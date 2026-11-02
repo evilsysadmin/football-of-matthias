@@ -133,6 +133,7 @@ func _initialize() -> void:
 		"goal", "goal_alt", "pass", "pass_soft", "pass_crisp",
 		"post", "crossbar", "save", "shot", "shot_low", "shot_snap",
 		"tackle", "tackle_boot", "tackle_foul", "whistle",
+		"crowd_bed", "crowd_gasp", "crowd_save",
 	]:
 		assert(audio_names.has(expected_audio))
 	# Same real event, alternate authored timbres. The distinction between
@@ -157,6 +158,28 @@ func _initialize() -> void:
 	assert(match_node.audio_fx.debug_last_played_key() == "goal")
 	match_node.audio_fx.play_goal()
 	assert(match_node.audio_fx.debug_last_played_key() == "goal_alt")
+	# An understated stadium bed is independent of one-shot ball voices.
+	assert(match_node.audio_fx.debug_crowd_bed_playing())
+	assert(match_node.audio_fx.debug_stream_duration("crowd_bed") >= 2.3)
+	assert(match_node.audio_fx.debug_stream_duration("crowd_gasp") >= 1.0)
+	# Earlier frame-hit and goal tests already consumed the first crowd cue.
+	# Advance only the audio clock to test a fresh genuine save after cooldown.
+	var prior_crowd_reactions: int = match_node.audio_fx.debug_crowd_reaction_count()
+	match_node.audio_fx._process(ChessFootballAudio.CROWD_REACTION_COOLDOWN + 0.1)
+	match_node.audio_fx.play_keeper_save()
+	assert(match_node.audio_fx.debug_crowd_reaction_count() == prior_crowd_reactions + 1)
+	assert(match_node.audio_fx.debug_last_crowd_reaction_key() == "crowd_save")
+	# A second notable event inside the cooldown cannot stack more cheers.
+	match_node.audio_fx.play_goal_frame(720.0, "post")
+	assert(match_node.audio_fx.debug_crowd_reaction_count() == prior_crowd_reactions + 1)
+	match_node.audio_fx.play_goal()
+	assert(not match_node.audio_fx._crowd_reaction.playing)
+	match_node.audio_fx.set_match_paused(true)
+	assert(not match_node.audio_fx.debug_crowd_bed_playing())
+	match_node.audio_fx.play_keeper_save()
+	assert(match_node.audio_fx.debug_crowd_reaction_count() == prior_crowd_reactions + 1)
+	match_node.audio_fx.set_match_paused(false)
+	assert(match_node.audio_fx.debug_crowd_bed_playing())
 	# The seven cues belong to actual match events. The SFX setting must
 	# silence any playing cheer immediately, never the global audio bus.
 	assert(match_node.debug_match_sfx_enabled())
@@ -166,6 +189,8 @@ func _initialize() -> void:
 	match_node.audio_fx.play_goal()
 	match_node.debug_toggle_match_sfx()
 	assert(not match_node.debug_match_sfx_enabled())
+	assert(not match_node.audio_fx.debug_crowd_bed_playing())
+	assert(not match_node.audio_fx._crowd_reaction.playing)
 	assert(match_node.debug_match_sfx_button_text() == "SFX: NO")
 	for voice in match_node.audio_fx._players:
 		assert(not voice.playing)
@@ -176,6 +201,7 @@ func _initialize() -> void:
 		assert(not voice.playing)
 	match_node.debug_toggle_match_sfx()
 	assert(match_node.debug_match_sfx_enabled())
+	assert(match_node.audio_fx.debug_crowd_bed_playing())
 	assert(match_node.debug_match_sfx_button_text() == "SFX: SÍ")
 	assert(match_node.debug_3d_animated_players() == 10)
 	# Two proper goalkeeper sprites, same canonical canvas and proportions
