@@ -9,6 +9,7 @@ dev:
 	npm --prefix frontend run dev
 test:
 	python3 scripts/check_migration.py
+	python3 -m unittest discover -s scripts -p 'test_migration_provenance.py'
 	python3 -S scripts/art/chess_football_sprite_forge.py verify --assets-dir games/chess-football-godot/assets/players
 	npm --prefix frontend test
 export:
