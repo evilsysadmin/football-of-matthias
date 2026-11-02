@@ -131,9 +131,10 @@ func _initialize() -> void:
 	var audio_names: Array[String] = match_node.debug_audio_stream_names()
 	for expected_audio in [
 		"goal", "goal_alt", "pass", "pass_soft", "pass_crisp",
-		"post", "crossbar", "save", "shot", "shot_low", "shot_snap",
+		"post", "crossbar", "save", "save_dive", "shot", "shot_low", "shot_snap",
 		"tackle", "tackle_boot", "tackle_foul", "whistle",
-		"crowd_bed", "crowd_gasp", "crowd_save", "crowd_near_miss",
+		"crowd_bed", "crowd_gasp", "crowd_save", "crowd_save_big",
+		"crowd_near_miss",
 	]:
 		assert(audio_names.has(expected_audio))
 	# Same real event, alternate authored timbres. The distinction between
@@ -1770,6 +1771,52 @@ func _initialize() -> void:
 	match_node._check_ball_out()
 	assert(match_node.audio_fx.debug_crowd_reaction_count() == near_miss_count + 1)
 	print("SMOKE_STAGE=tracked-near-miss-crowd")
+
+	# Use a genuine, fast shot near the actual keeper's dive limit: the
+	# spectacular cue is neither a random save nor a prediction before contact.
+	var heroic_keeper: Footballer = match_node.teams[1][0]
+	var heroic_shooter: Footballer = match_node.teams[0][4]
+	assert(not heroic_keeper.sent_off)
+	heroic_keeper.global_position = Vector2(
+		ChessFootballMath.PITCH_RECT.end.x - 100.0,
+		ChessFootballMath.PITCH_RECT.get_center().y
+	)
+	match_node.ball.attach_to(heroic_shooter)
+	match_node.ball.release(Vector2.RIGHT, 1060.0, 0.0, true)
+	match_node.ball.global_position = heroic_keeper.global_position + Vector2(-18.0, 40.0)
+	assert(match_node._is_spectacular_keeper_save(heroic_keeper))
+	match_node.audio_fx._process(ChessFootballAudio.CROWD_REACTION_COOLDOWN + 0.1)
+	var heroic_reactions_before: int = match_node.audio_fx.debug_crowd_reaction_count()
+	assert(match_node._keeper_try_save(heroic_keeper))
+	assert(match_node.audio_fx.debug_last_played_key() == "save_dive")
+	assert(match_node.audio_fx.debug_last_crowd_reaction_key() == "crowd_save_big")
+	assert(match_node.audio_fx.debug_crowd_reaction_count() == heroic_reactions_before + 1)
+	assert(not match_node.ball.last_release_was_shot)
+	assert(match_node.audio_fx.debug_stream_duration("save_dive") > 0.14)
+	assert(match_node.audio_fx.debug_stream_duration("crowd_save_big") >= 1.6)
+
+	# Hard passes, gentle catches, central saves and old shots are not heroic.
+	match_node.ball.attach_to(heroic_shooter)
+	match_node.ball.release(Vector2.RIGHT, 1060.0)
+	match_node.ball.global_position = heroic_keeper.global_position + Vector2(-18.0, 40.0)
+	assert(not match_node._is_spectacular_keeper_save(heroic_keeper))
+	match_node.ball.attach_to(heroic_shooter)
+	match_node.ball.release(Vector2.RIGHT, 420.0, 0.0, true)
+	match_node.ball.global_position = heroic_keeper.global_position + Vector2(-18.0, 40.0)
+	assert(not match_node._is_spectacular_keeper_save(heroic_keeper))
+	match_node.ball.attach_to(heroic_shooter)
+	match_node.ball.release(Vector2.RIGHT, 1060.0, 0.0, true)
+	match_node.ball.global_position = heroic_keeper.global_position + Vector2(-18.0, 10.0)
+	assert(not match_node._is_spectacular_keeper_save(heroic_keeper))
+	match_node.ball.global_position = heroic_keeper.global_position + Vector2(-18.0, 40.0)
+	match_node.ball.shot_flight_seconds = 3.5
+	assert(not match_node._is_spectacular_keeper_save(heroic_keeper))
+	# Magnitude alone must not classify a sideways, near-tangential shot.
+	match_node.ball.attach_to(heroic_shooter)
+	match_node.ball.release(Vector2(0.18, 0.98), 1060.0, 0.0, true)
+	match_node.ball.global_position = heroic_keeper.global_position + Vector2(-18.0, 40.0)
+	assert(not match_node._is_spectacular_keeper_save(heroic_keeper))
+	print("SMOKE_STAGE=heroic-keeper-save-audio")
 
 	print("chess-football godot smoke: OK")
 	quit(0)
