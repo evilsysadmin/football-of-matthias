@@ -249,6 +249,28 @@ func _initialize() -> void:
 		runner._sync_locomotion(false)
 	match_node.debug_sync_presentation()
 	await _save_capture(match_node, "directional-runs", "VISUAL_CAPTURE_DIRECTIONAL_RUNS")
+	# Freeze the same eight players without changing their pitch positions.
+	# They must retain their *last real direction* instead of all snapping to
+	# the side-running image at zero velocity.
+	for n in range(directions.size()):
+		var team_index: int = int(n / 4)
+		var runner: Footballer = match_node.teams[team_index][1 + n % 4]
+		runner.velocity = Vector2.ZERO
+		runner._sync_locomotion(false)
+	match_node.debug_sync_presentation()
+	for n in range(directions.size()):
+		var team_index: int = int(n / 4)
+		var player: Footballer = match_node.teams[team_index][1 + n % 4]
+		var visible_sprite: AnimatedSprite3D = match_node.presentation_3d.player_sprites[
+			player.get_instance_id()
+		]
+		var held_view := ChessFootballRunDirection.view_for_velocity(directions[n] * player.base_speed)
+		var idle_name := ChessFootballRunDirection.animation_for(&"idle", held_view)
+		assert(visible_sprite.animation == idle_name)
+		assert(visible_sprite.sprite_frames.get_frame_count(idle_name) == 1)
+		assert(visible_sprite.frame == 0)
+		assert(not visible_sprite.is_playing())
+	await _save_capture(match_node, "directional-idles", "VISUAL_CAPTURE_DIRECTIONAL_IDLES")
 	# Camera-scale comparison: same pitch depth, same eight-frame pose,
 	# five canonical views next to each other for each team's complete roster.
 	# A two-row, five-column grid makes diagonal bloat evident without
