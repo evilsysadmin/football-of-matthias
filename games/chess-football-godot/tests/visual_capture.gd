@@ -135,6 +135,29 @@ func _initialize() -> void:
 			assert((pennant.material_override as StandardMaterial3D).vertex_color_use_as_albedo)
 			assert(pennant.get_child_count() == 0)
 
+	# A real goal is the only trigger for the LED boards to celebrate. Test
+	# both clubs, and ensure the original signs/accents are restored afterwards.
+	var first_sign := match_node.presentation_3d.get_node("MatchLedSign_00") as Label3D
+	var second_sign := match_node.presentation_3d.get_node("MatchLedSign_01") as Label3D
+	var first_accent := match_node.presentation_3d.get_node("MatchLedAccent_00") as MeshInstance3D
+	var first_material := first_accent.material_override as StandardMaterial3D
+	var normal_message := first_sign.text
+	var normal_color := first_material.albedo_color
+	var previous_announcement := match_node.last_goal_text
+	match_node.last_goal_text = "GOAL · FC Matthias"
+	match_node.presentation_3d._sync_goal_ad_panels()
+	assert(first_sign.text == "GOOOL!")
+	assert(second_sign.text == "FC MATTHIAS")
+	assert(first_material.albedo_color != normal_color)
+	match_node.last_goal_text = "GOAL · Real Enroque"
+	match_node.presentation_3d._sync_goal_ad_panels()
+	assert(second_sign.text == "REAL ENROQUE")
+	match_node.last_goal_text = previous_announcement
+	match_node.presentation_3d._sync_goal_ad_panels()
+	assert(first_sign.text == normal_message)
+	assert(first_material.albedo_color == normal_color)
+	assert(match_node.presentation_3d.ad_last_goal_team == -1)
+
 	# Pin a real pre-kickoff tableau: both teams in their own halves and the
 	# selected team standing over the centre spot.
 	match_node.debug_prepare_kickoff(0)
