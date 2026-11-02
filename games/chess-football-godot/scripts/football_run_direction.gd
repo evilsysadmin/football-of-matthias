@@ -29,6 +29,9 @@ static func view_for_velocity(velocity: Vector2, previous: String = "side") -> S
 	return vertical_sign + "_diagonal"
 
 static func animation_for(base_animation: StringName, view: String) -> StringName:
-	if base_animation not in [&"run", &"sprint"] or view == "side":
+	# Idle must retain the last genuine movement view. Otherwise a player
+	# stops facing the camera and snaps to a lateral running silhouette.
+	# Action poses remain untouched, including tackling and shooting.
+	if base_animation not in [&"idle", &"run", &"sprint"] or view == "side":
 		return base_animation
 	return StringName(String(base_animation) + "_" + view)
