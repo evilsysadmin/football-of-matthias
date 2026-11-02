@@ -233,23 +233,23 @@ func _add_corner_flags() -> void:
 			pole.name = "CornerPole_%d_%d" % [x_index, z_index]
 			pole.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			# A contrasting hoist and a triangular club-colour fly share one mesh.
-			# The pennant bends toward the pitch so it is readable from broadcast.
-			var inward := -sx
+			# The pennant flies outward, away from the corner taker and match chyron.
+			var fly_direction := sx
 			var vertices := PackedVector3Array([
 				Vector3(0.0, 1.49, 0.0),
-				Vector3(inward * 0.25, 1.40, 0.0),
+				Vector3(fly_direction * 0.25, 1.40, 0.0),
 				Vector3(0.0, 1.11, 0.0),
 				Vector3(0.0, 1.11, 0.0),
-				Vector3(inward * 0.25, 1.40, 0.0),
-				Vector3(inward * 0.25, 1.20, 0.0),
-				Vector3(inward * 0.25, 1.40, 0.0),
-				Vector3(inward * 0.74, 1.30, 0.0),
-				Vector3(inward * 0.25, 1.20, 0.0),
+				Vector3(fly_direction * 0.25, 1.40, 0.0),
+				Vector3(fly_direction * 0.25, 1.20, 0.0),
+				Vector3(fly_direction * 0.25, 1.40, 0.0),
+				Vector3(fly_direction * 0.84, 1.30, 0.0),
+				Vector3(fly_direction * 0.25, 1.20, 0.0),
 			])
 			var hoist_color := Color(0.91, 0.81, 0.50)
 			var club_color := (
-				Color(0.18, 0.51, 0.90) if x_index == 0
-				else Color(0.68, 0.14, 0.26)
+				Color(0.20, 0.64, 0.98) if x_index == 0
+				else Color(0.92, 0.21, 0.31)
 			)
 			var colors := PackedColorArray()
 			for vertex_id in range(vertices.size()):
