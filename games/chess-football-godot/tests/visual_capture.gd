@@ -128,6 +128,10 @@ func _initialize() -> void:
 			assert(is_equal_approx(pole.position.x, pennant.position.x))
 			assert(is_equal_approx(pole.position.z, pennant.position.z))
 			assert(pennant.mesh.surface_get_array_len(0) == 9)
+			var corners := pennant.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array
+			var outward := -1.0 if x_index == 0 else 1.0
+			assert(corners[7].x * outward > 0.8,
+				"Club flag must fly away from corner taker and announcement")
 			assert((pennant.material_override as StandardMaterial3D).vertex_color_use_as_albedo)
 			assert(pennant.get_child_count() == 0)
 
