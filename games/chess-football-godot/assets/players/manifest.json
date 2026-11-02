@@ -264,22 +264,5 @@
       "fps": 10,
       "loop": true
     }
-  ],
-  "optional_idle_front": {
-    "version": 1,
-    "url": "https://assets.chess-studio.shadowops.dpdns.org/football/atlases/idle/football_idle_front_v1.webp",
-    "sha256": "53235e2ab271eb325e2e528f0d7dd9c861c38bb90506aae5cc607517189e7dec",
-    "cell": {
-      "width": 128,
-      "height": 144
-    },
-    "columns": 3,
-    "rows": 1,
-    "order": [
-      "fc_matthias",
-      "real_enroque",
-      "keeper"
-    ],
-    "footline": 134
-  }
+  ]
 }
