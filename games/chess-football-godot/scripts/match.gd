@@ -48,7 +48,7 @@ const KEEPER_SAVE_MIN_SPEED := 280.0
 const KEEPER_SAVE_Y_MARGIN := 36.0
 const KEEPER_SAVE_MAX_HEIGHT := 44.0
 # Sound-only thresholds. No effect on keeper reach, shot trajectory or goals.
-const KEEPER_SPECTACULAR_MIN_SHOT_SPEED := 790.0
+const KEEPER_SPECTACULAR_MIN_GOALWARD_SPEED := 790.0
 const KEEPER_SPECTACULAR_MIN_DIVE_OFFSET := 32.0
 const KEEPER_HOLD_SECONDS := 0.72
 const KEEPER_DISTRIBUTION_WAIT_SECONDS := 2.20
@@ -1339,10 +1339,12 @@ func _update_keeper_saves() -> void:
 # substantially off the keeper's body. A fast pass or a lingering loose ball
 # must never earn the larger crowd cheer.
 func _is_spectacular_keeper_save(keeper: Footballer) -> bool:
+	# A fast ball sweeping *across* the area is not a driven shot at goal.
+	var goalward_speed := ball.velocity.x if keeper.team_id == 1 else -ball.velocity.x
 	return (
 		ball.last_release_was_shot
 		and ball.shot_flight_seconds <= 3.0
-		and ball.velocity.length() >= KEEPER_SPECTACULAR_MIN_SHOT_SPEED
+		and goalward_speed >= KEEPER_SPECTACULAR_MIN_GOALWARD_SPEED
 		and absf(ball.global_position.y - keeper.global_position.y)
 			>= KEEPER_SPECTACULAR_MIN_DIVE_OFFSET
 	)

@@ -1811,6 +1811,11 @@ func _initialize() -> void:
 	match_node.ball.global_position = heroic_keeper.global_position + Vector2(-18.0, 40.0)
 	match_node.ball.shot_flight_seconds = 3.5
 	assert(not match_node._is_spectacular_keeper_save(heroic_keeper))
+	# Magnitude alone must not classify a sideways, near-tangential shot.
+	match_node.ball.attach_to(heroic_shooter)
+	match_node.ball.release(Vector2(0.18, 0.98), 1060.0, 0.0, true)
+	match_node.ball.global_position = heroic_keeper.global_position + Vector2(-18.0, 40.0)
+	assert(not match_node._is_spectacular_keeper_save(heroic_keeper))
 	print("SMOKE_STAGE=heroic-keeper-save-audio")
 
 	print("chess-football godot smoke: OK")
