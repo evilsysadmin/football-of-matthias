@@ -39,6 +39,7 @@ const KEEPER_STRIDE_EXTRA_LEAN_DEGREES := 13.0
 const STAMINA_BAR_WIDTH := 0.76
 const STAMINA_BAR_DEPTH := 0.10
 const STAMINA_BAR_Z := 0.62
+const OPTIONAL_IDLE_REQUEST_TIMEOUT := 8.0
 
 var match_node: Node
 var camera: Camera3D
@@ -70,6 +71,53 @@ var ad_default_messages: Array[String] = []
 var ad_default_accents: Array[Color] = []
 var ad_last_goal_team: int = -1
 
+func _request_idle_front_from_r2() -> void:
+	# Browser-only enhancement. The match, camera, sprites and gameplay start
+	# immediately with approved local frames even with no CDN or no CORS.
+	if not OS.has_feature("web"):
+		return
+	var url := ChessFootballSpriteBank.idle_front_url()
+	if not url.begins_with("https://assets.chess-studio.shadowops.dpdns.org/football/atlases/idle/"):
+		return
+	var request_node := HTTPRequest.new()
+	request_node.name = "OptionalIdleFrontR2"
+	request_node.timeout = OPTIONAL_IDLE_REQUEST_TIMEOUT
+	add_child(request_node)
+	request_node.request_completed.connect(_on_optional_idle_front_received.bind(request_node))
+	if request_node.request(url) != OK:
+		request_node.queue_free()
+
+
+func _on_optional_idle_front_received(
+	result: int, status: int, _headers: PackedStringArray,
+	body: PackedByteArray, request_node: HTTPRequest
+) -> void:
+	request_node.queue_free()
+	if result != HTTPRequest.RESULT_SUCCESS or status != 200:
+		return
+	var textures := ChessFootballSpriteBank.decode_idle_front_webp(body)
+	if textures.size() != 4:
+		return
+	_apply_idle_front_textures(textures)
+
+
+func _apply_idle_front_textures(textures: Array[Texture2D]) -> void:
+	# The third sheet cell is the yellow keeper; the fourth texture is the
+	# derived teal away variant. Neither alters the canonical move frames.
+	if textures.size() != 4:
+		return
+	for team in match_node.teams:
+		for player in team:
+			var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+			if sprite == null:
+				continue
+			var frames := sprite.sprite_frames
+			if not frames.has_animation(&"idle_front"):
+				continue
+			var index := 2 + player.team_id if player.role == "keeper" else player.team_id
+			frames.set_frame(&"idle_front", 0, textures[index])
+
+
 func setup(p_match: Node) -> void:
 	match_node = p_match
 	var pitch := ChessFootballMath.PITCH_RECT
@@ -82,6 +130,7 @@ func setup(p_match: Node) -> void:
 	_build_ball()
 	_build_camera()
 	sync_presentation(1.0, "broadcast")
+	_request_idle_front_from_r2()
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -934,7 +983,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 				# Keep locomotion animations in phase with the authoritative 2D actor.
 				# Non-locomotion actions preserve their established side-facing frames.
 				var run_view := ChessFootballRunDirection.view_for_velocity(
-					player.velocity, String(player_run_views.get(key, "side"))
+					player.velocity, String(player_run_views.get(key, "front"))
 				)
 				player_run_views[key] = run_view
 				var directional_animation := ChessFootballRunDirection.animation_for(wanted_animation, run_view)
@@ -1054,7 +1103,7 @@ func _sync_visible_animation(
 		# A stationary actor must not run in place.
 		if player.velocity.length() >= 12.0:
 			phase += advance * maxf(player.visual.speed_scale, 0.0)
-	elif wanted != &"idle":
+	elif not String(wanted).begins_with("idle"):
 		phase += advance * maxf(player.visual.speed_scale, 0.0)
 	if frames.get_animation_loop(wanted):
 		phase = fposmod(phase, float(count))
