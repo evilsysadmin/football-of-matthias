@@ -3,6 +3,7 @@ extends RefCounted
 
 const MANIFEST_PATH := "res://assets/players/manifest.json"
 const ASSET_ROOT := "res://assets/players/"
+const OPTIONAL_IDLE_META_PATH := "res://optional_idle_front_v1.json"
 const TEAM_KEYS := ["fc_matthias", "real_enroque"]
 
 # Temporary action poses are composed from the already approved lateral
@@ -17,6 +18,7 @@ const CANONICAL_ACTION_POSES := {
 }
 
 static var _cached_manifest: Dictionary = {}
+static var _cached_optional_idle_meta: Dictionary = {}
 static var _cached_run_textures: Dictionary = {}
 static var _cached_3d_run_frames: Dictionary = {}
 static var _cached_directional_textures: Dictionary = {}
@@ -41,13 +43,23 @@ static func manifest() -> Dictionary:
 
 # Optional asset load path: all callers already have approved raster fallbacks.
 # Return no textures unless the complete sheet passes origin/hash/shape checks.
+static func optional_idle_meta() -> Dictionary:
+	if not _cached_optional_idle_meta.is_empty():
+		return _cached_optional_idle_meta
+	var raw := FileAccess.get_file_as_string(OPTIONAL_IDLE_META_PATH)
+	var parsed: Variant = JSON.parse_string(raw)
+	if parsed is Dictionary:
+		_cached_optional_idle_meta = parsed
+	return _cached_optional_idle_meta
+
+
 static func idle_front_url() -> String:
-	return String(manifest().get("optional_idle_front", {}).get("url", ""))
+	return String(optional_idle_meta().get("url", ""))
 
 
 static func decode_idle_front_webp(payload: PackedByteArray) -> Array[Texture2D]:
 	var result: Array[Texture2D] = []
-	var meta: Dictionary = manifest().get("optional_idle_front", {})
+	var meta: Dictionary = optional_idle_meta()
 	if meta.is_empty() or payload.is_empty() or payload.size() > 262144:
 		return result
 	var hash := HashingContext.new()
@@ -65,7 +77,7 @@ static func idle_front_textures_from_image(image: Image) -> Array[Texture2D]:
 	# Exposed independently for deterministic offline tests; network source
 	# verification occurs ONLY in decode_idle_front_webp().
 	var textures: Array[Texture2D] = []
-	var meta: Dictionary = manifest().get("optional_idle_front", {})
+	var meta: Dictionary = optional_idle_meta()
 	if meta.is_empty() or image == null:
 		return textures
 	var cell: Dictionary = meta.get("cell", {})
