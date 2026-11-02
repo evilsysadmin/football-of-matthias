@@ -59,20 +59,12 @@ static func idle_front_url() -> String:
 
 
 static func decode_idle_front_webp(payload: PackedByteArray) -> Array[Texture2D]:
-	var result: Array[Texture2D] = []
-	var meta: Dictionary = optional_idle_meta()
-	if meta.is_empty() or payload.is_empty() or payload.size() > 262144:
-		return result
-	var hash := HashingContext.new()
-	if hash.start(HashingContext.HASH_SHA256) != OK or hash.update(payload) != OK:
-		return result
-	if hash.finish().hex_encode() != String(meta.get("sha256", "")):
-		return result
-	var image := Image.new()
-	if image.load_webp_from_buffer(payload) != OK:
-		return result
+	# The shared loader checks CDN metadata, SHA, WebP and sheet dimensions.
+	# This compatibility entry point remains useful for offline smoke tests.
+	var image := ChessFootballR2AtlasLoader.decode_verified_webp(payload, optional_idle_meta())
+	if image == null:
+		return []
 	return idle_front_textures_from_image(image)
-
 
 static func idle_front_textures_from_image(image: Image) -> Array[Texture2D]:
 	# Exposed independently for deterministic offline tests; network source

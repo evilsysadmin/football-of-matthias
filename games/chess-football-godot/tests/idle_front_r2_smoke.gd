@@ -28,6 +28,36 @@ func _initialize() -> void:
 			Color(0.84, 0.20, 0.27) if index == 1 else Color(0.93, 0.72, 0.12)
 		)
 		sheet.fill_rect(Rect2i(index * 128 + 36, 8, 56, 126), shirt)
+	# The shared loader is strict on URL origin, traversal, SHA and raster
+	# dimensions. All rejection paths leave the approved local art untouched.
+	assert(ChessFootballR2AtlasLoader.valid_metadata(meta))
+	for malformed_url in [
+		"https://attacker.invalid/football/atlases/idle/football_idle_front_v1.webp",
+		meta["url"] + "?cache-bust=1",
+		"https://assets.chess-studio.shadowops.dpdns.org/football/atlases/../secret.webp",
+		"https://assets.chess-studio.shadowops.dpdns.org/football/atlases/%2e%2e/x.webp",
+	]:
+		var bad_url_meta: Dictionary = meta.duplicate(true)
+		bad_url_meta["url"] = malformed_url
+		assert(not ChessFootballR2AtlasLoader.valid_metadata(bad_url_meta))
+	var bad_hash_meta: Dictionary = meta.duplicate(true)
+	bad_hash_meta["sha256"] = "not-a-real-sha"
+	assert(not ChessFootballR2AtlasLoader.valid_metadata(bad_hash_meta))
+	var bad_layout_meta: Dictionary = meta.duplicate(true)
+	bad_layout_meta["columns"] = 100
+	assert(not ChessFootballR2AtlasLoader.valid_metadata(bad_layout_meta))
+	var lossless_bytes: PackedByteArray = sheet.save_webp_to_buffer(false)
+	assert(not lossless_bytes.is_empty())
+	var hash := HashingContext.new()
+	assert(hash.start(HashingContext.HASH_SHA256) == OK)
+	assert(hash.update(lossless_bytes) == OK)
+	var fixture_meta: Dictionary = meta.duplicate(true)
+	fixture_meta["sha256"] = hash.finish().hex_encode()
+	var decoded: Image = ChessFootballR2AtlasLoader.decode_verified_webp(lossless_bytes, fixture_meta)
+	assert(decoded != null and decoded.get_size() == Vector2i(384, 144))
+	assert(ChessFootballR2AtlasLoader.decode_verified_webp(lossless_bytes, meta) == null)
+	fixture_meta["columns"] = 2
+	assert(ChessFootballR2AtlasLoader.decode_verified_webp(lossless_bytes, fixture_meta) == null)
 	var textures: Array[Texture2D] = ChessFootballSpriteBank.idle_front_textures_from_image(sheet)
 	assert(textures.size() == 4)
 	for team_id in range(2):
