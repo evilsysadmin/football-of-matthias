@@ -504,6 +504,8 @@ func _menu_button(text_value: String) -> Button:
 func _toggle_pause_menu() -> void:
 	pause_menu_open = not pause_menu_open
 	pause_overlay.visible = pause_menu_open
+	if audio_fx != null:
+		audio_fx.set_match_paused(pause_menu_open)
 	if pause_menu_open:
 		pause_exit_button.grab_focus()
 	else:
