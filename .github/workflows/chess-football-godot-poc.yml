@@ -433,6 +433,42 @@ jobs:
           path: ${{ runner.temp }}/chess-football-review/
           if-no-files-found: error
           retention-days: 7
+      - name: Export lossless R2 candidate atlas pack (no publication)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-atlas-webp-export.log"
+          set +e
+          timeout 45s "$godot" --headless --path games/chess-football-godot --script res://scripts/export_r2_atlases.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|FOOTBALL_ATLAS_EXPORT_ERROR' "$log"; then
+            echo '::error::Lossless atlas export failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_ATLAS_WEBP_EXPORT_OK families=3 teams=2 sheets=6' "$log"
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path('games/chess-football-godot/build/r2-atlases')
+          data = json.loads((root / 'atlas-manifest-v1.json').read_text())
+          assert data['schema'] == 1 and len(data['assets']) == 6
+          assert {x['family'] for x in data['assets']} == {'lateral_run', 'directional_run', 'goalkeeper_run'}
+          assert {x['team'] for x in data['assets']} == {'fc_matthias', 'real_enroque'}
+          for x in data['assets']:
+              raw = (root / x['file']).read_bytes()
+              assert len(raw) == x['bytes'] and raw[:4] == b'RIFF' and raw[8:12] == b'WEBP'
+              assert hashlib.sha256(raw).hexdigest() == x['sha256']
+          print('FOOTBALL_ATLAS_R2_PACK_MANIFEST_OK sheets=6')
+          PY
+      - name: Upload approved R2 candidate atlases for operator review
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-r2-atlas-candidates
+          path: games/chess-football-godot/build/r2-atlases/
+          if-no-files-found: error
+          retention-days: 7
       - name: Web export contract
         shell: bash
         run: |
