@@ -4,6 +4,7 @@ extends RefCounted
 const MANIFEST_PATH := "res://assets/players/manifest.json"
 const ASSET_ROOT := "res://assets/players/"
 const OPTIONAL_IDLE_META_PATH := "res://optional_idle_front_v1.json"
+const OPTIONAL_LATERAL_META_PATH := "res://optional_lateral_run_v1.json"
 const TEAM_KEYS := ["fc_matthias", "real_enroque"]
 
 # Temporary action poses are composed from the already approved lateral
@@ -106,6 +107,50 @@ static func idle_front_textures_from_image(image: Image) -> Array[Texture2D]:
 		_register_frame_bottom(texture, region)
 		textures.append(texture)
 	return textures
+
+
+# Separate, reviewable optional CDN contract. Never change the forge manifest.
+# Both club sheets remain disabled until the public R2/CORS gate is proven.
+static func lateral_run_meta(team_id: int) -> Dictionary:
+	var raw := FileAccess.get_file_as_string(OPTIONAL_LATERAL_META_PATH)
+	var parsed: Variant = JSON.parse_string(raw)
+	if not parsed is Dictionary or parsed.get("enabled") != true:
+		return {}
+	var teams: Dictionary = parsed.get("teams", {})
+	var sheet: Variant = teams.get(_team_key(team_id))
+	return sheet if sheet is Dictionary else {}
+
+
+static func validated_lateral_run_frames(image: Image, team_id: int) -> Array[Texture2D]:
+	# A hash and valid sheet dimensions are necessary but insufficient:
+	# reject replacement unless each RGBA byte is identical to the approved
+	# LOCAL canonical raster. Preserve the local sprite on any mismatch.
+	var result: Array[Texture2D] = []
+	if image == null or image.get_size() != Vector2i(1024, 144):
+		return result
+	var local_texture := _canonical_run_texture(team_id)
+	if local_texture == null:
+		return result
+	var reference := local_texture.get_image()
+	if reference.has_mipmaps():
+		reference.clear_mipmaps()
+	if reference.get_format() != Image.FORMAT_RGBA8:
+		reference.convert(Image.FORMAT_RGBA8)
+	var candidate := image.duplicate()
+	if candidate.has_mipmaps():
+		candidate.clear_mipmaps()
+	if candidate.get_format() != Image.FORMAT_RGBA8:
+		candidate.convert(Image.FORMAT_RGBA8)
+	if candidate.get_data() != reference.get_data():
+		return result
+	for index in range(8):
+		var crop := candidate.get_region(Rect2i(index * 128, 0, 128, 144))
+		if crop.get_used_rect().size.y < 60:
+			return []
+		var texture := ImageTexture.create_from_image(crop)
+		_register_frame_bottom(texture, crop)
+		result.append(texture)
+	return result
 
 
 static func _team_key(team_id: int) -> String:
