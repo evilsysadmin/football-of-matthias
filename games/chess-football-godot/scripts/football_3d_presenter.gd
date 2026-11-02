@@ -216,7 +216,7 @@ void fragment() {
 	_add_floodlights()
 
 func _add_corner_flags() -> void:
-	# Four real corner pennants: club colours make the arcade pitch read
+	# Four regulation-scale corner pennants: club colours help the pitch read
 	# like a football ground. Entirely decorative, outside the playable rect.
 	# One vertex-coloured pennant mesh and one pole per corner; no new lights.
 	for x_index in range(2):
@@ -226,8 +226,8 @@ func _add_corner_flags() -> void:
 			var position_x := sx * (field_width * 0.5 + 0.14)
 			var position_z := sz * (field_depth * 0.5 + 0.14)
 			var pole := _add_box(
-				Vector3(position_x, 0.50, position_z),
-				Vector3(0.045, 1.0, 0.045),
+				Vector3(position_x, 0.77, position_z),
+				Vector3(0.045, 1.54, 0.045),
 				Color(0.91, 0.92, 0.86)
 			)
 			pole.name = "CornerPole_%d_%d" % [x_index, z_index]
@@ -236,15 +236,15 @@ func _add_corner_flags() -> void:
 			# The pennant bends toward the pitch so it is readable from broadcast.
 			var inward := -sx
 			var vertices := PackedVector3Array([
-				Vector3(0.0, 0.94, 0.0),
-				Vector3(inward * 0.23, 0.88, 0.0),
-				Vector3(0.0, 0.66, 0.0),
-				Vector3(0.0, 0.66, 0.0),
-				Vector3(inward * 0.23, 0.88, 0.0),
-				Vector3(inward * 0.23, 0.72, 0.0),
-				Vector3(inward * 0.23, 0.88, 0.0),
-				Vector3(inward * 0.57, 0.80, 0.0),
-				Vector3(inward * 0.23, 0.72, 0.0),
+				Vector3(0.0, 1.49, 0.0),
+				Vector3(inward * 0.25, 1.40, 0.0),
+				Vector3(0.0, 1.11, 0.0),
+				Vector3(0.0, 1.11, 0.0),
+				Vector3(inward * 0.25, 1.40, 0.0),
+				Vector3(inward * 0.25, 1.20, 0.0),
+				Vector3(inward * 0.25, 1.40, 0.0),
+				Vector3(inward * 0.74, 1.30, 0.0),
+				Vector3(inward * 0.25, 1.20, 0.0),
 			])
 			var hoist_color := Color(0.91, 0.81, 0.50)
 			var club_color := (
