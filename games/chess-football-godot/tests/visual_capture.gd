@@ -143,7 +143,7 @@ func _initialize() -> void:
 	var first_material := first_accent.material_override as StandardMaterial3D
 	var normal_message := first_sign.text
 	var normal_color := first_material.albedo_color
-	var previous_announcement := match_node.last_goal_text
+	var previous_announcement: String = String(match_node.last_goal_text)
 	match_node.last_goal_text = "GOAL · FC Matthias"
 	match_node.presentation_3d._sync_goal_ad_panels()
 	assert(first_sign.text == "GOOOL!")
