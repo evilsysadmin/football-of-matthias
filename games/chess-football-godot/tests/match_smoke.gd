@@ -133,7 +133,7 @@ func _initialize() -> void:
 		"goal", "goal_alt", "pass", "pass_soft", "pass_crisp",
 		"post", "crossbar", "save", "shot", "shot_low", "shot_snap",
 		"tackle", "tackle_boot", "tackle_foul", "whistle",
-		"crowd_bed", "crowd_gasp", "crowd_save",
+		"crowd_bed", "crowd_gasp", "crowd_save", "crowd_near_miss",
 	]:
 		assert(audio_names.has(expected_audio))
 	# Same real event, alternate authored timbres. The distinction between
@@ -1706,6 +1706,70 @@ func _initialize() -> void:
 	assert(match_node.ai_primary_presser_cache[0] == null)
 	assert(match_node.ai_secondary_presser_cache[0] == null)
 	print("SMOKE_STAGE=stable-defensive-roles")
+
+	# The gasp belongs only to shots that narrowly miss the correct goal,
+	# not to passes, touchlines, wrong ends or old loose balls.
+	var goal_rect: Rect2 = ChessFootballMath.PITCH_RECT
+	var near_right := Vector2(
+		goal_rect.end.x + 32.0,
+		goal_rect.get_center().y + ChessFootballMath.GOAL_HALF_HEIGHT + 28.0
+	)
+	var near_left := Vector2(
+		goal_rect.position.x - 32.0,
+		goal_rect.get_center().y - ChessFootballMath.GOAL_HALF_HEIGHT - 28.0
+	)
+	assert(ChessFootballMath.close_shot_miss_at_goal_line(near_right, 0.0, 0))
+	assert(ChessFootballMath.close_shot_miss_at_goal_line(near_left, 0.0, 1))
+	assert(not ChessFootballMath.close_shot_miss_at_goal_line(near_right, 0.0, 1))
+	assert(not ChessFootballMath.close_shot_miss_at_goal_line(
+		Vector2(goal_rect.end.x + 32.0, goal_rect.get_center().y + 600.0), 0.0, 0
+	))
+	assert(ChessFootballMath.close_shot_miss_at_goal_line(
+		Vector2(goal_rect.end.x + 32.0, goal_rect.get_center().y),
+		ChessFootballMath.GOAL_FRAME_CROSSBAR_HEIGHT + 19.0, 0
+	))
+	assert(not ChessFootballMath.close_shot_miss_at_goal_line(
+		Vector2(goal_rect.end.x + 32.0, goal_rect.get_center().y),
+		ChessFootballMath.GOAL_FRAME_CROSSBAR_HEIGHT + 110.0, 0
+	))
+	match_node.set_physics_process(false)
+	match_node.goal_restart_active = false
+	match_node.kickoff_active = false
+	match_node.set_piece_active = false
+	match_node.audio_fx.set_match_paused(false)
+	match_node.audio_fx.set_sfx_enabled(true)
+	match_node.audio_fx._process(3.1)
+	var near_miss_count: int = match_node.audio_fx.debug_crowd_reaction_count()
+	var near_miss_shooter: Footballer = match_node.teams[0][4]
+	match_node.ball.attach_to(near_miss_shooter)
+	match_node.ball.release(Vector2.RIGHT, 900.0, 0.0, true)
+	assert(match_node.ball.last_release_was_shot)
+	match_node.ball.global_position = near_right
+	match_node._check_ball_out()
+	assert(match_node.audio_fx.debug_crowd_reaction_count() == near_miss_count + 1)
+	assert(match_node.audio_fx.debug_last_crowd_reaction_key() == "crowd_near_miss")
+	assert(not match_node.ball.last_release_was_shot)
+	# Passes and stale shots do not get another crowd event, even at the same spot.
+	match_node.audio_fx._process(3.1)
+	match_node.goal_restart_active = false
+	match_node.kickoff_active = false
+	match_node.set_piece_active = false
+	match_node.ball.attach_to(near_miss_shooter)
+	match_node.ball.release(Vector2.RIGHT, 900.0)
+	assert(not match_node.ball.last_release_was_shot)
+	match_node.ball.global_position = near_right
+	match_node._check_ball_out()
+	assert(match_node.audio_fx.debug_crowd_reaction_count() == near_miss_count + 1)
+	match_node.goal_restart_active = false
+	match_node.kickoff_active = false
+	match_node.set_piece_active = false
+	match_node.ball.attach_to(near_miss_shooter)
+	match_node.ball.release(Vector2.RIGHT, 900.0, 0.0, true)
+	match_node.ball.shot_flight_seconds = 3.5
+	match_node.ball.global_position = near_right
+	match_node._check_ball_out()
+	assert(match_node.audio_fx.debug_crowd_reaction_count() == near_miss_count + 1)
+	print("SMOKE_STAGE=tracked-near-miss-crowd")
 
 	print("chess-football godot smoke: OK")
 	quit(0)

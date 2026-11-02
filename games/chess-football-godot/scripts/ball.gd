@@ -3,6 +3,11 @@ extends CharacterBody2D
 
 var carrier: Footballer = null
 var last_touch_team_id: int = -1
+# Transient provenance for stadium reactions only. Gameplay ignores these.
+# Any possession or non-shot release clears it, so passes and rebounds cannot
+# masquerade as a close shot at the other goal line.
+var last_release_was_shot: bool = false
+var shot_flight_seconds: float = 0.0
 var friction: float = 0.965
 var fast_ball_friction: float = 0.982
 var max_speed: float = 1260.0
@@ -23,6 +28,8 @@ var contact_reclaim_block_player: Footballer = null
 var contact_reclaim_block_seconds: float = 0.0
 
 func attach_to(player: Footballer) -> void:
+	last_release_was_shot = false
+	shot_flight_seconds = 0.0
 	reclaim_block_player = null
 	reclaim_block_seconds = 0.0
 	contact_reclaim_block_player = null
@@ -40,7 +47,10 @@ func attach_to(player: Footballer) -> void:
 	player.queue_redraw()
 	global_position = player.global_position + player.ball_anchor()
 
-func release(direction: Vector2, power: float, lift_velocity: float = 0.0) -> void:
+func release(direction: Vector2, power: float, lift_velocity: float = 0.0, is_shot: bool = false) -> void:
+	# Tracking is sound-only and resets on every release, not just touches.
+	last_release_was_shot = is_shot
+	shot_flight_seconds = 0.0
 	# The new kick/deflection supersedes any old glancing-contact restriction.
 	contact_reclaim_block_player = null
 	contact_reclaim_block_seconds = 0.0
@@ -59,6 +69,8 @@ func release(direction: Vector2, power: float, lift_velocity: float = 0.0) -> vo
 	vertical_velocity = maxf(0.0, lift_velocity)
 
 func tick_ball(delta: float) -> void:
+	if last_release_was_shot and carrier == null:
+		shot_flight_seconds += maxf(0.0, delta)
 	reclaim_block_seconds = maxf(0.0, reclaim_block_seconds - delta)
 	if reclaim_block_seconds <= 0.0:
 		reclaim_block_player = null

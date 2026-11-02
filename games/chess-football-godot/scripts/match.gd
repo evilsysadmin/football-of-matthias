@@ -836,7 +836,7 @@ func _release_charged_shot() -> void:
 	if audio_fx != null:
 		audio_fx.play_shot(ratio)
 	_record_ai_pressure(0, 2.0)
-	ball.release(target - controlled.global_position, power, lift)
+	ball.release(target - controlled.global_position, power, lift, true)
 
 func _update_ai(delta: float) -> void:
 	for team_id in range(2):
@@ -1383,7 +1383,7 @@ func _ai_attack(player: Footballer) -> void:
 		if audio_fx != null:
 			audio_fx.play_shot(profile_ratio)
 		_record_ai_pressure(player.team_id, 2.0)
-		ball.release(shot_target - player.global_position, shot_power, shot_lift)
+		ball.release(shot_target - player.global_position, shot_power, shot_lift, true)
 		return
 
 	var threat := _nearest_opponent_to(player)
@@ -1943,6 +1943,8 @@ func _resolve_goal_frame_collision(
 			GOAL_CROSSBAR_DROP_SPEED,
 		)
 
+	# The woodwork already caused the moment; no second gasp on rebound.
+	ball.last_release_was_shot = false
 	if audio_fx != null:
 		audio_fx.play_goal_frame(impact_speed, kind)
 	return kind
@@ -2324,7 +2326,7 @@ func _release_human_penalty() -> void:
 	if audio_fx != null:
 		audio_fx.play_whistle()
 		audio_fx.play_shot(ratio)
-	ball.release(target - restarter.global_position, power, lift)
+	ball.release(target - restarter.global_position, power, lift, true)
 	set_piece_player = null
 
 func _release_ai_penalty() -> void:
@@ -2346,7 +2348,7 @@ func _release_ai_penalty() -> void:
 	restarter.play_action("shoot", 0.78)
 	if audio_fx != null:
 		audio_fx.play_shot(0.68)
-	ball.release(penalty_target - restarter.global_position, PENALTY_SHOT_POWER, penalty_lift)
+	ball.release(penalty_target - restarter.global_position, PENALTY_SHOT_POWER, penalty_lift, true)
 	set_piece_player = null
 
 func _move_human_penalty_keeper(axis: float, delta: float) -> void:
@@ -2553,6 +2555,18 @@ func _check_ball_out() -> void:
 
 	var attacking_team := 0 if beyond_right else 1
 	var defending_team := 1 - attacking_team
+	# Never label an ordinary clearance, pass, keeper deflection or stale loose
+	# ball as a narrowly missed shot. This does not influence the restart.
+	if (
+		ball.last_release_was_shot
+		and ball.shot_flight_seconds <= 3.0
+		and last_touch == attacking_team
+		and ChessFootballMath.close_shot_miss_at_goal_line(
+			point, ball.flight_height, attacking_team
+		)
+		and audio_fx != null
+	):
+		audio_fx.play_close_miss()
 	if last_touch == defending_team:
 		var corner_y := pitch.position.y + RESTART_GOAL_LINE_INSET if point.y < pitch.get_center().y else pitch.end.y - RESTART_GOAL_LINE_INSET
 		var corner_x := pitch.end.x - RESTART_GOAL_LINE_INSET if beyond_right else pitch.position.x + RESTART_GOAL_LINE_INSET
