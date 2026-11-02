@@ -27,6 +27,7 @@ try{
   await page.screenshot({path:resolve(out,viewport.width+'-login.png')});
   await page.goto('http://127.0.0.1:'+server.address().port+'/');
   await page.getByRole('button',{name:/Modo mánager/}).waitFor();
+  await page.getByRole('button',{name:'Salir de ShadowOps ID',exact:true}).click({trial:true});
   await page.screenshot({path:resolve(out,viewport.width+'-welcome.png')});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.getByRole('button',{name:/Modo mánager/}).click();

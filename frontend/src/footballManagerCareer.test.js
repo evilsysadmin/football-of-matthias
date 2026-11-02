@@ -1,4 +1,3 @@
-import {footballCareerStorageKey} from './profileKeys.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FOOTBALL_CAREER_KEY as LEGACY_FOOTBALL_CAREER_KEY, createFootballCareer, editFootballCareer, playFootballCareerRound, readFootballCareer, replayFootballCareer, writeFootballCareer } from './footballManagerCareer.js';
 import { STORAGE_LOCAL, clearStorageMemoryFallback, getStorageItem, removeStorageItem, setStorageItem } from './safeStorage.js';

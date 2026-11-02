@@ -5,7 +5,7 @@ import { advanceFootballSeason, createFootballSeason, FOOTBALL_MANAGER_TACTICS, 
 import { evaluateFootballLineup, getDefaultFootballLineup, getFootballClubRoster } from './footballManagerRoster.js';
 import { FOOTBALL_TRAINING_PLANS } from './footballManagerTraining.js';
 import { footballClubObjectiveReport } from './footballManagerObjectives.js';
-import { STORAGE_LOCAL, getStorageItem, storageHealthSnapshot } from './safeStorage.js';
+import { storageHealthSnapshot } from './safeStorage.js';
 import { profileStorageIdentityMatchesCurrentUser, setProfileStorageItem, getProfileStorageItem } from './profileKeys.js';
 
 export const FOOTBALL_CAREER_KEY = 'chess-study-football-manager-career-v1';
