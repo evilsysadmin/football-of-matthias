@@ -256,6 +256,21 @@ jobs:
             exit 1
           fi
           grep -q 'football optional idle-front R2 fallback smoke: OK' "$log"
+      - name: Staged R2 lateral-run parity and rollback smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-lateral-run-r2.log"
+          set +e
+          timeout 45s "$godot" --headless --quit-after 420 --path games/chess-football-godot --script res://tests/lateral_run_r2_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Staged R2 side-run parity/fallback failed.'
+            exit 1
+          fi
+          grep -q 'football lateral R2 staged parity/fallback smoke: OK' "$log"
       - name: Canonical 3D roster parity smoke
         shell: bash
         run: |
