@@ -1740,8 +1740,8 @@ func _initialize() -> void:
 	match_node.audio_fx.set_sfx_enabled(true)
 	match_node.audio_fx._process(3.1)
 	var near_miss_count: int = match_node.audio_fx.debug_crowd_reaction_count()
-	var shooter: Footballer = match_node.teams[0][4]
-	match_node.ball.attach_to(shooter)
+	var near_miss_shooter: Footballer = match_node.teams[0][4]
+	match_node.ball.attach_to(near_miss_shooter)
 	match_node.ball.release(Vector2.RIGHT, 900.0, 0.0, true)
 	assert(match_node.ball.last_release_was_shot)
 	match_node.ball.global_position = near_right
@@ -1754,7 +1754,7 @@ func _initialize() -> void:
 	match_node.goal_restart_active = false
 	match_node.kickoff_active = false
 	match_node.set_piece_active = false
-	match_node.ball.attach_to(shooter)
+	match_node.ball.attach_to(near_miss_shooter)
 	match_node.ball.release(Vector2.RIGHT, 900.0)
 	assert(not match_node.ball.last_release_was_shot)
 	match_node.ball.global_position = near_right
@@ -1763,7 +1763,7 @@ func _initialize() -> void:
 	match_node.goal_restart_active = false
 	match_node.kickoff_active = false
 	match_node.set_piece_active = false
-	match_node.ball.attach_to(shooter)
+	match_node.ball.attach_to(near_miss_shooter)
 	match_node.ball.release(Vector2.RIGHT, 900.0, 0.0, true)
 	match_node.ball.shot_flight_seconds = 3.5
 	match_node.ball.global_position = near_right
