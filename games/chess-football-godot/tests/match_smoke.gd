@@ -129,8 +129,34 @@ func _initialize() -> void:
 	assert(match_node.debug_3d_ready())
 	assert(match_node.debug_audio_ready())
 	var audio_names: Array[String] = match_node.debug_audio_stream_names()
-	for expected_audio in ["goal", "pass", "post", "save", "shot", "tackle", "whistle"]:
+	for expected_audio in [
+		"goal", "goal_alt", "pass", "pass_soft", "pass_crisp",
+		"post", "crossbar", "save", "shot", "shot_low", "shot_snap",
+		"tackle", "tackle_boot", "tackle_foul", "whistle",
+	]:
 		assert(audio_names.has(expected_audio))
+	# Same real event, alternate authored timbres. The distinction between
+	# post and crossbar comes from the physics event, not a random roll.
+	match_node.audio_fx.play_shot(0.25)
+	assert(match_node.audio_fx.debug_last_played_key() == "shot")
+	match_node.audio_fx.play_shot(0.25)
+	assert(match_node.audio_fx.debug_last_played_key() == "shot_low")
+	match_node.audio_fx.play_shot(0.25)
+	assert(match_node.audio_fx.debug_last_played_key() == "shot_snap")
+	match_node.audio_fx.play_tackle()
+	assert(match_node.audio_fx.debug_last_played_key() == "tackle")
+	match_node.audio_fx.play_tackle()
+	assert(match_node.audio_fx.debug_last_played_key() == "tackle_boot")
+	match_node.audio_fx.play_tackle(true)
+	assert(match_node.audio_fx.debug_last_played_key() == "tackle_foul")
+	match_node.audio_fx.play_goal_frame(690.0, "post")
+	assert(match_node.audio_fx.debug_last_played_key() == "post")
+	match_node.audio_fx.play_goal_frame(690.0, "crossbar")
+	assert(match_node.audio_fx.debug_last_played_key() == "crossbar")
+	match_node.audio_fx.play_goal()
+	assert(match_node.audio_fx.debug_last_played_key() == "goal")
+	match_node.audio_fx.play_goal()
+	assert(match_node.audio_fx.debug_last_played_key() == "goal_alt")
 	# The seven cues belong to actual match events. The SFX setting must
 	# silence any playing cheer immediately, never the global audio bus.
 	assert(match_node.debug_match_sfx_enabled())
@@ -143,7 +169,9 @@ func _initialize() -> void:
 	assert(match_node.debug_match_sfx_button_text() == "SFX: NO")
 	for voice in match_node.audio_fx._players:
 		assert(not voice.playing)
+	var last_live_key: String = match_node.audio_fx.debug_last_played_key()
 	match_node.audio_fx.play_shot(1.0)
+	assert(match_node.audio_fx.debug_last_played_key() == last_live_key)
 	for voice in match_node.audio_fx._players:
 		assert(not voice.playing)
 	match_node.debug_toggle_match_sfx()
