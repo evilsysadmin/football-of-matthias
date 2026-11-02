@@ -114,7 +114,7 @@ func _apply_idle_front_textures(textures: Array[Texture2D]) -> void:
 			var frames := sprite.sprite_frames
 			if not frames.has_animation(&"idle_front"):
 				continue
-			var index := 2 + player.team_id if player.role == "keeper" else player.team_id
+			var index: int = 2 + int(player.team_id) if player.role == "keeper" else int(player.team_id)
 			frames.set_frame(&"idle_front", 0, textures[index])
 
 
