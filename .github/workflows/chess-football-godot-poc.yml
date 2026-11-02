@@ -31,6 +31,8 @@ jobs:
         run: npx --yes npm@11.6.1 install --no-audit --no-fund
       - run: npm --prefix frontend test
       - run: node tests/identity-gate.test.mjs
+      - name: Exercise authority exchange and revocation in the real Workers runtime
+        run: npx --yes workerd@1.20261102.1 test tests/identity-workerd.capnp
       - run: python3 scripts/check_migration.py
       - run: python3 -m unittest discover -s scripts -p 'test_migration_provenance.py'
   validate:
