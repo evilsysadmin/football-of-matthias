@@ -92,9 +92,15 @@ func play_close_miss() -> void:
 	# Only called after a tracked shot actually exits narrowly by the goal.
 	_play_crowd_reaction("crowd_near_miss", -11.5)
 
-func play_keeper_save() -> void:
-	_play("save", -3.0, 1.0)
-	_play_crowd_reaction("crowd_save", -10.0)
+func play_keeper_save(spectacular: bool = false) -> void:
+	# Stronger impact and a longer stand-up applause only for a tracked,
+	# genuinely demanding goalkeeper save. Ordinary catches remain understated.
+	if spectacular:
+		_play("save_dive", -2.0, 0.96)
+		_play_crowd_reaction("crowd_save_big", -8.5)
+	else:
+		_play("save", -3.0, 1.0)
+		_play_crowd_reaction("crowd_save", -10.0)
 
 func play_goal() -> void:
 	# A confirmed goal supersedes a previous gasp. The existing goal swell
@@ -184,6 +190,7 @@ func _build_streams() -> void:
 	_streams["tackle_boot"] = _make_impact(0.115, 112.0, 55.0, 0.63, 0.65, 311)
 	_streams["tackle_foul"] = _make_impact(0.160, 81.0, 36.0, 0.88, 0.70, 313)
 	_streams["save"] = _make_impact(0.082, 260.0, 105.0, 0.52, 0.66, 401)
+	_streams["save_dive"] = _make_impact(0.160, 206.0, 69.0, 0.67, 0.72, 409)
 	_streams["whistle"] = _make_whistle(0.20)
 	# Crossbar has a lower, longer ringing timbre than a vertical post.
 	_streams["post"] = _make_metal_ring(0.46, 740.0)
@@ -195,6 +202,7 @@ func _build_streams() -> void:
 	_streams["crowd_bed"] = _make_crowd_bed(2.4, 727)
 	_streams["crowd_gasp"] = _make_crowd_reaction(1.05, 733, false)
 	_streams["crowd_save"] = _make_crowd_reaction(1.25, 739, true)
+	_streams["crowd_save_big"] = _make_crowd_reaction(1.70, 743, true)
 	_streams["crowd_near_miss"] = _make_crowd_reaction(1.0, 751, false)
 
 func _make_ball_strike(

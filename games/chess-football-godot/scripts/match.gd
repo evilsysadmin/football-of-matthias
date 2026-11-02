@@ -47,6 +47,9 @@ const KEEPER_SAVE_RANGE := 58.0
 const KEEPER_SAVE_MIN_SPEED := 280.0
 const KEEPER_SAVE_Y_MARGIN := 36.0
 const KEEPER_SAVE_MAX_HEIGHT := 44.0
+# Sound-only thresholds. No effect on keeper reach, shot trajectory or goals.
+const KEEPER_SPECTACULAR_MIN_SHOT_SPEED := 790.0
+const KEEPER_SPECTACULAR_MIN_DIVE_OFFSET := 32.0
 const KEEPER_HOLD_SECONDS := 0.72
 const KEEPER_DISTRIBUTION_WAIT_SECONDS := 2.20
 const KEEPER_DISTRIBUTION_PRESSURE_RADIUS := 185.0
@@ -1332,6 +1335,18 @@ func _update_keeper_saves() -> void:
 		if _keeper_try_save(keeper):
 			return
 
+# A saved shot is spectacular only when the real ball arrives fast and
+# substantially off the keeper's body. A fast pass or a lingering loose ball
+# must never earn the larger crowd cheer.
+func _is_spectacular_keeper_save(keeper: Footballer) -> bool:
+	return (
+		ball.last_release_was_shot
+		and ball.shot_flight_seconds <= 3.0
+		and ball.velocity.length() >= KEEPER_SPECTACULAR_MIN_SHOT_SPEED
+		and absf(ball.global_position.y - keeper.global_position.y)
+			>= KEEPER_SPECTACULAR_MIN_DIVE_OFFSET
+	)
+
 func _keeper_try_save(keeper: Footballer) -> bool:
 	if keeper.sent_off or keeper.role != "keeper" or ball.carrier != null:
 		return false
@@ -1357,9 +1372,10 @@ func _keeper_try_save(keeper: Footballer) -> bool:
 	var dive_direction := signf(ball.global_position.y - keeper.global_position.y)
 	if absf(dive_direction) < 0.01:
 		dive_direction = 1.0
+	var spectacular_save := _is_spectacular_keeper_save(keeper)
 	keeper.begin_keeper_save(dive_direction, 0.58)
 	if audio_fx != null:
-		audio_fx.play_keeper_save()
+		audio_fx.play_keeper_save(spectacular_save)
 	keeper.begin_keeper_hold(KEEPER_HOLD_SECONDS)
 	ball.attach_to(keeper)
 	if keeper.team_id == 0:
