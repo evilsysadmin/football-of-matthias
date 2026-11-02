@@ -6,7 +6,7 @@ import { evaluateFootballLineup, getDefaultFootballLineup, getFootballClubRoster
 import { FOOTBALL_TRAINING_PLANS } from './footballManagerTraining.js';
 import { footballClubObjectiveReport } from './footballManagerObjectives.js';
 import { STORAGE_LOCAL, getStorageItem, storageHealthSnapshot } from './safeStorage.js';
-import { profileStorageIdentityMatchesCurrentUser, setProfileStorageItem } from './profileKeys.js';
+import { profileStorageIdentityMatchesCurrentUser, setProfileStorageItem, getProfileStorageItem } from './profileKeys.js';
 
 export const FOOTBALL_CAREER_KEY = 'chess-study-football-manager-career-v1';
 export const FOOTBALL_CAREER_VERSION = 4;
@@ -185,7 +185,7 @@ export function startNextFootballSeason(journal) {
 
 export function readFootballCareer() {
   if (!profileStorageIdentityMatchesCurrentUser()) return freeze({ status: 'unavailable' });
-  const raw = getStorageItem(STORAGE_LOCAL, FOOTBALL_CAREER_KEY);
+  const raw = getProfileStorageItem(FOOTBALL_CAREER_KEY);
   if (raw === null) return freeze({ status: 'empty' });
   if (raw.length > MAX_SAVE_BYTES) return freeze({ status: 'invalid' });
   let parsed;

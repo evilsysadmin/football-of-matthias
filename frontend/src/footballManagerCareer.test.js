@@ -1,8 +1,11 @@
+import {footballCareerStorageKey} from './profileKeys.js';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { FOOTBALL_CAREER_KEY, createFootballCareer, editFootballCareer, playFootballCareerRound, readFootballCareer, replayFootballCareer, writeFootballCareer } from './footballManagerCareer.js';
+import { FOOTBALL_CAREER_KEY as LEGACY_FOOTBALL_CAREER_KEY, createFootballCareer, editFootballCareer, playFootballCareerRound, readFootballCareer, replayFootballCareer, writeFootballCareer } from './footballManagerCareer.js';
 import { STORAGE_LOCAL, clearStorageMemoryFallback, getStorageItem, removeStorageItem, setStorageItem } from './safeStorage.js';
 import { clearProfileProgress } from './profileKeys.js';
 import { advanceFootballSeason, createFootballSeason } from './footballManagerSeason.js';
+
+const FOOTBALL_CAREER_KEY=LEGACY_FOOTBALL_CAREER_KEY+':11111111-1111-4111-8111-111111111111';
 
 describe('Football manager · versioned career journal', () => {
   beforeEach(() => { clearStorageMemoryFallback(); removeStorageItem(STORAGE_LOCAL, FOOTBALL_CAREER_KEY); });
