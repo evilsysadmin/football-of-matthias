@@ -14,7 +14,7 @@ IMMUTABLE_ART_PATHS = ("games/chess-football-godot/assets/", "scripts/art/")
 
 
 def git_blob_sha(raw: bytes) -> str:
-    return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\\0" + raw).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
 
 
 def verify_migration(root: Path, source: dict, additions: dict) -> tuple[int, int]:
