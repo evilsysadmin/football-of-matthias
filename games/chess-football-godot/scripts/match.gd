@@ -217,6 +217,7 @@ var shot_meter_label: Label
 var pause_overlay: ColorRect
 var pause_exit_button: Button
 var pause_menu_button: Button
+var pause_sfx_button: Button
 
 func _ready() -> void:
 	_spawn_match()
@@ -469,9 +470,19 @@ func _create_pause_menu(hud: CanvasLayer) -> void:
 	continue_button.pressed.connect(_toggle_pause_menu)
 	box.add_child(continue_button)
 
+	# Keep two controls in the existing row: the pause panel still fits
+	# the constrained landscape phone viewport without vertical scrolling.
+	var settings_row := HBoxContainer.new()
+	settings_row.add_theme_constant_override("separation", 8)
+	box.add_child(settings_row)
 	var view_button := _menu_button("CAMBIAR VISTA")
+	view_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	view_button.pressed.connect(_menu_change_view)
-	box.add_child(view_button)
+	settings_row.add_child(view_button)
+	pause_sfx_button = _menu_button("SFX: SÍ")
+	pause_sfx_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pause_sfx_button.pressed.connect(_toggle_match_sfx)
+	settings_row.add_child(pause_sfx_button)
 
 	var restart_button := _menu_button("REINICIAR PARTIDO")
 	restart_button.pressed.connect(_restart_match)
@@ -497,6 +508,12 @@ func _toggle_pause_menu() -> void:
 		pause_exit_button.grab_focus()
 	else:
 		pause_exit_button.release_focus()
+
+func _toggle_match_sfx() -> void:
+	if audio_fx == null:
+		return
+	audio_fx.set_sfx_enabled(not audio_fx.sfx_enabled)
+	pause_sfx_button.text = "SFX: SÍ" if audio_fx.sfx_enabled else "SFX: NO"
 
 func _menu_change_view() -> void:
 	_toggle_camera_mode()
@@ -2671,6 +2688,15 @@ func debug_3d_ready() -> bool:
 
 func debug_audio_ready() -> bool:
 	return audio_fx != null
+
+func debug_match_sfx_enabled() -> bool:
+	return audio_fx != null and audio_fx.sfx_enabled
+
+func debug_toggle_match_sfx() -> void:
+	_toggle_match_sfx()
+
+func debug_match_sfx_button_text() -> String:
+	return pause_sfx_button.text if pause_sfx_button != null else ""
 
 func debug_audio_stream_names() -> Array[String]:
 	return audio_fx.debug_stream_names() if audio_fx != null else []

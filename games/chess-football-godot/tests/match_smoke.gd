@@ -131,6 +131,24 @@ func _initialize() -> void:
 	var audio_names: Array[String] = match_node.debug_audio_stream_names()
 	for expected_audio in ["goal", "pass", "post", "save", "shot", "tackle", "whistle"]:
 		assert(audio_names.has(expected_audio))
+	# The seven cues belong to actual match events. The SFX setting must
+	# silence any playing cheer immediately, never the global audio bus.
+	assert(match_node.debug_match_sfx_enabled())
+	assert(match_node.debug_match_sfx_button_text() == "SFX: SÍ")
+	assert(match_node.audio_fx.debug_stream_duration("goal") >= 2.2)
+	assert(match_node.audio_fx.debug_stream_duration("shot") < 0.2)
+	match_node.audio_fx.play_goal()
+	match_node.debug_toggle_match_sfx()
+	assert(not match_node.debug_match_sfx_enabled())
+	assert(match_node.debug_match_sfx_button_text() == "SFX: NO")
+	for voice in match_node.audio_fx._players:
+		assert(not voice.playing)
+	match_node.audio_fx.play_shot(1.0)
+	for voice in match_node.audio_fx._players:
+		assert(not voice.playing)
+	match_node.debug_toggle_match_sfx()
+	assert(match_node.debug_match_sfx_enabled())
+	assert(match_node.debug_match_sfx_button_text() == "SFX: SÍ")
 	assert(match_node.debug_3d_animated_players() == 10)
 	# Two proper goalkeeper sprites, same canonical canvas and proportions
 	# as field players. No animation may fall back to the old SVG body.
