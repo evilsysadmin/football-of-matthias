@@ -4,6 +4,8 @@ export const HOST='staging.football.shadowops.dpdns.org';
 export const ISSUER='https://id-staging.shadowops.dpdns.org';
 export const AUDIENCE='football';
 const COOKIE='__Host-football_staging';
+// workerd requires the native global receiver; Node accepts detached fetch.
+const publicRequest=(...args)=>globalThis.fetch(...args);
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 class Denied extends Error{constructor(status=401,stage='session'){super('session unavailable');this.status=status;this.stage=stage;}}
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'};
@@ -25,7 +27,7 @@ async function bounded(response,max=32768){
  const text=await limitedBody(response.body,max,503);
  try{return JSON.parse(text);}catch{throw new Denied(503);}
 }
-export async function verifyIdentityToken(token,{request=fetch,now=Math.floor(Date.now()/1000),subtle=crypto.subtle}={}){
+export async function verifyIdentityToken(token,{request=publicRequest,now=Math.floor(Date.now()/1000),subtle=crypto.subtle}={}){
  if(typeof token!=='string'||token.length>8192)throw new Denied();
  const parts=token.split('.');if(parts.length!==3)throw new Denied();
  let header,claims;
@@ -45,7 +47,7 @@ export async function verifyIdentityToken(token,{request=fetch,now=Math.floor(Da
  }catch{throw new Denied();}
  return claims;
 }
-export async function authorize(token,env,{request=fetch,now=Math.floor(Date.now()/1000),subtle=crypto.subtle}={}){
+export async function authorize(token,env,{request=publicRequest,now=Math.floor(Date.now()/1000),subtle=crypto.subtle}={}){
  const proof=env.SHADOWOPS_FOOTBALL_SERVICE_CREDENTIAL;
  if(typeof proof!=='string'||!/^soc1_[A-Za-z0-9_-]{43}$/.test(proof))throw new Denied(503,'edge_configuration');
  const claims=await verifyIdentityToken(token,{request,now,subtle});
