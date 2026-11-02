@@ -3,6 +3,7 @@ extends RefCounted
 
 const MANIFEST_PATH := "res://assets/players/manifest.json"
 const ASSET_ROOT := "res://assets/players/"
+const OPTIONAL_IDLE_META_PATH := "res://optional_idle_front_v1.json"
 const TEAM_KEYS := ["fc_matthias", "real_enroque"]
 
 # Temporary action poses are composed from the already approved lateral
@@ -17,6 +18,7 @@ const CANONICAL_ACTION_POSES := {
 }
 
 static var _cached_manifest: Dictionary = {}
+static var _cached_optional_idle_meta: Dictionary = {}
 static var _cached_run_textures: Dictionary = {}
 static var _cached_3d_run_frames: Dictionary = {}
 static var _cached_directional_textures: Dictionary = {}
@@ -26,6 +28,7 @@ static var _cached_keeper_frames: Dictionary = {}
 # Every 3D raster frame has a known alpha boot baseline. Cache it while the
 # CPU image is being cropped, not by reading textures back from WebGL each tick.
 static var _cached_3d_frame_bottoms: Dictionary = {}
+static var _cached_3d_frame_heights: Dictionary = {}
 # Per-frame opaque-pixel luminance is gathered from already decoded CPU
 # pixels during atlas slicing. No texture readbacks in the 3D game loop.
 static var _cached_3d_frame_luminance: Dictionary = {}
@@ -38,6 +41,80 @@ static func manifest() -> Dictionary:
 	assert(parsed is Dictionary, "Chess Football sprite manifest inválido")
 	_cached_manifest = parsed
 	return _cached_manifest
+
+# Optional asset load path: all callers already have approved raster fallbacks.
+# Return no textures unless the complete sheet passes origin/hash/shape checks.
+static func optional_idle_meta() -> Dictionary:
+	if not _cached_optional_idle_meta.is_empty():
+		return _cached_optional_idle_meta
+	var raw := FileAccess.get_file_as_string(OPTIONAL_IDLE_META_PATH)
+	var parsed: Variant = JSON.parse_string(raw)
+	if parsed is Dictionary:
+		_cached_optional_idle_meta = parsed
+	return _cached_optional_idle_meta
+
+
+static func idle_front_url() -> String:
+	return String(optional_idle_meta().get("url", ""))
+
+
+static func decode_idle_front_webp(payload: PackedByteArray) -> Array[Texture2D]:
+	var result: Array[Texture2D] = []
+	var meta: Dictionary = optional_idle_meta()
+	if meta.is_empty() or payload.is_empty() or payload.size() > 262144:
+		return result
+	var hash := HashingContext.new()
+	if hash.start(HashingContext.HASH_SHA256) != OK or hash.update(payload) != OK:
+		return result
+	if hash.finish().hex_encode() != String(meta.get("sha256", "")):
+		return result
+	var image := Image.new()
+	if image.load_webp_from_buffer(payload) != OK:
+		return result
+	return idle_front_textures_from_image(image)
+
+
+static func idle_front_textures_from_image(image: Image) -> Array[Texture2D]:
+	# Exposed independently for deterministic offline tests; network source
+	# verification occurs ONLY in decode_idle_front_webp().
+	var textures: Array[Texture2D] = []
+	var meta: Dictionary = optional_idle_meta()
+	if meta.is_empty() or image == null:
+		return textures
+	var cell: Dictionary = meta.get("cell", {})
+	var width := int(cell.get("width", 0))
+	var height := int(cell.get("height", 0))
+	if width != 128 or height != 144 or image.get_size() != Vector2i(width * 3, height):
+		return textures
+	if image.get_format() != Image.FORMAT_RGBA8:
+		image = image.duplicate()
+		image.convert(Image.FORMAT_RGBA8)
+	var regions: Array[Image] = []
+	for index in range(3):
+		var region := image.get_region(Rect2i(index * width, 0, width, height))
+		var rect := region.get_used_rect()
+		if rect.size.y < 60 or rect.end.y > height or rect.position.y > 40:
+			return []
+		# A missing transparency channel would render an opaque card over turf.
+		if region.get_pixel(0, 0).a > 0.05 or region.get_pixel(width - 1, 0).a > 0.05:
+			return []
+		regions.append(region)
+	# Retain the approved teal keeper kit for Real Enroque: recolour only
+	# yellow fabric, not skin, gloves, socks or hair.
+	var away_keeper: Image = regions[2].duplicate()
+	var teal := Color("#2bafad")
+	for y in range(height):
+		for x in range(width):
+			var pixel: Color = away_keeper.get_pixel(x, y)
+			if pixel.a > 0.10 and pixel.h >= 0.105 and pixel.h <= 0.19 and pixel.s >= 0.43 and pixel.v >= 0.28:
+				away_keeper.set_pixel(x, y, Color.from_hsv(teal.h, pixel.s, pixel.v, pixel.a))
+	regions.append(away_keeper)
+	for region in regions:
+		var texture := ImageTexture.create_from_image(region)
+		_register_frame_bottom(texture, region)
+		textures.append(texture)
+	return textures
+
 
 static func _team_key(team_id: int) -> String:
 	return TEAM_KEYS[clampi(team_id, 0, TEAM_KEYS.size() - 1)]
@@ -146,6 +223,7 @@ static func _register_frame_bottom(texture: ImageTexture, cropped: Image) -> voi
 	var visible: Rect2i = cropped.get_used_rect()
 	assert(visible.size.y >= 60 and visible.end.y <= cropped.get_height())
 	_cached_3d_frame_bottoms[texture.get_instance_id()] = float(visible.end.y)
+	_cached_3d_frame_heights[texture.get_instance_id()] = float(visible.size.y)
 	var rgba := cropped
 	if rgba.get_format() != Image.FORMAT_RGBA8:
 		rgba = cropped.duplicate()
@@ -171,6 +249,12 @@ static func frame_luminance(texture: Texture2D) -> float:
 	if texture == null:
 		return 0.0
 	return float(_cached_3d_frame_luminance.get(texture.get_instance_id(), 0.0))
+
+
+static func frame_height(texture: Texture2D) -> float:
+	if texture == null:
+		return 0.0
+	return float(_cached_3d_frame_heights.get(texture.get_instance_id(), 0.0))
 
 
 static func frame_bottom(texture: Texture2D) -> float:
@@ -295,6 +379,10 @@ static func _build_keeper_frames(team_id: int) -> SpriteFrames:
 			frames.add_frame(anim, _keeper_frame_3d(team_id, side_row, source_frame, atlas, cell))
 	for view_name in ["front", "back", "back_diagonal", "front_diagonal"]:
 		var authored_row: int = int(meta["views"][view_name])
+		var idle_name := StringName("idle_" + view_name)
+		frames.add_animation(idle_name)
+		frames.set_animation_speed(idle_name, 1.0)
+		frames.add_frame(idle_name, _keeper_frame_3d(team_id, authored_row, 0, atlas, cell))
 		for base_name in ["run", "sprint"]:
 			var named := StringName(base_name + "_" + view_name)
 			frames.add_animation(named)
@@ -414,6 +502,11 @@ static func build_frames(team_id: int, role: String = "", squad_index: int = -1,
 			)
 			for view_name in ["front", "back", "back_diagonal", "front_diagonal"]:
 				var row: int = int(directional_meta["views"][view_name])
+				if for_3d:
+					var idle_name := StringName("idle_" + view_name)
+					frames.add_animation(idle_name)
+					frames.set_animation_speed(idle_name, 1.0)
+					frames.add_frame(idle_name, _direction_frame_3d(team_id, row, 0, directional_atlas, directional_cell))
 				for base_name in ["run", "sprint"]:
 					var directional_name := StringName(base_name + "_" + view_name)
 					frames.add_animation(directional_name)

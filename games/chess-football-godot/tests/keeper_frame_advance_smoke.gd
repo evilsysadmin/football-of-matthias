@@ -99,7 +99,7 @@ func _initialize() -> void:
 		keeper.velocity = Vector2.ZERO
 		keeper._sync_locomotion(false)
 		presenter.sync_presentation(1.0 / 60.0, "broadcast")
-		assert(sprite.animation == &"idle")
+		assert(sprite.animation == &"idle_back")
 		assert(sprite.frame == 0)
 		print("KEEPER_ANIM_TEAM=%d RUN_POSES=%d TACKLE_POSES=%d LEAN=%.1f SWAY=%.3f LIFT=%.3f" % [
 			team_id, observed.size(), action_observed.size(),

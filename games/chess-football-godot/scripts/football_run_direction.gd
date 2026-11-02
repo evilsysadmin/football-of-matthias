@@ -29,6 +29,6 @@ static func view_for_velocity(velocity: Vector2, previous: String = "side") -> S
 	return vertical_sign + "_diagonal"
 
 static func animation_for(base_animation: StringName, view: String) -> StringName:
-	if base_animation not in [&"run", &"sprint"] or view == "side":
+	if base_animation not in [&"idle", &"run", &"sprint"] or view == "side":
 		return base_animation
 	return StringName(String(base_animation) + "_" + view)

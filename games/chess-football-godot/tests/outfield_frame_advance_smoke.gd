@@ -61,7 +61,7 @@ func _initialize() -> void:
 			player.velocity = Vector2.ZERO
 			player._sync_locomotion(false)
 			presenter.sync_presentation(1.0 / 60.0, "broadcast")
-			assert(sprite.animation == &"idle")
+			assert(sprite.animation == &"idle_back")
 			assert(sprite.frame == 0)
 			for action in ["pass", "shoot"]:
 				player.play_action(action, 0.62)
@@ -75,7 +75,7 @@ func _initialize() -> void:
 				player.action_lock_seconds = 0.0
 				player._sync_locomotion(false)
 				presenter.sync_presentation(0.0, "broadcast")
-				assert(sprite.animation == &"idle")
+				assert(sprite.animation == &"idle_back")
 				assert(sprite.frame == 0)
 			print("OUTFIELD_3D_POSES team=%d slot=%d run=%d sprint=%d" % [
 				team_id, index, poses.size(), sprint_poses.size()
