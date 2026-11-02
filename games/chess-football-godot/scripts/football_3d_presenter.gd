@@ -965,24 +965,28 @@ func _build_keeper_catch_rig(parent: Node3D, team_id: int) -> Node3D:
 		var sleeve := MeshInstance3D.new()
 		sleeve.name = "Sleeve" + suffix
 		var sleeve_mesh := CylinderMesh.new()
-		sleeve_mesh.top_radius = 0.075
-		sleeve_mesh.bottom_radius = 0.105
+		sleeve_mesh.top_radius = 0.047
+		sleeve_mesh.bottom_radius = 0.066
 		sleeve_mesh.height = 1.0
 		sleeve.mesh = sleeve_mesh
-		sleeve.material_override = _material(sleeve_color, 0.78)
+		var sleeve_mat := _material(sleeve_color, 0.98)
+		sleeve_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		sleeve.material_override = sleeve_mat
 		sleeve.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		rig.add_child(sleeve)
 
 		var glove := MeshInstance3D.new()
 		glove.name = "Glove" + suffix
 		var glove_mesh := SphereMesh.new()
-		glove_mesh.radius = 0.12
-		glove_mesh.height = 0.22
+		glove_mesh.radius = 0.085
+		glove_mesh.height = 0.15
 		glove_mesh.radial_segments = 12
 		glove_mesh.rings = 6
 		glove.mesh = glove_mesh
 		# Pale yellow gloves echo the canonical painted palms.
-		glove.material_override = _material(Color(0.94, 0.84, 0.34), 0.58)
+		var glove_mat := _material(Color(0.83, 0.81, 0.58), 0.95)
+		glove_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		glove.material_override = glove_mat
 		glove.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		rig.add_child(glove)
 	return rig
@@ -1002,10 +1006,10 @@ func _sync_keeper_catch_hands(carrier: Footballer, ball_at: Vector3) -> void:
 		var suffix := "Left" if side < 0 else "Right"
 		var glove := rig.get_node("Glove" + suffix) as MeshInstance3D
 		var sleeve := rig.get_node("Sleeve" + suffix) as MeshInstance3D
-		var palm := held_ball + Vector3(float(side) * 0.21, -0.035, 0.10)
+		var palm := held_ball + Vector3(float(side) * 0.188, -0.015, 0.085)
 		glove.position = palm
-		var shoulder := Vector3(float(side) * 0.29, 0.92, 0.24)
-		var wrist := palm + Vector3(float(side) * 0.06, -0.08, -0.035)
+		var shoulder := Vector3(float(side) * 0.29, 0.91, 0.24)
+		var wrist := palm + Vector3(float(side) * 0.055, -0.065, -0.04)
 		var length := shoulder.distance_to(wrist)
 		sleeve.position = (shoulder + wrist) * 0.5
 		sleeve.scale.y = length
