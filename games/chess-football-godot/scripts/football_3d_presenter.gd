@@ -39,7 +39,6 @@ const KEEPER_STRIDE_EXTRA_LEAN_DEGREES := 13.0
 const STAMINA_BAR_WIDTH := 0.76
 const STAMINA_BAR_DEPTH := 0.10
 const STAMINA_BAR_Z := 0.62
-const OPTIONAL_IDLE_REQUEST_TIMEOUT := 8.0
 
 var match_node: Node
 var camera: Camera3D
@@ -72,33 +71,21 @@ var ad_default_accents: Array[Color] = []
 var ad_last_goal_team: int = -1
 
 func _request_idle_front_from_r2() -> void:
-	# Browser-only enhancement. The match, camera, sprites and gameplay start
-	# immediately with approved local frames even with no CDN or no CORS.
+	# The shared loader owns URL validation, single-fetch, timeout and SHA.
+	# Club-specific colour mapping stays in the sprite bank.
 	if not OS.has_feature("web"):
 		return
-	var url := ChessFootballSpriteBank.idle_front_url()
-	if not url.begins_with("https://assets.chess-studio.shadowops.dpdns.org/football/atlases/idle/"):
-		return
-	var request_node := HTTPRequest.new()
-	request_node.name = "OptionalIdleFrontR2"
-	request_node.timeout = OPTIONAL_IDLE_REQUEST_TIMEOUT
-	add_child(request_node)
-	request_node.request_completed.connect(_on_optional_idle_front_received.bind(request_node))
-	if request_node.request(url) != OK:
-		request_node.queue_free()
+	var loader := ChessFootballR2AtlasLoader.new()
+	loader.name = "OptionalIdleFrontR2"
+	add_child(loader)
+	loader.atlas_ready.connect(_on_idle_front_atlas_ready)
+	loader.start(ChessFootballSpriteBank.optional_idle_meta())
 
 
-func _on_optional_idle_front_received(
-	result: int, status: int, _headers: PackedStringArray,
-	body: PackedByteArray, request_node: HTTPRequest
-) -> void:
-	request_node.queue_free()
-	if result != HTTPRequest.RESULT_SUCCESS or status != 200:
-		return
-	var textures := ChessFootballSpriteBank.decode_idle_front_webp(body)
-	if textures.size() != 4:
-		return
-	_apply_idle_front_textures(textures)
+func _on_idle_front_atlas_ready(image: Image) -> void:
+	var textures := ChessFootballSpriteBank.idle_front_textures_from_image(image)
+	if textures.size() == 4:
+		_apply_idle_front_textures(textures)
 
 
 func _apply_idle_front_textures(textures: Array[Texture2D]) -> void:
