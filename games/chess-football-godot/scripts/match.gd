@@ -1658,7 +1658,7 @@ func _resolve_tackle_contact(
 	var foul_spot := victim.global_position
 	victim.receive_tackle_contact(push_direction)
 	if audio_fx != null:
-		audio_fx.play_tackle()
+		audio_fx.play_tackle(bool(resolved_hitbox.get("foul", false)))
 
 	if bool(resolved_hitbox.get("foul", false)):
 		tackler.tackle_recovery_seconds = maxf(tackler.tackle_recovery_seconds, 0.85)
@@ -1942,7 +1942,7 @@ func _resolve_goal_frame_collision(
 		)
 
 	if audio_fx != null:
-		audio_fx.play_goal_frame(impact_speed)
+		audio_fx.play_goal_frame(impact_speed, kind)
 	return kind
 
 func _check_goal() -> void:
