@@ -116,6 +116,8 @@ func _apply_idle_front_textures(textures: Array[Texture2D]) -> void:
 				continue
 			var index: int = 2 + int(player.team_id) if player.role == "keeper" else int(player.team_id)
 			frames.set_frame(&"idle_front", 0, textures[index])
+	# A late successful optional sheet invalidates any cached tonal correction.
+	tone_gain_cache.clear()
 
 
 func setup(p_match: Node) -> void:
@@ -1183,6 +1185,14 @@ static func normalized_body_scale(pixel_height: float) -> float:
 
 func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "") -> float:
 	var current_name := String(sprite.animation)
+	# Idle is a deliberately fixed stance. Normalize its actual silhouette,
+	# not a sampled running gait (which can be significantly shorter).
+	# The height was measured during the CPU crop, never read back from WebGL.
+	if current_name == "idle" or current_name.begins_with("idle_"):
+		var stance := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+		var height := ChessFootballSpriteBank.frame_height(stance)
+		if height >= 60.0:
+			return normalized_body_scale(height)
 	var view := "side"
 	if current_name.begins_with("run_"):
 		view = current_name.trim_prefix("run_")
