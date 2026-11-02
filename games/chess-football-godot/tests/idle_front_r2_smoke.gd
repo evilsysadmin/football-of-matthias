@@ -13,7 +13,7 @@ func _initialize() -> void:
 	game.set_physics_process(false)
 	var presenter: ChessFootball3DPresenter = game.presentation_3d
 	assert(presenter != null)
-	var meta := ChessFootballSpriteBank.manifest().get("optional_idle_front", {})
+	var meta := ChessFootballSpriteBank.optional_idle_meta()
 	assert(meta.get("columns") == 3 and meta.get("rows") == 1)
 	assert(ChessFootballSpriteBank.idle_front_url().begins_with("https://"))
 	assert(ChessFootballSpriteBank.decode_idle_front_webp(PackedByteArray([1, 2, 3])).is_empty())
