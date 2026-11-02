@@ -144,7 +144,7 @@ static func validated_lateral_run_frames(image: Image, team_id: int) -> Array[Te
 	if candidate.get_data() != reference.get_data():
 		return result
 	for index in range(8):
-		var crop := candidate.get_region(Rect2i(index * 128, 0, 128, 144))
+		var crop: Image = candidate.get_region(Rect2i(index * 128, 0, 128, 144))
 		if crop.get_used_rect().size.y < 60:
 			return []
 		var texture := ImageTexture.create_from_image(crop)
