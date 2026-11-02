@@ -40,7 +40,7 @@ describe('Chess Football Godot runtime', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('resolves the current R2 manifest without caching it', async () => {
+  it('resolves the protected runtime manifest with its same-origin session and no cache', async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,
       json: async () => VALID_MANIFEST,
@@ -52,7 +52,7 @@ describe('Chess Football Godot runtime', () => {
     });
     expect(fetchImpl).toHaveBeenCalledWith(
       `${DEFAULT_CHESS_FOOTBALL_MANIFEST_URL}?v=42`,
-      expect.objectContaining({ cache: 'no-store', credentials: 'omit' }),
+      expect.objectContaining({ cache: 'no-store', credentials: 'same-origin' }),
     );
   });
 

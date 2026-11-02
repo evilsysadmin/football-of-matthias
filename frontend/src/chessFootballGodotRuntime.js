@@ -49,7 +49,7 @@ export async function resolveChessFootballGodotUrl({
     requestUrl.searchParams.set('v', String(now()));
     const response = await fetchWithTimeout(fetchImpl, requestUrl.href, {
       cache: 'no-store',
-      credentials: 'omit',
+      credentials: 'same-origin',
     });
     if (!response?.ok) throw new Error(`manifest Chess Football HTTP ${response?.status || 0}`);
     const manifest = validateChessFootballManifest(await response.json(), manifestUrl);
