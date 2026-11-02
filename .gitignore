@@ -1,0 +1,14 @@
+node_modules/
+frontend/dist/
+frontend/public/runtime.json
+frontend/public/release.json
+.godot-ci/
+**/.godot/
+games/chess-football-godot/build/
+.artifacts/
+__pycache__/
+*.pyc
+.DS_Store
+games/chess-football-godot/assets/players/keeper_canon_v1/keeper_run_v1.png
+games/chess-football-godot/assets/players/run_directions_v1/directional_run_v1.png
+frontend/public/

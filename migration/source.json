@@ -1,0 +1,346 @@
+{
+  "repository": "evilsysadmin/chess-studio",
+  "commit": "dd0c6b1a528dcc357cf3cc7377fc83ffae7f1994",
+  "files": [
+    {
+      "path": ".github/workflows/chess-football-godot-poc.yml",
+      "sha": "f1bc4fec927d159c75b7903dee24911b86a9f3c7"
+    },
+    {
+      "path": "docs/ci/football-required-merge-gate.md",
+      "sha": "f2c115e0f56e686eabe32a16f27a59d3b822c24c"
+    },
+    {
+      "path": "docs/operations/chess-football-product.md",
+      "sha": "74efcf48feba7405dcaf2e0ad7c51c2d889e703c"
+    },
+    {
+      "path": "e2e/football-godot-real-web.mjs",
+      "sha": "f662f3afd3b96b1ad1495ccf5a027560028e5ea2"
+    },
+    {
+      "path": "frontend/src/asyncControl.js",
+      "sha": "e5e7a62a17e6e6c4a1754fd6bc4349f89d0895cc"
+    },
+    {
+      "path": "frontend/src/chessFootballGodotRuntime.js",
+      "sha": "3dcfae7fb59d9f1e15d662985f4983a45cdb9749"
+    },
+    {
+      "path": "frontend/src/chessFootballGodotRuntime.test.js",
+      "sha": "5a76b6cff3038d47ac27d95ea001585fb352a233"
+    },
+    {
+      "path": "frontend/src/components/ChessFootballEntry.css",
+      "sha": "8a408906bc8df9bd359d7a30f510fea3520c1858"
+    },
+    {
+      "path": "frontend/src/components/ChessFootballEntry.jsx",
+      "sha": "a4d4eff8195232b9eff1dc3b858495126d415524"
+    },
+    {
+      "path": "frontend/src/components/ChessFootballGodotHost.css",
+      "sha": "c5a0aba971450253ba6877db73744515fc3ea4f5"
+    },
+    {
+      "path": "frontend/src/components/ChessFootballGodotHost.jsx",
+      "sha": "32e80db284d9d5a7526609cc82876b819059e2f8"
+    },
+    {
+      "path": "frontend/src/components/useWarRoomImmersive.js",
+      "sha": "08d1784a8047ffa8ac901210dffb95bb064bc020"
+    },
+    {
+      "path": "frontend/src/footballManagerCareer.js",
+      "sha": "519e32c8bc7c24fd7e32d036a897d216e58d9f31"
+    },
+    {
+      "path": "frontend/src/footballManagerCareer.test.js",
+      "sha": "64f7724c5d170fb4ca48d8416cc618535ab25285"
+    },
+    {
+      "path": "frontend/src/footballManagerClubs.js",
+      "sha": "709b3416de24c82434d5e2c57ac91491f84d3735"
+    },
+    {
+      "path": "frontend/src/footballManagerClubs.test.js",
+      "sha": "fb0475348bd32f0c84e6487f05b0475dd84da33a"
+    },
+    {
+      "path": "frontend/src/footballManagerDevelopment.js",
+      "sha": "d3c08d28b25c8c717f07267ed0b028d82d868b3d"
+    },
+    {
+      "path": "frontend/src/footballManagerDevelopment.test.js",
+      "sha": "bf05893fe26d2cb9a79807a5b1052404cfb8ed29"
+    },
+    {
+      "path": "frontend/src/footballManagerMultiSeason.test.js",
+      "sha": "64a7cee2642fca437cb19e0a67bde42da31408be"
+    },
+    {
+      "path": "frontend/src/footballManagerObjectives.js",
+      "sha": "956a1d97f2977bdd5d9537449d1733920f92df6c"
+    },
+    {
+      "path": "frontend/src/footballManagerObjectives.test.js",
+      "sha": "1f599cf26ffa23247b5908c1f282626cdaa92528"
+    },
+    {
+      "path": "frontend/src/footballManagerRoster.js",
+      "sha": "fdedd08f1a48eb39a78c8022d5a15a4e478d8f6f"
+    },
+    {
+      "path": "frontend/src/footballManagerRoster.test.js",
+      "sha": "82998bc4d161e55effb7607943ee299176733105"
+    },
+    {
+      "path": "frontend/src/footballManagerSeason.js",
+      "sha": "ec0046be6806f7a868feb0fa21969cf756769c26"
+    },
+    {
+      "path": "frontend/src/footballManagerSeason.test.js",
+      "sha": "f2dc6107eeb0b0529cb191cea24868c50855748c"
+    },
+    {
+      "path": "frontend/src/footballManagerTraining.js",
+      "sha": "bf4071836502cb10ee284119f619738dd9b688ce"
+    },
+    {
+      "path": "frontend/src/footballManagerTraining.test.js",
+      "sha": "1c81bd5e45049e3f5eec275a23e2e2b99451f2f9"
+    },
+    {
+      "path": "frontend/src/requestTimeout.js",
+      "sha": "9713fc3bff596bd50873d4639afb13e2d0b2a24b"
+    },
+    {
+      "path": "frontend/src/safeStorage.js",
+      "sha": "ea3bfcaf315c8d4ebd2d27358916965dfec0bc75"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/action_canon/canonical_idle_celebrate_v1.part00.b64",
+      "sha": "004e5dfd15b9faa8bf8582284cdd8091e1a85924"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/action_canon/canonical_idle_celebrate_v1.part00b.b64",
+      "sha": "0558dc9819c5d6b75e81ec9b1033cfc52d6cdee7"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/action_canon/canonical_idle_celebrate_v1.part01.b64",
+      "sha": "735b01b88a504fac0a465e5535f2f854ba7eaf03"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/action_canon/canonical_idle_celebrate_v1.part02.b64",
+      "sha": "cf98b99371ea0f5c46e7144abb79ab3270a3b4e1"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/action_canon/canonical_idle_celebrate_v1.part03.b64",
+      "sha": "7fc6d2a1236d028f82bae4d1bb77dd4a0f6b24b0"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/action_canon/canonical_idle_celebrate_v1.part04.b64",
+      "sha": "7ee3c7f3e94ffbac00f35325cbe98a6dc23cd04b"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/action_canon/canonical_idle_celebrate_v1.part05.b64",
+      "sha": "d9df285379b614ed652cea0c78d90efc6698bca2"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/action_canon/canonical_idle_celebrate_v1.part06.b64",
+      "sha": "4e64bcc1dbcd1bd6a9e56d1cde33bc2c681f9fb9"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/fc_matthias_atlas.svg",
+      "sha": "2814366b1f360f0c56314c715cfa785c5b468cfa"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/fc_matthias_keeper_atlas.svg",
+      "sha": "4802baeb11e7c5f1a883ecb0730c0b7cd5f40f15"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/fc_matthias_v2_atlas.svg",
+      "sha": "46833f2f55194d5f9aebb17108e9399c52f6d71b"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/fc_matthias_v3_atlas.svg",
+      "sha": "00d2e628fc71f749fc2e639866b9f173e5ce070d"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/fc_matthias_v4_atlas.svg",
+      "sha": "bda8cc465dd3ace85f4aafb1e5ad02ad50491bab"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/keeper_canon_v1/README.md",
+      "sha": "e5196e946779a0c35cfe833547b24c4f6880f9f9"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/keeper_canon_v1/keeper_run_v1.b64",
+      "sha": "6bc47ecc3d2f0197fa1ac9f1be77a4059d2a2913"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/manifest.json",
+      "sha": "6dfd1fed24794b2cad4e4419eee88b7e5d3674c9"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/real_enroque_atlas.svg",
+      "sha": "f2cf745c3f331a41c07aaef29aa4783555e47c78"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/real_enroque_keeper_atlas.svg",
+      "sha": "9cc2e31ededc9368664cff26a5e9ebc42bc03655"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/real_enroque_v2_atlas.svg",
+      "sha": "5feb77966cfa181b6094a5a37400c957354c8527"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/real_enroque_v3_atlas.svg",
+      "sha": "8fbdace3947da74f1276b0fe1d3db35a3cd0723b"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/real_enroque_v4_atlas.svg",
+      "sha": "030f528051953bd17f42da8c23f893479a26f450"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/run_canon/README.md",
+      "sha": "b8e03eed4d882e65400a3d731e7a34f2488848ee"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/run_canon/canonical_run_v1.exact00.b64",
+      "sha": "7cad4f27df51c1a62e8f83fbf0a351fad82a7368"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/run_canon/canonical_run_v1.exact01.b64",
+      "sha": "2b45d2cb1495efb29a727ee16a4d154d0e84d12d"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/run_canon/canonical_run_v1.exact02.b64",
+      "sha": "4ea1be55607b634e7cb9486d6e8d6ae26759eef9"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/run_canon/canonical_run_v1.exact03.b64",
+      "sha": "712dc7fee8e68f10c7b0adbbc3f71326112a9ae7"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/run_canon/canonical_run_v1.exact04.b64",
+      "sha": "09e9e8f93b1e80339866c1ec6c6924a7217fe0ed"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/run_directions_v1/README.md",
+      "sha": "d7b2003a31b6af4523c916defca21b78c7b1fa49"
+    },
+    {
+      "path": "games/chess-football-godot/assets/players/run_directions_v1/directional_run_v1.b64",
+      "sha": "f04a4c29e97915be55df1336ec37b12a78158160"
+    },
+    {
+      "path": "games/chess-football-godot/export_presets.cfg",
+      "sha": "387bf1041058badfb0e4e0c0eb28367e7cb8840c"
+    },
+    {
+      "path": "games/chess-football-godot/main.tscn",
+      "sha": "e70df630efb82f8c112df8cff81ec47b1c9af014"
+    },
+    {
+      "path": "games/chess-football-godot/project.godot",
+      "sha": "13da238693b2d107fa8ea766f9bc6e71262653e7"
+    },
+    {
+      "path": "games/chess-football-godot/scripts/ball.gd",
+      "sha": "b7c0a7fbd8c6a9cdbbdb5f99a7d0a000ab23ad6a"
+    },
+    {
+      "path": "games/chess-football-godot/scripts/football_3d_presenter.gd",
+      "sha": "27615e5e52d8263080985b15b854c1153e64d842"
+    },
+    {
+      "path": "games/chess-football-godot/scripts/football_audio.gd",
+      "sha": "a93af95f59d5c42810168cb701e9ad684b81a2da"
+    },
+    {
+      "path": "games/chess-football-godot/scripts/football_math.gd",
+      "sha": "8ea48eef536ca2bc73b8557c2fd1f1be6ee7285c"
+    },
+    {
+      "path": "games/chess-football-godot/scripts/football_run_direction.gd",
+      "sha": "08397ee0554d52e0efd75f04e026226693bc4b4f"
+    },
+    {
+      "path": "games/chess-football-godot/scripts/football_sprite_bank.gd",
+      "sha": "671ee8f26d2bd0e37b062f9a2ff1df1ab0dba2ab"
+    },
+    {
+      "path": "games/chess-football-godot/scripts/footballer.gd",
+      "sha": "8d031ade114d6091d3692454d7fa836a9163415c"
+    },
+    {
+      "path": "games/chess-football-godot/scripts/match.gd",
+      "sha": "5bdb080f0f0a6154f774dee188348379d378a733"
+    },
+    {
+      "path": "games/chess-football-godot/scripts/mobile_controls.gd",
+      "sha": "dbf5a3ebc0fc5c0020a5beca4756768642202dbc"
+    },
+    {
+      "path": "games/chess-football-godot/tests/canonical_roster_parity_smoke.gd",
+      "sha": "348a57f5912584f62acb6bf4f5448bcbcffe61c3"
+    },
+    {
+      "path": "games/chess-football-godot/tests/keeper_frame_advance_smoke.gd",
+      "sha": "c950e586333774505fe4826391cb8000ad097547"
+    },
+    {
+      "path": "games/chess-football-godot/tests/keeper_motion_smoke.gd",
+      "sha": "5708f8ce3330dcf45d22e8505128e989cf332bb6"
+    },
+    {
+      "path": "games/chess-football-godot/tests/match_smoke.gd",
+      "sha": "bfc8b958b0345604aee6715ae5fe3c8b98d60fe2"
+    },
+    {
+      "path": "games/chess-football-godot/tests/mobile_controls_smoke.gd",
+      "sha": "02253dc9ffd566f80650881f3c6c5dec05197a60"
+    },
+    {
+      "path": "games/chess-football-godot/tests/outfield_frame_advance_smoke.gd",
+      "sha": "579b78440f8c538b692cd7574f799d30421fe5eb"
+    },
+    {
+      "path": "games/chess-football-godot/tests/pitch_spacing_smoke.gd",
+      "sha": "68163f7649cbd4de4a5bedda2ea0a3c368c47cf6"
+    },
+    {
+      "path": "games/chess-football-godot/tests/visual_capture.gd",
+      "sha": "a8abb74c74a9446c4e898fee9b5d3f65a89720ca"
+    },
+    {
+      "path": "scripts/art/chess_football_sprite_forge.py",
+      "sha": "952aab0e401e1c56586dc0f9e48214bac254fee3"
+    },
+    {
+      "path": "scripts/art/contracts/chess_football_players_v1.json",
+      "sha": "5312d69b738a450970b581e7ab63b1ef4d61575a"
+    },
+    {
+      "path": "scripts/art/extract_chess_football_directional.py",
+      "sha": "5e1c1d3353a020699985752d84a13102846863ac"
+    },
+    {
+      "path": "scripts/art/normalize_chess_football_keeper.py",
+      "sha": "9ce1f6e08480a1287acb89ae17d1dbf8f8d618d5"
+    },
+    {
+      "path": "frontend/src/components/FootballManagerDesk.css",
+      "sha": "97acaee605eb6609a84585933b67699c0ef77e77"
+    },
+    {
+      "path": "frontend/src/components/FootballManagerDesk.jsx",
+      "sha": "3d1890ebcafac6ae59d7a22f9ca42fcc304d3f87"
+    },
+    {
+      "path": "frontend/src/profileKeys.js",
+      "sha": "411d1a108af30240ab21d5d3b7f687f92a6969d9"
+    }
+  ]
+}
