@@ -7,6 +7,7 @@ const POOL_SIZE := 10
 var _players: Array[AudioStreamPlayer] = []
 var _streams: Dictionary = {}
 var _cursor: int = 0
+var sfx_enabled: bool = true
 
 func _ready() -> void:
 	for index in range(POOL_SIZE):
@@ -15,6 +16,16 @@ func _ready() -> void:
 		add_child(player)
 		_players.append(player)
 	_build_streams()
+
+# Match-local only: do not mute the browser, the host, or other modes.
+# Stopping active voices matters for a goal cheer already ringing out.
+func set_sfx_enabled(enabled: bool) -> void:
+	if sfx_enabled == enabled:
+		return
+	sfx_enabled = enabled
+	if not enabled:
+		for player in _players:
+			player.stop()
 
 func play_whistle() -> void:
 	# Referee cue, not an alarm: short, slightly lower and tucked behind the ball audio.
@@ -47,7 +58,13 @@ func debug_stream_names() -> Array[String]:
 	names.sort()
 	return names
 
+func debug_stream_duration(key: String) -> float:
+	var stream = _streams.get(key) as AudioStreamWAV
+	return stream.get_length() if stream != null else 0.0
+
 func _play(key: String, volume_db: float, pitch_scale: float) -> void:
+	if not sfx_enabled:
+		return
 	var stream = _streams.get(key)
 	if stream == null or _players.is_empty():
 		return
@@ -66,7 +83,7 @@ func _build_streams() -> void:
 	_streams["save"] = _make_impact(0.082, 260.0, 105.0, 0.52, 0.66, 401)
 	_streams["whistle"] = _make_whistle(0.20)
 	_streams["post"] = _make_metal_ring(0.46)
-	_streams["goal"] = _make_goal_swell(1.10, 503)
+	_streams["goal"] = _make_goal_swell(2.25, 503)
 
 func _make_ball_strike(
 	duration: float,
@@ -94,7 +111,11 @@ func _make_ball_strike(
 		previous_noise = noise
 		var transient := exp(-seconds * 180.0)
 		var body_env := exp(-seconds * 31.0)
-		var raw := sin(phase) * body_gain * body_env + snap * noise_gain * transient
+		# A little leather resonance and low-frequency thump separate a boot
+		# strike from a synthetic single-frequency click.
+		var leather := sin(phase * 1.96) * body_gain * exp(-seconds * 65.0) * 0.17
+		var thump := sin(phase * 0.53) * body_gain * exp(-seconds * 29.0) * 0.24
+		var raw := sin(phase) * body_gain * body_env + snap * noise_gain * transient + leather + thump
 		var sample := raw / (1.0 + absf(raw) * 0.34)
 		data.encode_s16(index * 2, int(round(clampf(sample, -1.0, 1.0) * 32767.0)))
 
@@ -184,6 +205,7 @@ func _make_goal_swell(duration: float, seed: int) -> AudioStreamWAV:
 	var noise_state := seed
 	var low_phase := 0.0
 	var clap_phase := 0.0
+	var filtered_noise := 0.0
 
 	for index in range(sample_count):
 		var t := float(index) / float(sample_count)
@@ -191,12 +213,16 @@ func _make_goal_swell(duration: float, seed: int) -> AudioStreamWAV:
 		noise_state = int((noise_state * 1103515245 + 12345) & 0x7fffffff)
 		var noise := (float(noise_state) / 1073741824.0) - 1.0
 		low_phase += TAU * 82.0 / float(MIX_RATE)
-		clap_phase += TAU * 6.0 / float(MIX_RATE)
-		var attack := minf(1.0, t / 0.12)
-		var decay := pow(maxf(0.0, 1.0 - t), 0.55)
-		var crowd := noise * 0.26 + sin(low_phase) * 0.12
-		var claps := maxf(0.0, sin(clap_phase)) * noise * 0.20
-		var stinger := sin(TAU * 620.0 * seconds) * exp(-seconds * 6.5) * 0.18
+		clap_phase += TAU * 5.6 / float(MIX_RATE)
+		# Filter broadband noise into a low stadium roar. Keep discrete handclap
+		# transients on top; the sustained noise must not sound like TV static.
+		filtered_noise = filtered_noise * 0.87 + noise * 0.13
+		var attack := minf(1.0, t / 0.06)
+		var decay := pow(maxf(0.0, 1.0 - t), 0.80)
+		var crowd := filtered_noise * 0.41 + sin(low_phase) * 0.08
+		var clap_gate := pow(maxf(0.0, sin(clap_phase)), 13.0)
+		var claps := (noise - filtered_noise) * clap_gate * 0.37
+		var stinger := sin(TAU * 620.0 * seconds) * exp(-seconds * 7.0) * 0.15
 		var raw := (crowd + claps) * attack * decay + stinger
 		var sample := raw / (1.0 + absf(raw) * 0.30)
 		data.encode_s16(index * 2, int(round(clampf(sample, -1.0, 1.0) * 32767.0)))
