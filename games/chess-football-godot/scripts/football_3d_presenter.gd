@@ -65,6 +65,10 @@ var field_depth: float
 var smoothed_focus_x: float = 0.0
 var smoothed_lead_x: float = 0.0
 var last_camera_mode: String = "broadcast"
+# Keep the static sponsor signs as the source of truth outside a real goal.
+var ad_default_messages: Array[String] = []
+var ad_default_accents: Array[Color] = []
+var ad_last_goal_team: int = -1
 
 func setup(p_match: Node) -> void:
 	match_node = p_match
@@ -444,12 +448,16 @@ func _add_ad_panels() -> void:
 		Color(0.26, 0.72, 0.91), Color(0.90, 0.69, 0.33),
 		Color(0.62, 0.81, 0.89), Color(0.77, 0.41, 0.44),
 	]
+	ad_default_messages.clear()
+	ad_default_accents.clear()
 	var panel_count := messages.size()
 	var panel_width := field_width / float(panel_count)
 	var z := -field_depth * 0.5 - 0.30
 	for i in range(panel_count):
 		var x := -field_width * 0.5 + panel_width * (float(i) + 0.5)
 		var color: Color = accents[i % accents.size()]
+		ad_default_messages.append(messages[i])
+		ad_default_accents.append(color)
 		var panel := _add_box(
 			Vector3(x, 0.24, z), Vector3(panel_width - 0.045, 0.43, 0.08),
 			Color(0.045, 0.085, 0.124)
@@ -480,6 +488,40 @@ func _add_ad_panels() -> void:
 		sign.no_depth_test = false
 		sign.position = Vector3(x, 0.253, z + 0.061)
 		add_child(sign)
+
+
+func _sync_goal_ad_panels() -> void:
+	# Only the authoritative match announcement triggers this diegetic
+	# celebration. A transition restores the original sponsor content exactly
+	# once, so no per-frame churn, overlays, or made-up result data.
+	var announcement := String(match_node.last_goal_text)
+	var scoring_team := -1
+	if announcement.begins_with("GOAL · FC Matthias"):
+		scoring_team = 0
+	elif announcement.begins_with("GOAL · Real Enroque"):
+		scoring_team = 1
+	if scoring_team == ad_last_goal_team:
+		return
+	ad_last_goal_team = scoring_team
+	var winning_name := "FC MATTHIAS" if scoring_team == 0 else "REAL ENROQUE"
+	var winning_accent := (
+		Color(0.24, 0.70, 0.97) if scoring_team == 0
+		else Color(0.96, 0.35, 0.38)
+	)
+	for index in range(ad_default_messages.size()):
+		var board := get_node_or_null("MatchLedSign_%02d" % index) as Label3D
+		if board != null:
+			board.text = (
+				("GOOOL!" if index % 2 == 0 else winning_name)
+				if scoring_team >= 0 else ad_default_messages[index]
+			)
+		var accent_mesh := get_node_or_null("MatchLedAccent_%02d" % index) as MeshInstance3D
+		if accent_mesh != null:
+			var accent_mat := accent_mesh.material_override as StandardMaterial3D
+			if accent_mat != null:
+				accent_mat.albedo_color = (
+					winning_accent if scoring_team >= 0 else ad_default_accents[index]
+				)
 
 func _add_crowd() -> void:
 	# The grandstand is one authored crowd, not 170 individual shadow-casting
@@ -875,6 +917,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 	# Size compensation must use the camera pose from this same frame, not
 	# yesterday's interpolated pose; otherwise footballers visibly pulse.
 	_sync_camera(delta, mode)
+	_sync_goal_ad_panels()
 	for team in match_node.teams:
 		for player in team:
 			var key: int = int(player.get_instance_id())
