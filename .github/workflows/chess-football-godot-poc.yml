@@ -27,7 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
+      - name: Install with pinned npm workspace resolver
+        run: npx --yes npm@11.6.1 install --no-audit --no-fund
       - run: npm --prefix frontend test
       - run: node tests/identity-gate.test.mjs
       - run: python3 scripts/check_migration.py
@@ -540,7 +541,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
+      - name: Install with pinned npm workspace resolver
+        run: npx --yes npm@11.6.1 install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - name: Boot real WebAssembly in Chromium
         run: node e2e/football-godot-real-web.mjs
