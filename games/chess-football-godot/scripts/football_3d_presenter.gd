@@ -170,6 +170,7 @@ void fragment() {
 	_add_goal_area_markings(false, line_color)
 	_add_goal_area_markings(true, line_color)
 	_add_center_circle(line_color)
+	_add_corner_flags()
 
 	var far_stand := MeshInstance3D.new()
 	var far_mesh := BoxMesh.new()
@@ -213,6 +214,63 @@ void fragment() {
 	_add_box(Vector3(0.0, 0.22, field_depth * 0.5 + 0.28), Vector3(field_width + 1.4, 0.44, 0.12), Color(0.075, 0.070, 0.060))
 	_add_benches()
 	_add_floodlights()
+
+func _add_corner_flags() -> void:
+	# Four regulation-scale corner pennants: club colours help the pitch read
+	# like a football ground. Entirely decorative, outside the playable rect.
+	# One vertex-coloured pennant mesh and one pole per corner; no new lights.
+	for x_index in range(2):
+		var sx := -1.0 if x_index == 0 else 1.0
+		for z_index in range(2):
+			var sz := -1.0 if z_index == 0 else 1.0
+			var position_x := sx * (field_width * 0.5 + 0.14)
+			var position_z := sz * (field_depth * 0.5 + 0.14)
+			var pole := _add_box(
+				Vector3(position_x, 0.77, position_z),
+				Vector3(0.045, 1.54, 0.045),
+				Color(0.91, 0.92, 0.86)
+			)
+			pole.name = "CornerPole_%d_%d" % [x_index, z_index]
+			pole.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			# A contrasting hoist and a triangular club-colour fly share one mesh.
+			# The pennant flies outward, away from the corner taker and match chyron.
+			var fly_direction := sx
+			var vertices := PackedVector3Array([
+				Vector3(0.0, 1.49, 0.0),
+				Vector3(fly_direction * 0.25, 1.40, 0.0),
+				Vector3(0.0, 1.11, 0.0),
+				Vector3(0.0, 1.11, 0.0),
+				Vector3(fly_direction * 0.25, 1.40, 0.0),
+				Vector3(fly_direction * 0.25, 1.20, 0.0),
+				Vector3(fly_direction * 0.25, 1.40, 0.0),
+				Vector3(fly_direction * 0.84, 1.30, 0.0),
+				Vector3(fly_direction * 0.25, 1.20, 0.0),
+			])
+			var hoist_color := Color(0.91, 0.81, 0.50)
+			var club_color := (
+				Color(0.20, 0.64, 0.98) if x_index == 0
+				else Color(0.92, 0.21, 0.31)
+			)
+			var colors := PackedColorArray()
+			for vertex_id in range(vertices.size()):
+				colors.append(hoist_color if vertex_id < 6 else club_color)
+			var arrays := []
+			arrays.resize(Mesh.ARRAY_MAX)
+			arrays[Mesh.ARRAY_VERTEX] = vertices
+			arrays[Mesh.ARRAY_COLOR] = colors
+			var pennant_mesh := ArrayMesh.new()
+			pennant_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+			var pennant := MeshInstance3D.new()
+			pennant.name = "CornerPennant_%d_%d" % [x_index, z_index]
+			pennant.mesh = pennant_mesh
+			pennant.position = Vector3(position_x, 0.0, position_z)
+			var cloth := StandardMaterial3D.new()
+			cloth.vertex_color_use_as_albedo = true
+			cloth.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			cloth.cull_mode = BaseMaterial3D.CULL_DISABLED
+			pennant.material_override = cloth
+			pennant.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(pennant)
 
 func _add_stadium_apron() -> void:
 	var apron := MeshInstance3D.new()

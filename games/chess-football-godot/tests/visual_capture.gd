@@ -109,6 +109,32 @@ func _initialize() -> void:
 	assert(event_chyron.get_theme_stylebox("normal") is StyleBoxFlat)
 	assert(event_chyron.visible == (not match_node.last_goal_text.is_empty()))
 
+	# Both club-colour corner flags live beyond the touchlines; a pennant
+	# and pole never add a shadow, light, or collider to the playable pitch.
+	for x_index in range(2):
+		for z_index in range(2):
+			var pole := match_node.presentation_3d.get_node_or_null(
+				"CornerPole_%d_%d" % [x_index, z_index]
+			) as MeshInstance3D
+			var pennant := match_node.presentation_3d.get_node_or_null(
+				"CornerPennant_%d_%d" % [x_index, z_index]
+			) as MeshInstance3D
+			assert(pole != null and pennant != null)
+			assert(pole.mesh is BoxMesh and pennant.mesh is ArrayMesh)
+			assert(pole.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+			assert(pennant.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+			assert(absf(pole.position.x) > match_node.presentation_3d.field_width * 0.5)
+			assert(absf(pole.position.z) > match_node.presentation_3d.field_depth * 0.5)
+			assert(is_equal_approx(pole.position.x, pennant.position.x))
+			assert(is_equal_approx(pole.position.z, pennant.position.z))
+			assert(pennant.mesh.surface_get_array_len(0) == 9)
+			var corners := pennant.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array
+			var outward := -1.0 if x_index == 0 else 1.0
+			assert(corners[7].x * outward > 0.8,
+				"Club flag must fly away from corner taker and announcement")
+			assert((pennant.material_override as StandardMaterial3D).vertex_color_use_as_albedo)
+			assert(pennant.get_child_count() == 0)
+
 	# Pin a real pre-kickoff tableau: both teams in their own halves and the
 	# selected team standing over the centre spot.
 	match_node.debug_prepare_kickoff(0)
