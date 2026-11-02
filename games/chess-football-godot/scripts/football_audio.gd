@@ -88,6 +88,10 @@ func play_tackle(is_foul: bool = false) -> void:
 	else:
 		_play_variant("tackle", ["tackle", "tackle_boot"], -2.5, 1.0)
 
+func play_close_miss() -> void:
+	# Only called after a tracked shot actually exits narrowly by the goal.
+	_play_crowd_reaction("crowd_near_miss", -11.5)
+
 func play_keeper_save() -> void:
 	_play("save", -3.0, 1.0)
 	_play_crowd_reaction("crowd_save", -10.0)
@@ -191,6 +195,7 @@ func _build_streams() -> void:
 	_streams["crowd_bed"] = _make_crowd_bed(2.4, 727)
 	_streams["crowd_gasp"] = _make_crowd_reaction(1.05, 733, false)
 	_streams["crowd_save"] = _make_crowd_reaction(1.25, 739, true)
+	_streams["crowd_near_miss"] = _make_crowd_reaction(1.0, 751, false)
 
 func _make_ball_strike(
 	duration: float,

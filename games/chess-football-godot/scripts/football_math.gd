@@ -19,6 +19,10 @@ const GOAL_MAX_FLIGHT_HEIGHT := 80.0
 const GOAL_FRAME_POST_RADIUS := 16.0
 const GOAL_FRAME_CROSSBAR_HEIGHT := 94.0
 const GOAL_FRAME_CROSSBAR_RADIUS := 10.0
+# Only narrowly missed posts or shots just over the bar merit the crowd gasp.
+# Leave a safe gap beyond the physical frame hitboxes, which already have SFX.
+const NEAR_MISS_SIDE_MARGIN := 64.0
+const NEAR_MISS_ABOVE_MARGIN := 52.0
 
 static func clamp_to_pitch(position: Vector2) -> Vector2:
 	return Vector2(
@@ -35,6 +39,28 @@ static func in_goal_mouth(position: Vector2) -> bool:
 
 static func ball_fits_under_crossbar(flight_height: float) -> bool:
 	return flight_height <= GOAL_MAX_FLIGHT_HEIGHT
+
+static func close_shot_miss_at_goal_line(point: Vector2, height: float, attacking_team: int) -> bool:
+	if attacking_team not in [0, 1]:
+		return false
+	var crossed: bool = (
+		point.x > PITCH_RECT.end.x + 10.0 if attacking_team == 0
+		else point.x < PITCH_RECT.position.x - 10.0
+	)
+	if not crossed:
+		return false
+	var offset_y := absf(point.y - PITCH_RECT.get_center().y)
+	var outside_post := (
+		offset_y > GOAL_HALF_HEIGHT + GOAL_FRAME_POST_RADIUS
+		and offset_y <= GOAL_HALF_HEIGHT + GOAL_FRAME_POST_RADIUS + NEAR_MISS_SIDE_MARGIN
+		and height <= GOAL_FRAME_CROSSBAR_HEIGHT + GOAL_FRAME_CROSSBAR_RADIUS
+	)
+	var above_bar := (
+		offset_y <= GOAL_HALF_HEIGHT - GOAL_FRAME_POST_RADIUS
+		and height > GOAL_FRAME_CROSSBAR_HEIGHT + GOAL_FRAME_CROSSBAR_RADIUS
+		and height <= GOAL_FRAME_CROSSBAR_HEIGHT + GOAL_FRAME_CROSSBAR_RADIUS + NEAR_MISS_ABOVE_MARGIN
+	)
+	return outside_post or above_bar
 
 static func goal_frame_collision(
 	previous_position: Vector2,
