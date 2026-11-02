@@ -162,19 +162,22 @@ func _initialize() -> void:
 	assert(match_node.audio_fx.debug_crowd_bed_playing())
 	assert(match_node.audio_fx.debug_stream_duration("crowd_bed") >= 2.3)
 	assert(match_node.audio_fx.debug_stream_duration("crowd_gasp") >= 1.0)
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == 0)
+	# Earlier frame-hit and goal tests already consumed the first crowd cue.
+	# Advance only the audio clock to test a fresh genuine save after cooldown.
+	var prior_crowd_reactions: int = match_node.audio_fx.debug_crowd_reaction_count()
+	match_node.audio_fx._process(ChessFootballAudio.CROWD_REACTION_COOLDOWN + 0.1)
 	match_node.audio_fx.play_keeper_save()
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == 1)
+	assert(match_node.audio_fx.debug_crowd_reaction_count() == prior_crowd_reactions + 1)
 	assert(match_node.audio_fx.debug_last_crowd_reaction_key() == "crowd_save")
 	# A second notable event inside the cooldown cannot stack more cheers.
 	match_node.audio_fx.play_goal_frame(720.0, "post")
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == 1)
+	assert(match_node.audio_fx.debug_crowd_reaction_count() == prior_crowd_reactions + 1)
 	match_node.audio_fx.play_goal()
 	assert(not match_node.audio_fx._crowd_reaction.playing)
 	match_node.audio_fx.set_match_paused(true)
 	assert(not match_node.audio_fx.debug_crowd_bed_playing())
 	match_node.audio_fx.play_keeper_save()
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == 1)
+	assert(match_node.audio_fx.debug_crowd_reaction_count() == prior_crowd_reactions + 1)
 	match_node.audio_fx.set_match_paused(false)
 	assert(match_node.audio_fx.debug_crowd_bed_playing())
 	# The seven cues belong to actual match events. The SFX setting must
