@@ -107,6 +107,60 @@ func _apply_idle_front_textures(textures: Array[Texture2D]) -> void:
 	tone_gain_cache.clear()
 
 
+# Staged activation: metadata remains disabled until Infra has publicly
+# accredited both R2 sheets and exact byte/CORS parity.
+func _request_lateral_run_from_r2() -> void:
+	if not OS.has_feature("web"):
+		return
+	for team_id in range(2):
+		var meta := ChessFootballSpriteBank.lateral_run_meta(team_id)
+		if meta.is_empty():
+			continue
+		var loader := ChessFootballR2AtlasLoader.new()
+		loader.name = "OptionalLateralRun_%d" % team_id
+		add_child(loader)
+		loader.atlas_ready.connect(_on_lateral_run_atlas_ready.bind(team_id))
+		loader.start(meta)
+
+
+func _on_lateral_run_atlas_ready(image: Image, team_id: int) -> void:
+	var textures := ChessFootballSpriteBank.validated_lateral_run_frames(image, team_id)
+	_apply_verified_lateral_run(textures, team_id)
+
+
+func _apply_verified_lateral_run(textures: Array[Texture2D], team_id: int) -> void:
+	# Keep all original run phases, FPS, action indices and facing animations;
+	# switching only the eight side frames cannot change game simulation.
+	if textures.size() != 8 or team_id not in [0, 1]:
+		return
+	var names := [&"idle", &"run", &"sprint", &"pass", &"shoot", &"tackle", &"celebrate"]
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null:
+			return
+		var frames := sprite.sprite_frames
+		for animation in names:
+			if not frames.has_animation(animation):
+				return
+			var expected := 1 if animation == &"idle" else 8
+			if frames.get_frame_count(animation) != expected:
+				return
+		targets.append(frames)
+	for frames in targets:
+		frames.set_frame(&"idle", 0, textures[0])
+		for animation in names:
+			if animation == &"idle":
+				continue
+			var poses: Array = ChessFootballSpriteBank.CANONICAL_ACTION_POSES.get(String(animation), [])
+			for index in range(8):
+				var source := index if animation in [&"run", &"sprint"] else int(poses[index])
+				frames.set_frame(animation, index, textures[source])
+	tone_gain_cache.clear()
+
+
 func setup(p_match: Node) -> void:
 	match_node = p_match
 	var pitch := ChessFootballMath.PITCH_RECT
@@ -120,6 +174,7 @@ func setup(p_match: Node) -> void:
 	_build_camera()
 	sync_presentation(1.0, "broadcast")
 	_request_idle_front_from_r2()
+	_request_lateral_run_from_r2()
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()

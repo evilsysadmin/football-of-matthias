@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "enabled": false,
+  "reason": "Await verified public R2 object, staging CORS and immutable cache admission",
+  "teams": {
+    "fc_matthias": {
+      "url": "https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1/fc_matthias_lateral_run_v1.webp",
+      "sha256": "1582191cd87d9f71b54488121e121fc9fc9ae01ff49f7225feed371ff801eed9",
+      "cell": {
+        "width": 128,
+        "height": 144
+      },
+      "columns": 8,
+      "rows": 1
+    },
+    "real_enroque": {
+      "url": "https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1/real_enroque_lateral_run_v1.webp",
+      "sha256": "5de99def7d74fa5c715a87297c582506030f2fe242da2e55d7f0ec1e84048afb",
+      "cell": {
+        "width": 128,
+        "height": 144
+      },
+      "columns": 8,
+      "rows": 1
+    }
+  }
+}
