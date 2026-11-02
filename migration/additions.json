@@ -1,0 +1,10 @@
+{
+  "repository": "evilsysadmin/chess-studio",
+  "commit": "a18d35b2e93ed021764462d8dffaf5237bc43103",
+  "files": [
+    {
+      "path": "games/chess-football-godot/tests/match_endurance_smoke.gd",
+      "sha": "999d9c699b037bb3de465ffa1e1d7ec85428e82a"
+    }
+  ]
+}
