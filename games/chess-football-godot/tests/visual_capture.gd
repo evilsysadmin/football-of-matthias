@@ -496,6 +496,8 @@ func _initialize() -> void:
 		review_keeper.visual.frame = 4
 	match_node.debug_focus_presentation()
 	await _save_capture(match_node, "keeper-save", "VISUAL_CAPTURE_KEEPER_SAVE")
+	await _save_keeper_detail(match_node, "keeper-catch-detail",
+		"VISUAL_CAPTURE_KEEPER_CATCH_DETAIL", 1)
 
 	match_node.debug_toggle_camera_mode()
 	for _frame in range(10):
@@ -697,13 +699,13 @@ func _save_texture_preview(source_path: String, filename: String, marker: String
 
 # Detail crops are taken from the same *actual* Godot Web renderer frame,
 # not from an idealized atlas or a synthetic animation preview.
-func _save_keeper_detail(match_node: Node, filename: String, marker: String) -> void:
+func _save_keeper_detail(match_node: Node, filename: String, marker: String, team_id: int = 0) -> void:
 	await process_frame
 	var viewport := match_node.get_viewport()
 	var image := viewport.get_texture().get_image()
 	var current_camera := viewport.get_camera_3d()
 	assert(current_camera != null)
-	var keeper: Footballer = match_node.teams[0][0]
+	var keeper: Footballer = match_node.teams[team_id][0]
 	var sprite: AnimatedSprite3D = match_node.presentation_3d.player_sprites[keeper.get_instance_id()]
 	var screen_point := current_camera.unproject_position(sprite.global_position)
 	var region_width := 116

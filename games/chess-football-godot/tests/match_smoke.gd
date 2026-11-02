@@ -1071,7 +1071,17 @@ func _initialize() -> void:
 	assert(keeper.debug_keeper_save_direction() > 0.0)
 	assert(String(keeper.visual.animation) == "tackle")
 	match_node.debug_sync_presentation()
-	assert(match_node.debug_3d_ball_height() > 0.80)
+	# Advance only the 3D presentation catch blend; physics / possession
+	# remains unchanged. Palms must flank the ball in camera-front space.
+	match_node.presentation_3d.sync_presentation(0.25, match_node.camera_mode)
+	assert(match_node.debug_3d_ball_height() > 0.95)
+	var stage_keeper: Vector3 = match_node.presentation_3d.world_to_stage(keeper.global_position)
+	var held_ball: Vector3 = match_node.presentation_3d.ball_node.position
+	assert(held_ball.z > stage_keeper.z + 0.49)
+	assert(match_node.presentation_3d.debug_keeper_catch_hands_visible(keeper))
+	for side in [-1, 1]:
+		assert(match_node.presentation_3d.debug_keeper_catch_glove_distance(keeper, side) < 0.32)
+	assert(not match_node.presentation_3d.ball_shadow.visible)
 
 	var rival_keeper: Footballer = match_node.teams[1][0]
 	rival_keeper.global_position = Vector2(ChessFootballMath.PITCH_RECT.end.x - 120.0, ChessFootballMath.PITCH_RECT.get_center().y)
@@ -1083,11 +1093,17 @@ func _initialize() -> void:
 			ChessFootballMath.PITCH_RECT.position.y + 120.0 + human_player.squad_index * 190.0,
 		)
 	match_node.ball.attach_to(rival_keeper)
+	match_node.presentation_3d.sync_presentation(0.25, match_node.camera_mode)
+	assert(not match_node.presentation_3d.debug_keeper_catch_hands_visible(keeper))
+	assert(match_node.presentation_3d.debug_keeper_catch_hands_visible(rival_keeper))
 	rival_keeper.begin_keeper_hold(0.0)
 	match_node.debug_step_ai(1.0 / 60.0)
 	assert(match_node.ball.carrier == null)
 	assert(match_node.ball.velocity.length() > 0.0)
 	assert(match_node.ball.reclaim_blocked_for(rival_keeper))
+	match_node.debug_sync_presentation()
+	assert(not match_node.presentation_3d.debug_keeper_catch_hands_visible(rival_keeper))
+	assert(match_node.presentation_3d.ball_shadow.visible)
 	print("SMOKE_STAGE=keeper")
 	match_node.ball.tick_ball(1.0 / 60.0)
 	match_node.debug_try_claim_loose_ball()
