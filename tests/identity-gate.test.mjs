@@ -58,3 +58,19 @@ test('CSRF, duplicate cookies, missing proof and token-in-query fail closed',asy
  assert.equal((await handle(new Request(origin+'/',{headers:{Cookie:duplicate}}),env,options)).status,401);
  assert.equal((await handle(new Request(origin+'/?token='+token),env,options)).status,401);
 });
+
+test('unavailable upstream diagnostics contain only a fixed stage, never credentials or claims',async()=>{
+ const fixture=await identityFixture(),token=await fixture.sign();
+ const env={SHADOWOPS_FOOTBALL_SERVICE_CREDENTIAL:fixture.proof};
+ const req=()=>new Request(origin+'/api/football/session',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({token})});
+ const cases=[{env:{},request:fixture.request,stage:'edge_configuration'},
+  {env,request:async()=>{throw Error('private transport detail');},stage:'identity_keys'},
+  {env,request:async(url,options)=>url.endsWith('/jwks')?fixture.request(url,options):new Response('private upstream detail',{status:403}),stage:'identity_freshness'}];
+ for(const item of cases){
+  const response=await handle(req(),item.env,{request:item.request,subtle:fixture.subtle});
+  assert.equal(response.status,503);assert.equal(response.headers.get('X-Football-Identity-Error'),item.stage);
+  assert.deepEqual(await response.json(),{error:'access_unavailable'});
+ }
+ const denied=await handle(new Request(origin+'/api/football/session'),env,{request:fixture.request});
+ assert.equal(denied.status,401);assert.equal(denied.headers.get('X-Football-Identity-Error'),null);
+});

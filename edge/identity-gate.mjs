@@ -5,7 +5,7 @@ export const ISSUER='https://id-staging.shadowops.dpdns.org';
 export const AUDIENCE='football';
 const COOKIE='__Host-football_staging';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-class Denied extends Error{constructor(status=401){super('session unavailable');this.status=status;}}
+class Denied extends Error{constructor(status=401,stage='session'){super('session unavailable');this.status=status;this.stage=stage;}}
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'};
 function json(value,status=200,extra={}){return new Response(JSON.stringify(value),{status,headers:{...headers,'Content-Type':'application/json',...extra}});}
 function decode(value){
@@ -15,6 +15,10 @@ function decode(value){
 async function limitedBody(body,max,status){
  const reader=body?.getReader();if(!reader)return '';let bytes=0,text='';const decoder=new TextDecoder('utf-8',{fatal:true});
  try{for(;;){const {done,value}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>max){await reader.cancel();throw new Denied(status);}text+=decoder.decode(value,{stream:true});}return text+decoder.decode();}finally{reader.releaseLock();}
+}
+async function upstream(request,url,init,stage){
+ try{const response=await request(url,init);if(!response.ok)throw new Denied(response.status===401?401:503,stage);return response;}
+ catch(error){if(error instanceof Denied)throw error;throw new Denied(503,stage);}
 }
 async function bounded(response,max=32768){
  if(!response.ok)throw new Denied(response.status===401?401:503);
@@ -31,7 +35,7 @@ export async function verifyIdentityToken(token,{request=fetch,now=Math.floor(Da
    ||typeof claims.jti!=='string'||!claims.jti||claims.jti.length>128
    ||![claims.iat,claims.nbf,claims.exp].every(Number.isSafeInteger)||claims.iat>now+5||claims.nbf>now+5
    ||claims.exp<=now||claims.exp<=claims.iat||claims.exp-claims.iat>120||claims.nbf<claims.iat-5)throw new Denied();
- const jwks=await bounded(await request(ISSUER+'/api/identity/jwks',{headers:{'Accept':'application/json','User-Agent':'ShadowOps-Football-Edge/1.0'},redirect:'error',signal:AbortSignal.timeout(5000)}));
+ const jwks=await bounded(await upstream(request,ISSUER+'/api/identity/jwks',{headers:{'Accept':'application/json','User-Agent':'ShadowOps-Football-Edge/1.0'},redirect:'error',signal:AbortSignal.timeout(5000)},'identity_keys'));
  if(!Array.isArray(jwks.keys)||jwks.keys.length>20)throw new Denied(503);
  const matches=jwks.keys.filter(key=>key.kid===header.kid&&key.kty==='OKP'&&key.crv==='Ed25519'&&key.use==='sig'&&!key.d);
  if(matches.length!==1)throw new Denied();
@@ -43,11 +47,11 @@ export async function verifyIdentityToken(token,{request=fetch,now=Math.floor(Da
 }
 export async function authorize(token,env,{request=fetch,now=Math.floor(Date.now()/1000),subtle=crypto.subtle}={}){
  const proof=env.SHADOWOPS_FOOTBALL_SERVICE_CREDENTIAL;
- if(typeof proof!=='string'||!/^soc1_[A-Za-z0-9_-]{43}$/.test(proof))throw new Denied(503);
+ if(typeof proof!=='string'||!/^soc1_[A-Za-z0-9_-]{43}$/.test(proof))throw new Denied(503,'edge_configuration');
  const claims=await verifyIdentityToken(token,{request,now,subtle});
- const response=await request(ISSUER+'/api/identity/freshness',{method:'POST',redirect:'error',signal:AbortSignal.timeout(5000),
+ const response=await upstream(request,ISSUER+'/api/identity/freshness',{method:'POST',redirect:'error',signal:AbortSignal.timeout(5000),
   headers:{'Content-Type':'application/json','Authorization':'Bearer '+proof,'User-Agent':'ShadowOps-Football-Edge/1.0'},
-  body:JSON.stringify({subject:claims.sub,session_version:claims.sv,token_jti:claims.jti})});
+  body:JSON.stringify({subject:claims.sub,session_version:claims.sv,token_jti:claims.jti})},'identity_freshness');
  const live=await bounded(response,8192);
  if(live.issuer!==ISSUER||live.audience!==AUDIENCE||live.subject!==claims.sub||live.session_version!==claims.sv||live.token_jti!==claims.jti
   ||live.account_active!==true||live.session_active!==true||live.token_active!==true||!Number.isSafeInteger(live.checked_at)
@@ -98,7 +102,7 @@ export async function handle(request,env,options={}){
  }catch(error){
   const status=error instanceof Denied?error.status:503;
   if(url.pathname==='/'||url.pathname==='/index.html')return login(status===401?401:503);
-  return json({error:status===401?'authentication_required':'access_unavailable'},status);
+  return json({error:status===401?'authentication_required':'access_unavailable'},status,status===503?{'X-Football-Identity-Error':error instanceof Denied?error.stage:'edge_runtime'}:{});
  }
 }
 export default {fetch:handle};
