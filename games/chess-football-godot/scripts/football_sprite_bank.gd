@@ -100,11 +100,11 @@ static func idle_front_textures_from_image(image: Image) -> Array[Texture2D]:
 		regions.append(region)
 	# Retain the approved teal keeper kit for Real Enroque: recolour only
 	# yellow fabric, not skin, gloves, socks or hair.
-	var away_keeper := regions[2].duplicate()
+	var away_keeper: Image = regions[2].duplicate()
 	var teal := Color("#2bafad")
 	for y in range(height):
 		for x in range(width):
-			var pixel := away_keeper.get_pixel(x, y)
+			var pixel: Color = away_keeper.get_pixel(x, y)
 			if pixel.a > 0.10 and pixel.h >= 0.105 and pixel.h <= 0.19 and pixel.s >= 0.43 and pixel.v >= 0.28:
 				away_keeper.set_pixel(x, y, Color.from_hsv(teal.h, pixel.s, pixel.v, pixel.a))
 	regions.append(away_keeper)
