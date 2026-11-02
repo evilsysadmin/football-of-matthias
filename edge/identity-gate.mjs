@@ -37,7 +37,7 @@ export async function verifyIdentityToken(token,{request=publicRequest,now=Math.
    ||typeof claims.jti!=='string'||!claims.jti||claims.jti.length>128
    ||![claims.iat,claims.nbf,claims.exp].every(Number.isSafeInteger)||claims.iat>now+5||claims.nbf>now+5
    ||claims.exp<=now||claims.exp<=claims.iat||claims.exp-claims.iat>120||claims.nbf<claims.iat-5)throw new Denied();
- const jwks=await bounded(await upstream(request,ISSUER+'/api/identity/jwks',{headers:{'Accept':'application/json','User-Agent':'ShadowOps-Football-Edge/1.0'},redirect:'error',signal:AbortSignal.timeout(5000)},'identity_keys'));
+ const jwks=await bounded(await upstream(request,ISSUER+'/api/identity/jwks',{headers:{'Accept':'application/json','User-Agent':'ShadowOps-Football-Edge/1.0'},redirect:'manual',signal:AbortSignal.timeout(5000)},'identity_keys'));
  if(!Array.isArray(jwks.keys)||jwks.keys.length>20)throw new Denied(503);
  const matches=jwks.keys.filter(key=>key.kid===header.kid&&key.kty==='OKP'&&key.crv==='Ed25519'&&key.use==='sig'&&!key.d);
  if(matches.length!==1)throw new Denied();
@@ -51,7 +51,7 @@ export async function authorize(token,env,{request=publicRequest,now=Math.floor(
  const proof=env.SHADOWOPS_FOOTBALL_SERVICE_CREDENTIAL;
  if(typeof proof!=='string'||!/^soc1_[A-Za-z0-9_-]{43}$/.test(proof))throw new Denied(503,'edge_configuration');
  const claims=await verifyIdentityToken(token,{request,now,subtle});
- const response=await upstream(request,ISSUER+'/api/identity/freshness',{method:'POST',redirect:'error',signal:AbortSignal.timeout(5000),
+ const response=await upstream(request,ISSUER+'/api/identity/freshness',{method:'POST',redirect:'manual',signal:AbortSignal.timeout(5000),
   headers:{'Content-Type':'application/json','Authorization':'Bearer '+proof,'User-Agent':'ShadowOps-Football-Edge/1.0'},
   body:JSON.stringify({subject:claims.sub,session_version:claims.sv,token_jti:claims.jti})},'identity_freshness');
  const live=await bounded(response,8192);
