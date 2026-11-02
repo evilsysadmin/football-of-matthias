@@ -1,0 +1,1 @@
+{"name":"football-of-matthias","private":true,"type":"module","workspaces":["frontend"],"scripts":{"test":"npm --workspace frontend test","build":"npm --workspace frontend run build"}}
