@@ -74,3 +74,12 @@ test('unavailable upstream diagnostics contain only a fixed stage, never credent
  const denied=await handle(new Request(origin+'/api/football/session'),env,{request:fixture.request});
  assert.equal(denied.status,401);assert.equal(denied.headers.get('X-Football-Identity-Error'),null);
 });
+
+test('default transport retains the Worker global fetch receiver for keys and freshness',async()=>{
+ const fixture=await identityFixture(),token=await fixture.sign(),original=globalThis.fetch;let calls=0;
+ globalThis.fetch=function(url,options){assert.equal(this,globalThis,'native Worker fetch requires its global receiver');calls++;return fixture.request(url,options);};
+ try{
+  const claims=await authorize(token,{SHADOWOPS_FOOTBALL_SERVICE_CREDENTIAL:fixture.proof});
+  assert.equal(claims.sub,fixture.claims.sub);assert.equal(calls,2);
+ }finally{globalThis.fetch=original;}
+});
