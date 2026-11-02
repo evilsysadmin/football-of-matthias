@@ -295,6 +295,14 @@ static func _build_keeper_frames(team_id: int) -> SpriteFrames:
 			frames.add_frame(anim, _keeper_frame_3d(team_id, side_row, source_frame, atlas, cell))
 	for view_name in ["front", "back", "back_diagonal", "front_diagonal"]:
 		var authored_row: int = int(meta["views"][view_name])
+		# Stop in the same authored view instead of snapping to front/side.
+		# The current raster bank only contains locomotion cells; this static
+		# hold is a compatibility stop-pose until dedicated idle art is approved.
+		var idle_named := StringName("idle_" + view_name)
+		frames.add_animation(idle_named)
+		frames.set_animation_speed(idle_named, 1.0)
+		frames.set_animation_loop(idle_named, true)
+		frames.add_frame(idle_named, _keeper_frame_3d(team_id, authored_row, 0, atlas, cell))
 		for base_name in ["run", "sprint"]:
 			var named := StringName(base_name + "_" + view_name)
 			frames.add_animation(named)
@@ -414,6 +422,18 @@ static func build_frames(team_id: int, role: String = "", squad_index: int = -1,
 			)
 			for view_name in ["front", "back", "back_diagonal", "front_diagonal"]:
 				var row: int = int(directional_meta["views"][view_name])
+				if for_3d:
+					# Single-frame directional stop pose; never loop a running
+					# atlas across a stationary player. Dedicated neutral cel art
+					# can replace this source column without changing the API.
+					var idle_named := StringName("idle_" + view_name)
+					frames.add_animation(idle_named)
+					frames.set_animation_speed(idle_named, 1.0)
+					frames.set_animation_loop(idle_named, true)
+					frames.add_frame(
+						idle_named,
+						_direction_frame_3d(team_id, row, 0, directional_atlas, directional_cell)
+					)
 				for base_name in ["run", "sprint"]:
 					var directional_name := StringName(base_name + "_" + view_name)
 					frames.add_animation(directional_name)
