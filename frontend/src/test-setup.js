@@ -1,3 +1,6 @@
+import {beforeEach} from 'vitest';
+import {setFootballIdentity} from './profileKeys.js';
+beforeEach(()=>setFootballIdentity('11111111-1111-4111-8111-111111111111'));
 // test-setup.js — Web Storage mínimo para los módulos que corren en Node.
 // localStorage persiste entre sesiones; sessionStorage es independiente, como
 // en el navegador. Cada test los limpia explícitamente cuando lo necesita.
