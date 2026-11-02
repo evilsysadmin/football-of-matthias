@@ -56,10 +56,6 @@ func _initialize() -> void:
 			assert(bank.get_frame_texture(&"shoot", 0) == textures[1])
 			assert(bank.get_frame_texture(&"tackle", 0) == textures[5])
 			assert(bank.get_frame_texture(&"idle", 0) == textures[0])
-			assert(bank.get_frame_texture(&"run_front", 0) == (
-				original_front if sprite == first
-				else bank.get_frame_texture(&"run_front", 0)
-			))
 			assert(bank.get_animation_speed(&"run") == original_fps)
 		assert(keeper_sprite.sprite_frames.get_frame_texture(&"run", 0) == original_keeper)
 		assert(first.sprite_frames.get_frame_texture(&"run_front", 0) == original_front)
