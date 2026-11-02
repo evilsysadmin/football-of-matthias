@@ -241,7 +241,7 @@ func start_tackle(aggressive: bool = false) -> bool:
 		1.35,
 	)
 	velocity *= 0.68 if aggressive else 0.35
-	play_action("tackle", 0.64 if aggressive else 0.50)
+	play_action("slide_tackle" if aggressive else "tackle", 0.64 if aggressive else 0.50)
 	return true
 
 func tackle_active() -> bool:
@@ -410,7 +410,7 @@ func _sync_locomotion(sprinting: bool) -> void:
 			wanted == "idle" and previous in ["run", "sprint"]
 		)
 		var returns_from_action := (
-			previous in ["pass", "shoot", "tackle", "celebrate"]
+			previous in ["pass", "shoot", "tackle", "slide_tackle", "celebrate"]
 			and wanted in ["run", "sprint"]
 		)
 		if crosses_idle_boundary:

@@ -153,6 +153,19 @@ static func validated_lateral_run_frames(image: Image, team_id: int) -> Array[Te
 	return result
 
 
+# Transitional visual contract until the dedicated tackle and slide atlases
+# are available from R2. Both animations retain the exact approved fallback
+# frames: the sliding action now has its own stable name, FPS and duration.
+static func _add_slide_tackle_fallback(frames: SpriteFrames) -> void:
+	if frames.has_animation(&"slide_tackle") or not frames.has_animation(&"tackle"):
+		return
+	frames.add_animation(&"slide_tackle")
+	frames.set_animation_speed(&"slide_tackle", frames.get_animation_speed(&"tackle"))
+	frames.set_animation_loop(&"slide_tackle", frames.get_animation_loop(&"tackle"))
+	for i in range(frames.get_frame_count(&"tackle")):
+		frames.add_frame(&"slide_tackle", frames.get_frame_texture(&"tackle", i))
+
+
 static func _team_key(team_id: int) -> String:
 	return TEAM_KEYS[clampi(team_id, 0, TEAM_KEYS.size() - 1)]
 
@@ -427,6 +440,7 @@ static func _build_keeper_frames(team_id: int) -> SpriteFrames:
 			frames.set_animation_loop(named, true)
 			for frame_id in range(int(meta["frames"])):
 				frames.add_frame(named, _keeper_frame_3d(team_id, authored_row, frame_id, atlas, cell))
+	_add_slide_tackle_fallback(frames)
 	return frames
 
 
@@ -561,6 +575,7 @@ static func build_frames(team_id: int, role: String = "", squad_index: int = -1,
 							_direction_frame_3d(team_id, row, column, directional_atlas, directional_cell)
 							if for_3d else region,
 						)
+	_add_slide_tackle_fallback(frames)
 	return frames
 
 static func cell_size() -> Vector2:
