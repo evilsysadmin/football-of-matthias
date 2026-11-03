@@ -152,3 +152,17 @@ sin afectar a la simulación física hasta slices específicos posteriores.
 
 La simulación estadística y la validación/reproducción de carreras mánager
 no consumen estos nuevos multiplicadores ni cambian los resultados previos.
+
+## Partida rápida · dificultad de CPU
+Antes del partido, el jugador elige Fácil / Normal / Difícil / Experto.
+La opción se transmite al export de Godot con un fragmento URL
+`#football-difficulty=...` validado por ambos lados: no se envía a R2
+ni exige conexiones entre dominios. Los valores desconocidos y las
+ejecuciones nativas se comportan como Normal.
+
+Los niveles cambian únicamente a la CPU de Real Enroque: intervalo
+de decisión, radio de presión, esfuerzo en defensa/ataque y distancia
+desde la que intenta rematar. Normal preserva los parámetros históricos.
+La dificultad no altera los atributos físicos individuales, el portero,
+el movimiento del balón, los compañeros del jugador ni las carreras mánager.
+La adaptación táctica durante el partido se mantiene encima de cada nivel.

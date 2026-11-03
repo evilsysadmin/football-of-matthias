@@ -30,6 +30,16 @@ try{
   await page.getByRole('button',{name:'Salir de ShadowOps ID',exact:true}).click({trial:true});
   await page.screenshot({path:resolve(out,viewport.width+'-welcome.png')});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.getByRole('button',{name:/Partida rápida/}).click();
+  await page.getByRole('heading',{name:'Elige a tu rival'}).waitFor();
+  assert.equal(await page.locator('.chess-football-entry__quick-level').count(),4);
+  assert.equal(await page.getByRole('button',{name:/^Normal\b/}).getAttribute('aria-pressed'),'true');
+  await page.getByRole('button',{name:/^Experto\b/}).click();
+  assert.equal(await page.getByRole('button',{name:/^Experto\b/}).getAttribute('aria-pressed'),'true');
+  assert.ok(await page.getByRole('button',{name:/Saltar al campo · Experto/}).isVisible());
+  assert.equal(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'Difficulty briefing must fit mobile');
+  await page.screenshot({path:resolve(out,viewport.width+'-quick-difficulty.png')});
+  await page.getByRole('button',{name:/Volver a Football/}).click();
   await page.getByRole('button',{name:/Modo mánager/}).click();
   await page.screenshot({path:resolve(out,viewport.width+'-manager.png')});
   await page.getByRole('button',{name:'Elegir FC Matthias'}).click();
