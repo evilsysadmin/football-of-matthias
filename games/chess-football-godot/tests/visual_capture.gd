@@ -949,6 +949,11 @@ func _assert_live_corner_ball_frame(match_node: Node) -> void:
 		0.18 + float(match_node.ball.flight_height) * ChessFootball3DPresenter.WORLD_SCALE
 	)
 	var screen := match_node.get_viewport().get_visible_rect().size
+	print("FOOTBALL_LIVE_CORNER_SCREEN=%s WORLD=%s HEIGHT=%.2f CAM=%s LOOK=%.2f CARRIER=%s" % [
+		str(ball_screen), str(match_node.ball.global_position),
+		float(match_node.ball.flight_height), str(presenter.camera.position),
+		presenter.smoothed_restart_look_z, str(match_node.ball.carrier != null),
+	])
 	assert(ball_screen.x > 20.0 and ball_screen.x < screen.x - 20.0,
 		"Live corner cross is offscreen horizontally")
 	assert(ball_screen.y > 115.0 and ball_screen.y < screen.y - 28.0,
