@@ -1364,12 +1364,15 @@ func sync_presentation(delta: float, mode: String) -> void:
 		)
 		if holding_keeper != null:
 			var current_keeper_id := int(holding_keeper.get_instance_id())
+			# Authored palms meet around the centre of the chest. The old
+			# side-offset remains untouched for the fallback glove rig.
+			var catch_offset := (
+				0.0 if _keeper_catch_r2_loaded.has(int(holding_keeper.team_id))
+				else KEEPER_CATCH_SIDE * holding_keeper.keeper_save_direction
+			)
 			var target := (
 				world_to_stage(holding_keeper.global_position, KEEPER_CATCH_HEIGHT)
-				+ Vector3(
-					KEEPER_CATCH_SIDE * holding_keeper.keeper_save_direction,
-					0.0, KEEPER_CATCH_FRONT,
-				)
+				+ Vector3(catch_offset, 0.0, KEEPER_CATCH_FRONT)
 			)
 			if keeper_catch_carrier_id != current_keeper_id:
 				keeper_catch_carrier_id = current_keeper_id
