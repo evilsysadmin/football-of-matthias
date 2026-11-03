@@ -90,6 +90,28 @@ func _initialize() -> void:
 		assert(net.mesh.get_surface_count() == 1)
 		assert(net.mesh.get_aabb().size.length() > 1.0)
 		assert(net.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	# The dark foreground used to be exposed apron. Reuse exactly the
+	# existing 16 striped grass meshes and shader, extending them only
+	# OUTSIDE the near white touchline; gameplay pitch/world bounds do not move.
+	var pitch_presenter: ChessFootball3DPresenter = match_node.presentation_3d
+	var expected_near_runoff := ChessFootball3DPresenter.NEAR_TURF_RUNOFF_DEPTH
+	assert(is_equal_approx(expected_near_runoff, 4.0))
+	for grass_index in range(16):
+		var stripe := pitch_presenter.get_node_or_null(
+			"TurfStripe_%02d" % grass_index
+		) as MeshInstance3D
+		assert(stripe != null)
+		assert(stripe.mesh is PlaneMesh)
+		assert(is_equal_approx(stripe.mesh.size.y,
+			pitch_presenter.field_depth + expected_near_runoff))
+		assert(is_equal_approx(stripe.position.z, expected_near_runoff * 0.5))
+		assert(is_equal_approx(stripe.position.z - stripe.mesh.size.y * 0.5,
+			-pitch_presenter.field_depth * 0.5))
+		assert(is_equal_approx(stripe.position.z + stripe.mesh.size.y * 0.5,
+			pitch_presenter.field_depth * 0.5 + expected_near_runoff))
+		assert(stripe.material_override is ShaderMaterial)
+		assert(stripe.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		assert(stripe.get_child_count() == 0)
 	# Near-touchline broadcast restarts must no longer show a giant parapet
 	# or midfield benches. All elements stay outside gameplay geometry and
 	# remain non-shadow-casting, avoiding runtime draw/light regressions.
