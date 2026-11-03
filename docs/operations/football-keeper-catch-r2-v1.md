@@ -36,9 +36,14 @@ these objects to `chess-studio-assets` merely to make that URL work.
    **`football`** bucket, not the shared bucket.
 3. Compare each response's exact SHA-256 with the pinned hashes above.
    Confirm the images decode to 1024 × 144, eight non-clipped cells.
-4. Only then configure `cdn_base`, set `enabled=true`, and adapt the
-   currently shared-CDN-locked loader's allowlist to the **explicit new
-   origin** without weakening validation for other atlases.
+4. Only then configure `cdn_base` and set `enabled=true`.
+   The loader now supports an explicitly pinned, verified additional root
+   for **keeper catch only**, while all other R2 consumers remain restricted
+   to the original shared CDN. The dedicated root is derived from the
+   versioned local manifest, must be HTTPS with a full `/atlases/v1`
+   path, and rejects the old shared-CDN host, IPs, port overrides,
+   credentials, queries and fragments. No public origin is assumed or
+   hard-coded before operator verification.
 5. Re-run the required PR CI including **actual Godot 1280 × 720 captures**
    of both teams at catch open, closing, held, broadcast and release, plus
    Chromium Web boot and fallback. Only after visual approval may a Draft

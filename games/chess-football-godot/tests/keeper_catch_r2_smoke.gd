@@ -22,6 +22,33 @@ func _initialize() -> void:
 	assert(String(metadata.get("cdn_base", "")).is_empty())
 	assert((metadata.get("entries", []) as Array).size() == 2)
 	assert(ChessFootballKeeperCatchR2.source_entry(-1).is_empty())
+	# The real bucket lacks a verified public hostname. Verify the future
+	# activation path with a synthetic HTTPS host; never contact the network.
+	var proposed: Dictionary = metadata.duplicate(true)
+	proposed["enabled"] = true
+	proposed["cdn_base"] = "https://football-assets.example.org/atlases/v1"
+	var approved_root := ChessFootballKeeperCatchR2.trusted_public_root(proposed)
+	assert(approved_root == "https://football-assets.example.org/atlases/v1/")
+	assert(ChessFootballKeeperCatchR2.public_root().is_empty())
+	var invalid_bases := [
+		"http://football-assets.example.org/atlases/v1",
+		"https://football-assets.example.org/other/v1",
+		"https://football-assets.example.org/atlases/v1?token=bad",
+		"https://football-assets.example.org/atlases/v1/",
+		"https://football-assets.example.org:8443/atlases/v1",
+		"https://127.0.0.1/atlases/v1",
+		"https://football-assets.example.org.evil.invalid/atlases/v1/../v1",
+		"https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1",
+	]
+	for candidate_base in invalid_bases:
+		proposed["cdn_base"] = candidate_base
+		assert(ChessFootballKeeperCatchR2.trusted_public_root(proposed).is_empty())
+	proposed["cdn_base"] = "https://football-assets.example.org/atlases/v1"
+	proposed["bucket"] = "chess-studio-assets"
+	assert(ChessFootballKeeperCatchR2.trusted_public_root(proposed).is_empty())
+	proposed["bucket"] = "football"
+	proposed["prefix"] = "football/atlases/v1/"
+	assert(ChessFootballKeeperCatchR2.trusted_public_root(proposed).is_empty())
 	var original_score: Array = match_node.score.duplicate()
 	var original_time: float = match_node.match_seconds
 	for team_id in range(2):
@@ -50,6 +77,42 @@ func _initialize() -> void:
 				Rect2i(128 * i + 32 + i, 9, 64 - i * 2, 123),
 				Color(0.2 + float(i) * 0.08, 0.6, 0.25, 1.0)
 			)
+		# The shared loader still rejects the keeper's other origin by
+		# default; accepting one exact approved prefix cannot allow siblings,
+		# traversal, query strings, a bad hash or untrusted binary.
+		var test_meta: Dictionary = source.duplicate(true)
+		test_meta["url"] = approved_root + String(source["file"])
+		test_meta["cell"] = metadata["cell"]
+		test_meta["columns"] = 8
+		test_meta["rows"] = 1
+		assert(not ChessFootballR2AtlasLoader.valid_metadata(test_meta))
+		assert(ChessFootballR2AtlasLoader.valid_metadata(test_meta, approved_root))
+		var encoded: PackedByteArray = candidate.save_webp_to_buffer(false)
+		assert(not encoded.is_empty())
+		var hasher := HashingContext.new()
+		assert(hasher.start(HashingContext.HASH_SHA256) == OK)
+		assert(hasher.update(encoded) == OK)
+		test_meta["sha256"] = hasher.finish().hex_encode()
+		assert(ChessFootballR2AtlasLoader.decode_verified_webp(encoded, test_meta) == null)
+		var decoded: Image = ChessFootballR2AtlasLoader.decode_verified_webp(
+			encoded, test_meta, approved_root
+		)
+		assert(decoded != null and decoded.get_size() == Vector2i(1024, 144))
+		var corrupted: PackedByteArray = encoded.duplicate()
+		corrupted[corrupted.size() - 1] ^= 1
+		assert(ChessFootballR2AtlasLoader.decode_verified_webp(
+			corrupted, test_meta, approved_root
+		) == null)
+		for malicious in [
+			"https://football-assets.example.org.evil.invalid/atlases/v1/" + String(source["file"]),
+			"https://football-assets.example.org/atlases/v1/../bad.webp",
+			"https://football-assets.example.org/atlases/v1/%2e%2e/bad.webp",
+			"https://football-assets.example.org/atlases/v1/" + String(source["file"]) + "?v=2",
+			"https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1/" + String(source["file"]),
+		]:
+			var altered: Dictionary = test_meta.duplicate(true)
+			altered["url"] = malicious
+			assert(not ChessFootballR2AtlasLoader.valid_metadata(altered, approved_root))
 		var textures := ChessFootballKeeperCatchR2.frames_from_image(candidate, source)
 		assert(textures.size() == 8)
 		for i in range(8):
