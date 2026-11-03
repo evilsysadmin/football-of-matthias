@@ -803,14 +803,23 @@ func _initialize() -> void:
 	assert(match_node._release_outfield_set_piece())
 	assert(match_node.ball.velocity.length() > 500.0)
 	assert(match_node.ball.vertical_velocity > 0.0)
+	var max_ball_distance_from_corner := 0.0
 	for _tick in range(9):
 		match_node._physics_process(1.0 / 60.0)
+		max_ball_distance_from_corner = maxf(
+			max_ball_distance_from_corner,
+			match_node.ball.global_position.distance_to(live_corner_ball_start)
+		)
 	_assert_live_corner_ball_frame(match_node)
 	assert(match_node.ball.flight_height > 1.0)
 	assert(match_node.ball.global_position.distance_to(live_corner_ball_start) > 60.0)
 	await _save_capture(match_node, "corner-cross-live-150ms", "VISUAL_CAPTURE_CORNER_CROSS_LIVE_150MS")
 	for _tick in range(18):
 		match_node._physics_process(1.0 / 60.0)
+		max_ball_distance_from_corner = maxf(
+			max_ball_distance_from_corner,
+			match_node.ball.global_position.distance_to(live_corner_ball_start)
+		)
 	_assert_live_corner_ball_frame(match_node)
 	assert(
 		near_presenter.camera.position.x
@@ -820,6 +829,10 @@ func _initialize() -> void:
 	await _save_capture(match_node, "corner-cross-live-450ms", "VISUAL_CAPTURE_CORNER_CROSS_LIVE_450MS")
 	for _tick in range(18):
 		match_node._physics_process(1.0 / 60.0)
+		max_ball_distance_from_corner = maxf(
+			max_ball_distance_from_corner,
+			match_node.ball.global_position.distance_to(live_corner_ball_start)
+		)
 	_assert_live_corner_ball_frame(match_node)
 	var moved_defenders := 0
 	for defender_index in range(match_node.teams[1].size()):
@@ -828,7 +841,10 @@ func _initialize() -> void:
 		) > 5.0:
 			moved_defenders += 1
 	assert(moved_defenders >= 2, "Corner QA did not actually move the defenders")
-	assert(match_node.ball.global_position.distance_to(live_corner_ball_start) > 150.0)
+	# A legal interception can send the ball back toward the corner by
+	# 750 ms. Judge the actual cross's maximum travel, not its last position.
+	assert(max_ball_distance_from_corner > 150.0,
+		"Live corner cross never travelled far enough before the interception")
 	await _save_capture(match_node, "corner-cross-live-750ms", "VISUAL_CAPTURE_CORNER_CROSS_LIVE_750MS")
 	match_node.set_process(true)
 
