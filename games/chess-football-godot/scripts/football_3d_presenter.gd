@@ -1087,12 +1087,17 @@ func _add_goal_net_grid(
 func _enable_xi_raster_bodies() -> void:
 	if match_node.match_team_size != 11:
 		return
-	# The XI quads must enter an already rendering stadium: Godot otherwise
-	# silently drops them from the graphics batch while keeping their 3D
-	# shadow/scene-tree nodes valid. Preserve 5v5 and defer preview-only
-	# raster creation until real camera/turf frames have been submitted.
-	for _raster_ready_frame in range(16):
-		await get_tree().process_frame
+	# The earlier process_frame-only warmup does not guarantee that the
+	# renderer has actually submitted a 3D draw. Our successful 22-static
+	# diagnostic added these same quads AFTER completed frame_post_draw events.
+	# Headless has no GPU frames: use process_frame there, not a blocking
+	# rendering signal. Neither path runs for the default public 5v5.
+	if DisplayServer.get_name() == "headless":
+		for _raster_ready_frame in range(2):
+			await get_tree().process_frame
+	else:
+		for _raster_ready_frame in range(8):
+			await RenderingServer.frame_post_draw
 	for team in match_node.teams:
 		for player in team:
 			var key: int = int(player.get_instance_id())
