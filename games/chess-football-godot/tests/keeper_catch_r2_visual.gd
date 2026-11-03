@@ -15,6 +15,17 @@ func _initialize() -> void:
 		await physics_frame
 	match_node.set_process(false)
 	match_node.set_physics_process(false)
+	# The match starts with a selected outfielder on the centre spot.
+	# Move only those review-scene bystanders away before comparing keeper
+	# palm poses; the selected player's highlight must not occlude the ball.
+	for review_team_id in range(2):
+		for review_player in match_node.teams[review_team_id]:
+			if review_player.role != "keeper":
+				review_player.global_position = (
+					ChessFootballMath.PITCH_RECT.position
+					+ Vector2(70.0 + float(review_player.squad_index) * 20.0,
+						80.0 + float(review_team_id) * 150.0)
+				)
 	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
 	assert(match_node.camera_mode == "broadcast")
 	var original_score: Array = match_node.score.duplicate()
