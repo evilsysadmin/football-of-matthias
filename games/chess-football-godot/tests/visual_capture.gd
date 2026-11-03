@@ -793,7 +793,7 @@ func _initialize() -> void:
 	match_node.debug_refresh_hud()
 	for _settle in range(3):
 		match_node.debug_focus_presentation()
-	var live_corner_ball_start := match_node.ball.global_position
+	var live_corner_ball_start: Vector2 = match_node.ball.global_position
 	var live_corner_player_start: Array[Vector2] = []
 	for runner in match_node.teams[1]:
 		live_corner_player_start.append(runner.global_position)
@@ -912,7 +912,7 @@ func _assert_near_corner_composition(match_node: Node) -> void:
 	assert(presenter.smoothed_restart_look_z > 2.5)
 	assert(presenter.camera.position.z > ChessFootball3DPresenter.BROADCAST_DEPTH + 5.0)
 	var take: Footballer = match_node.set_piece_player
-	var screen := match_node.get_viewport().get_visible_rect().size
+	var screen: Vector2 = match_node.get_viewport().get_visible_rect().size
 	var head := presenter.screen_position_for_world(take.global_position, 1.65)
 	var feet := presenter.screen_position_for_world(take.global_position, 0.05)
 	assert(head.x > 22.0 and head.x < screen.x - 22.0)
