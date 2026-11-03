@@ -157,6 +157,12 @@ export function getFootballElevenMatchLineup(clubId, managerNine) {
   if (!extras || !Array.isArray(managerNine) || managerNine.length !== 9) {
     throw new Error('Unsupported Football 11v11 roster');
   }
+  // Reject malformed career sources even when the duplicate sits on the
+  // bench: the XI must never mask corruption in the authoritative nine.
+  if (new Set(managerNine.map((player) => player?.id)).size !== 9
+    || managerNine.some((player) => !player || !player.id.startsWith(`${clubId}-`))) {
+    throw new Error('Invalid Football 11v11 starting eleven source roster');
+  }
   const players = MANAGER_INDICES.map((index) => (
     index >= 0 ? managerNine[index] : extras[-index - 1]
   ));
