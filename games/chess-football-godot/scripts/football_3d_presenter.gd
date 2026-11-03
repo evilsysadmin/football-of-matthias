@@ -1879,6 +1879,18 @@ static func broadcast_live_corner_x_limit_ratio(easing_corner_release: bool) -> 
 	return CORNER_CROSS_X_LIMIT_RATIO if easing_corner_release else BROADCAST_X_LIMIT_RATIO
 
 
+# The real corner cross can be intercepted near the near touchline while
+# the lens is already easing upward to the normal midfield view. Until the
+# ball moves infield, retain enough downward pitch to keep that first touch
+# and its selected-player ring visible. This only runs during near-corner
+# release; no change to normal play, far corners or CPU restarts.
+static func broadcast_live_corner_pitch_floor(ball_spot: Vector2) -> float:
+	var pitch := ChessFootballMath.PITCH_RECT
+	var near_fraction := (ball_spot.y - pitch.get_center().y) / pitch.size.y
+	var side_influence := smoothstep(0.30, 0.42, near_fraction)
+	return BROADCAST_BASE_LOOK_Z + NEAR_CORNER_LOOK_SHIFT * side_influence
+
+
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
 	if delta <= 0.0:
 		return 0.0
@@ -1962,6 +1974,11 @@ func _sync_camera(delta: float, mode: String) -> void:
 			String(match_node.set_piece_kind),
 			match_node.set_piece_spot,
 		)
+		if easing_corner_release:
+			restart_look_z = maxf(
+				restart_look_z,
+				broadcast_live_corner_pitch_floor(match_node.ball.global_position),
+			)
 		var pitch_speed := (
 			CAMERA_CORNER_RELEASE_SPEED if easing_corner_release
 			else CAMERA_FOCUS_SMOOTH_SPEED
