@@ -753,24 +753,27 @@ func _initialize() -> void:
 		Vector3(near_presenter.camera.position.x, 0.0, near_corner_look), Vector3.UP
 	)
 	await _save_capture(match_node, "corner-near-playable", "VISUAL_CAPTURE_CORNER_NEAR_PLAYABLE")
-	# The match remains frozen after the real pass; only the 3D camera
-	# advances. Review frames at 80 ms, 430 ms and 1830 ms to catch
-	# discontinuities, unwanted jumps and delayed returns in the actual
-	# Godot renderer instead of inferring motion from an isolated still.
+	# Keep player/AI simulation frozen to isolate camera continuity, but
+	# let the real released ball travel toward the box. The pitch stays low
+	# while the ball is near the touchline, then eases back as it moves infield.
+	# Review 80 ms, 430 ms and 1830 ms in the actual Godot renderer.
 	assert(match_node._release_outfield_set_piece())
 	assert(not match_node.debug_set_piece_active())
 	var depth_at_release := near_presenter.camera.position.z
 	var pitch_at_release := near_presenter.smoothed_restart_look_z
+	match_node.ball.tick_ball(0.08)
 	near_presenter.sync_presentation(0.08, "broadcast")
 	assert(near_presenter.camera.position.z < depth_at_release)
 	assert(near_presenter.camera.position.z > depth_at_release - 1.0)
 	assert(near_presenter.smoothed_restart_look_z < pitch_at_release)
 	await _save_capture(match_node, "corner-near-release-early", "VISUAL_CAPTURE_CORNER_NEAR_RELEASE_EARLY")
 	var depth_early := near_presenter.camera.position.z
+	match_node.ball.tick_ball(0.35)
 	near_presenter.sync_presentation(0.35, "broadcast")
 	assert(near_presenter.camera.position.z < depth_early)
 	assert(near_presenter.camera.position.z > ChessFootball3DPresenter.BROADCAST_DEPTH + 1.0)
 	await _save_capture(match_node, "corner-near-release-mid", "VISUAL_CAPTURE_CORNER_NEAR_RELEASE_MID")
+	match_node.ball.tick_ball(1.40)
 	near_presenter.sync_presentation(1.40, "broadcast")
 	assert(absf(near_presenter.camera.position.z - ChessFootball3DPresenter.BROADCAST_DEPTH) < 0.30)
 	assert(absf(near_presenter.smoothed_restart_look_z - ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z) < 0.22)
