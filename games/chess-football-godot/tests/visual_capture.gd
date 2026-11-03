@@ -687,6 +687,40 @@ func _initialize() -> void:
 	await _save_capture(match_node, "throw-in-playable", "VISUAL_CAPTURE_THROW_IN_PLAYABLE")
 	assert(match_node._release_outfield_set_piece())
 
+	# Near touchline: same live Godot scene with the legacy angle and the
+	# corrected angle. Capture both *without advancing physics* between
+	# screenshots so perspective/foot clearance can be compared honestly.
+	var near_pitch := ChessFootballMath.PITCH_RECT
+	match_node.ball.attach_to(match_node.teams[1][3])
+	match_node.ball.release(Vector2.DOWN, 420.0)
+	match_node.ball.global_position = Vector2(
+		near_pitch.get_center().x + 210.0, near_pitch.end.y + 24.0
+	)
+	match_node.debug_check_ball_out()
+	assert(match_node.debug_set_piece_kind() == "SAQUE DE BANDA")
+	assert(match_node.debug_set_piece_team() == 0)
+	match_node.debug_force_set_piece_ready()
+	assert(match_node.human_set_piece_available())
+	match_node.debug_refresh_hud()
+	for _settle in range(3):
+		match_node.debug_focus_presentation()
+	var near_presenter: ChessFootball3DPresenter = match_node.presentation_3d
+	_assert_near_throw_in_bounds(match_node)
+	var near_look := near_presenter.smoothed_restart_look_z
+	match_node.set_physics_process(false)
+	near_presenter.camera.look_at(
+		Vector3(near_presenter.camera.position.x, 0.0,
+			ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z),
+		Vector3.UP
+	)
+	await _save_capture(match_node, "throw-in-near-before", "VISUAL_CAPTURE_THROW_IN_NEAR_BEFORE")
+	near_presenter.camera.look_at(
+		Vector3(near_presenter.camera.position.x, 0.0, near_look),
+		Vector3.UP
+	)
+	await _save_capture(match_node, "throw-in-near-playable", "VISUAL_CAPTURE_THROW_IN_NEAR_PLAYABLE")
+	assert(match_node._release_outfield_set_piece())
+
 	match_node.debug_toggle_pause_menu()
 	for _frame in range(4):
 		await process_frame
@@ -745,6 +779,26 @@ func _assert_far_restart_hud_clearance(match_node: Node) -> void:
 	var chyron_bottom: float = match_node.goal_label.position.y + match_node.goal_label.size.y
 	assert(head.y >= chyron_bottom + 8.0,
 		"Far-side restart taker's head collides with the match event chyron")
+
+
+
+func _assert_near_throw_in_bounds(match_node: Node) -> void:
+	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
+	var player: Footballer = match_node.set_piece_player
+	assert(player != null and match_node.human_set_piece_available())
+	assert(presenter.smoothed_restart_look_z > 5.0)
+	var feet := presenter.screen_position_for_world(player.global_position, 0.05)
+	var head := presenter.screen_position_for_world(player.global_position, 1.65)
+	var canvas_size := match_node.get_viewport().get_visible_rect().size
+	assert(head.x > 28.0 and head.x < canvas_size.x - 28.0)
+	assert(head.y >= match_node.goal_label.position.y + match_node.goal_label.size.y + 8.0)
+	assert(head.y < feet.y)
+	# The selected-player disc is wider than the boots and projects lower
+	# than its world-space centre. A 100 px ground margin keeps the whole
+	# amber control ring visible in the 1280x720 Godot screenshot.
+	assert(feet.y < canvas_size.y - 100.0,
+		"Near touchline thrower's selection ring lacks bottom clearance")
+	assert(feet.y > canvas_size.y * 0.56)
 
 func _save_texture_preview(source_path: String, filename: String, marker: String) -> void:
 	var texture := load(source_path) as Texture2D

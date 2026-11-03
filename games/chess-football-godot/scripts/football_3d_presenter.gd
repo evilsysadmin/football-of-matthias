@@ -14,6 +14,12 @@ const SET_PIECE_CAMERA_PAN_DISTANCE := 1.15
 # the human decides the restart. Do not change the lens, world or hitboxes.
 const BROADCAST_BASE_LOOK_Z := -0.85
 const FAR_RESTART_LOOK_SHIFT := 2.35
+# With broadcast's camera behind the near touchline, its thrower/receiver
+# feet can fall below the viewport. Tilt towards that edge only for human
+# throw-ins; near corners need a separate horizontal composition review.
+# Leave enough space below the near thrower for the larger selected-player
+# ring, not just the feet. Calibrated against 1280x720 actual Godot PNGs.
+const NEAR_RESTART_LOOK_SHIFT := 8.3
 const BROADCAST_HEIGHT := 9.8
 const BROADCAST_DEPTH := 17.8
 const TACTICAL_HEIGHT := 27.0
@@ -1757,19 +1763,20 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 		var shadow_scale := clampf(1.0 - maxf(bob, 0.0) * 2.2, 0.76, 1.0)
 		shadow.scale = Vector3(shadow_scale, 1.0, shadow_scale)
 
-# Framing is needed only on the far touchline in human-owned, playable
-# outfield restarts. The near touchline, penalties, CPU restarts, tactical
-# view and ordinary play retain their established camera framing.
+# Human-owned touchline restarts need a little extra camera clearance on
+# either edge: far away from the top chyron, near throw-ins above the bottom crop.
+# Penalties, CPU restarts, tactical view and normal play remain unaffected.
 static func broadcast_restart_look_z(
 	active: bool, team_id: int, kind: String, spot: Vector2
 ) -> float:
 	var pitch := ChessFootballMath.PITCH_RECT
-	if (
-		active and team_id == 0
-		and kind in ["CÓRNER", "SAQUE DE BANDA"]
-		and spot.y <= pitch.get_center().y - pitch.size.y * 0.35
-	):
+	if not active or team_id != 0 or kind not in ["CÓRNER", "SAQUE DE BANDA"]:
+		return BROADCAST_BASE_LOOK_Z
+	var distance_from_center := spot.y - pitch.get_center().y
+	if distance_from_center <= -pitch.size.y * 0.35:
 		return BROADCAST_BASE_LOOK_Z - FAR_RESTART_LOOK_SHIFT
+	if kind == "SAQUE DE BANDA" and distance_from_center >= pitch.size.y * 0.35:
+		return BROADCAST_BASE_LOOK_Z + NEAR_RESTART_LOOK_SHIFT
 	return BROADCAST_BASE_LOOK_Z
 
 
