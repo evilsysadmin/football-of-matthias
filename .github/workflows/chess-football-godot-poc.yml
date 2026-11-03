@@ -544,6 +544,23 @@ jobs:
           cp "$atlas_fc_keeper" "$RUNNER_TEMP/chess-football-review/atlas-fc-matthias-keeper.png"
           cp "$atlas_rival_keeper" "$RUNNER_TEMP/chess-football-review/atlas-real-enroque-keeper.png"
           cp "$atlas_directional" "$RUNNER_TEMP/chess-football-review/atlas-directional-run.png"
+      - name: Render verified keeper-catch R2 poses in actual Godot 3D
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-keeper-r2-real-visual.log"
+          export FOOTBALL_KEEPER_CATCH_PREVIEW_DIR="$RUNNER_TEMP/football-keeper-catch-r2"
+          timeout 55s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/keeper_catch_r2_visual.gd 2>&1 | tee "$log"
+          grep -q 'FOOTBALL_KEEPER_R2_REAL_GODOT_REVIEW_OK teams=2 poses=8' "$log"
+          for team in FC ENROQUE; do
+            for phase in OPEN CLOSING HELD BROADCAST; do
+              marker="FOOTBALL_KEEPER_R2_CAPTURE_${team}_${phase}"
+              screenshot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
+              test -n "$screenshot" && test -s "$screenshot"
+              cp "$screenshot" "$RUNNER_TEMP/chess-football-review/keeper-r2-${team,,}-${phase,,}.png"
+            done
+          done
       - name: Upload visual review
         uses: actions/upload-artifact@v7
         with:
