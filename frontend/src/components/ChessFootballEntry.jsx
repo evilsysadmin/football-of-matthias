@@ -19,7 +19,7 @@ function FootballSquadDevelopment({ players }) {
   return (
     <details className="chess-football-entry__development" aria-label="Fichas de la plantilla">
       <summary>Plantilla · {players.length} futbolistas{grown ? ` · ${grown} mejorados` : ''}</summary>
-      <p>Abre la ficha de un jugador para ver su historia y sus siete atributos (1–99). La valoración general pondera su posición. De momento son datos de scouting; los partidos estadísticos siguen usando ATQ, DEF y fatiga.</p>
+      <p>Abre cada ficha para ver su biografía y sus siete atributos (1–99). La GRL pondera su posición. Por ahora son datos de scouting; la liga sigue usando ATQ, DEF y fatiga.</p>
       <ul>
         {players.map((player) => (
           <li key={player.id}>
@@ -247,7 +247,7 @@ export default function ChessFootballEntry({ onExit }) {
               <div className="chess-football-entry__club-summary">
                 <p><strong>Estilo:</strong> {selectedClub.style}</p>
                 <p><strong>Objetivo propuesto:</strong> {selectedClub.objective}</p>
-                <p>Temporada estadística de seis clubes y diez jornadas, con quinteto y fatiga. La guardamos en el progreso de tu perfil; todavía no hay contratos, fichajes ni conexión con partidos Godot.</p>
+                <p>Liga de seis clubes y diez jornadas, con quinteto y fatiga. La carrera se guarda en este dispositivo; los partidos Godot aún van por separado.</p>
               </div>
             ) : null}
             {selectedClub ? <FootballSquadDevelopment players={developedRoster} /> : null}
