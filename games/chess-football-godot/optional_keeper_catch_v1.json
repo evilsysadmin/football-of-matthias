@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "enabled": false,
+  "enabled": true,
   "bucket": "football",
   "prefix": "atlases/v1/",
-  "cdn_base": "",
+  "cdn_base": "https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1",
   "quality_contract": "football-keeper-catch-v1",
-  "note": "User uploads both lossless 1024x144 WebP sheets to R2 first. Do not enable until HTTPS/CORS/sha256/visual review succeed. Canonical keeper run remains fallback.",
+  "note": "Enabled for staging after operator upload; CI validates HTTPS 200, CORS, WebP headers and exact hashes before any merge. Failure or invalid frame preserves original keeper glove-rig fallback.",
   "cell": {
     "width": 128,
     "height": 144
