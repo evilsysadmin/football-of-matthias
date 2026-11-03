@@ -16,7 +16,7 @@ const BROADCAST_BASE_LOOK_Z := -0.85
 const FAR_RESTART_LOOK_SHIFT := 2.35
 # With broadcast's camera behind the near touchline, its thrower/receiver
 # feet can fall below the viewport. Tilt towards that edge only for human
-# corners and throw-ins, then ease back to the normal pitch framing.
+# throw-ins; near corners need a separate horizontal composition review.
 const NEAR_RESTART_LOOK_SHIFT := 6.8
 const BROADCAST_HEIGHT := 9.8
 const BROADCAST_DEPTH := 17.8
@@ -1762,7 +1762,7 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 		shadow.scale = Vector3(shadow_scale, 1.0, shadow_scale)
 
 # Human-owned touchline restarts need a little extra camera clearance on
-# either edge: far away from the top chyron, near away from the bottom crop.
+# either edge: far away from the top chyron, near throw-ins above the bottom crop.
 # Penalties, CPU restarts, tactical view and normal play remain unaffected.
 static func broadcast_restart_look_z(
 	active: bool, team_id: int, kind: String, spot: Vector2
@@ -1773,7 +1773,7 @@ static func broadcast_restart_look_z(
 	var distance_from_center := spot.y - pitch.get_center().y
 	if distance_from_center <= -pitch.size.y * 0.35:
 		return BROADCAST_BASE_LOOK_Z - FAR_RESTART_LOOK_SHIFT
-	if distance_from_center >= pitch.size.y * 0.35:
+	if kind == "SAQUE DE BANDA" and distance_from_center >= pitch.size.y * 0.35:
 		return BROADCAST_BASE_LOOK_Z + NEAR_RESTART_LOOK_SHIFT
 	return BROADCAST_BASE_LOOK_Z
 
