@@ -15,6 +15,17 @@ func _initialize() -> void:
 		await physics_frame
 	match_node.set_process(false)
 	match_node.set_physics_process(false)
+	# The match starts with a selected outfielder on the centre spot.
+	# Move only those review-scene bystanders away before comparing keeper
+	# palm poses; the selected player's highlight must not occlude the ball.
+	for review_team_id in range(2):
+		for review_player in match_node.teams[review_team_id]:
+			if review_player.role != "keeper":
+				review_player.global_position = (
+					ChessFootballMath.PITCH_RECT.position
+					+ Vector2(70.0 + float(review_player.squad_index) * 20.0,
+						80.0 + float(review_team_id) * 150.0)
+				)
 	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
 	assert(match_node.camera_mode == "broadcast")
 	var original_score: Array = match_node.score.duplicate()
@@ -24,7 +35,13 @@ func _initialize() -> void:
 		var file_path := asset_dir.path_join(String(ChessFootballKeeperCatchR2.source_entry(team_id)["file"]))
 		assert(FileAccess.file_exists(file_path), "Real keeper sheet was not downloaded")
 		var bytes := FileAccess.get_file_as_bytes(file_path)
-		var sheet := ChessFootballR2AtlasLoader.decode_verified_webp(bytes, meta)
+		# Runtime verifies the same exact independent origin as the live
+		# keeper-only HTTP loader; the shared CDN default must stay rejected.
+		var authorized_root := ChessFootballKeeperCatchR2.public_root()
+		assert(not authorized_root.is_empty())
+		assert(not ChessFootballR2AtlasLoader.valid_metadata(meta))
+		assert(ChessFootballR2AtlasLoader.valid_metadata(meta, authorized_root))
+		var sheet := ChessFootballR2AtlasLoader.decode_verified_webp(bytes, meta, authorized_root)
 		assert(sheet != null, "R2 keeper bytes must pass the runtime's own SHA-256 verifier")
 		var poses := ChessFootballKeeperCatchR2.frames_from_image(
 			sheet, ChessFootballKeeperCatchR2.source_entry(team_id)
@@ -34,15 +51,19 @@ func _initialize() -> void:
 		assert(presenter._keeper_catch_r2_loaded.has(team_id))
 		var keeper: Footballer = match_node.teams[team_id][0]
 		var sprite: AnimatedSprite3D = presenter.player_sprites[keeper.get_instance_id()]
-		keeper.global_position = Vector2(
-			ChessFootballMath.PITCH_RECT.position.x + 125.0
-			if team_id == 0 else ChessFootballMath.PITCH_RECT.end.x - 125.0,
-			ChessFootballMath.PITCH_RECT.get_center().y
-		)
+		var original_keeper_position: Vector2 = keeper.global_position
+		# Centre-field inspection avoids the edge-clamped broadcast camera
+		# cropping a goalkeeper during the first capture of either team.
+		# This is a visual test scene only; the match never gets this move.
+		keeper.global_position = ChessFootballMath.PITCH_RECT.get_center()
 		match_node.ball.attach_to(keeper)
-		# Place the real camera at the possession before starting a fresh
-		# zero-time catch, so the screenshot never captures stale camera motion.
-		match_node.debug_focus_presentation()
+		# Preposition the actual broadcast camera at each end of the
+		# pitch BEFORE resetting the grip clock. A single focus tick can
+		# leave the first frame cropped as the camera crosses the stadium.
+		for _camera_step in range(4):
+			match_node.debug_focus_presentation()
+		for _render_step in range(2):
+			await process_frame
 		presenter.keeper_catch_carrier_id = 0
 		presenter.keeper_catch_elapsed = 0.0
 		presenter.sync_presentation(0.018, "broadcast")
@@ -50,9 +71,13 @@ func _initialize() -> void:
 		assert(not presenter.debug_keeper_catch_hands_visible(keeper))
 		await _save_keeper(match_node, team_id, "open")
 		presenter.sync_presentation(0.075, "broadcast")
+		# The grip clock advances at the end of sync_presentation; refresh
+		# the visible sprite frame from that updated clock before asserting.
+		presenter.sync_presentation(0.0, "broadcast")
 		assert(sprite.frame >= 2 and sprite.frame <= 5)
 		await _save_keeper(match_node, team_id, "closing")
 		presenter.sync_presentation(0.20, "broadcast")
+		presenter.sync_presentation(0.0, "broadcast")
 		assert(sprite.frame == 7)
 		assert(not presenter.ball_shadow.visible)
 		assert(not presenter.debug_keeper_catch_hands_visible(keeper))
@@ -64,6 +89,7 @@ func _initialize() -> void:
 		presenter.sync_presentation(0.0, "broadcast")
 		assert(sprite.animation != &"keeper_catch")
 		assert(presenter.ball_shadow.visible)
+		keeper.global_position = original_keeper_position
 	assert(match_node.score == original_score)
 	print("FOOTBALL_KEEPER_R2_REAL_GODOT_REVIEW_OK teams=2 poses=8")
 	quit(0)
@@ -85,6 +111,10 @@ func _save_keeper(match_node: Node, team_id: int, phase: String) -> void:
 	var center := camera.unproject_position(sprite.global_position)
 	var width := 116
 	var height := 144
+	assert(center.x >= float(width) * 0.5 + 8.0)
+	assert(center.x <= float(image.get_width()) - float(width) * 0.5 - 8.0)
+	assert(center.y >= float(height) * 0.5 + 8.0)
+	assert(center.y <= float(image.get_height()) - float(height) * 0.5 - 8.0)
 	var x := clampi(int(center.x) - width / 2, 0, image.get_width() - width)
 	var y := clampi(int(center.y) - height / 2, 0, image.get_height() - height)
 	var crop := image.get_region(Rect2i(x, y, width, height))

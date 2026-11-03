@@ -1,8 +1,8 @@
 extends SceneTree
 
-# Until the independent football bucket has a published HTTPS endpoint,
-# the atlas stays disabled. Synthetic sheets exercise frame conversion,
-# presentation integration and the canonical fallback without any network.
+# Staging activation uses an explicitly pinned dedicated R2 development origin.
+# This smoke never accesses the network; the CI preflight verifies the exact
+# published WebP bytes and CORS, and the visual job captures actual Godot poses.
 func _initialize() -> void:
 	var packed := load("res://main.tscn") as PackedScene
 	assert(packed != null)
@@ -18,18 +18,20 @@ func _initialize() -> void:
 	assert(metadata.get("quality_contract") == "football-keeper-catch-v1")
 	assert(metadata.get("bucket") == "football")
 	assert(metadata.get("prefix") == "atlases/v1/")
-	assert(metadata.get("enabled") == false)
-	assert(String(metadata.get("cdn_base", "")).is_empty())
+	assert(metadata.get("enabled") == true)
+	assert(String(metadata.get("cdn_base", "")) ==
+		"https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1")
 	assert((metadata.get("entries", []) as Array).size() == 2)
 	assert(ChessFootballKeeperCatchR2.source_entry(-1).is_empty())
-	# The real bucket lacks a verified public hostname. Verify the future
-	# activation path with a synthetic HTTPS host; never contact the network.
+	# The published origin is selected solely by the bundled manifest.
+	# Verify that existing shared-CDN consumers cannot use it accidentally.
 	var proposed: Dictionary = metadata.duplicate(true)
 	proposed["enabled"] = true
 	proposed["cdn_base"] = "https://football-assets.example.org/atlases/v1"
 	var approved_root := ChessFootballKeeperCatchR2.trusted_public_root(proposed)
 	assert(approved_root == "https://football-assets.example.org/atlases/v1/")
-	assert(ChessFootballKeeperCatchR2.public_root().is_empty())
+	assert(ChessFootballKeeperCatchR2.public_root() ==
+		"https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1/")
 	var invalid_bases := [
 		"http://football-assets.example.org/atlases/v1",
 		"https://football-assets.example.org/other/v1",
@@ -55,7 +57,12 @@ func _initialize() -> void:
 		var source := ChessFootballKeeperCatchR2.source_entry(team_id)
 		assert(String(source.get("file", "")).ends_with("_keeper_catch_v1.webp"))
 		assert(String(source.get("sha256", "")).length() == 64)
-		assert(ChessFootballKeeperCatchR2.active_entry(team_id).is_empty())
+		var actual: Dictionary = ChessFootballKeeperCatchR2.active_entry(team_id)
+		assert(ChessFootballR2AtlasLoader.valid_metadata(
+			actual, ChessFootballKeeperCatchR2.public_root()
+		))
+		assert(String(actual["url"]) == ChessFootballKeeperCatchR2.public_root() + String(source["file"]))
+		assert(actual["sha256"] == source["sha256"])
 		var keeper: Footballer = match_node.teams[team_id][0]
 		var sprite: AnimatedSprite3D = presenter.player_sprites[keeper.get_instance_id()]
 		var original_run: Texture2D = sprite.sprite_frames.get_frame_texture(&"run", 0)

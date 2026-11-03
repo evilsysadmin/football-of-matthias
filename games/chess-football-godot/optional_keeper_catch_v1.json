@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "enabled": false,
+  "enabled": true,
   "bucket": "football",
   "prefix": "atlases/v1/",
-  "cdn_base": "",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1",
   "quality_contract": "football-keeper-catch-v1",
-  "note": "Independent Cloudflare R2 bucket 'football', keys 'atlases/v1/'. Operator-uploaded assets confirmed in dashboard. Disabled until its own public HTTPS base, 200/CORS/sha256, and actual Godot screenshots are verified. The shared Chess Studio CDN is NOT this bucket.",
+  "note": "Staging-only trial using Cloudflare's public development URL for dedicated R2 bucket football. Both SHA-256-pinned WebPs, staging-origin CORS and actual Godot visual captures are required in CI before merge. Keep the local canonical keeper and glove-rig fallback. Replace r2.dev with a custom domain before production.",
   "cell": {
     "width": 128,
     "height": 144
