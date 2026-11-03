@@ -3,6 +3,10 @@ extends Node3D
 
 const WORLD_SCALE := 0.014
 const GOAL_POST_HEIGHT := 1.50
+# Presentation-only grass runoff beyond the near sideline. The camera now
+# includes this area during human throw-ins; keeping the same authored pitch
+# shader avoids a dark foreground band with no new draw calls or hitboxes.
+const NEAR_TURF_RUNOFF_DEPTH := 4.0
 const CAMERA_LERP_SPEED := 3.25
 const CAMERA_FOCUS_SMOOTH_SPEED := 2.65
 const CAMERA_LEAD_SMOOTH_SPEED := 2.10
@@ -381,9 +385,15 @@ void fragment() {
 	for i in range(16):
 		var stripe := MeshInstance3D.new()
 		var mesh := PlaneMesh.new()
-		mesh.size = Vector2(stripe_width + 0.01, field_depth)
+		# Extend only towards the broadcast camera: far-sideline shape and
+		# every stripe's X coordinate stay identical. No extra MeshInstance3Ds.
+		mesh.size = Vector2(stripe_width + 0.01, field_depth + NEAR_TURF_RUNOFF_DEPTH)
 		stripe.mesh = mesh
-		stripe.position = Vector3(-field_width * 0.5 + stripe_width * (float(i) + 0.5), 0.0, 0.0)
+		stripe.position = Vector3(
+			-field_width * 0.5 + stripe_width * (float(i) + 0.5),
+			0.0,
+			NEAR_TURF_RUNOFF_DEPTH * 0.5,
+		)
 		stripe.name = "TurfStripe_%02d" % i
 		var turf_material := ShaderMaterial.new()
 		turf_material.shader = turf_shader
