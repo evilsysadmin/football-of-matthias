@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Exercise exported Godot WASM in Chromium, not a mocked iframe.
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, mkdirSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve, extname, sep } from 'node:path';
 import { chromium } from 'playwright';
 
@@ -10,6 +11,68 @@ const output = resolve('.artifacts/football-web');
 mkdirSync(output, { recursive: true });
 if (!existsSync(resolve(root, 'index.html'))) throw new Error('Missing exported Godot index.html');
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json' };
+
+// CI runs the actual WebAssembly game from an ephemeral 127.0.0.1 origin.
+// The independent R2 bucket must allow the real staging HTTPS origin, not
+// localhost with a random port. Verify BOTH real R2 responses, their staging
+// CORS headers and SHA-256 on the Node side, then serve those identical bytes
+// to the local-only browser through a narrowly scoped Playwright route.
+// The normal CI R2 gate separately makes the same live-origin checks.
+// Do not weaken Cloudflare's CORS policy or intercept other CDN requests.
+async function bridgeVerifiedStagingKeeperR2(page) {
+  if (process.env.CI !== 'true') {
+    throw new Error('The R2 localhost bridge is only permitted in GitHub CI');
+  }
+  const meta = JSON.parse(readFileSync('games/chess-football-godot/optional_keeper_catch_v1.json', 'utf8'));
+  if (!meta.enabled) return;
+  const expectedBase = 'https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1';
+  if (meta.bucket !== 'football' || meta.prefix !== 'atlases/v1/' || meta.cdn_base !== expectedBase) {
+    throw new Error('Refusing unexpected keeper bucket, path or public origin');
+  }
+  const expected = new Map([
+    ['fc_matthias', 'fc_matthias_keeper_catch_v1.webp'],
+    ['real_enroque', 'real_enroque_keeper_catch_v1.webp']
+  ]);
+  if (!Array.isArray(meta.entries) || meta.entries.length !== expected.size) {
+    throw new Error('Expected exactly two pinned keeper sheets');
+  }
+  const stagingOrigin = 'https://staging.football.shadowops.dpdns.org';
+  for (const entry of meta.entries) {
+    const filename = expected.get(entry.team);
+    if (!filename || entry.file !== filename || !/^[a-f0-9]{64}$/.test(entry.sha256)) {
+      throw new Error('Invalid keeper sheet entry in bundled manifest');
+    }
+    expected.delete(entry.team);
+    const assetUrl = expectedBase + '/' + filename;
+    const result = await fetch(assetUrl, {
+      headers: { Origin: stagingOrigin, 'User-Agent': 'Football-CI-real-Web/1.0' },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (result.status !== 200 || !result.headers.get('content-type')?.toLowerCase().startsWith('image/webp')) {
+      throw new Error('Public keeper WebP unavailable: ' + assetUrl + ' HTTP ' + result.status);
+    }
+    const cors = result.headers.get('access-control-allow-origin');
+    if (cors !== '*' && cors !== stagingOrigin) {
+      throw new Error('Staging R2 CORS missing for ' + filename + ': ' + JSON.stringify(cors));
+    }
+    const raw = Buffer.from(await result.arrayBuffer());
+    if (!raw.length || raw.length > 4194304 ||
+        raw.toString('ascii', 0, 4) !== 'RIFF' || raw.toString('ascii', 8, 12) !== 'WEBP' ||
+        createHash('sha256').update(raw).digest('hex') !== entry.sha256) {
+      throw new Error('Keeper R2 byte integrity mismatch for ' + filename);
+    }
+    await page.route(assetUrl, (route) => route.fulfill({
+      status: 200,
+      contentType: 'image/webp',
+      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+      body: raw
+    }));
+    console.log('FOOTBALL_WEB_CI_KEEPER_R2_VERIFIED', entry.team,
+      'bytes=' + raw.length, 'sha256=' + entry.sha256, 'staging_cors=' + cors);
+  }
+  if (expected.size !== 0) throw new Error('Missing a keeper R2 team');
+}
+
 const server = createServer((req, res) => {
   try {
     let path = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
@@ -29,6 +92,7 @@ let page;
 try {
   browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  if (process.env.FOOTBALL_CI_KEEPER_R2_BRIDGE === '1') await bridgeVerifiedStagingKeeperR2(page);
   await page.addInitScript(() => {
     window.__chessFootballWebReady = false;
     window.addEventListener('message', (event) => {
