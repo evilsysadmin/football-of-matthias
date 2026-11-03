@@ -6,6 +6,52 @@ extends SceneTree
 const DELTA := 1.0 / 60.0
 const TICKS := 5400
 
+func _assert_live_scouting(match_node: Node2D) -> void:
+	var expected_ids := {}
+	for side in range(2):
+		for index in range(5):
+			var actor: Footballer = match_node.teams[side][index]
+			assert(not actor.scouting_player_id.is_empty())
+			assert(not actor.scouting_player_name.is_empty())
+			assert(not expected_ids.has(actor.scouting_player_id))
+			expected_ids[actor.scouting_player_id] = true
+			assert(actor.scouting_pace >= 1 and actor.scouting_pace <= 99)
+			assert(actor.scouting_endurance >= 1 and actor.scouting_endurance <= 99)
+			assert(actor.movement_multiplier >= 0.90 and actor.movement_multiplier <= 1.10)
+			assert(actor.stamina_drain_multiplier >= 0.80 and actor.stamina_drain_multiplier <= 1.20)
+			if index == 0:
+				assert(is_equal_approx(actor.movement_multiplier, 1.0))
+	assert(expected_ids.size() == 10)
+	var fast: Footballer = match_node.teams[0][4]  # Lucas Aguirre, pace 90
+	var slow: Footballer = match_node.teams[0][1]  # Iván Prieto, pace 65
+	assert(fast.scouting_pace == 90 and slow.scouting_pace == 65)
+	assert(fast.movement_multiplier > slow.movement_multiplier)
+	var old_fast := fast.global_position
+	var old_slow := slow.global_position
+	fast.global_position = Vector2(750.0, 440.0)
+	slow.global_position = Vector2(750.0, 1140.0)
+	fast.velocity = Vector2.ZERO
+	slow.velocity = Vector2.ZERO
+	for tick in range(60):
+		fast.move_human(DELTA, Vector2.RIGHT, false)
+		slow.move_human(DELTA, Vector2.RIGHT, false)
+	assert(fast.global_position.x > slow.global_position.x + 15.0)
+	fast.global_position = old_fast
+	slow.global_position = old_slow
+	fast.velocity = Vector2.ZERO
+	slow.velocity = Vector2.ZERO
+	var durable: Footballer = match_node.teams[0][3]  # Eric Roca, stamina 92
+	assert(durable.stamina_drain_multiplier < slow.stamina_drain_multiplier)
+	var durable_before := durable.stamina
+	var slow_before := slow.stamina
+	for tick in range(30):
+		durable._update_stamina(DELTA, true, true)
+		slow._update_stamina(DELTA, true, true)
+	assert(durable.stamina > slow.stamina)
+	durable.stamina = durable_before
+	slow.stamina = slow_before
+	print("FOOTBALL_LIVE_SCOUTING_OK players=10 pace=real stamina=real")
+
 func _initialize() -> void:
 	seed(44129)
 	var scene := load("res://main.tscn") as PackedScene
@@ -19,6 +65,7 @@ func _initialize() -> void:
 
 	assert(match_node.teams.size() == 2)
 	assert(match_node.debug_team_counts() == [5, 5])
+	_assert_live_scouting(match_node)
 	var pitch: Rect2 = ChessFootballMath.PITCH_RECT
 	var initial_time: float = match_node.match_seconds
 	var active_ticks := 0

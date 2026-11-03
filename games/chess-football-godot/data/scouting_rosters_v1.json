@@ -1,0 +1,881 @@
+{
+  "version": 1,
+  "clubs": {
+    "fc-matthias": [
+      {
+        "id": "fc-matthias-por-1",
+        "name": "Óscar Campos",
+        "role": "POR",
+        "age": 29,
+        "bio": "Portero de reflejos felinos; manda en el área y apenas regala rechaces.",
+        "scouting": {
+          "pace": 49,
+          "stamina": 78,
+          "technique": 46,
+          "passing": 54,
+          "shooting": 20,
+          "tackling": 39,
+          "keeping": 85
+        }
+      },
+      {
+        "id": "fc-matthias-def-1",
+        "name": "Iván Prieto",
+        "role": "DEF",
+        "age": 27,
+        "bio": "Central de escuela antigua: anticipa, ordena y sale tocando sin alardes.",
+        "scouting": {
+          "pace": 65,
+          "stamina": 84,
+          "technique": 58,
+          "passing": 70,
+          "shooting": 34,
+          "tackling": 84,
+          "keeping": 12
+        }
+      },
+      {
+        "id": "fc-matthias-med-1",
+        "name": "Sergio Cano",
+        "role": "MED",
+        "age": 24,
+        "bio": "Cerebro de posesión, vive entre líneas y ve pases que nadie espera.",
+        "scouting": {
+          "pace": 71,
+          "stamina": 82,
+          "technique": 88,
+          "passing": 90,
+          "shooting": 62,
+          "tackling": 62,
+          "keeping": 10
+        }
+      },
+      {
+        "id": "fc-matthias-med-2",
+        "name": "Eric Roca",
+        "role": "MED",
+        "age": 30,
+        "bio": "Interior incansable que equilibra el equipo y llega desde segunda línea.",
+        "scouting": {
+          "pace": 76,
+          "stamina": 92,
+          "technique": 75,
+          "passing": 81,
+          "shooting": 69,
+          "tackling": 76,
+          "keeping": 9
+        }
+      },
+      {
+        "id": "fc-matthias-del-1",
+        "name": "Lucas Aguirre",
+        "role": "DEL",
+        "age": 23,
+        "bio": "Nueve eléctrico: primer paso temible y remate seco con ambas piernas.",
+        "scouting": {
+          "pace": 90,
+          "stamina": 79,
+          "technique": 84,
+          "passing": 64,
+          "shooting": 92,
+          "tackling": 32,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "fc-matthias-por-2",
+        "name": "Bruno Luna",
+        "role": "POR",
+        "age": 34,
+        "bio": "Guardameta veterano, menos veloz pero enorme en el mano a mano.",
+        "scouting": {
+          "pace": 39,
+          "stamina": 66,
+          "technique": 50,
+          "passing": 58,
+          "shooting": 16,
+          "tackling": 31,
+          "keeping": 88
+        }
+      },
+      {
+        "id": "fc-matthias-def-2",
+        "name": "Gael Campos",
+        "role": "DEF",
+        "age": 20,
+        "bio": "Defensa de cantera, agresivo en el robo y valiente cuando sube.",
+        "scouting": {
+          "pace": 82,
+          "stamina": 77,
+          "technique": 68,
+          "passing": 61,
+          "shooting": 48,
+          "tackling": 74,
+          "keeping": 7
+        }
+      },
+      {
+        "id": "fc-matthias-med-3",
+        "name": "Hugo Prieto",
+        "role": "MED",
+        "age": 26,
+        "bio": "Organizador de zurda educada; acelera los ataques con un solo toque.",
+        "scouting": {
+          "pace": 73,
+          "stamina": 74,
+          "technique": 86,
+          "passing": 91,
+          "shooting": 57,
+          "tackling": 49,
+          "keeping": 11
+        }
+      },
+      {
+        "id": "fc-matthias-del-2",
+        "name": "Álex Cano",
+        "role": "DEL",
+        "age": 21,
+        "bio": "Delantero de apoyo, asociativo y oportunista en el segundo palo.",
+        "scouting": {
+          "pace": 77,
+          "stamina": 78,
+          "technique": 75,
+          "passing": 76,
+          "shooting": 79,
+          "tackling": 43,
+          "keeping": 6
+        }
+      }
+    ],
+    "real-enroque": [
+      {
+        "id": "real-enroque-por-1",
+        "name": "Iker Vidal",
+        "role": "POR",
+        "age": 31,
+        "bio": "Portero sobrio y de gran colocación; prefiere asegurar a lucirse.",
+        "scouting": {
+          "pace": 42,
+          "stamina": 72,
+          "technique": 43,
+          "passing": 67,
+          "shooting": 17,
+          "tackling": 36,
+          "keeping": 88
+        }
+      },
+      {
+        "id": "real-enroque-def-1",
+        "name": "Leo Costa",
+        "role": "DEF",
+        "age": 28,
+        "bio": "Defensa elegante que rompe líneas con pases verticales.",
+        "scouting": {
+          "pace": 65,
+          "stamina": 83,
+          "technique": 76,
+          "passing": 84,
+          "shooting": 40,
+          "tackling": 79,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "real-enroque-med-1",
+        "name": "Marcos Rey",
+        "role": "MED",
+        "age": 22,
+        "bio": "Mediapunta exquisito; controla en espacios minúsculos y filtra balones.",
+        "scouting": {
+          "pace": 79,
+          "stamina": 75,
+          "technique": 91,
+          "passing": 89,
+          "shooting": 65,
+          "tackling": 51,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "real-enroque-med-2",
+        "name": "Dani Ferrer",
+        "role": "MED",
+        "age": 26,
+        "bio": "Interior de metrónomo, siempre ofrece una línea de pase.",
+        "scouting": {
+          "pace": 71,
+          "stamina": 88,
+          "technique": 86,
+          "passing": 93,
+          "shooting": 56,
+          "tackling": 63,
+          "keeping": 12
+        }
+      },
+      {
+        "id": "real-enroque-del-1",
+        "name": "Nico León",
+        "role": "DEL",
+        "age": 25,
+        "bio": "Goleador cerebral: desmarque breve, toque rápido y mucha puntería.",
+        "scouting": {
+          "pace": 79,
+          "stamina": 75,
+          "technique": 86,
+          "passing": 74,
+          "shooting": 91,
+          "tackling": 38,
+          "keeping": 5
+        }
+      },
+      {
+        "id": "real-enroque-por-2",
+        "name": "Álvaro Serrano",
+        "role": "POR",
+        "age": 20,
+        "bio": "Portero de gran proyección, destaca por sus reflejos y pies.",
+        "scouting": {
+          "pace": 52,
+          "stamina": 76,
+          "technique": 63,
+          "passing": 73,
+          "shooting": 20,
+          "tackling": 36,
+          "keeping": 80
+        }
+      },
+      {
+        "id": "real-enroque-def-2",
+        "name": "Julián Vidal",
+        "role": "DEF",
+        "age": 32,
+        "bio": "Zaguero experimentado; lee las coberturas antes de que llegue el peligro.",
+        "scouting": {
+          "pace": 54,
+          "stamina": 72,
+          "technique": 66,
+          "passing": 77,
+          "shooting": 28,
+          "tackling": 85,
+          "keeping": 10
+        }
+      },
+      {
+        "id": "real-enroque-med-3",
+        "name": "Adrián Costa",
+        "role": "MED",
+        "age": 24,
+        "bio": "Centrocampista de pausa y último pase, especialista en saques cortos.",
+        "scouting": {
+          "pace": 68,
+          "stamina": 74,
+          "technique": 81,
+          "passing": 87,
+          "shooting": 61,
+          "tackling": 53,
+          "keeping": 7
+        }
+      },
+      {
+        "id": "real-enroque-del-2",
+        "name": "Mateo Rey",
+        "role": "DEL",
+        "age": 19,
+        "bio": "Canterano de regate valiente; alterna genialidades y decisiones precipitadas.",
+        "scouting": {
+          "pace": 86,
+          "stamina": 68,
+          "technique": 86,
+          "passing": 70,
+          "shooting": 74,
+          "tackling": 35,
+          "keeping": 6
+        }
+      }
+    ],
+    "atletico-torreon": [
+      {
+        "id": "atletico-torreon-por-1",
+        "name": "Adrián Valdés",
+        "role": "POR",
+        "age": 32,
+        "bio": "Portero de guantes duros; domina los balones divididos y la voz de mando.",
+        "scouting": {
+          "pace": 39,
+          "stamina": 77,
+          "technique": 37,
+          "passing": 46,
+          "shooting": 15,
+          "tackling": 48,
+          "keeping": 84
+        }
+      },
+      {
+        "id": "atletico-torreon-def-1",
+        "name": "Saúl Barrera",
+        "role": "DEF",
+        "age": 29,
+        "bio": "Defensa rocoso, contundente por abajo y disciplinado en el bloque.",
+        "scouting": {
+          "pace": 57,
+          "stamina": 83,
+          "technique": 49,
+          "passing": 53,
+          "shooting": 29,
+          "tackling": 88,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "atletico-torreon-med-1",
+        "name": "Tomás Robledo",
+        "role": "MED",
+        "age": 27,
+        "bio": "Medio recuperador que sostiene el repliegue con oficio.",
+        "scouting": {
+          "pace": 65,
+          "stamina": 86,
+          "technique": 62,
+          "passing": 59,
+          "shooting": 46,
+          "tackling": 84,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "atletico-torreon-med-2",
+        "name": "Néstor Blanco",
+        "role": "MED",
+        "age": 24,
+        "bio": "Volante todoterreno: persigue al rival y lanza contras.",
+        "scouting": {
+          "pace": 75,
+          "stamina": 91,
+          "technique": 67,
+          "passing": 70,
+          "shooting": 57,
+          "tackling": 73,
+          "keeping": 10
+        }
+      },
+      {
+        "id": "atletico-torreon-del-1",
+        "name": "Rubén Alarcón",
+        "role": "DEL",
+        "age": 28,
+        "bio": "Punta de choque; gana la posición y remata de primeras.",
+        "scouting": {
+          "pace": 72,
+          "stamina": 77,
+          "technique": 61,
+          "passing": 52,
+          "shooting": 82,
+          "tackling": 51,
+          "keeping": 6
+        }
+      },
+      {
+        "id": "atletico-torreon-por-2",
+        "name": "Pablo Merino",
+        "role": "POR",
+        "age": 21,
+        "bio": "Portero ágil y valiente en salidas, aún debe mejorar el juego con los pies.",
+        "scouting": {
+          "pace": 59,
+          "stamina": 71,
+          "technique": 40,
+          "passing": 41,
+          "shooting": 16,
+          "tackling": 32,
+          "keeping": 78
+        }
+      },
+      {
+        "id": "atletico-torreon-def-2",
+        "name": "Diego Montes",
+        "role": "DEF",
+        "age": 23,
+        "bio": "Lateral reconvertido al fútbol cinco, rápido en las ayudas.",
+        "scouting": {
+          "pace": 81,
+          "stamina": 80,
+          "technique": 56,
+          "passing": 58,
+          "shooting": 40,
+          "tackling": 75,
+          "keeping": 7
+        }
+      },
+      {
+        "id": "atletico-torreon-med-3",
+        "name": "Fermín Ortega",
+        "role": "MED",
+        "age": 30,
+        "bio": "Mediocentro táctico: pocas florituras y mucha lectura defensiva.",
+        "scouting": {
+          "pace": 61,
+          "stamina": 79,
+          "technique": 70,
+          "passing": 76,
+          "shooting": 47,
+          "tackling": 78,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "atletico-torreon-del-2",
+        "name": "Joel Pastor",
+        "role": "DEL",
+        "age": 20,
+        "bio": "Delantero de presión feroz, roba arriba y aprovecha segundas jugadas.",
+        "scouting": {
+          "pace": 82,
+          "stamina": 84,
+          "technique": 64,
+          "passing": 56,
+          "shooting": 73,
+          "tackling": 58,
+          "keeping": 5
+        }
+      }
+    ],
+    "union-alfil": [
+      {
+        "id": "union-alfil-por-1",
+        "name": "Marcos Luna",
+        "role": "POR",
+        "age": 25,
+        "bio": "Portero ágil, inicia contragolpes con lanzamientos largos.",
+        "scouting": {
+          "pace": 51,
+          "stamina": 73,
+          "technique": 49,
+          "passing": 68,
+          "shooting": 18,
+          "tackling": 42,
+          "keeping": 78
+        }
+      },
+      {
+        "id": "union-alfil-def-1",
+        "name": "Dani Campos",
+        "role": "DEF",
+        "age": 24,
+        "bio": "Defensa de ida y vuelta, especialista en cerrar bandas.",
+        "scouting": {
+          "pace": 79,
+          "stamina": 82,
+          "technique": 60,
+          "passing": 64,
+          "shooting": 35,
+          "tackling": 77,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "union-alfil-med-1",
+        "name": "Nico Prieto",
+        "role": "MED",
+        "age": 27,
+        "bio": "Extremo reconvertido a interior, abre campo y centra con precisión.",
+        "scouting": {
+          "pace": 85,
+          "stamina": 77,
+          "technique": 74,
+          "passing": 83,
+          "shooting": 54,
+          "tackling": 52,
+          "keeping": 5
+        }
+      },
+      {
+        "id": "union-alfil-med-2",
+        "name": "Álvaro Cano",
+        "role": "MED",
+        "age": 22,
+        "bio": "Mediocampista de centro tenso y llegada al segundo palo.",
+        "scouting": {
+          "pace": 72,
+          "stamina": 83,
+          "technique": 74,
+          "passing": 86,
+          "shooting": 67,
+          "tackling": 59,
+          "keeping": 7
+        }
+      },
+      {
+        "id": "union-alfil-del-1",
+        "name": "Julián Roca",
+        "role": "DEL",
+        "age": 29,
+        "bio": "Delantero aéreo y rematador, sabe esperar el centro adecuado.",
+        "scouting": {
+          "pace": 66,
+          "stamina": 73,
+          "technique": 69,
+          "passing": 53,
+          "shooting": 84,
+          "tackling": 40,
+          "keeping": 5
+        }
+      },
+      {
+        "id": "union-alfil-por-2",
+        "name": "Adrián Aguirre",
+        "role": "POR",
+        "age": 33,
+        "bio": "Veterano de portería; difícil de batir en distancias cortas.",
+        "scouting": {
+          "pace": 37,
+          "stamina": 61,
+          "technique": 37,
+          "passing": 52,
+          "shooting": 14,
+          "tackling": 29,
+          "keeping": 82
+        }
+      },
+      {
+        "id": "union-alfil-def-2",
+        "name": "Mateo Luna",
+        "role": "DEF",
+        "age": 21,
+        "bio": "Defensa zurdo que proyecta bien la pelota por fuera.",
+        "scouting": {
+          "pace": 78,
+          "stamina": 78,
+          "technique": 66,
+          "passing": 70,
+          "shooting": 39,
+          "tackling": 70,
+          "keeping": 6
+        }
+      },
+      {
+        "id": "union-alfil-med-3",
+        "name": "Iker Campos",
+        "role": "MED",
+        "age": 26,
+        "bio": "Interior de recorrido largo, centro medido y gran resistencia.",
+        "scouting": {
+          "pace": 81,
+          "stamina": 89,
+          "technique": 67,
+          "passing": 82,
+          "shooting": 48,
+          "tackling": 61,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "union-alfil-del-2",
+        "name": "Leo Prieto",
+        "role": "DEL",
+        "age": 19,
+        "bio": "Punta rápido que amenaza el espacio libre más que el juego de espaldas.",
+        "scouting": {
+          "pace": 89,
+          "stamina": 72,
+          "technique": 72,
+          "passing": 56,
+          "shooting": 74,
+          "tackling": 30,
+          "keeping": 6
+        }
+      }
+    ],
+    "deportivo-gambito": [
+      {
+        "id": "deportivo-gambito-por-1",
+        "name": "Víctor Mena",
+        "role": "POR",
+        "age": 24,
+        "bio": "Portero atrevido que juega adelantado; alterna paradas brillantes y riesgos.",
+        "scouting": {
+          "pace": 61,
+          "stamina": 66,
+          "technique": 56,
+          "passing": 59,
+          "shooting": 20,
+          "tackling": 29,
+          "keeping": 69
+        }
+      },
+      {
+        "id": "deportivo-gambito-def-1",
+        "name": "Fabio Ledesma",
+        "role": "DEF",
+        "age": 22,
+        "bio": "Defensa ofensivo, rompe líneas aunque deje huecos a su espalda.",
+        "scouting": {
+          "pace": 78,
+          "stamina": 68,
+          "technique": 65,
+          "passing": 66,
+          "shooting": 49,
+          "tackling": 59,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "deportivo-gambito-med-1",
+        "name": "Samuel Cuesta",
+        "role": "MED",
+        "age": 20,
+        "bio": "Regateador imprevisible, encara incluso cuando sería más fácil pasar.",
+        "scouting": {
+          "pace": 86,
+          "stamina": 70,
+          "technique": 86,
+          "passing": 58,
+          "shooting": 62,
+          "tackling": 35,
+          "keeping": 7
+        }
+      },
+      {
+        "id": "deportivo-gambito-med-2",
+        "name": "Mauro Serrano",
+        "role": "MED",
+        "age": 27,
+        "bio": "Interior de último pase y disparo lejano, poco amigo de replegar.",
+        "scouting": {
+          "pace": 68,
+          "stamina": 72,
+          "technique": 78,
+          "passing": 81,
+          "shooting": 75,
+          "tackling": 38,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "deportivo-gambito-del-1",
+        "name": "Enzo Pereda",
+        "role": "DEL",
+        "age": 23,
+        "bio": "Delantero explosivo que vive al límite del fuera de juego.",
+        "scouting": {
+          "pace": 92,
+          "stamina": 67,
+          "technique": 76,
+          "passing": 51,
+          "shooting": 84,
+          "tackling": 24,
+          "keeping": 5
+        }
+      },
+      {
+        "id": "deportivo-gambito-por-2",
+        "name": "Darío Cordero",
+        "role": "POR",
+        "age": 29,
+        "bio": "Suplente bajo palos, fuerte en el uno contra uno y limitado por arriba.",
+        "scouting": {
+          "pace": 48,
+          "stamina": 65,
+          "technique": 41,
+          "passing": 44,
+          "shooting": 14,
+          "tackling": 31,
+          "keeping": 73
+        }
+      },
+      {
+        "id": "deportivo-gambito-def-2",
+        "name": "Rafa Villalba",
+        "role": "DEF",
+        "age": 25,
+        "bio": "Zaguero veloz que corrige con piernas lo que pierde en colocación.",
+        "scouting": {
+          "pace": 85,
+          "stamina": 74,
+          "technique": 51,
+          "passing": 48,
+          "shooting": 35,
+          "tackling": 64,
+          "keeping": 5
+        }
+      },
+      {
+        "id": "deportivo-gambito-med-3",
+        "name": "Noé Ramírez",
+        "role": "MED",
+        "age": 19,
+        "bio": "Canterano habilidoso, gran conducción pero irregular en el último pase.",
+        "scouting": {
+          "pace": 80,
+          "stamina": 69,
+          "technique": 82,
+          "passing": 61,
+          "shooting": 54,
+          "tackling": 34,
+          "keeping": 7
+        }
+      },
+      {
+        "id": "deportivo-gambito-del-2",
+        "name": "Héctor Gálvez",
+        "role": "DEL",
+        "age": 31,
+        "bio": "Segundo delantero curtido; protege el balón y golpea sin avisar.",
+        "scouting": {
+          "pace": 60,
+          "stamina": 64,
+          "technique": 71,
+          "passing": 59,
+          "shooting": 78,
+          "tackling": 37,
+          "keeping": 5
+        }
+      }
+    ],
+    "peones-del-norte": [
+      {
+        "id": "peones-del-norte-por-1",
+        "name": "Bruno Salas",
+        "role": "POR",
+        "age": 30,
+        "bio": "Portero paciente, protege su palo y ordena los cierres.",
+        "scouting": {
+          "pace": 43,
+          "stamina": 77,
+          "technique": 39,
+          "passing": 49,
+          "shooting": 15,
+          "tackling": 45,
+          "keeping": 76
+        }
+      },
+      {
+        "id": "peones-del-norte-def-1",
+        "name": "Gael Soler",
+        "role": "DEF",
+        "age": 25,
+        "bio": "Defensa resistente que aguanta el uno contra uno sin lanzarse.",
+        "scouting": {
+          "pace": 68,
+          "stamina": 87,
+          "technique": 54,
+          "passing": 56,
+          "shooting": 24,
+          "tackling": 80,
+          "keeping": 7
+        }
+      },
+      {
+        "id": "peones-del-norte-med-1",
+        "name": "Hugo Paredes",
+        "role": "MED",
+        "age": 23,
+        "bio": "Mediocentro sacrificado, barre por delante de la zaga.",
+        "scouting": {
+          "pace": 66,
+          "stamina": 90,
+          "technique": 59,
+          "passing": 61,
+          "shooting": 46,
+          "tackling": 75,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "peones-del-norte-med-2",
+        "name": "Álex Ríos",
+        "role": "MED",
+        "age": 21,
+        "bio": "Lanzador de contraataques, corre más de lo que pausa.",
+        "scouting": {
+          "pace": 88,
+          "stamina": 81,
+          "technique": 64,
+          "passing": 70,
+          "shooting": 50,
+          "tackling": 53,
+          "keeping": 7
+        }
+      },
+      {
+        "id": "peones-del-norte-del-1",
+        "name": "Óscar Molina",
+        "role": "DEL",
+        "age": 28,
+        "bio": "Delantero de pocos toques, letal si recibe al espacio.",
+        "scouting": {
+          "pace": 83,
+          "stamina": 76,
+          "technique": 69,
+          "passing": 47,
+          "shooting": 80,
+          "tackling": 39,
+          "keeping": 6
+        }
+      },
+      {
+        "id": "peones-del-norte-por-2",
+        "name": "Iván Gil",
+        "role": "POR",
+        "age": 32,
+        "bio": "Arquero de oficio, firme ante disparos fuertes y algo lento en las salidas.",
+        "scouting": {
+          "pace": 35,
+          "stamina": 65,
+          "technique": 42,
+          "passing": 53,
+          "shooting": 16,
+          "tackling": 38,
+          "keeping": 79
+        }
+      },
+      {
+        "id": "peones-del-norte-def-2",
+        "name": "Sergio Salas",
+        "role": "DEF",
+        "age": 19,
+        "bio": "Defensa de cantera con zancada larga y buen juego aéreo.",
+        "scouting": {
+          "pace": 74,
+          "stamina": 77,
+          "technique": 50,
+          "passing": 45,
+          "shooting": 31,
+          "tackling": 70,
+          "keeping": 7
+        }
+      },
+      {
+        "id": "peones-del-norte-med-3",
+        "name": "Eric Soler",
+        "role": "MED",
+        "age": 26,
+        "bio": "Pasador trabajador, nunca deja de ofrecerse en apoyo.",
+        "scouting": {
+          "pace": 70,
+          "stamina": 85,
+          "technique": 67,
+          "passing": 74,
+          "shooting": 49,
+          "tackling": 57,
+          "keeping": 8
+        }
+      },
+      {
+        "id": "peones-del-norte-del-2",
+        "name": "Lucas Paredes",
+        "role": "DEL",
+        "age": 22,
+        "bio": "Atacante zurdo que busca diagonales y disparos al segundo palo.",
+        "scouting": {
+          "pace": 79,
+          "stamina": 74,
+          "technique": 72,
+          "passing": 59,
+          "shooting": 76,
+          "tackling": 35,
+          "keeping": 5
+        }
+      }
+    ]
+  }
+}
