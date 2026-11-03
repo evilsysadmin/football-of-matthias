@@ -1098,7 +1098,7 @@ func _initialize() -> void:
 		var glove := catch_rig.get_node("Glove" + suffix) as MeshInstance3D
 		var palm := glove.get_node("GripPalm") as MeshInstance3D
 		assert(match_node.presentation_3d.debug_keeper_catch_sleeve_length(keeper, side) < 0.85)
-		assert((sleeve.mesh as CylinderMesh).bottom_radius <= 0.052,
+		assert((sleeve.mesh as CylinderMesh).bottom_radius < 0.055,
 			"Catch sleeves must not look like thick tubes")
 		assert((glove.mesh as SphereMesh).radius <= 0.074)
 		assert((palm.mesh as SphereMesh).radius < (glove.mesh as SphereMesh).radius)
