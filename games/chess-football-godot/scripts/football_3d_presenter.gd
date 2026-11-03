@@ -51,6 +51,10 @@ const KEEPER_CATCH_START_REACH := 0.32
 const KEEPER_CATCH_OPEN_HAND_SPAN := 0.29
 const KEEPER_CATCH_CLOSED_HAND_SPAN := 0.188
 const KEEPER_CATCH_BLEND_SECONDS := 0.18
+# Keep the established visual spin rate, but roll around the axis
+# perpendicular to the ball's actual 2D travel on the X/Z pitch plane.
+# This changes no movement, velocity, 2D authority, collisions or ball art.
+const BALL_VISUAL_SPIN_PER_PIXEL := 0.004
 
 var match_node: Node
 var camera: Camera3D
@@ -1396,7 +1400,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 			keeper_catch_carrier_id = 0
 			keeper_catch_elapsed = 0.0
 		ball_node.position = ball_at
-		ball_node.rotate_z(match_node.ball.velocity.length() * delta * 0.004)
+		_sync_ball_visual_roll(delta)
 		_sync_keeper_catch_hands(holding_keeper, ball_at, grip_progress)
 	if ball_shadow != null:
 		# The carried ball is not simultaneously painted at the keeper's boots.
@@ -1413,6 +1417,25 @@ func sync_presentation(delta: float, mode: String) -> void:
 				match_node.penalty_preview_target(),
 				0.045,
 			)
+
+
+# Given a 2D movement (X along the field, Y across it), the matching 3D
+# movement is (X, 0, Z). Up cross travel gives the horizontal rolling axis;
+# a fixed Z-axis spin visibly rolls sideways during vertical passes.
+static func ball_roll_axis(velocity: Vector2) -> Vector3:
+	if velocity.length_squared() <= 0.001:
+		return Vector3.ZERO
+	return Vector3(velocity.y, 0.0, -velocity.x).normalized()
+
+
+func _sync_ball_visual_roll(delta: float) -> void:
+	if ball_node == null or delta <= 0.0 or match_node.ball.carrier != null:
+		return
+	var velocity: Vector2 = match_node.ball.velocity
+	var axis := ball_roll_axis(velocity)
+	if axis == Vector3.ZERO:
+		return
+	ball_node.rotate(axis, velocity.length() * delta * BALL_VISUAL_SPIN_PER_PIXEL)
 
 
 static func _keeper_locomotion(animation_name: StringName) -> bool:

@@ -240,6 +240,21 @@ jobs:
             exit 1
           fi
           grep -q 'chess-football godot smoke: OK' "$log"
+      - name: Direction-aware 3D ball roll (visual-only, no match physics changes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-ball-directional-roll.log"
+          set +e
+          timeout 25s "$godot" --headless --quit-after 360 --path games/chess-football-godot --script res://tests/ball_directional_roll_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::3D ball roll does not match the real pitch travel direction.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_BALL_DIRECTIONAL_ROLL_OK' "$log"
       - name: Full-match endurance smoke (90s simulated)
         shell: bash
         run: |
