@@ -793,8 +793,11 @@ func _assert_near_throw_in_bounds(match_node: Node) -> void:
 	assert(head.x > 28.0 and head.x < canvas_size.x - 28.0)
 	assert(head.y >= match_node.goal_label.position.y + match_node.goal_label.size.y + 8.0)
 	assert(head.y < feet.y)
-	assert(feet.y < canvas_size.y - 30.0,
-		"Near touchline thrower's boots fall below the broadcast viewport")
+	# The selected-player disc is wider than the boots and projects lower
+	# than its world-space centre. A 100 px ground margin keeps the whole
+	# amber control ring visible in the 1280x720 Godot screenshot.
+	assert(feet.y < canvas_size.y - 100.0,
+		"Near touchline thrower's selection ring lacks bottom clearance")
 	assert(feet.y > canvas_size.y * 0.56)
 
 func _save_texture_preview(source_path: String, filename: String, marker: String) -> void:
