@@ -1071,17 +1071,32 @@ func _initialize() -> void:
 	assert(keeper.debug_keeper_save_direction() > 0.0)
 	assert(String(keeper.visual.animation) == "tackle")
 	match_node.debug_sync_presentation()
+	assert(match_node.presentation_3d.debug_keeper_catch_hands_visible(keeper))
+	var open_grip_span: float = match_node.presentation_3d.debug_keeper_catch_glove_span(keeper)
+	assert(open_grip_span > 0.58)
 	# Advance only the 3D presentation catch blend; physics / possession
-	# remains unchanged. Palms must flank the ball in camera-front space.
+	# remain unchanged. The palms must converge around a chest-height ball.
 	match_node.presentation_3d.sync_presentation(0.25, match_node.camera_mode)
-	assert(match_node.debug_3d_ball_height() > 0.95)
+	var closed_grip_span: float = match_node.presentation_3d.debug_keeper_catch_glove_span(keeper)
+	assert(closed_grip_span < open_grip_span - 0.20)
+	assert(closed_grip_span < 0.43)
+	assert(match_node.debug_3d_ball_height() > 1.18)
 	var stage_keeper: Vector3 = match_node.presentation_3d.world_to_stage(keeper.global_position)
 	var held_ball: Vector3 = match_node.presentation_3d.ball_node.position
-	assert(held_ball.z > stage_keeper.z + 0.49)
+	assert(held_ball.z > stage_keeper.z + 0.37)
 	assert(match_node.presentation_3d.debug_keeper_catch_hands_visible(keeper))
 	for side in [-1, 1]:
 		assert(match_node.presentation_3d.debug_keeper_catch_glove_distance(keeper, side) < 0.32)
 	assert(not match_node.presentation_3d.ball_shadow.visible)
+	# Camera changes and keeper movement must not leave a detached glove pose.
+	keeper.global_position += Vector2(0.0, 35.0)
+	match_node.ball.tick_ball(1.0 / 60.0)
+	match_node.presentation_3d.sync_presentation(1.0 / 60.0, "tactical")
+	var moved_keeper_stage: Vector3 = match_node.presentation_3d.world_to_stage(keeper.global_position)
+	assert(absf(match_node.presentation_3d.ball_node.position.z
+		- moved_keeper_stage.z - ChessFootball3DPresenter.KEEPER_CATCH_FRONT) < 0.05)
+	for side in [-1, 1]:
+		assert(match_node.presentation_3d.debug_keeper_catch_glove_distance(keeper, side) < 0.32)
 
 	var rival_keeper: Footballer = match_node.teams[1][0]
 	rival_keeper.global_position = Vector2(ChessFootballMath.PITCH_RECT.end.x - 120.0, ChessFootballMath.PITCH_RECT.get_center().y)

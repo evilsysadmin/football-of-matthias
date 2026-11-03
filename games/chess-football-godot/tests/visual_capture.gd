@@ -487,9 +487,15 @@ func _initialize() -> void:
 	match_node.ball.release(Vector2.RIGHT, 760.0)
 	match_node.ball.global_position = review_keeper.global_position + Vector2(-42.0, 26.0)
 	match_node.ball.velocity = Vector2.RIGHT * 760.0
+	# Camera is prepositioned before contact: its 1-second focus tick would
+	# otherwise complete the short glove animation before the first screenshot.
+	match_node.debug_focus_presentation()
 	assert(match_node.debug_try_keeper_save(review_keeper))
 	assert(review_keeper.debug_keeper_save_active())
 	assert(review_keeper.debug_keeper_save_direction() > 0.0)
+	match_node.presentation_3d.sync_presentation(0.018, match_node.camera_mode)
+	await _save_keeper_detail(match_node, "keeper-catch-open-detail",
+		"VISUAL_CAPTURE_KEEPER_CATCH_OPEN_DETAIL", 1)
 	review_keeper._process(0.29)
 	if review_keeper.visual != null and String(review_keeper.visual.animation) == "tackle":
 		review_keeper.visual.pause()
@@ -498,6 +504,8 @@ func _initialize() -> void:
 	await _save_capture(match_node, "keeper-save", "VISUAL_CAPTURE_KEEPER_SAVE")
 	await _save_keeper_detail(match_node, "keeper-catch-detail",
 		"VISUAL_CAPTURE_KEEPER_CATCH_DETAIL", 1)
+	await _save_keeper_detail(match_node, "keeper-catch-closed-detail",
+		"VISUAL_CAPTURE_KEEPER_CATCH_CLOSED_DETAIL", 1)
 
 	match_node.debug_toggle_camera_mode()
 	for _frame in range(10):
