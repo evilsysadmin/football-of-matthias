@@ -29,8 +29,12 @@ func _initialize() -> void:
 	var game = packed.instantiate()
 	game.match_team_size = 11
 	root.add_child(game)
-	# Isolate whether per-frame Sprite3D property updates invalidate the XI
-	# batch: allow initial raster creation, then hold its exact first pose.
+	# In SceneTree scripts the match node's _ready() runs only after one
+	# process frame, so the 3D presenter does not exist immediately.
+	await process_frame
+	assert(game.presentation_3d != null)
+	# Isolate whether per-frame Sprite3D updates invalidate the XI batch.
+	# Set the hold before the delayed raster creation (16 warm-up frames).
 	game.presentation_3d.xi_raster_hold_for_visual_probe = true
 	# The kickoff clock starts ticking on the next physics frame. Extend it
 	# immediately, BEFORE the visual warm-up, so this preview never runs
