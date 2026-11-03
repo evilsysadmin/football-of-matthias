@@ -52,8 +52,12 @@ func _initialize() -> void:
 	match_node.debug_force_set_piece_ready()
 	assert(match_node.human_set_piece_available())
 	var corner_taker: Footballer = match_node.ball.carrier
-	var target: Footballer = match_node.teams[0][3]
-	assert(target != corner_taker and target.role != "keeper")
+	var target: Footballer = null
+	for teammate in match_node.teams[0]:
+		if teammate != corner_taker and teammate.role != "keeper" and not teammate.sent_off:
+			target = teammate
+			break
+	assert(target != null and target != corner_taker)
 	assert(not match_node.mobile_begin_context_pass(match_node.teams[1][2]))
 	assert(match_node.ball.carrier == corner_taker)
 	assert(match_node.mobile_begin_context_pass(target))
