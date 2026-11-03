@@ -79,6 +79,7 @@ jobs:
               'fc_matthias': 'fc_matthias_keeper_catch_v1.webp',
               'real_enroque': 'real_enroque_keeper_catch_v1.webp'
           }
+          missing_cors = []
           for entry in meta['entries']:
               name = expected.pop(entry['team'])
               assert entry['file'] == name
@@ -98,16 +99,22 @@ jobs:
                   mime = response.headers.get_content_type()
                   assert mime == 'image/webp', f'{name}: content-type {mime!r}'
                   cors = response.headers.get('Access-Control-Allow-Origin', '')
-                  assert cors in ('*', origin), f'{name}: missing staging CORS ({cors!r})'
                   raw = response.read(4194305)
               assert 0 < len(raw) <= 4194304, f'{name}: size outside 4 MiB cap'
               assert raw[:4] == b'RIFF' and raw[8:12] == b'WEBP', f'{name}: not WebP'
               digest = hashlib.sha256(raw).hexdigest()
               assert digest == entry['sha256'], f'{name}: mismatched SHA-256 ({digest})'
               (output / name).write_bytes(raw)
-              print(f'KEEPER_R2_VERIFIED team={entry["team"]} bytes={len(raw)} sha256={digest} cors={cors}')
+              if cors not in ('*', origin):
+                  missing_cors.append(name)
+              print(f'KEEPER_R2_VERIFIED team={entry["team"]} bytes={len(raw)} sha256={digest} cors={cors!r}')
           assert not expected
-          Path(os.environ['GITHUB_OUTPUT']).open('a').write('enabled=true\n')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as result:
+              result.write('enabled=true\n')
+              result.write('cors_ok=' + ('false' if missing_cors else 'true') + '\n')
+          if missing_cors:
+              print('FOOTBALL_KEEPER_R2_CORS_BLOCKED: CORS for staging missing in ' + ', '.join(missing_cors))
+              print('Configure R2 > football > Settings > CORS Policy: allowed origin ' + origin + ', method GET')
           PY
       - name: Restore pinned Godot editor
         uses: actions/cache@v6
@@ -590,6 +597,14 @@ jobs:
           path: ${{ runner.temp }}/chess-football-review/
           if-no-files-found: error
           retention-days: 7
+      # Public bytes may be intact before the operator adds bucket CORS.
+      # Still capture real Godot frames, but never pass the required gate
+      # or publish a Web build until browsers can fetch both sheets.
+      - name: Enforce CORS on dedicated Football R2 origin
+        if: steps.keeper_r2.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          test "${{ steps.keeper_r2.outputs.cors_ok }}" = true
       - name: Export lossless R2 candidate atlas pack (no publication)
         shell: bash
         run: |
