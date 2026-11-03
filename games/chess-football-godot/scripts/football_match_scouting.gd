@@ -48,6 +48,6 @@ static func starter(team_id: int, squad_index: int) -> Dictionary:
 		if typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT:
 			return {}
 		var rating := float(value)
-		if not is_finite(rating) or rating < 1.0 or rating > 99.0 or floorf(rating) != rating:
+		if is_nan(rating) or is_inf(rating) or rating < 1.0 or rating > 99.0 or floorf(rating) != rating:
 			return {}
 	return player
