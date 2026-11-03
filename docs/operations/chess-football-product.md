@@ -144,7 +144,7 @@ que Godot y el mánager puedan divergir silenciosamente.
 En el partido rápido actual, los **cinco titulares de FC Matthias y de
 Real Enroque** ya aplican velocidad (±10 % sobre el desplazamiento de
 campo; no se altera el movimiento especial del portero) y resistencia
-(±20 % sobre el desgaste al esprintar). Se aplican igual al futbolista
+(de −10 % a +20 % sobre el desgaste al esprintar). Se aplican igual al futbolista
 controlado por humanos y por la IA. Los otros cuatro clubes y los suplentes
 están preparados en el catálogo, pero todavía no hay selector de equipos
 ni sustituciones en Godot. Técnica/pase/remate/defensa/portería siguen

@@ -84,7 +84,7 @@ func configure(p_team_id: int, p_index: int, p_role: String, p_position: Vector2
 
 # Keep goalkeepers' established lateral save speed unchanged. Outfield
 # players use a bounded ±10% pace factor in both human and AI movement;
-# stamina changes sprint drain only, never match rules or saved careers.
+# stamina changes sprint drain by -10% to +20% only, never match rules or saved careers.
 func _apply_match_scouting() -> void:
 	var profile: Dictionary = MatchScouting.starter(team_id, squad_index)
 	scouting_player_id = String(profile.get("id", ""))
@@ -99,7 +99,7 @@ func _apply_match_scouting() -> void:
 	# Tackle and exhaustion checks already work relative to this field.
 	base_speed = 250.0 * movement_multiplier
 	stamina_drain_multiplier = clampf(
-		1.0 - float(scouting_endurance - 75) * 0.008, 0.80, 1.20
+		1.0 - float(scouting_endurance - 75) * 0.008, 0.90, 1.20
 	)
 
 func _configure_visual() -> void:
