@@ -13,8 +13,10 @@ func _initialize() -> void:
 	root.add_child(game)
 	for i in range(4):
 		await process_frame
-	game.set_process(false)
-	game.set_physics_process(false)
+	# Preserve the SAME real physics/presenter update path as a normal match.
+	# Keep the kickoff freeze long enough to capture both camera modes without
+	# letting the incomplete 11v11 match rules advance.
+	game.kickoff_seconds_remaining = 15.0
 	assert(game.debug_team_counts() == [11, 11])
 	assert(game.match_pitch == Formation.ELEVEN_PITCH_RECT)
 	assert(game.kickoff_active)
@@ -47,11 +49,6 @@ func _initialize() -> void:
 			else:
 				assert(player.global_position.x > center.x)
 	assert(roster_ids.size() == 22)
-	# Isolate whether native 3D front-idle art or the whole renderer is hidden.
-	# Runtime match remains frozen during this visual-only diagnostic.
-	for team in game.teams:
-		for player in team:
-			player.visual.play("run")
 	stage.sync_presentation(2.0, "tactical")
 	# Sprite3D textures and camera transforms must survive multiple real
 	# rendered frames before taking visual evidence of the 22 athletes.
