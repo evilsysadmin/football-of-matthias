@@ -2,6 +2,7 @@ extends Node2D
 
 const Presenter3D = preload("res://scripts/football_3d_presenter.gd")
 const FootballAudio = preload("res://scripts/football_audio.gd")
+const QuickDifficulty = preload("res://scripts/football_quick_difficulty.gd")
 const TEAM_SIZE := 5
 const ROLES := ["keeper", "defender", "midfielder", "wing", "forward"]
 const TEAM_COLORS := [Color(0.12, 0.42, 0.92), Color(0.86, 0.18, 0.2)]
@@ -178,13 +179,14 @@ var ai_next_decision: Dictionary = {}
 var ai_primary_presser_cache: Array = [null, null]
 var ai_secondary_presser_cache: Array = [null, null]
 var keeper_distribution_started_at: Dictionary = {}
+var quick_difficulty: String = "normal"
+var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0}
 var ai_adaptive_level: int = 0
 var ai_adapt_human_pressure: float = 0.0
 var ai_adapt_cpu_pressure: float = 0.0
 var ai_adapt_next_sample: float = AI_ADAPT_SAMPLE_SECONDS
 var ai_adapt_next_eval: float = AI_ADAPT_EVAL_SECONDS
-# Localhost-only browser probe for the exported-Web keyboard E2E.
-# Never enabled on staging/production and never changes input authority.
+# Real-browser E2E probe, never active outside local 127.0.0.1 CI.
 var ci_web_keyboard_probe: bool = false
 var pause_menu_open: bool = false
 var kickoff_team_id: int = 0
@@ -231,6 +233,7 @@ var pause_menu_button: Button
 var pause_sfx_button: Button
 
 func _ready() -> void:
+	_set_quick_difficulty(QuickDifficulty.read_browser())
 	_spawn_match()
 	_create_audio()
 	_prepare_kickoff(randi_range(0, 1), true)
@@ -243,6 +246,14 @@ func _ready() -> void:
 			true
 		))
 		JavaScriptBridge.eval("window.parent.postMessage({source:'chess-football-godot', type:'ready'}, '*');")
+
+func _set_quick_difficulty(level: String) -> void:
+	quick_difficulty = QuickDifficulty.normalize(level)
+	quick_difficulty_profile = QuickDifficulty.profile(quick_difficulty)
+	ai_next_decision.clear()
+
+func _ai_cpu_intensity(base: float) -> float:
+	return clampf(base * float(quick_difficulty_profile["effort"]), 0.35, 1.0)
 
 func _physics_process(delta: float) -> void:
 	if ci_web_keyboard_probe and Engine.get_physics_frames() % 6 == 0:
@@ -285,9 +296,9 @@ func _physics_process(delta: float) -> void:
 	_update_3d_presentation(delta)
 	_refresh_hud()
 
-# Real WebAssembly/browser evidence, never a fake Input.action_press:
-# Playwright sends Arrow keys to the actual Godot canvas, then compares
-# both the player's real position and Input.get_vector in these samples.
+# Playwright presses real browser keys and receives the actual game action
+# and player position. Test-only: no input injection or browser telemetry
+# runs in staging/production.
 func _emit_ci_web_keyboard_sample() -> void:
 	if not is_instance_valid(controlled):
 		return
@@ -492,7 +503,7 @@ func _create_pause_menu(hud: CanvasLayer) -> void:
 	box.add_child(title)
 
 	var subtitle := Label.new()
-	subtitle.text = "PARTIDO EN PAUSA"
+	subtitle.text = "PARTIDO EN PAUSA · " + quick_difficulty.to_upper()
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_font_size_override("font_size", 14)
 	subtitle.add_theme_color_override("font_color", Color(1.0, 0.82, 0.28))
@@ -938,6 +949,9 @@ func _update_ai(delta: float) -> void:
 				and (team_has_ball or player != presser)
 			):
 				target = _ai_spaced_target(player, target)
+			# Only the opposing team changes effort; human teammates remain unchanged.
+			if team_id == 1:
+				intensity = _ai_cpu_intensity(intensity)
 			player.move_ai(delta, target, intensity)
 
 			if (
@@ -1118,10 +1132,11 @@ func _update_ai_adaptation() -> void:
 		ai_adapt_next_eval = match_seconds + AI_ADAPT_EVAL_SECONDS
 
 func _ai_adaptive_decision_interval() -> float:
-	return AI_DECISION_INTERVAL * (1.0 - float(ai_adaptive_level) * AI_ADAPT_DECISION_STEP)
+	return AI_DECISION_INTERVAL * (1.0 - float(ai_adaptive_level) * AI_ADAPT_DECISION_STEP) * float(quick_difficulty_profile["decision"])
 
-func _ai_adaptive_pressure_radius() -> float:
-	return AI_PRESSURE_RADIUS * (1.0 + float(ai_adaptive_level) * AI_ADAPT_PRESSURE_STEP)
+func _ai_adaptive_pressure_radius(team_id: int = 1) -> float:
+	var radius := AI_PRESSURE_RADIUS * (1.0 + float(ai_adaptive_level) * AI_ADAPT_PRESSURE_STEP)
+	return radius * float(quick_difficulty_profile["pressure"]) if team_id == 1 else radius
 
 func _ai_adaptive_support_forward() -> float:
 	return AI_SUPPORT_FORWARD + float(ai_adaptive_level) * AI_ADAPT_SUPPORT_STEP
@@ -1151,7 +1166,7 @@ func _ai_dribble_target(player: Footballer) -> Vector2:
 	var threat := _nearest_opponent_to(player)
 	if threat != null:
 		var distance := player.global_position.distance_to(threat.global_position)
-		var pressure_radius := _ai_adaptive_pressure_radius()
+		var pressure_radius := _ai_adaptive_pressure_radius(player.team_id)
 		if distance < pressure_radius:
 			var escape := (player.global_position - threat.global_position).normalized()
 			target += escape * (pressure_radius - distance) * 0.9
@@ -1424,7 +1439,7 @@ func _ai_attack(player: Footballer) -> void:
 		return
 	var goal := ChessFootballMath.goal_center(player.team_id)
 	var goal_distance := player.global_position.distance_to(goal)
-	if goal_distance < AI_SHOOT_DISTANCE:
+	if goal_distance < AI_SHOOT_DISTANCE * float(quick_difficulty_profile["shoot"]):
 		var defending_keeper: Footballer = teams[1 - player.team_id][0]
 		var aim_y := goal.y + (-70.0 if defending_keeper.global_position.y > goal.y else 70.0)
 		var shot_target := Vector2(goal.x, aim_y)

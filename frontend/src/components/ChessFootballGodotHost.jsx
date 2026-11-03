@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { resolveChessFootballGodotUrl } from '../chessFootballGodotRuntime.js';
+import { footballQuickMatchUrl } from '../footballQuickDifficulty.js';
 import { exitWarRoomBrowserFullscreen, requestWarRoomLandscapeFullscreen, unlockWarRoomOrientation } from './useWarRoomImmersive.js';
 import './ChessFootballGodotHost.css';
 
@@ -22,7 +23,7 @@ function readMobileViewport() {
   };
 }
 
-export default function ChessFootballGodotHost({ onExit }) {
+export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }) {
   const frameRef = useRef(null);
   const [attempt, setAttempt] = useState(0);
   const [runtimeReady, setRuntimeReady] = useState(false);
@@ -94,10 +95,9 @@ export default function ChessFootballGodotHost({ onExit }) {
     return () => { cancelled = true; };
   }, [attempt]);
 
-  // Godot lives in a cross-origin iframe. Once it reports ready, hand
-  // keyboard focus to that frame: otherwise arrow keys can be consumed by
-  // the outer document instead of reaching InputMap. Pointer/touch users
-  // retain their normal focus behavior.
+  // Godot is hosted in a cross-origin iframe. When it becomes ready,
+  // keyboard focus must move into the game rather than remain on the
+  // outer welcome-screen button. Leave touch/pointer focus unchanged.
   useEffect(() => {
     if (!runtimeReady || mobileViewport.coarse) return;
     const frame = frameRef.current;
@@ -134,6 +134,7 @@ export default function ChessFootballGodotHost({ onExit }) {
   };
 
   const mobilePortrait = mobileViewport.coarse && mobileViewport.portrait;
+  const matchUrl = footballQuickMatchUrl(runtime.url, difficulty);
 
 
   const runtimeStatus = bootFailed
@@ -194,10 +195,10 @@ export default function ChessFootballGodotHost({ onExit }) {
       {runtime.url && !bootFailed ? (
         <iframe
           ref={frameRef}
-          key={runtime.url}
+          key={matchUrl}
           className="chess-football-godot-host__frame"
           tabIndex={0}
-          src={runtime.url}
+          src={matchUrl}
           title="Chess Football Godot"
           allow="autoplay; fullscreen; gamepad"
           allowFullScreen
