@@ -42,6 +42,52 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.FOOTBALL_SOURCE_SHA }}
+      - name: Verify published keeper WebPs (HTTPS, SHA-256, CORS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          meta = json.loads(Path('games/chess-football-godot/optional_keeper_catch_v1.json').read_text())
+          assert meta['enabled'] is True
+          base = 'https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1'
+          origin = 'https://staging.football.shadowops.dpdns.org'
+          assert meta['cdn_base'] == base
+          assert len(meta['entries']) == 2
+          output = Path(os.environ['RUNNER_TEMP']) / 'football-keeper-catch-r2'
+          output.mkdir(parents=True, exist_ok=True)
+          expected = {
+              'fc_matthias': 'fc_matthias_keeper_catch_v1.webp',
+              'real_enroque': 'real_enroque_keeper_catch_v1.webp'
+          }
+          for entry in meta['entries']:
+              name = expected.pop(entry['team'])
+              assert entry['file'] == name
+              assert len(entry['sha256']) == 64
+              req = Request(f'{base}/{name}', headers={
+                  'Origin': origin,
+                  'User-Agent': 'Football-keeper-catch-CI/1.0'
+              })
+              with urlopen(req, timeout=18) as response:
+                  assert response.status == 200, f'{name}: HTTP {response.status}'
+                  mime = response.headers.get_content_type()
+                  assert mime == 'image/webp', f'{name}: content-type {mime!r}'
+                  cors = response.headers.get('Access-Control-Allow-Origin', '')
+                  assert cors in ('*', origin), f'{name}: missing staging CORS ({cors!r})'
+                  raw = response.read(4194305)
+              assert 0 < len(raw) <= 4194304, f'{name}: size outside 4 MiB cap'
+              assert raw[:4] == b'RIFF' and raw[8:12] == b'WEBP', f'{name}: not a WebP'
+              digest = hashlib.sha256(raw).hexdigest()
+              assert digest == entry['sha256'], f'{name}: mismatched SHA256 ({digest})'
+              (output / name).write_bytes(raw)
+              print(f'KEEPER_R2_VERIFIED team={entry["team"]} bytes={len(raw)} sha256={digest} cors={cors}')
+          assert not expected
+          PY
       - name: Restore pinned Godot editor
         uses: actions/cache@v6
         with:
