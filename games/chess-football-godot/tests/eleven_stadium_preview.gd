@@ -92,6 +92,32 @@ func _initialize() -> void:
 	marker.position = Vector3(2.0, 1.0, 0.0)
 	marker.name = "XI_MeshDiagnostic"
 	stage.add_child(marker)
+	# Isolate whether identical standalone Sprite3D quads also render when
+	# parented to each real athlete proxy. This is an XI preview ONLY; the
+	# existing AnimatedSprite3D remains the authoritative animation clock.
+	# If the static clones appear, the failure is confined to the animated
+	# draw path rather than player transforms, atlas bytes, or camera.
+	for team in game.teams:
+		for athlete in team:
+			var actor_key: int = athlete.get_instance_id()
+			var actual: AnimatedSprite3D = stage.player_sprites[actor_key]
+			var proxy: Node3D = stage.player_nodes[actor_key]
+			var clone := Sprite3D.new()
+			clone.name = "XI_ProxyRasterDiagnostic_%d" % actor_key
+			clone.texture = actual.sprite_frames.get_frame_texture(actual.animation, actual.frame)
+			clone.position = actual.position
+			clone.scale = actual.scale
+			clone.pixel_size = actual.pixel_size
+			clone.centered = actual.centered
+			clone.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			clone.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+			clone.alpha_scissor_threshold = 0.12
+			clone.shaded = false
+			clone.flip_h = actual.flip_h
+			clone.modulate = actual.modulate
+			clone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			proxy.add_child(clone)
+			actual.visible = false # do not double-render if AnimatedSprite3D wakes up
 	var viewport := root.get_viewport()
 	var size := viewport.get_visible_rect().size
 	assert(size.x > 100.0 and size.y > 100.0)
