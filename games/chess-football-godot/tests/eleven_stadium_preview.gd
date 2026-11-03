@@ -29,14 +29,14 @@ func _initialize() -> void:
 	var game = packed.instantiate()
 	game.match_team_size = 11
 	root.add_child(game)
-	# Allow the 11v11 renderer to register its quads after the first
-	# actual stadium frames, not during 3D node construction.
+	# The kickoff clock starts ticking on the next physics frame. Extend it
+	# immediately, BEFORE the visual warm-up, so this preview never runs
+	# incomplete 11v11 match rules during its first 21 frames.
+	game.kickoff_seconds_remaining = 15.0
+	# Allow the XI renderer to register its quads in an active 3D scene.
+	# Keep physics/presenter updating exactly as during normal gameplay.
 	for i in range(21):
 		await process_frame
-	# Preserve the SAME real physics/presenter update path as a normal match.
-	# Keep the kickoff freeze long enough to capture both camera modes without
-	# letting the incomplete 11v11 match rules advance.
-	game.kickoff_seconds_remaining = 15.0
 	assert(game.debug_team_counts() == [11, 11])
 	assert(game.match_pitch == Formation.ELEVEN_PITCH_RECT)
 	assert(game.kickoff_active)
