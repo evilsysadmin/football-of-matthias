@@ -46,7 +46,18 @@ func _process(_delta: float) -> void:
 	if touch_root.visible:
 		var match_node = get_parent()
 		if match_node != null and match_node.help_label != null:
-			match_node.help_label.text = MOBILE_HELP
+			# The generic touch help must not hide instructions for penalties
+			# or user-controlled corners/throw-ins during a dead ball.
+			if match_node.human_set_piece_available():
+				match_node.help_label.text = "%s · TOCA un compañero para sacar" % match_node.set_piece_kind
+			elif match_node.set_piece_active and match_node.set_piece_kind == "PENALTI":
+				match_node.help_label.text = (
+					"PENALTI · toca y arrastra en portería para tirar"
+					if match_node.set_piece_team_id == 0
+					else "PENALTI RIVAL · mueve al portero con joystick"
+				)
+			else:
+				match_node.help_label.text = MOBILE_HELP
 
 func _exit_tree() -> void:
 	_release_all_inputs()

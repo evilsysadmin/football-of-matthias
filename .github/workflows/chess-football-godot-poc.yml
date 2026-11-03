@@ -240,6 +240,21 @@ jobs:
             exit 1
           fi
           grep -q 'chess-football godot smoke: OK' "$log"
+      - name: Playable throw-ins and corners (keyboard, touch, AI and timeout)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/chess-football-playable-restarts.log"
+          set +e
+          timeout 25s "$godot" --headless --quit-after 400 --path games/chess-football-godot --script res://tests/playable_restarts_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Football throw-in/corner player control regression.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_PLAYABLE_RESTARTS_OK' "$log"
       - name: Direction-aware 3D ball roll (visual-only, no match physics changes)
         shell: bash
         run: |
@@ -480,6 +495,8 @@ jobs:
           restart="$(sed -n 's/^VISUAL_CAPTURE_RESTART=//p' "$log" | tail -1)"
           throw_in="$(sed -n 's/^VISUAL_CAPTURE_THROW_IN=//p' "$log" | tail -1)"
           corner="$(sed -n 's/^VISUAL_CAPTURE_CORNER=//p' "$log" | tail -1)"
+          corner_playable="$(sed -n 's/^VISUAL_CAPTURE_CORNER_PLAYABLE=//p' "$log" | tail -1)"
+          throw_in_playable="$(sed -n 's/^VISUAL_CAPTURE_THROW_IN_PLAYABLE=//p' "$log" | tail -1)"
           menu="$(sed -n 's/^VISUAL_CAPTURE_MENU=//p' "$log" | tail -1)"
           atlas_fc="$(sed -n 's/^VISUAL_CAPTURE_ATLAS_FC_MATTHIAS=//p' "$log" | tail -1)"
           atlas_rival="$(sed -n 's/^VISUAL_CAPTURE_ATLAS_REAL_ENROQUE=//p' "$log" | tail -1)"
@@ -527,6 +544,8 @@ jobs:
           test -n "$restart" && test -s "$restart"
           test -n "$throw_in" && test -s "$throw_in"
           test -n "$corner" && test -s "$corner"
+          test -n "$corner_playable" && test -s "$corner_playable"
+          test -n "$throw_in_playable" && test -s "$throw_in_playable"
           test -n "$menu" && test -s "$menu"
           test -n "$atlas_fc" && test -s "$atlas_fc"
           test -n "$atlas_rival" && test -s "$atlas_rival"
@@ -575,6 +594,8 @@ jobs:
           cp "$restart" "$RUNNER_TEMP/chess-football-review/restart.png"
           cp "$throw_in" "$RUNNER_TEMP/chess-football-review/throw-in.png"
           cp "$corner" "$RUNNER_TEMP/chess-football-review/corner.png"
+          cp "$corner_playable" "$RUNNER_TEMP/chess-football-review/corner-playable.png"
+          cp "$throw_in_playable" "$RUNNER_TEMP/chess-football-review/throw-in-playable.png"
           cp "$menu" "$RUNNER_TEMP/chess-football-review/menu.png"
           cp "$atlas_fc" "$RUNNER_TEMP/chess-football-review/atlas-fc-matthias.png"
           cp "$atlas_rival" "$RUNNER_TEMP/chess-football-review/atlas-real-enroque.png"

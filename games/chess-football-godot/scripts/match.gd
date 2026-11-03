@@ -101,6 +101,8 @@ const KICKOFF_TEAM_HALF_GAP := 120.0
 const KICKOFF_RIVAL_HALF_GAP := 250.0
 const GOAL_CELEBRATION_SECONDS := 1.35
 const RESTART_FREEZE_SECONDS := 0.38
+# Human set-pieces remain visible and playable; automatic fallback prevents stalls.
+const RESTART_HUMAN_DECISION_SECONDS := 8.0
 const RESTART_OUT_MARGIN := 10.0
 const RESTART_TOUCHLINE_INSET := 28.0
 const RESTART_GOAL_LINE_INSET := 34.0
@@ -194,6 +196,9 @@ var set_piece_team_id: int = 0
 var set_piece_kind: String = ""
 var set_piece_spot: Vector2 = Vector2.ZERO
 var set_piece_player: Footballer = null
+var set_piece_human_seconds_remaining: float = 0.0
+var set_piece_human_aim: Vector2 = Vector2.ZERO
+var set_piece_touch_target: Footballer = null
 var penalty_human_ready: bool = false
 var penalty_aim_y: float = 0.0
 var card_notice: String = ""
@@ -539,7 +544,9 @@ func _exit_to_host() -> void:
 
 func _refresh_hud() -> void:
 	score_label.text = "FC Matthias %d - %d Real Enroque" % [score[0], score[1]]
-	if set_piece_active and set_piece_kind == "PENALTI":
+	if human_set_piece_available():
+		help_label.text = "%s · WASD orienta · ESPACIO saca · en móvil toca compañero" % set_piece_kind
+	elif set_piece_active and set_piece_kind == "PENALTI":
 		if set_piece_team_id == 0:
 			help_label.text = "PENALTI · W/S apunta · mantén Enter para cargar y suelta para tirar"
 		else:
@@ -2205,6 +2212,9 @@ func _arrange_set_piece_formation(kind: String) -> void:
 func _prepare_set_piece(kind: String, team_id: int, spot: Vector2) -> void:
 	_cancel_shot_charge()
 	_cancel_pass_charge()
+	set_piece_touch_target = null
+	set_piece_human_aim = Vector2.ZERO
+	set_piece_human_seconds_remaining = RESTART_HUMAN_DECISION_SECONDS
 	penalty_human_ready = false
 	penalty_aim_y = 0.0
 	pending_tackle_player = null
@@ -2268,17 +2278,62 @@ func _update_set_piece(delta: float) -> void:
 		_release_ai_penalty()
 		return
 
+	if human_set_piece_available():
+		set_piece_human_seconds_remaining = maxf(
+			0.0, set_piece_human_seconds_remaining - maxf(0.0, delta)
+		)
+		var input_aim := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+		if input_aim.length_squared() > 0.0324:
+			set_piece_human_aim = input_aim.normalized()
+		if (
+			Input.is_action_just_pressed("pass_ball")
+			or Input.is_action_just_pressed("shoot_ball")
+			or set_piece_human_seconds_remaining <= 0.0
+		):
+			_release_outfield_set_piece(null, set_piece_human_aim)
+		return
+	_release_outfield_set_piece()
+
+
+func human_set_piece_available() -> bool:
+	return (
+		set_piece_active
+		and set_piece_team_id == 0
+		and set_piece_kind in ["SAQUE DE BANDA", "CÓRNER"]
+		and set_piece_seconds_remaining <= 0.0
+	)
+
+
+func _release_outfield_set_piece(
+	explicit_target: Footballer = null, directional_aim: Vector2 = Vector2.ZERO
+) -> bool:
+	if not set_piece_active or set_piece_player == null or set_piece_kind == "PENALTI":
+		return false
+	var restarter := set_piece_player
+	if explicit_target != null and (
+		not is_instance_valid(explicit_target)
+		or explicit_target.sent_off
+		or explicit_target.team_id != set_piece_team_id
+		or explicit_target == restarter
+	):
+		return false
 	set_piece_active = false
 	last_goal_text = ""
 	# The infringement already produced the referee cue. Corners, throws, goal kicks
 	# and ordinary free-kick restarts should not whistle again and pepper the match
 	# with duplicate beeps.
-	var restarter := set_piece_player
 	var receiver := _restart_receiver(set_piece_team_id, restarter, set_piece_kind)
 	var direction := ChessFootballMath.PITCH_RECT.get_center() - restarter.global_position
 	var power := RESTART_THROW_POWER
 	var lift := 0.0
-	if receiver != null:
+	if explicit_target != null:
+		receiver = explicit_target
+		direction = explicit_target.global_position - restarter.global_position
+	elif directional_aim.length_squared() > 0.0324:
+		# A manual direction wins over the auto target and stays straight.
+		direction = directional_aim.normalized()
+		receiver = _best_directional_pass_target(restarter, direction)
+	elif receiver != null:
 		direction = receiver.global_position - restarter.global_position
 	if set_piece_kind == "CÓRNER":
 		power = RESTART_CORNER_POWER
@@ -2293,6 +2348,11 @@ func _update_set_piece(delta: float) -> void:
 	if set_piece_team_id == 0 and receiver != null:
 		_select_player(receiver)
 	set_piece_player = null
+	set_piece_touch_target = null
+	set_piece_human_aim = Vector2.ZERO
+	set_piece_human_seconds_remaining = 0.0
+	return true
+
 
 func _penalty_target(team_id: int, aim_y: float) -> Vector2:
 	var goal := ChessFootballMath.goal_center(team_id)
@@ -2474,16 +2534,33 @@ func mobile_touch_target(
 	}
 
 func mobile_begin_context_pass(player: Footballer) -> bool:
+	if set_piece_active:
+		if not human_set_piece_available():
+			return false
+		if (
+			player == null or player.sent_off or player.team_id != 0
+			or player == set_piece_player
+		):
+			return false
+		set_piece_touch_target = player
+		return true
 	return _begin_pass_charge(player)
 
 func mobile_release_context_pass() -> bool:
+	if set_piece_active:
+		var target := set_piece_touch_target
+		set_piece_touch_target = null
+		return _release_outfield_set_piece(target) if human_set_piece_available() and target != null else false
 	return _release_charged_pass()
 
 func mobile_cancel_context_pass() -> void:
+	if set_piece_active:
+		set_piece_touch_target = null
+		return
 	_cancel_pass_charge()
 
 func mobile_activate_teammate(player: Footballer) -> bool:
-	if player == null or player.sent_off or player.team_id != 0:
+	if set_piece_active or player == null or player.sent_off or player.team_id != 0:
 		return false
 	_cancel_shot_charge()
 	_cancel_pass_charge()
@@ -2491,7 +2568,7 @@ func mobile_activate_teammate(player: Footballer) -> bool:
 	return controlled == player
 
 func mobile_activate_opponent(player: Footballer, aggressive: bool = false) -> bool:
-	if player == null or player.sent_off or player.team_id != 1:
+	if set_piece_active or player == null or player.sent_off or player.team_id != 1:
 		return false
 	_cancel_shot_charge()
 	var nearest := _nearest_player_to_ball(0)
@@ -2517,7 +2594,7 @@ func mobile_begin_context_shot(aim_y: float = 0.0) -> bool:
 		penalty_aim_y = wanted_aim
 		_begin_shot_charge(wanted_aim)
 		return true
-	if ball.carrier != controlled or controlled == null:
+	if set_piece_active or ball.carrier != controlled or controlled == null:
 		return false
 	_begin_shot_charge(wanted_aim)
 	return true
