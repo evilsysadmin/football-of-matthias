@@ -95,6 +95,9 @@ func _apply_match_scouting() -> void:
 	movement_multiplier = 1.0 if role == "keeper" else clampf(
 		1.0 + float(scouting_pace - 75) * 0.005, 0.90, 1.10
 	)
+	# Base speed is the actor's real scouting-adjusted cruising speed.
+	# Tackle and exhaustion checks already work relative to this field.
+	base_speed = 250.0 * movement_multiplier
 	stamina_drain_multiplier = clampf(
 		1.0 - float(scouting_endurance - 75) * 0.008, 0.80, 1.20
 	)
@@ -162,7 +165,6 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		if dribbling
 		else base_speed * (SPRINT_SPEED_MULTIPLIER if actual_sprint else 1.0)
 	)
-	speed *= movement_multiplier
 	if tackle_recovery_seconds > 0.0:
 		speed *= 0.42
 	if contact_stun_seconds > 0.0:
@@ -200,7 +202,7 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0) -> void:
 	var desired := Vector2.ZERO
 	if moving:
 		var keeper_boost := KEEPER_AI_SPEED_MULTIPLIER if role == "keeper" else 1.0
-		desired = offset.normalized() * base_speed * movement_multiplier * effective_intensity * recovery_scale * keeper_boost
+		desired = offset.normalized() * base_speed * effective_intensity * recovery_scale * keeper_boost
 	var acceleration := MOVE_ACCELERATION if desired.length_squared() > 0.001 else MOVE_DECELERATION
 	if role == "keeper":
 		acceleration *= KEEPER_AI_ACCELERATION_MULTIPLIER
