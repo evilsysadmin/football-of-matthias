@@ -7,6 +7,7 @@ func _initialize() -> void:
 	root.add_child(match_node)
 	await process_frame
 	await process_frame
+	_assert_keyboard_movement_map()
 	var counts: Array[int] = match_node.debug_team_counts()
 	assert(counts == [5, 5])
 	assert(match_node.debug_ball_exists())
@@ -1964,3 +1965,46 @@ func _initialize() -> void:
 
 	print("chess-football godot smoke: OK")
 	quit(0)
+
+
+# Both keyboard layouts must drive the same four Godot input actions used
+# by player movement, corner/throw-in aiming and the penalty goalkeeper.
+# Verify physical keys to keep WASD stable on non-Spanish layouts.
+func _assert_keyboard_movement_map() -> void:
+	var cases: Array[Dictionary] = [
+		{"action": "move_left", "letter": KEY_A, "arrow": KEY_LEFT, "vector": Vector2.LEFT},
+		{"action": "move_right", "letter": KEY_D, "arrow": KEY_RIGHT, "vector": Vector2.RIGHT},
+		{"action": "move_up", "letter": KEY_W, "arrow": KEY_UP, "vector": Vector2.UP},
+		{"action": "move_down", "letter": KEY_S, "arrow": KEY_DOWN, "vector": Vector2.DOWN},
+	]
+	for binding in cases:
+		var action: StringName = StringName(binding["action"])
+		var letter: int = int(binding["letter"])
+		var arrow: int = int(binding["arrow"])
+		var expected: Vector2 = binding["vector"]
+		var events := InputMap.action_get_events(action)
+		assert(events.size() == 2, "Movement must keep WASD and one cursor key")
+		var physical_keys: Array[int] = []
+		for input_event in events:
+			assert(input_event is InputEventKey)
+			physical_keys.append((input_event as InputEventKey).physical_keycode)
+		assert(physical_keys.has(letter) and physical_keys.has(arrow))
+		for physical_key in [letter, arrow]:
+			var press := InputEventKey.new()
+			press.physical_keycode = physical_key
+			press.pressed = true
+			# The headless CI runner has no focused window to dispatch OS key
+			# presses. Check the real InputMap match, then exercise the exact
+			# action it routes to through Godot's action-state API.
+			assert(InputMap.event_is_action(press, action, true),
+				"Physical WASD/cursor key is not mapped to the correct action")
+			Input.action_press(action)
+			assert(Input.is_action_pressed(action), "Mapped action not activated")
+			assert(Input.get_vector(
+				"move_left", "move_right", "move_up", "move_down"
+			).distance_to(expected) < 0.01, "Mapped action has wrong direction")
+			Input.action_release(action)
+			assert(not Input.is_action_pressed(action), "Movement action stuck after release")
+	assert(Input.get_vector(
+		"move_left", "move_right", "move_up", "move_down"
+	).is_zero_approx(), "Movement input must be neutral after all releases")
