@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "enabled": false,
+  "bucket": "football",
+  "prefix": "atlases/v1/",
+  "cdn_base": "",
+  "quality_contract": "football-keeper-catch-v1",
+  "note": "User uploads both lossless 1024x144 WebP sheets to R2 first. Do not enable until HTTPS/CORS/sha256/visual review succeed. Canonical keeper run remains fallback.",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "columns": 8,
+  "rows": 1,
+  "footline": 130,
+  "entries": [
+    {
+      "team": "fc_matthias",
+      "file": "fc_matthias_keeper_catch_v1.webp",
+      "sha256": "b6d0beb2bc26f2ef816ef2cdd3ce631d88f5489099d745fd14b3dcf796138089"
+    },
+    {
+      "team": "real_enroque",
+      "file": "real_enroque_keeper_catch_v1.webp",
+      "sha256": "8afa136c5c07a8e7be67d0952ef2cc9a7fcbfca08b8313d75c0157e14d613e41"
+    }
+  ]
+}

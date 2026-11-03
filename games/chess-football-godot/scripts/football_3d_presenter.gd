@@ -72,6 +72,8 @@ var tone_gain_cache: Dictionary = {}
 var ball_node: MeshInstance3D
 var ball_shadow: MeshInstance3D
 var keeper_catch_rigs: Dictionary = {}
+# A keeper switches only after all eight verified CDN frames arrive.
+var _keeper_catch_r2_loaded: Dictionary = {}
 var keeper_catch_carrier_id: int = 0
 var keeper_catch_origin: Vector3 = Vector3.ZERO
 var keeper_catch_elapsed: float = 0.0
@@ -230,6 +232,54 @@ func _apply_verified_tackle_frames(
 	tone_gain_cache.clear()
 
 
+
+# Reception-only sheets never touch canonical run/tackle or keeper physics.
+# Bad bytes, wrong poses or failed HTTP leave the old glove rig available.
+func _request_keeper_catch_atlases_from_r2() -> void:
+	if not OS.has_feature("web"):
+		return
+	for team_id in range(2):
+		var meta := ChessFootballKeeperCatchR2.active_entry(team_id)
+		if meta.is_empty():
+			continue
+		var loader := ChessFootballR2AtlasLoader.new()
+		loader.name = "OptionalKeeperCatch_%d" % team_id
+		add_child(loader)
+		loader.atlas_ready.connect(_on_keeper_catch_atlas_ready.bind(team_id))
+		loader.start(meta)
+
+
+func _on_keeper_catch_atlas_ready(image: Image, team_id: int) -> void:
+	var textures := ChessFootballKeeperCatchR2.frames_from_image(
+		image, ChessFootballKeeperCatchR2.source_entry(team_id)
+	)
+	_apply_verified_keeper_catch_frames(textures, team_id)
+
+
+func _apply_verified_keeper_catch_frames(textures: Array[Texture2D], team_id: int) -> void:
+	if team_id not in [0, 1] or textures.size() != 8:
+		return
+	var targets: Array[AnimatedSprite3D] = []
+	for player in match_node.teams[team_id]:
+		if player.role != "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null or sprite.sprite_frames.has_animation(&"keeper_catch"):
+			return
+		targets.append(sprite)
+	if targets.is_empty():
+		return
+	for sprite in targets:
+		var bank := sprite.sprite_frames
+		bank.add_animation(&"keeper_catch")
+		bank.set_animation_speed(&"keeper_catch", 12.0)
+		bank.set_animation_loop(&"keeper_catch", false)
+		for texture in textures:
+			bank.add_frame(&"keeper_catch", texture)
+	_keeper_catch_r2_loaded[team_id] = true
+	tone_gain_cache.clear()
+
+
 func setup(p_match: Node) -> void:
 	match_node = p_match
 	var pitch := ChessFootballMath.PITCH_RECT
@@ -245,6 +295,7 @@ func setup(p_match: Node) -> void:
 	_request_idle_front_from_r2()
 	_request_lateral_run_from_r2()
 	_request_tackle_atlases_from_r2()
+	_request_keeper_catch_atlases_from_r2()
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -1075,11 +1126,16 @@ func _sync_keeper_catch_hands(
 ) -> void:
 	for key in keeper_catch_rigs.keys():
 		var rig: Node3D = keeper_catch_rigs[key]
-		rig.visible = carrier != null and int(carrier.get_instance_id()) == int(key)
+		rig.visible = (
+			carrier != null and int(carrier.get_instance_id()) == int(key)
+			and not _keeper_catch_r2_loaded.has(int(carrier.team_id))
+		)
 	if carrier == null:
 		return
 	var rig: Node3D = keeper_catch_rigs.get(int(carrier.get_instance_id()))
 	if rig == null:
+		return
+	if _keeper_catch_r2_loaded.has(int(carrier.team_id)):
 		return
 	var held_ball := ball_at - world_to_stage(carrier.global_position)
 	# Both wrists move in from an open, anticipatory shape instead of appearing
@@ -1209,6 +1265,9 @@ func sync_presentation(delta: float, mode: String) -> void:
 	# yesterday's interpolated pose; otherwise footballers visibly pulse.
 	_sync_camera(delta, mode)
 	_sync_goal_ad_panels()
+	var holding_keeper: Footballer = match_node.ball.carrier
+	if holding_keeper != null and holding_keeper.role != "keeper":
+		holding_keeper = null
 	for team in match_node.teams:
 		for player in team:
 			var key: int = int(player.get_instance_id())
@@ -1231,7 +1290,21 @@ func sync_presentation(delta: float, mode: String) -> void:
 				var directional_animation := ChessFootballRunDirection.animation_for(wanted_animation, run_view)
 				if sprite.sprite_frames.has_animation(directional_animation):
 					wanted_animation = directional_animation
-				_sync_visible_animation(key, player, sprite, wanted_animation, delta)
+				var authored_catch: bool = (
+					player.role == "keeper" and player == holding_keeper
+					and _keeper_catch_r2_loaded.has(int(player.team_id))
+				)
+				if authored_catch:
+					if sprite.animation != &"keeper_catch":
+						sprite.play(&"keeper_catch")
+						sprite.pause()
+					# Follow the same visual-only grip clock as the single 3D ball.
+					var grip_ratio := clampf(
+						keeper_catch_elapsed / KEEPER_CATCH_BLEND_SECONDS, 0.0, 1.0
+					)
+					sprite.frame = clampi(int(floorf(grip_ratio * 7.0)), 0, 7)
+				else:
+					_sync_visible_animation(key, player, sprite, wanted_animation, delta)
 				if player.role == "keeper":
 					# The approved front/back keeper atlas does not alternate which
 					# leg leads strongly enough. Mirroring only the second half of
@@ -1283,9 +1356,6 @@ func sync_presentation(delta: float, mode: String) -> void:
 				stamina_fill.scale.x = fill_ratio
 				stamina_fill.position.x = -STAMINA_BAR_WIDTH * 0.5 * (1.0 - fill_ratio)
 
-	var holding_keeper: Footballer = match_node.ball.carrier
-	if holding_keeper != null and holding_keeper.role != "keeper":
-		holding_keeper = null
 	if ball_node != null:
 		var grip_progress := 1.0
 		var ball_at := world_to_stage(
@@ -1294,12 +1364,15 @@ func sync_presentation(delta: float, mode: String) -> void:
 		)
 		if holding_keeper != null:
 			var current_keeper_id := int(holding_keeper.get_instance_id())
+			# Authored palms meet around the centre of the chest. The old
+			# side-offset remains untouched for the fallback glove rig.
+			var catch_offset := (
+				0.0 if _keeper_catch_r2_loaded.has(int(holding_keeper.team_id))
+				else KEEPER_CATCH_SIDE * holding_keeper.keeper_save_direction
+			)
 			var target := (
 				world_to_stage(holding_keeper.global_position, KEEPER_CATCH_HEIGHT)
-				+ Vector3(
-					KEEPER_CATCH_SIDE * holding_keeper.keeper_save_direction,
-					0.0, KEEPER_CATCH_FRONT,
-				)
+				+ Vector3(catch_offset, 0.0, KEEPER_CATCH_FRONT)
 			)
 			if keeper_catch_carrier_id != current_keeper_id:
 				keeper_catch_carrier_id = current_keeper_id
@@ -1579,7 +1652,7 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 		bob += absf(foot_phase) * KEEPER_STRIDE_EXTRA_BOB * moving_weight
 		tilt_degrees += foot_phase * KEEPER_STRIDE_EXTRA_LEAN_DEGREES * moving_weight
 		stretch_x *= 1.0 + foot_phase * 0.035 * moving_weight
-	if player.keeper_save_active():
+	if player.keeper_save_active() and sprite.animation != &"keeper_catch":
 		var save_progress := 1.0 - player.keeper_save_ratio()
 		var save_weight := sin(PI * clampf(save_progress, 0.0, 1.0))
 		lateral_sway = player.keeper_save_direction * 0.23 * save_weight
