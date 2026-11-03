@@ -64,7 +64,7 @@ jobs:
           if meta['enabled'] is not True:
               assert base == '', 'Disabled R2 bucket should not advertise an unverified public origin'
               print('FOOTBALL_KEEPER_R2_STAGED awaiting dedicated bucket HTTPS origin; canonical fallback retained')
-              Path(os.environ['GITHUB_OUTPUT']).open('a').write('enabled=false\\n')
+              Path(os.environ['GITHUB_OUTPUT']).open('a').write('enabled=false\n')
               raise SystemExit(0)
           parsed = urlsplit(base)
           assert parsed.scheme == 'https' and parsed.hostname and not parsed.username and not parsed.password
@@ -107,7 +107,7 @@ jobs:
               (output / name).write_bytes(raw)
               print(f'KEEPER_R2_VERIFIED team={entry["team"]} bytes={len(raw)} sha256={digest} cors={cors}')
           assert not expected
-          Path(os.environ['GITHUB_OUTPUT']).open('a').write('enabled=true\\n')
+          Path(os.environ['GITHUB_OUTPUT']).open('a').write('enabled=true\n')
           PY
       - name: Restore pinned Godot editor
         uses: actions/cache@v6
