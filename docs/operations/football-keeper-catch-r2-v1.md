@@ -49,9 +49,17 @@ these objects to `chess-studio-assets` merely to make that URL work.
    Chromium Web boot and fallback. Only after visual approval may a Draft
    PR become Ready/merged.
 
-Current manifest deliberately has `enabled=false` and empty `cdn_base`.
-Do not publish a broken active configuration. Failed requests, invalid bytes,
-or missing sheets always retain the original keeper frames and glove rig.
+The operator supplied the development bucket URL:
+`https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev`.
+This activation PR points `cdn_base` at that **exact HTTPS host plus
+`/atlases/v1`** and sets `enabled=true` for staging only. It must not merge
+unless CI verifies both public WebPs, CORS and hashes, and captures real
+Godot frames for both clubs. Replace the rate-limited `r2.dev` host with a
+proper custom domain before using it for production traffic.
+
+Failed requests, invalid bytes, or missing sheets still retain the original
+keeper frames and glove rig. If validation fails, leave the PR in Draft and
+keep the previous `main` commit active.
 
 Rollback: set `enabled=false`, deploy the previous SHA; keep the original
 atlases untouched. No cloud keys, secrets or R2 object mutation are required.
