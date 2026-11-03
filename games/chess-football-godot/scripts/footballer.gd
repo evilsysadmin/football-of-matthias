@@ -132,7 +132,7 @@ func clean_tackle_multiplier() -> float:
 # Goalkeeping improves early shot recognition and nearby hand reach, not
 # teleportation, immunity to high balls or the keeper's movement speed.
 func keeper_reflex_multiplier() -> float:
-	return clampf(1.0 + float(scouting_keeping - 75) * 0.005, 0.92, 1.08)
+	return clampf(1.0 + float(scouting_keeping - 75) * 0.003, 0.92, 1.08)
 
 func _configure_visual() -> void:
 	if visual == null:
