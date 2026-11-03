@@ -8,6 +8,10 @@ const GOAL_POST_HEIGHT := 1.50
 # shader avoids a dark foreground band with no new draw calls or hitboxes.
 const NEAR_TURF_RUNOFF_DEPTH := 4.0
 const CAMERA_LERP_SPEED := 3.25
+# Ease the *depth and pitch only* back from the near-corner wide shot.
+# Horizontal ball tracking keeps its usual pace to follow the cross.
+const CAMERA_CORNER_RELEASE_SPEED := 1.80
+const CAMERA_CORNER_RELEASE_DEPTH_EPSILON := 0.30
 const CAMERA_FOCUS_SMOOTH_SPEED := 2.65
 const CAMERA_LEAD_SMOOTH_SPEED := 2.10
 const CAMERA_FOCUS_DEAD_ZONE := 0.42
@@ -1853,6 +1857,19 @@ static func broadcast_corner_camera_depth(
 	return BROADCAST_DEPTH
 
 
+# The corner is the only broadcast state that pushes the camera backward.
+# Detect the outgoing composition from the real interpolated camera depth,
+# not the new target: set_piece_active is cleared before the first ball frame.
+static func broadcast_corner_release_active(
+	mode: String, restart_active: bool, current_depth: float
+) -> bool:
+	return (
+		mode == "broadcast"
+		and not restart_active
+		and current_depth > BROADCAST_DEPTH + CAMERA_CORNER_RELEASE_DEPTH_EPSILON
+	)
+
+
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
 	if delta <= 0.0:
 		return 0.0
@@ -1863,6 +1880,9 @@ func _sync_camera(delta: float, mode: String) -> void:
 		return
 
 	var focus := world_to_stage(match_node.ball.global_position)
+	var easing_corner_release := broadcast_corner_release_active(
+		mode, bool(match_node.set_piece_active), camera.position.z
+	)
 	var wanted_position: Vector3
 	var wanted_look: Vector3
 	var wanted_fov: float
@@ -1930,16 +1950,28 @@ func _sync_camera(delta: float, mode: String) -> void:
 			String(match_node.set_piece_kind),
 			match_node.set_piece_spot,
 		)
+		var pitch_speed := (
+			CAMERA_CORNER_RELEASE_SPEED if easing_corner_release
+			else CAMERA_FOCUS_SMOOTH_SPEED
+		)
 		smoothed_restart_look_z = lerpf(
 			smoothed_restart_look_z,
 			restart_look_z,
-			_camera_smoothing_factor(CAMERA_FOCUS_SMOOTH_SPEED, delta),
+			_camera_smoothing_factor(pitch_speed, delta),
 		)
 		wanted_look = Vector3(wanted_position.x, 0.0, smoothed_restart_look_z)
 		wanted_fov = 37.5
 
 	var t := _camera_smoothing_factor(CAMERA_LERP_SPEED, delta)
+	var previous_depth := camera.position.z
 	camera.position = camera.position.lerp(wanted_position, t)
+	if easing_corner_release:
+		# Preserve the existing fast follow in X/Y. A slower, matched
+		# depth/pitch recovery avoids whipping the shot at ball release.
+		camera.position.z = lerpf(
+			previous_depth, wanted_position.z,
+			_camera_smoothing_factor(CAMERA_CORNER_RELEASE_SPEED, delta),
+		)
 	camera.fov = lerpf(camera.fov, wanted_fov, t)
 	var look_target := wanted_look
 	if mode == "broadcast":

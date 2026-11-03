@@ -753,7 +753,28 @@ func _initialize() -> void:
 		Vector3(near_presenter.camera.position.x, 0.0, near_corner_look), Vector3.UP
 	)
 	await _save_capture(match_node, "corner-near-playable", "VISUAL_CAPTURE_CORNER_NEAR_PLAYABLE")
+	# The match remains frozen after the real pass; only the 3D camera
+	# advances. Review frames at 80 ms, 430 ms and 1830 ms to catch
+	# discontinuities, unwanted jumps and delayed returns in the actual
+	# Godot renderer instead of inferring motion from an isolated still.
 	assert(match_node._release_outfield_set_piece())
+	assert(not match_node.debug_set_piece_active())
+	var depth_at_release := near_presenter.camera.position.z
+	var pitch_at_release := near_presenter.smoothed_restart_look_z
+	near_presenter.sync_presentation(0.08, "broadcast")
+	assert(near_presenter.camera.position.z < depth_at_release)
+	assert(near_presenter.camera.position.z > depth_at_release - 1.0)
+	assert(near_presenter.smoothed_restart_look_z < pitch_at_release)
+	await _save_capture(match_node, "corner-near-release-early", "VISUAL_CAPTURE_CORNER_NEAR_RELEASE_EARLY")
+	var depth_early := near_presenter.camera.position.z
+	near_presenter.sync_presentation(0.35, "broadcast")
+	assert(near_presenter.camera.position.z < depth_early)
+	assert(near_presenter.camera.position.z > ChessFootball3DPresenter.BROADCAST_DEPTH + 1.0)
+	await _save_capture(match_node, "corner-near-release-mid", "VISUAL_CAPTURE_CORNER_NEAR_RELEASE_MID")
+	near_presenter.sync_presentation(1.40, "broadcast")
+	assert(absf(near_presenter.camera.position.z - ChessFootball3DPresenter.BROADCAST_DEPTH) < 0.30)
+	assert(absf(near_presenter.smoothed_restart_look_z - ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z) < 0.22)
+	await _save_capture(match_node, "corner-near-release-settled", "VISUAL_CAPTURE_CORNER_NEAR_RELEASE_SETTLED")
 	match_node.set_process(true)
 
 	match_node.debug_toggle_pause_menu()
