@@ -16,8 +16,8 @@ func _initialize() -> void:
 	var metadata := ChessFootballKeeperCatchR2.metadata()
 	assert(metadata.get("version") == 1)
 	assert(metadata.get("quality_contract") == "football-keeper-catch-v1")
-	assert(metadata.get("bucket") == "football")
-	assert(metadata.get("prefix") == "atlases/v1/")
+	assert(metadata.get("bucket") == "chess-studio-assets")
+	assert(metadata.get("prefix") == "football/atlases/v1/")
 	assert(metadata.get("enabled") == true)
 	assert(String(metadata.get("cdn_base", "")) ==
 		"https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1")
