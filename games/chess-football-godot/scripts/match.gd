@@ -183,6 +183,9 @@ var ai_adapt_human_pressure: float = 0.0
 var ai_adapt_cpu_pressure: float = 0.0
 var ai_adapt_next_sample: float = AI_ADAPT_SAMPLE_SECONDS
 var ai_adapt_next_eval: float = AI_ADAPT_EVAL_SECONDS
+# Localhost-only browser probe for the exported-Web keyboard E2E.
+# Never enabled on staging/production and never changes input authority.
+var ci_web_keyboard_probe: bool = false
 var pause_menu_open: bool = false
 var kickoff_team_id: int = 0
 var kickoff_active: bool = false
@@ -235,9 +238,15 @@ func _ready() -> void:
 	_create_hud()
 	_refresh_hud()
 	if OS.has_feature("web"):
+		ci_web_keyboard_probe = bool(JavaScriptBridge.eval(
+			"location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true",
+			true
+		))
 		JavaScriptBridge.eval("window.parent.postMessage({source:'chess-football-godot', type:'ready'}, '*');")
 
 func _physics_process(delta: float) -> void:
+	if ci_web_keyboard_probe and Engine.get_physics_frames() % 6 == 0:
+		_emit_ci_web_keyboard_sample()
 	if pause_menu_open:
 		_update_3d_presentation(0.0)
 		return
@@ -275,6 +284,25 @@ func _physics_process(delta: float) -> void:
 	_check_ball_out()
 	_update_3d_presentation(delta)
 	_refresh_hud()
+
+# Real WebAssembly/browser evidence, never a fake Input.action_press:
+# Playwright sends Arrow keys to the actual Godot canvas, then compares
+# both the player's real position and Input.get_vector in these samples.
+func _emit_ci_web_keyboard_sample() -> void:
+	if not is_instance_valid(controlled):
+		return
+	var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var sample := {
+		"source": "chess-football-godot",
+		"type": "ci-keyboard-sample",
+		"x": controlled.global_position.x,
+		"y": controlled.global_position.y,
+		"dx": direction.x,
+		"dy": direction.y,
+		"playable": not (kickoff_active or goal_restart_active or set_piece_active or pause_menu_open),
+	}
+	JavaScriptBridge.eval("window.parent.postMessage(%s, '*')" % JSON.stringify(sample))
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
