@@ -1,0 +1,268 @@
+{
+  "version": 2,
+  "enabled": false,
+  "bucket": "football",
+  "prefix": "atlases/v1/",
+  "cdn_base": "",
+  "note": "Cloudflare dashboard bucket path alone is NOT a public HTTPS URL. Keep disabled until verified public CDN hostname and CORS are known.",
+  "source_size": {
+    "width": 2172,
+    "height": 724
+  },
+  "output_cell": {
+    "width": 128,
+    "height": 144
+  },
+  "scale": 0.43,
+  "footline": 135,
+  "entries": [
+    {
+      "team": "fc_matthias",
+      "animation": "tackle",
+      "file": "fc_matthias_standing_tackle_v2.webp",
+      "sha256": "a99a1207c78bd15d0ed29478429876571924820ca5106b71c37d2cc5dc5746ef",
+      "cell": {
+        "width": 2172,
+        "height": 724
+      },
+      "columns": 1,
+      "rows": 1,
+      "rects": [
+        [
+          44,
+          247,
+          173,
+          255
+        ],
+        [
+          322,
+          263,
+          151,
+          239
+        ],
+        [
+          564,
+          275,
+          182,
+          227
+        ],
+        [
+          817,
+          292,
+          219,
+          210
+        ],
+        [
+          1090,
+          310,
+          261,
+          192
+        ],
+        [
+          1413,
+          279,
+          202,
+          223
+        ],
+        [
+          1715,
+          263,
+          120,
+          239
+        ],
+        [
+          1956,
+          256,
+          141,
+          246
+        ]
+      ]
+    },
+    {
+      "team": "real_enroque",
+      "animation": "tackle",
+      "file": "real_enroque_standing_tackle_v2.webp",
+      "sha256": "2345d566a37a61389445f7420340693056b206bbc8eb99491a8541eb3394a2ea",
+      "cell": {
+        "width": 2172,
+        "height": 724
+      },
+      "columns": 1,
+      "rows": 1,
+      "rects": [
+        [
+          46,
+          247,
+          173,
+          242
+        ],
+        [
+          331,
+          258,
+          153,
+          232
+        ],
+        [
+          576,
+          268,
+          178,
+          222
+        ],
+        [
+          822,
+          283,
+          220,
+          207
+        ],
+        [
+          1092,
+          293,
+          262,
+          197
+        ],
+        [
+          1410,
+          273,
+          209,
+          216
+        ],
+        [
+          1719,
+          264,
+          123,
+          226
+        ],
+        [
+          1965,
+          254,
+          145,
+          236
+        ]
+      ]
+    },
+    {
+      "team": "fc_matthias",
+      "animation": "slide_tackle",
+      "file": "fc_matthias_slide_tackle_v2.webp",
+      "sha256": "f1fe62fc444e7658a0adc11f127ec835e249f7d2f0695d29eb56f64e25a29874",
+      "cell": {
+        "width": 2172,
+        "height": 724
+      },
+      "columns": 1,
+      "rows": 1,
+      "rects": [
+        [
+          53,
+          244,
+          172,
+          244
+        ],
+        [
+          308,
+          265,
+          153,
+          223
+        ],
+        [
+          546,
+          289,
+          201,
+          199
+        ],
+        [
+          802,
+          322,
+          234,
+          166
+        ],
+        [
+          1086,
+          340,
+          247,
+          148
+        ],
+        [
+          1386,
+          325,
+          232,
+          163
+        ],
+        [
+          1684,
+          325,
+          166,
+          163
+        ],
+        [
+          1950,
+          272,
+          155,
+          215
+        ]
+      ]
+    },
+    {
+      "team": "real_enroque",
+      "animation": "slide_tackle",
+      "file": "real_enroque_slide_tackle_v2.webp",
+      "sha256": "0d20a6ee95a2757d8341e2efa5e89f3d4040839091f412f57bbe9cb633bc9bbd",
+      "cell": {
+        "width": 2172,
+        "height": 724
+      },
+      "columns": 1,
+      "rows": 1,
+      "rects": [
+        [
+          49,
+          250,
+          179,
+          241
+        ],
+        [
+          323,
+          267,
+          160,
+          223
+        ],
+        [
+          555,
+          289,
+          220,
+          201
+        ],
+        [
+          821,
+          311,
+          235,
+          179
+        ],
+        [
+          1083,
+          341,
+          272,
+          149
+        ],
+        [
+          1395,
+          331,
+          230,
+          159
+        ],
+        [
+          1688,
+          331,
+          186,
+          159
+        ],
+        [
+          1961,
+          277,
+          152,
+          213
+        ]
+      ]
+    }
+  ]
+}
