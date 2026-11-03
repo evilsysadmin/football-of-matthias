@@ -66,11 +66,32 @@ func _initialize() -> void:
 		var source: Texture2D = body.sprite_frames.get_frame_texture(body.animation, body.frame)
 		assert(source != null)
 		var silhouette: Rect2i = (source as ImageTexture).get_image().get_used_rect()
-		print("FOOTBALL_XI_BODY_SAMPLE index=%d visible=%s tree=%s frame=%s bounds=%s world=%s scale=%s camera=%s" % [
+		print("FOOTBALL_XI_BODY_SAMPLE index=%d visible=%s tree=%s frame=%s bounds=%s world=%s scale=%s camera=%s color=%s opacity=%.2f pixel=%.4f" % [
 			sample_id, body.visible, body.is_visible_in_tree(), body.animation,
 			silhouette, body.global_position, body.scale, stage.camera.global_position,
+			body.modulate, body.transparency, body.pixel_size,
 		])
 		assert(silhouette.size.y >= 80)
+	# Diagnostic comparison: a plain Sprite3D using the SAME approved raster
+	# frame, beside the actual animated players. If it renders, distinguish
+	# an AnimatedSprite3D path failure from camera/material/lens visibility.
+	var source_actor: Footballer = game.teams[0][10]
+	var animated: AnimatedSprite3D = stage.player_sprites[source_actor.get_instance_id()]
+	var diagnostic := Sprite3D.new()
+	diagnostic.texture = animated.sprite_frames.get_frame_texture(animated.animation, animated.frame)
+	diagnostic.pixel_size = animated.pixel_size
+	diagnostic.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	diagnostic.shaded = false
+	diagnostic.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	diagnostic.alpha_scissor_threshold = 0.12
+	diagnostic.position = Vector3(-2.0, 1.0, 0.0)
+	diagnostic.name = "XI_StandaloneRasterDiagnostic"
+	stage.add_child(diagnostic)
+	var marker := MeshInstance3D.new()
+	marker.mesh = BoxMesh.new()
+	marker.position = Vector3(2.0, 1.0, 0.0)
+	marker.name = "XI_MeshDiagnostic"
+	stage.add_child(marker)
 	var viewport := root.get_viewport()
 	var size := viewport.get_visible_rect().size
 	assert(size.x > 100.0 and size.y > 100.0)
