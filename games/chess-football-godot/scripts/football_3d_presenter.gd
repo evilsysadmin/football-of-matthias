@@ -1092,6 +1092,10 @@ func _build_player_proxies() -> void:
 			# Raster footballers should render opaque body pixels, without pitch lighting.
 			sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 			sprite.alpha_scissor_threshold = 0.12
+			# XI preview: diagnose alpha-scissor at the distant 4-3-3 cameras.
+			# Preserve canonical 5v5 material byte-for-byte.
+			if match_node.match_team_size == 11:
+				sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 			sprite.shaded = false
 			sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			sprite.flip_h = player.team_id == 1
