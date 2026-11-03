@@ -447,7 +447,17 @@ void fragment() {
 	_add_crowd()
 	_add_end_stands()
 	_add_far_roof()
-	_add_box(Vector3(0.0, 0.22, field_depth * 0.5 + 0.28), Vector3(field_width + 1.4, 0.44, 0.12), Color(0.075, 0.070, 0.060))
+	# The camera now includes the near touchline on playable human throw-ins.
+	# Replace the tall, shadow-casting brown parapet that used to fill the
+	# lower screen edge with a low satin-green pitch-side trim, outside the
+	# playable rect. The new name makes its pure decorative contract testable.
+	var near_rim := _add_box(
+		Vector3(0.0, 0.09, field_depth * 0.5 + 0.28),
+		Vector3(field_width + 1.4, 0.14, 0.12),
+		Color(0.088, 0.16, 0.13)
+	)
+	near_rim.name = "NearTouchlineTrim"
+	near_rim.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_add_benches()
 	_add_floodlights()
 
@@ -647,10 +657,26 @@ func _add_far_roof() -> void:
 		_add_box(Vector3(x, 3.03, roof_z + 0.10), Vector3(0.10, 0.10, 1.05), Color(0.20, 0.22, 0.24))
 
 func _add_benches() -> void:
-	for x_value in [-4.2, 4.2]:
-		var x: float = float(x_value)
-		_add_box(Vector3(x, 0.20, field_depth * 0.5 + 0.68), Vector3(1.7, 0.38, 0.52), Color(0.055, 0.070, 0.082))
-		_add_box(Vector3(x, 0.46, field_depth * 0.5 + 0.72), Vector3(1.7, 0.08, 0.56), Color(0.24, 0.26, 0.28))
+	# The benches used to sit directly in the playable near-touchline
+	# camera foreground. Keep their actual geometry and dimensions, but park
+	# them at the edges of the pitch, outside the centre-of-play broadcast shot.
+	for side_index in range(2):
+		var side := -1.0 if side_index == 0 else 1.0
+		var x := side * field_width * 0.41
+		var base := _add_box(
+			Vector3(x, 0.20, field_depth * 0.5 + 0.68),
+			Vector3(1.7, 0.38, 0.52),
+			Color(0.055, 0.070, 0.082)
+		)
+		base.name = "TouchlineBenchBase_%d" % side_index
+		base.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var canopy := _add_box(
+			Vector3(x, 0.46, field_depth * 0.5 + 0.72),
+			Vector3(1.7, 0.08, 0.56),
+			Color(0.24, 0.26, 0.28)
+		)
+		canopy.name = "TouchlineBenchCanopy_%d" % side_index
+		canopy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 func _add_floodlights() -> void:
 	for z_value in [-field_depth * 0.5 - 3.15, field_depth * 0.5 + 3.15]:
