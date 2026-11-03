@@ -545,14 +545,14 @@ func _exit_to_host() -> void:
 func _refresh_hud() -> void:
 	score_label.text = "FC Matthias %d - %d Real Enroque" % [score[0], score[1]]
 	if human_set_piece_available():
-		help_label.text = "%s · WASD orienta · ESPACIO saca · en móvil toca compañero" % set_piece_kind
+		help_label.text = "%s · WASD/Flechas orienta · ESPACIO saca · en móvil toca compañero" % set_piece_kind
 	elif set_piece_active and set_piece_kind == "PENALTI":
 		if set_piece_team_id == 0:
 			help_label.text = "PENALTI · W/S apunta · mantén Enter para cargar y suelta para tirar"
 		else:
 			help_label.text = "PENALTI RIVAL · W/S mueve al portero antes del disparo"
 	else:
-		help_label.text = "WASD · Shift sprint · Mantén Space pase · Mantén Enter tiro · E regate/entrada · Shift+E segada · Tab cambia · V vista · ESC menú"
+		help_label.text = "WASD/Flechas · Shift sprint · Mantén Space pase · Mantén Enter tiro · E regate/entrada · Shift+E segada · Tab cambia · V vista · ESC menú"
 	var charge_visible := shot_charging or pass_charging
 	if shot_meter != null:
 		shot_meter.visible = charge_visible
