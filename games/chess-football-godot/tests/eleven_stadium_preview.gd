@@ -112,6 +112,8 @@ func _initialize() -> void:
 			clone.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 			clone.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 			clone.alpha_scissor_threshold = 0.12
+			# XI-only probe: bypass turf depth to isolate missing *far* bodies.
+			clone.no_depth_test = true
 			clone.shaded = false
 			clone.flip_h = actual.flip_h
 			clone.modulate = actual.modulate
