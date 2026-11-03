@@ -1089,8 +1089,25 @@ func _initialize() -> void:
 	assert(match_node.presentation_3d.debug_keeper_catch_hands_visible(keeper))
 	var open_grip_span: float = match_node.presentation_3d.debug_keeper_catch_glove_span(keeper)
 	assert(open_grip_span > 0.52)
+	var catch_rig := match_node.presentation_3d.keeper_catch_rigs[
+		int(keeper.get_instance_id())
+	] as Node3D
 	for side in [-1, 1]:
+		var suffix := "Left" if side < 0 else "Right"
+		var sleeve := catch_rig.get_node("Sleeve" + suffix) as MeshInstance3D
+		var glove := catch_rig.get_node("Glove" + suffix) as MeshInstance3D
+		var palm := glove.get_node("GripPalm") as MeshInstance3D
 		assert(match_node.presentation_3d.debug_keeper_catch_sleeve_length(keeper, side) < 0.85)
+		assert((sleeve.mesh as CylinderMesh).bottom_radius < 0.055,
+			"Catch sleeves must not look like thick tubes")
+		assert((glove.mesh as SphereMesh).radius < 0.076)
+		assert((palm.mesh as SphereMesh).radius < (glove.mesh as SphereMesh).radius)
+		assert(palm.position.z > 0.04)
+		assert((glove.material_override as StandardMaterial3D).albedo_color.r < 0.4)
+		assert((palm.material_override as StandardMaterial3D).albedo_color.r > 0.8)
+		assert(sleeve.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		assert(glove.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		assert(palm.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	# The initial ball must remain in an anatomically reachable pocket.
 	var first_catch_ball: Vector3 = match_node.presentation_3d.ball_node.position
 	var first_catch_keeper: Vector3 = match_node.presentation_3d.world_to_stage(keeper.global_position)
