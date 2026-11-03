@@ -14,11 +14,18 @@ var _started := false
 var _request_node: HTTPRequest
 
 
-static func valid_metadata(meta: Dictionary) -> bool:
-	var url := String(meta.get("url", ""))
-	if not url.begins_with(CDN_ROOT):
+# The original shared CDN remains the default for every existing caller.
+# A separate trusted caller can pin one complete origin + atlas prefix (e.g.
+# the independent Football R2 bucket). Never accept a root from the response.
+static func valid_metadata(meta: Dictionary, allowed_root: String = CDN_ROOT) -> bool:
+	if not allowed_root.begins_with("https://") or not allowed_root.ends_with("/"):
 		return false
-	var relative := url.substr(CDN_ROOT.length())
+	if allowed_root != CDN_ROOT and not allowed_root.ends_with("/atlases/v1/"):
+		return false
+	var url := String(meta.get("url", ""))
+	if not url.begins_with(allowed_root):
+		return false
+	var relative := url.substr(allowed_root.length())
 	if relative.is_empty() or not relative.ends_with(".webp"):
 		return false
 	# Do not allow another origin, a URL query, traversal or encoded redirects.
@@ -45,8 +52,10 @@ static func valid_metadata(meta: Dictionary) -> bool:
 	return true
 
 
-static func decode_verified_webp(payload: PackedByteArray, meta: Dictionary) -> Image:
-	if not valid_metadata(meta) or payload.is_empty() or payload.size() > MAX_PAYLOAD_BYTES:
+static func decode_verified_webp(
+	payload: PackedByteArray, meta: Dictionary, allowed_root: String = CDN_ROOT
+) -> Image:
+	if not valid_metadata(meta, allowed_root) or payload.is_empty() or payload.size() > MAX_PAYLOAD_BYTES:
 		return null
 	var hash := HashingContext.new()
 	if hash.start(HashingContext.HASH_SHA256) != OK or hash.update(payload) != OK:
@@ -66,18 +75,20 @@ static func decode_verified_webp(payload: PackedByteArray, meta: Dictionary) -> 
 	return image
 
 
-func start(meta: Dictionary) -> void:
+func start(meta: Dictionary, allowed_root: String = CDN_ROOT) -> void:
 	# Prevent retries or duplicate requests in one presenter lifetime.
 	if _started:
 		return
 	_started = true
-	if not OS.has_feature("web") or not valid_metadata(meta):
+	if not OS.has_feature("web") or not valid_metadata(meta, allowed_root):
 		return
 	_request_node = HTTPRequest.new()
 	_request_node.name = "AtlasHTTP"
 	_request_node.timeout = REQUEST_TIMEOUT_SECONDS
 	add_child(_request_node)
-	_request_node.request_completed.connect(_on_request_completed.bind(meta.duplicate(true)))
+	_request_node.request_completed.connect(
+		_on_request_completed.bind(meta.duplicate(true), allowed_root)
+	)
 	if _request_node.request(String(meta["url"])) != OK:
 		_request_node.queue_free()
 		_request_node = null
@@ -85,13 +96,13 @@ func start(meta: Dictionary) -> void:
 
 func _on_request_completed(
 	result: int, status: int, _headers: PackedStringArray,
-	body: PackedByteArray, meta: Dictionary
+	body: PackedByteArray, meta: Dictionary, allowed_root: String
 ) -> void:
 	if _request_node != null:
 		_request_node.queue_free()
 		_request_node = null
 	if result != HTTPRequest.RESULT_SUCCESS or status != 200:
 		return
-	var image := decode_verified_webp(body, meta)
+	var image := decode_verified_webp(body, meta, allowed_root)
 	if image != null:
 		atlas_ready.emit(image)
