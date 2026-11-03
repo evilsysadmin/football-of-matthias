@@ -55,6 +55,19 @@ func _initialize() -> void:
 			stage.sync_presentation(1.0 / 60.0, "tactical")
 			await process_frame
 			await RenderingServer.frame_post_draw
+	# Diagnostic guard: a valid 3D proxy is not sufficient if its authored
+	# raster body is empty/invisible. Keep the instrumented sample small.
+	for sample_id in [0, 10]:
+		var athlete: Footballer = game.teams[0][sample_id]
+		var body: AnimatedSprite3D = stage.player_sprites[athlete.get_instance_id()]
+		var source: Texture2D = body.sprite_frames.get_frame_texture(body.animation, body.frame)
+		assert(source != null)
+		var silhouette: Rect2i = (source as ImageTexture).get_image().get_used_rect()
+		print("FOOTBALL_XI_BODY_SAMPLE index=%d visible=%s tree=%s frame=%s bounds=%s world=%s scale=%s camera=%s" % [
+			sample_id, body.visible, body.is_visible_in_tree(), body.animation,
+			silhouette, body.global_position, body.scale, stage.camera.global_position,
+		])
+		assert(silhouette.size.y >= 80)
 	var viewport := root.get_viewport()
 	var size := viewport.get_visible_rect().size
 	assert(size.x > 100.0 and size.y > 100.0)
