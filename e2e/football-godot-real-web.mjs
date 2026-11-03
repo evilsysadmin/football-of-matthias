@@ -142,18 +142,19 @@ try {
     () => window.__chessFootballInputSamples.some((sample) => sample.playable),
     null, { timeout: 30000 }
   );
-  async function expectRealMovement(key, axis, sign) {
+  async function expectRealMovement(key, axis, sign, requireTravel = false) {
     const startLength = await page.evaluate(() => window.__chessFootballInputSamples.length);
+    const directionKey = axis === 'x' ? 'dx' : 'dy';
+    const minimumSamples = requireTravel ? 4 : 2;
     await page.keyboard.down(key);
     try {
-      // Hosted Chromium uses software WebGL. Wall-clock 580 ms may advance
-      // only a handful of Godot physics frames; await four REAL 6-frame
-      // samples while the key is down instead of assuming 60 FPS.
+      // WebGL software renderer is not a 60 FPS clock: require real engine
+      // samples, then check the action received by the exported WebAssembly.
       await page.waitForFunction(
-        ({ index, directionKey, sign }) => window.__chessFootballInputSamples
+        ({ index, directionKey, sign, minimumSamples }) => window.__chessFootballInputSamples
           .slice(index).filter((sample) => sample.playable &&
-            Number(sample[directionKey]) * sign >= 0.8).length >= 4,
-        { index: startLength, directionKey: axis === 'x' ? 'dx' : 'dy', sign },
+            Number(sample[directionKey]) * sign >= 0.8).length >= minimumSamples,
+        { index: startLength, directionKey, sign, minimumSamples },
         { timeout: 30000 }
       );
     } finally {
@@ -163,24 +164,37 @@ try {
       (index) => window.__chessFootballInputSamples.slice(index).filter((sample) => sample.playable),
       startLength
     );
-    const directionKey = axis === 'x' ? 'dx' : 'dy';
     const keySamples = samples.filter((sample) => Number(sample[directionKey]) * sign >= 0.8);
-    if (keySamples.length < 2) {
+    if (keySamples.length < minimumSamples) {
       throw new Error(`Real Godot Web key ${key} not recognized: ${JSON.stringify(samples.slice(-8))}`);
     }
-    const distance = (Number(keySamples.at(-1)[axis]) - Number(keySamples[0][axis])) * sign;
-    if (distance < 4) {
-      throw new Error(`Real Godot Web key ${key} did not move player: ${distance.toFixed(2)} game units`);
+
+    // AI/pass handoffs may automatically change which teammate is selected.
+    // Never compare world positions belonging to different real players.
+    const firstById = new Map();
+    let distance = 0;
+    for (const sample of keySamples) {
+      const id = String(sample.player_id);
+      if (!firstById.has(id)) firstById.set(id, Number(sample[axis]));
+      distance = Math.max(distance, (Number(sample[axis]) - firstById.get(id)) * sign);
     }
-    console.log('FOOTBALL_REAL_WEB_KEY_MOVE_OK', key, axis, 'distance=' + distance.toFixed(2));
+    if (requireTravel && distance < 4) {
+      throw new Error(`Real Godot Web key ${key} did not move same player: ${distance.toFixed(2)} game units`);
+    }
+    console.log('FOOTBALL_REAL_WEB_KEY_' + (requireTravel ? 'MOVE' : 'INPUT') + '_OK',
+      key, axis, 'distance=' + distance.toFixed(2), 'samples=' + keySamples.length);
     await page.waitForTimeout(120);
   }
-  // Move vertically first, before dribbling far toward one side of
-  // the pitch, so the sampled player is not already touching a boundary.
-  await expectRealMovement('ArrowUp', 'y', -1);
+  // Require observed movement on both arrow axes, then exercise ALL eight
+  // keys against real browser events and the real Godot input vector.
+  await expectRealMovement('ArrowUp', 'y', -1, true);
+  await expectRealMovement('ArrowRight', 'x', 1, true);
+  await expectRealMovement('ArrowDown', 'y', 1);
+  await expectRealMovement('ArrowLeft', 'x', -1);
   await expectRealMovement('w', 'y', -1);
-  await expectRealMovement('ArrowRight', 'x', 1);
   await expectRealMovement('d', 'x', 1);
+  await expectRealMovement('s', 'y', 1);
+  await expectRealMovement('a', 'x', -1);
 
   // Software WebGL in hosted Chromium can stall indefinitely on readPixels.
   // A successful scene handshake and clean browser error log are the hard gate;
