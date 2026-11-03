@@ -54,9 +54,11 @@ static func active_entry(team_id: int, animation: StringName) -> Dictionary:
 static func frames_from_image(image: Image, source: Dictionary) -> Array[Texture2D]:
 	var frames: Array[Texture2D] = []
 	if image == null or image.get_size() != SOURCE_SIZE:
+		print("TACKLE_DEBUG size mismatch")
 		return frames
 	var rects: Array = source.get("rects", [])
 	if rects.size() != 8 or source.get("cell", {}) != {"width": SOURCE_SIZE.x, "height": SOURCE_SIZE.y}:
+		print("TACKLE_DEBUG layout mismatch: ", rects.size(), " ", source.get("cell", {}))
 		return frames
 	var rgba: Image = image.duplicate()
 	if rgba.has_mipmaps():
@@ -84,6 +86,7 @@ static func frames_from_image(image: Image, source: Dictionary) -> Array[Texture
 		var target_width := maxi(1, roundi(float(crop.get_width()) * POSE_SCALE))
 		var target_height := maxi(1, roundi(float(crop.get_height()) * POSE_SCALE))
 		if target_width > OUTPUT_SIZE.x - 8 or target_height > BOOT_BASELINE - 8:
+			print("TACKLE_DEBUG target width/height mismatch: ", target_width, " ", target_height)
 			return []
 		crop.resize(target_width, target_height, Image.INTERPOLATE_LANCZOS)
 		var target: Image = Image.create(OUTPUT_SIZE.x, OUTPUT_SIZE.y, false, Image.FORMAT_RGBA8)
@@ -93,6 +96,7 @@ static func frames_from_image(image: Image, source: Dictionary) -> Array[Texture
 			Vector2i((OUTPUT_SIZE.x - target_width) / 2, BOOT_BASELINE - target_height)
 		)
 		if target.get_used_rect().size.y < 40:
+			print("TACKLE_DEBUG empty crop ", target.get_used_rect())
 			return []
 		normalized.append(target)
 	# Atomic conversion: never return partially decoded action animations.
