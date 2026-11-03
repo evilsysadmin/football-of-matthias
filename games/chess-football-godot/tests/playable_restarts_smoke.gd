@@ -36,6 +36,17 @@ func _initialize() -> void:
 	assert(near_corner_look > base_look)
 	assert(near_corner_look <
 		ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "SAQUE DE BANDA", near_spot))
+	# Wider follow is permitted only during the actual corner release,
+	# never during the stationary set piece or ordinary/CPU match tracking.
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.broadcast_live_corner_x_limit_ratio(false), 0.32))
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.broadcast_live_corner_x_limit_ratio(true), 0.39))
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.broadcast_live_corner_pitch_floor(pitch.get_center()),
+		base_look))
+	assert(ChessFootball3DPresenter.broadcast_live_corner_pitch_floor(near_spot) > base_look + 3.0)
+	assert(ChessFootball3DPresenter.broadcast_live_corner_pitch_floor(far_spot) == base_look)
 	var depth := ChessFootball3DPresenter.BROADCAST_DEPTH
 	var near_corner_depth := ChessFootball3DPresenter.broadcast_corner_camera_depth(
 		true, 0, "CÓRNER", near_spot)
@@ -162,10 +173,13 @@ func _initialize() -> void:
 	assert(presenter.camera.position.z < starting_depth)
 	assert(presenter.camera.position.z > starting_depth - 0.28,
 		"Near-corner camera snaps back on the first live-ball frame")
-	assert(presenter.smoothed_restart_look_z < starting_pitch)
+	assert(presenter.smoothed_restart_look_z <= starting_pitch + 0.05)
 	assert(presenter.smoothed_restart_look_z > starting_pitch - 0.20,
 		"Near-corner camera pitch snaps on the first live-ball frame")
+	# Let the actual kicked ball travel infield. Holding its world position
+	# on the touchline would correctly keep the new vertical safe area open.
 	for _frame in range(120):
+		match_node.ball.tick_ball(1.0 / 60.0)
 		presenter.sync_presentation(1.0 / 60.0, "broadcast")
 	assert(absf(presenter.camera.position.z - depth) < 0.28)
 	assert(absf(presenter.smoothed_restart_look_z - base_look) < 0.20)

@@ -753,28 +753,83 @@ func _initialize() -> void:
 		Vector3(near_presenter.camera.position.x, 0.0, near_corner_look), Vector3.UP
 	)
 	await _save_capture(match_node, "corner-near-playable", "VISUAL_CAPTURE_CORNER_NEAR_PLAYABLE")
-	# The match remains frozen after the real pass; only the 3D camera
-	# advances. Review frames at 80 ms, 430 ms and 1830 ms to catch
-	# discontinuities, unwanted jumps and delayed returns in the actual
-	# Godot renderer instead of inferring motion from an isolated still.
+	# Keep player/AI simulation frozen to isolate camera continuity, but
+	# let the real released ball travel toward the box. The pitch stays low
+	# while the ball is near the touchline, then eases back as it moves infield.
+	# Review 80 ms, 430 ms and 1830 ms in the actual Godot renderer.
 	assert(match_node._release_outfield_set_piece())
 	assert(not match_node.debug_set_piece_active())
 	var depth_at_release := near_presenter.camera.position.z
 	var pitch_at_release := near_presenter.smoothed_restart_look_z
+	match_node.ball.tick_ball(0.08)
 	near_presenter.sync_presentation(0.08, "broadcast")
 	assert(near_presenter.camera.position.z < depth_at_release)
 	assert(near_presenter.camera.position.z > depth_at_release - 1.0)
 	assert(near_presenter.smoothed_restart_look_z < pitch_at_release)
 	await _save_capture(match_node, "corner-near-release-early", "VISUAL_CAPTURE_CORNER_NEAR_RELEASE_EARLY")
 	var depth_early := near_presenter.camera.position.z
+	match_node.ball.tick_ball(0.35)
 	near_presenter.sync_presentation(0.35, "broadcast")
 	assert(near_presenter.camera.position.z < depth_early)
 	assert(near_presenter.camera.position.z > ChessFootball3DPresenter.BROADCAST_DEPTH + 1.0)
 	await _save_capture(match_node, "corner-near-release-mid", "VISUAL_CAPTURE_CORNER_NEAR_RELEASE_MID")
+	match_node.ball.tick_ball(1.40)
 	near_presenter.sync_presentation(1.40, "broadcast")
 	assert(absf(near_presenter.camera.position.z - ChessFootball3DPresenter.BROADCAST_DEPTH) < 0.30)
 	assert(absf(near_presenter.smoothed_restart_look_z - ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z) < 0.22)
 	await _save_capture(match_node, "corner-near-release-settled", "VISUAL_CAPTURE_CORNER_NEAR_RELEASE_SETTLED")
+
+	# Real in-flight coverage was previously missing: the snapshots above
+	# evolve camera only while ball and players stand still. Recreate the same
+	# playable near corner and run the MATCH physics tick at 60 Hz, including
+	# ball kinematics, AI movement, interceptions and camera follow.
+	match_node.ball.attach_to(match_node.teams[1][1])
+	match_node.ball.release(Vector2.RIGHT, 520.0)
+	match_node.ball.global_position = Vector2(
+		near_pitch.end.x + 24.0, near_pitch.end.y - 44.0
+	)
+	match_node.debug_check_ball_out()
+	assert(match_node.debug_set_piece_kind() == "CÓRNER")
+	assert(match_node.debug_set_piece_team() == 0)
+	match_node.debug_force_set_piece_ready()
+	assert(match_node.human_set_piece_available())
+	match_node.debug_refresh_hud()
+	for _settle in range(3):
+		match_node.debug_focus_presentation()
+	var live_corner_ball_start: Vector2 = match_node.ball.global_position
+	var live_corner_player_start: Array[Vector2] = []
+	for runner in match_node.teams[1]:
+		live_corner_player_start.append(runner.global_position)
+	assert(match_node._release_outfield_set_piece())
+	assert(match_node.ball.velocity.length() > 500.0)
+	assert(match_node.ball.vertical_velocity > 0.0)
+	for _tick in range(9):
+		match_node._physics_process(1.0 / 60.0)
+	_assert_live_corner_ball_frame(match_node)
+	assert(match_node.ball.flight_height > 1.0)
+	assert(match_node.ball.global_position.distance_to(live_corner_ball_start) > 60.0)
+	await _save_capture(match_node, "corner-cross-live-150ms", "VISUAL_CAPTURE_CORNER_CROSS_LIVE_150MS")
+	for _tick in range(18):
+		match_node._physics_process(1.0 / 60.0)
+	_assert_live_corner_ball_frame(match_node)
+	assert(
+		near_presenter.camera.position.x
+		> near_presenter.field_width * ChessFootball3DPresenter.BROADCAST_X_LIMIT_RATIO + 0.4,
+		"Live near-corner cross is still pinned to the ordinary broadcast edge"
+	)
+	await _save_capture(match_node, "corner-cross-live-450ms", "VISUAL_CAPTURE_CORNER_CROSS_LIVE_450MS")
+	for _tick in range(18):
+		match_node._physics_process(1.0 / 60.0)
+	_assert_live_corner_ball_frame(match_node)
+	var moved_defenders := 0
+	for defender_index in range(match_node.teams[1].size()):
+		if match_node.teams[1][defender_index].global_position.distance_to(
+			live_corner_player_start[defender_index]
+		) > 5.0:
+			moved_defenders += 1
+	assert(moved_defenders >= 2, "Corner QA did not actually move the defenders")
+	assert(match_node.ball.global_position.distance_to(live_corner_ball_start) > 150.0)
+	await _save_capture(match_node, "corner-cross-live-750ms", "VISUAL_CAPTURE_CORNER_CROSS_LIVE_750MS")
 	match_node.set_process(true)
 
 	match_node.debug_toggle_pause_menu()
@@ -865,7 +920,7 @@ func _assert_near_corner_composition(match_node: Node) -> void:
 	assert(presenter.smoothed_restart_look_z > 2.5)
 	assert(presenter.camera.position.z > ChessFootball3DPresenter.BROADCAST_DEPTH + 5.0)
 	var take: Footballer = match_node.set_piece_player
-	var screen := match_node.get_viewport().get_visible_rect().size
+	var screen: Vector2 = match_node.get_viewport().get_visible_rect().size
 	var head := presenter.screen_position_for_world(take.global_position, 1.65)
 	var feet := presenter.screen_position_for_world(take.global_position, 0.05)
 	assert(head.x > 22.0 and head.x < screen.x - 22.0)
@@ -884,6 +939,28 @@ func _assert_near_corner_composition(match_node: Node) -> void:
 		if point.x > 18.0 and point.x < screen.x - 18.0 and point.y > 145.0 and point.y < screen.y - 25.0:
 			visible_receivers += 1
 	assert(visible_receivers >= 2, "Near corner framing hides passing options")
+
+
+
+# Live-flight assertion uses the rendered 3D ball height, not its flat
+# simulation coordinate: a high cross must be visible above the crowd.
+func _assert_live_corner_ball_frame(match_node: Node) -> void:
+	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
+	assert(not match_node.debug_set_piece_active())
+	var ball_screen := presenter.screen_position_for_world(
+		match_node.ball.global_position,
+		0.18 + float(match_node.ball.flight_height) * ChessFootball3DPresenter.WORLD_SCALE
+	)
+	var screen := match_node.get_viewport().get_visible_rect().size
+	print("FOOTBALL_LIVE_CORNER_SCREEN=%s WORLD=%s HEIGHT=%.2f CAM=%s LOOK=%.2f CARRIER=%s" % [
+		str(ball_screen), str(match_node.ball.global_position),
+		float(match_node.ball.flight_height), str(presenter.camera.position),
+		presenter.smoothed_restart_look_z, str(match_node.ball.carrier != null),
+	])
+	assert(ball_screen.x > 20.0 and ball_screen.x < screen.x - 20.0,
+		"Live corner cross is offscreen horizontally")
+	assert(ball_screen.y > 115.0 and ball_screen.y < screen.y - 28.0,
+		"Live corner cross falls under the HUD or below the frame")
 
 func _save_texture_preview(source_path: String, filename: String, marker: String) -> void:
 	var texture := load(source_path) as Texture2D

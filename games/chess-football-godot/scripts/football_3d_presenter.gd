@@ -12,6 +12,11 @@ const CAMERA_LERP_SPEED := 3.25
 # Horizontal ball tracking keeps its usual pace to follow the cross.
 const CAMERA_CORNER_RELEASE_SPEED := 1.80
 const CAMERA_CORNER_RELEASE_DEPTH_EPSILON := 0.30
+# During the live near-corner cross the goalmouth is near the right edge
+# under the default horizontal cap. Give the camera a little more room to
+# track that one short transition without altering ordinary broadcast play.
+const BROADCAST_X_LIMIT_RATIO := 0.32
+const CORNER_CROSS_X_LIMIT_RATIO := 0.39
 const CAMERA_FOCUS_SMOOTH_SPEED := 2.65
 const CAMERA_LEAD_SMOOTH_SPEED := 2.10
 const CAMERA_FOCUS_DEAD_ZONE := 0.42
@@ -1870,6 +1875,22 @@ static func broadcast_corner_release_active(
 	)
 
 
+static func broadcast_live_corner_x_limit_ratio(easing_corner_release: bool) -> float:
+	return CORNER_CROSS_X_LIMIT_RATIO if easing_corner_release else BROADCAST_X_LIMIT_RATIO
+
+
+# The real corner cross can be intercepted near the near touchline while
+# the lens is already easing upward to the normal midfield view. Until the
+# ball moves infield, retain enough downward pitch to keep that first touch
+# and its selected-player ring visible. This only runs during near-corner
+# release; no change to normal play, far corners or CPU restarts.
+static func broadcast_live_corner_pitch_floor(ball_spot: Vector2) -> float:
+	var pitch := ChessFootballMath.PITCH_RECT
+	var near_fraction := (ball_spot.y - pitch.get_center().y) / pitch.size.y
+	var side_influence := smoothstep(0.30, 0.42, near_fraction)
+	return BROADCAST_BASE_LOOK_Z + NEAR_CORNER_LOOK_SHIFT * side_influence
+
+
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
 	if delta <= 0.0:
 		return 0.0
@@ -1943,13 +1964,21 @@ func _sync_camera(delta: float, mode: String) -> void:
 				match_node.set_piece_spot,
 			),
 		)
-		wanted_position.x = clampf(wanted_position.x, -field_width * 0.32, field_width * 0.32)
+		var camera_x_limit := field_width * broadcast_live_corner_x_limit_ratio(
+			easing_corner_release
+		)
+		wanted_position.x = clampf(wanted_position.x, -camera_x_limit, camera_x_limit)
 		var restart_look_z := broadcast_restart_look_z(
 			bool(match_node.set_piece_active),
 			int(match_node.set_piece_team_id),
 			String(match_node.set_piece_kind),
 			match_node.set_piece_spot,
 		)
+		if easing_corner_release:
+			restart_look_z = maxf(
+				restart_look_z,
+				broadcast_live_corner_pitch_floor(match_node.ball.global_position),
+			)
 		var pitch_speed := (
 			CAMERA_CORNER_RELEASE_SPEED if easing_corner_release
 			else CAMERA_FOCUS_SMOOTH_SPEED
