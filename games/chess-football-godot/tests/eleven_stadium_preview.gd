@@ -118,5 +118,26 @@ func _initialize() -> void:
 		_assert_visible_kit_colors(actual_image)
 		assert(actual_image.save_png(broadcast_path) == OK)
 		print("FOOTBALL_XI_PREVIEW_BROADCAST=" + ProjectSettings.globalize_path(broadcast_path))
+	# A readable XI must also keep its original authored animation clock:
+	# the visible Sprite3D samples *new* approved textures as a winger runs.
+	# This is a real presenter update, not a static proxy/image count.
+	var winger: Footballer = game.teams[0][8]
+	winger.velocity = Vector2.RIGHT * winger.base_speed
+	winger.visual.play("run")
+	var winger_key: int = winger.get_instance_id()
+	var distinct_raster_frames: Dictionary = {}
+	for frame_step in range(24):
+		stage.sync_presentation(1.0 / 18.0, "broadcast")
+		var driver: AnimatedSprite3D = stage.player_sprites[winger_key]
+		var visible_body: Sprite3D = stage.xi_raster_sprites[winger_key]
+		var authored: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
+		assert(visible_body.texture == authored)
+		assert(visible_body.scale == driver.scale)
+		assert(visible_body.flip_h == driver.flip_h)
+		assert(visible_body.position == driver.position)
+		distinct_raster_frames[authored.get_instance_id()] = true
+	assert(distinct_raster_frames.size() >= 2,
+		"XI Sprite3D must advance through approved real run frames")
+	print("FOOTBALL_XI_ANIMATION_OK unique_run_frames=%d" % distinct_raster_frames.size())
 	print("FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22")
 	quit(0)
