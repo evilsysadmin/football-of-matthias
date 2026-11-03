@@ -48,7 +48,12 @@ func _initialize() -> void:
 				assert(player.global_position.x > center.x)
 	assert(roster_ids.size() == 22)
 	stage.sync_presentation(2.0, "tactical")
-	await process_frame
+	# Sprite3D textures and camera transforms must survive multiple real
+	# rendered frames before taking visual evidence of the 22 athletes.
+	for render_frame in range(12):
+		stage.sync_presentation(1.0 / 60.0, "tactical")
+		await process_frame
+		await RenderingServer.frame_post_draw
 	var viewport := root.get_viewport()
 	var size := viewport.get_visible_rect().size
 	assert(size.x > 100.0 and size.y > 100.0)
@@ -63,7 +68,10 @@ func _initialize() -> void:
 		assert(viewport.get_texture().get_image().save_png(tactical_path) == OK)
 		print("FOOTBALL_XI_PREVIEW_TACTICAL=" + ProjectSettings.globalize_path(tactical_path))
 		stage.sync_presentation(2.0, "broadcast")
-		await process_frame
+		for render_frame in range(12):
+			stage.sync_presentation(1.0 / 60.0, "broadcast")
+			await process_frame
+			await RenderingServer.frame_post_draw
 		await RenderingServer.frame_post_draw
 		var broadcast_path := "user://chess-football-xi-broadcast.png"
 		assert(viewport.get_texture().get_image().save_png(broadcast_path) == OK)
