@@ -2,11 +2,15 @@ class_name Footballer
 extends CharacterBody2D
 
 const MatchScouting = preload("res://scripts/football_match_scouting.gd")
+const Formation = preload("res://scripts/football_match_formation.gd")
 
 var team_id: int = 0
 var squad_index: int = 0
 var role: String = "midfielder"
 var base_speed: float = 250.0
+# Each actor uses its own real pitch bounds; 5v5 stays the default.
+# The expanded 11v11 field is testable without switching live match rules.
+var match_pitch: Rect2 = ChessFootballMath.PITCH_RECT
 # Player identities come from the canonical 54-player scouting snapshot.
 var scouting_player_id: String = ""
 var scouting_player_name: String = ""
@@ -76,7 +80,8 @@ var last_sprinting: bool = false
 var stamina: float = STAMINA_MAX
 var sprint_exhausted: bool = false
 
-func configure(p_team_id: int, p_index: int, p_role: String, p_position: Vector2, p_color: Color) -> void:
+func configure(p_team_id: int, p_index: int, p_role: String, p_position: Vector2, p_color: Color, p_team_size: int = 5) -> void:
+	match_pitch = Formation.ELEVEN_PITCH_RECT if p_team_size == 11 else ChessFootballMath.PITCH_RECT
 	team_id = p_team_id
 	squad_index = p_index
 	role = p_role
@@ -84,15 +89,15 @@ func configure(p_team_id: int, p_index: int, p_role: String, p_position: Vector2
 	home_position = p_position
 	ai_target = p_position
 	team_color = p_color
-	_apply_match_scouting()
+	_apply_match_scouting(p_team_size)
 	_configure_visual()
 	queue_redraw()
 
 # Keep goalkeepers' established lateral save speed unchanged. Outfield
 # players use a bounded ±10% pace factor in both human and AI movement;
 # stamina changes sprint drain by -10% to +20% only, never match rules or saved careers.
-func _apply_match_scouting() -> void:
-	var profile: Dictionary = MatchScouting.starter(team_id, squad_index)
+func _apply_match_scouting(p_team_size: int = 5) -> void:
+	var profile: Dictionary = MatchScouting.starter(team_id, squad_index, p_team_size)
 	scouting_player_id = String(profile.get("id", ""))
 	scouting_player_name = String(profile.get("name", ""))
 	var stats: Dictionary = profile.get("scouting", {})
@@ -214,7 +219,7 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	if velocity.length() < 1.0:
 		velocity = Vector2.ZERO
 	move_and_slide()
-	global_position = ChessFootballMath.clamp_to_pitch(global_position)
+	global_position = ChessFootballMath.clamp_to_pitch(global_position, match_pitch)
 	_sync_facing()
 	_sync_locomotion(actual_sprint or dribbling)
 
@@ -247,7 +252,7 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0) -> void:
 	if velocity.length() < 1.0:
 		velocity = Vector2.ZERO
 	move_and_slide()
-	global_position = ChessFootballMath.clamp_to_pitch(global_position)
+	global_position = ChessFootballMath.clamp_to_pitch(global_position, match_pitch)
 	_sync_facing()
 	_sync_locomotion(actual_sprint)
 
