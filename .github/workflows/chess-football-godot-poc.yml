@@ -716,6 +716,12 @@ jobs:
         run: npx --yes npm@11.6.1 install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - name: Boot real WebAssembly in Chromium
+        # The Godot Web app runs from 127.0.0.1 with a random test port.
+        # The bucket CORS remains restricted to the real staging origin.
+        # Our local-only bridge checks live staging CORS + exact SHA-256
+        # before fulfilling only the two R2 requests with verified bytes.
+        env:
+          FOOTBALL_CI_KEEPER_R2_BRIDGE: '1'
         run: node e2e/football-godot-real-web.mjs
       - name: Upload real Web browser evidence
         if: always()
