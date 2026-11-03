@@ -24,7 +24,13 @@ func _initialize() -> void:
 		var file_path := asset_dir.path_join(String(ChessFootballKeeperCatchR2.source_entry(team_id)["file"]))
 		assert(FileAccess.file_exists(file_path), "Real keeper sheet was not downloaded")
 		var bytes := FileAccess.get_file_as_bytes(file_path)
-		var sheet := ChessFootballR2AtlasLoader.decode_verified_webp(bytes, meta)
+		# Runtime verifies the same exact independent origin as the live
+		# keeper-only HTTP loader; the shared CDN default must stay rejected.
+		var authorized_root := ChessFootballKeeperCatchR2.public_root()
+		assert(not authorized_root.is_empty())
+		assert(not ChessFootballR2AtlasLoader.valid_metadata(meta))
+		assert(ChessFootballR2AtlasLoader.valid_metadata(meta, authorized_root))
+		var sheet := ChessFootballR2AtlasLoader.decode_verified_webp(bytes, meta, authorized_root)
 		assert(sheet != null, "R2 keeper bytes must pass the runtime's own SHA-256 verifier")
 		var poses := ChessFootballKeeperCatchR2.frames_from_image(
 			sheet, ChessFootballKeeperCatchR2.source_entry(team_id)
