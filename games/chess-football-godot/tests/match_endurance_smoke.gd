@@ -28,6 +28,17 @@ func _assert_live_scouting(match_node: Node2D) -> void:
 	assert(fast.movement_multiplier > slow.movement_multiplier)
 	var old_fast := fast.global_position
 	var old_slow := slow.global_position
+	# Benchmark isolated player speed, not chance contact with another
+	# player on the live pitch. Otherwise unrelated teammates can obstruct
+	# Lucas during a headless setup and make the pace assertion flaky.
+	var fast_mask := fast.collision_mask
+	var slow_mask := slow.collision_mask
+	var fast_layer := fast.collision_layer
+	var slow_layer := slow.collision_layer
+	fast.collision_mask = 0
+	slow.collision_mask = 0
+	fast.collision_layer = 0
+	slow.collision_layer = 0
 	fast.global_position = Vector2(750.0, 440.0)
 	slow.global_position = Vector2(750.0, 1140.0)
 	fast.velocity = Vector2.ZERO
@@ -35,11 +46,20 @@ func _assert_live_scouting(match_node: Node2D) -> void:
 	for tick in range(60):
 		fast.move_human(DELTA, Vector2.RIGHT, false)
 		slow.move_human(DELTA, Vector2.RIGHT, false)
-	assert(fast.global_position.x > slow.global_position.x + 15.0)
+	var actual_fast_meters := fast.global_position.x - 750.0
+	var actual_slow_meters := slow.global_position.x - 750.0
+	print("FOOTBALL_SCOUT_PACE_BENCH fast=%.2f slow=%.2f" % [
+		actual_fast_meters, actual_slow_meters
+	])
+	assert(actual_fast_meters > actual_slow_meters + 15.0)
 	fast.global_position = old_fast
 	slow.global_position = old_slow
 	fast.velocity = Vector2.ZERO
 	slow.velocity = Vector2.ZERO
+	fast.collision_mask = fast_mask
+	slow.collision_mask = slow_mask
+	fast.collision_layer = fast_layer
+	slow.collision_layer = slow_layer
 	var durable: Footballer = match_node.teams[0][3]  # Eric Roca, stamina 92
 	assert(durable.stamina_drain_multiplier < slow.stamina_drain_multiplier)
 	var durable_before := durable.stamina
