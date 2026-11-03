@@ -1044,6 +1044,22 @@ func _build_player_proxies() -> void:
 			active_disc.visible = false
 			root.add_child(active_disc)
 
+			# Only during a playable human corner/throw: show which outfield
+			# teammates can receive a tap. This is passive 3D decoration, never
+			# a new input or match-state authority. Keep it separate from the
+			# existing amber controlled-player ring.
+			var receiver_disc := MeshInstance3D.new()
+			receiver_disc.name = "SetPieceReceiverDisc"
+			var receiver_mesh := TorusMesh.new()
+			receiver_mesh.inner_radius = 0.59
+			receiver_mesh.outer_radius = 0.67
+			receiver_disc.mesh = receiver_mesh
+			receiver_disc.position.y = 0.045
+			receiver_disc.material_override = _material(Color(0.30, 0.92, 0.83), 0.34)
+			receiver_disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			receiver_disc.visible = false
+			root.add_child(receiver_disc)
+
 			var stamina_back := MeshInstance3D.new()
 			stamina_back.name = "StaminaBack"
 			var stamina_back_mesh := BoxMesh.new()
@@ -1350,6 +1366,16 @@ func sync_presentation(delta: float, mode: String) -> void:
 			var active_disc := proxy.get_node_or_null("ActiveDisc") as MeshInstance3D
 			if active_disc != null:
 				active_disc.visible = is_controlled
+			var receiver_disc := proxy.get_node_or_null("SetPieceReceiverDisc") as MeshInstance3D
+			if receiver_disc != null:
+				receiver_disc.visible = (
+					match_node.human_set_piece_available()
+					and not match_node.pause_menu_open
+					and player.team_id == 0
+					and player != match_node.set_piece_player
+					and player.role != "keeper"
+					and not player.sent_off
+				)
 			var stamina_back := proxy.get_node_or_null("StaminaBack") as MeshInstance3D
 			var stamina_fill := proxy.get_node_or_null("StaminaFill") as MeshInstance3D
 			var stamina_ratio: float = player.stamina_ratio()
