@@ -7,12 +7,12 @@ Godot 3D object. The original front-view approved keeper body, boots, cap and
 team-specific fabric are retained. These are an initial frontal reception pass,
 not a lateral diving-atlas redesign.
 
-Upload these two operator-provided assets to R2 bucket `football`:
+Upload these two operator-provided assets to the existing shared R2 bucket `chess-studio-assets` (owned by ShadowOps Infra; **not** a separate bucket named `football`):
 
 | Object key | SHA-256 |
 | --- | --- |
-| `atlases/v1/fc_matthias_keeper_catch_v1.webp` | `b6d0beb2bc26f2ef816ef2cdd3ce631d88f5489099d745fd14b3dcf796138089` |
-| `atlases/v1/real_enroque_keeper_catch_v1.webp` | `8afa136c5c07a8e7be67d0952ef2cc9a7fcbfca08b8313d75c0157e14d613e41` |
+| `football/atlases/v1/fc_matthias_keeper_catch_v1.webp` | `b6d0beb2bc26f2ef816ef2cdd3ce631d88f5489099d745fd14b3dcf796138089` |
+| `football/atlases/v1/real_enroque_keeper_catch_v1.webp` | `8afa136c5c07a8e7be67d0952ef2cc9a7fcbfca08b8313d75c0157e14d613e41` |
 
 Expected public URLs after Infra exposes them:
 
@@ -37,3 +37,5 @@ Rollback is immediate: set `enabled=false` and deploy. No source art or
 existing canonical atlas needs removal. The required Godot smoke in CI
 validates both sources, the disabled gate, the eight-frame conversion, and
 the old/new presentation switch without contacting R2.
+
+The former `bucket: football` / `prefix: atlases/v1/` labels were inaccurate. The shared public CDN maps bucket `chess-studio-assets` with keys under `football/atlases/v1/`. An upload to a different bucket or key may succeed without appearing at the game's public URL.
