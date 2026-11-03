@@ -29,7 +29,9 @@ func _initialize() -> void:
 	var game = packed.instantiate()
 	game.match_team_size = 11
 	root.add_child(game)
-	for i in range(4):
+	# Allow the 11v11 renderer to register its quads after the first
+	# actual stadium frames, not during 3D node construction.
+	for i in range(21):
 		await process_frame
 	# Preserve the SAME real physics/presenter update path as a normal match.
 	# Keep the kickoff freeze long enough to capture both camera modes without
