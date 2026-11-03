@@ -246,7 +246,9 @@ func _request_keeper_catch_atlases_from_r2() -> void:
 		loader.name = "OptionalKeeperCatch_%d" % team_id
 		add_child(loader)
 		loader.atlas_ready.connect(_on_keeper_catch_atlas_ready.bind(team_id))
-		loader.start(meta)
+		# Pin only the receiving keeper to its independently owned R2 origin.
+		# Every other atlas still uses the legacy shared CDN allowlist.
+		loader.start(meta, ChessFootballKeeperCatchR2.public_root())
 
 
 func _on_keeper_catch_atlas_ready(image: Image, team_id: int) -> void:
