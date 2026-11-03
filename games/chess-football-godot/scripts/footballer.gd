@@ -1,10 +1,19 @@
 class_name Footballer
 extends CharacterBody2D
 
+const MatchScouting = preload("res://scripts/football_match_scouting.gd")
+
 var team_id: int = 0
 var squad_index: int = 0
 var role: String = "midfielder"
 var base_speed: float = 250.0
+# Player identities come from the canonical 54-player scouting snapshot.
+var scouting_player_id: String = ""
+var scouting_player_name: String = ""
+var scouting_pace: int = 75
+var scouting_endurance: int = 75
+var movement_multiplier: float = 1.0
+var stamina_drain_multiplier: float = 1.0
 const MOVE_ACCELERATION := 1650.0
 const MOVE_DECELERATION := 2150.0
 const SPRINT_SPEED_MULTIPLIER := 1.34
@@ -69,8 +78,26 @@ func configure(p_team_id: int, p_index: int, p_role: String, p_position: Vector2
 	home_position = p_position
 	ai_target = p_position
 	team_color = p_color
+	_apply_match_scouting()
 	_configure_visual()
 	queue_redraw()
+
+# Keep goalkeepers' established lateral save speed unchanged. Outfield
+# players use a bounded ±10% pace factor in both human and AI movement;
+# stamina changes sprint drain only, never match rules or saved careers.
+func _apply_match_scouting() -> void:
+	var profile: Dictionary = MatchScouting.starter(team_id, squad_index)
+	scouting_player_id = String(profile.get("id", ""))
+	scouting_player_name = String(profile.get("name", ""))
+	var stats: Dictionary = profile.get("scouting", {})
+	scouting_pace = int(stats.get("pace", 75))
+	scouting_endurance = int(stats.get("stamina", 75))
+	movement_multiplier = 1.0 if role == "keeper" else clampf(
+		1.0 + float(scouting_pace - 75) * 0.005, 0.90, 1.10
+	)
+	stamina_drain_multiplier = clampf(
+		1.0 - float(scouting_endurance - 75) * 0.008, 0.80, 1.20
+	)
 
 func _configure_visual() -> void:
 	if visual == null:
@@ -135,6 +162,7 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		if dribbling
 		else base_speed * (SPRINT_SPEED_MULTIPLIER if actual_sprint else 1.0)
 	)
+	speed *= movement_multiplier
 	if tackle_recovery_seconds > 0.0:
 		speed *= 0.42
 	if contact_stun_seconds > 0.0:
@@ -172,7 +200,7 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0) -> void:
 	var desired := Vector2.ZERO
 	if moving:
 		var keeper_boost := KEEPER_AI_SPEED_MULTIPLIER if role == "keeper" else 1.0
-		desired = offset.normalized() * base_speed * effective_intensity * recovery_scale * keeper_boost
+		desired = offset.normalized() * base_speed * movement_multiplier * effective_intensity * recovery_scale * keeper_boost
 	var acceleration := MOVE_ACCELERATION if desired.length_squared() > 0.001 else MOVE_DECELERATION
 	if role == "keeper":
 		acceleration *= KEEPER_AI_ACCELERATION_MULTIPLIER
@@ -188,7 +216,7 @@ func _update_stamina(delta: float, sprint_requested: bool, moving: bool) -> bool
 	var before := stamina
 	var actual_sprint := sprint_requested and moving and not sprint_exhausted and stamina > 0.0
 	if actual_sprint:
-		stamina = maxf(0.0, stamina - STAMINA_DRAIN_PER_SECOND * delta)
+		stamina = maxf(0.0, stamina - STAMINA_DRAIN_PER_SECOND * stamina_drain_multiplier * delta)
 		if stamina <= 0.01:
 			stamina = 0.0
 			sprint_exhausted = true

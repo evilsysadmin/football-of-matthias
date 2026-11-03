@@ -132,3 +132,23 @@ tácticas y journal. La siguiente PR podrá conectar atributos concretos a accio
 reales en Godot con calibración, prueba visual y contrato de integración, sin
 alterar silenciosamente resultados guardados. Las fichas se consultan desde la
 selección de club y la plantilla del despacho.
+
+## Slice siguiente · atributos físicos del partido rápido
+
+La fuente única de las 54 fichas es `frontend/src/footballManagerRoster.js`.
+`node scripts/generate_football_match_rosters.mjs` exporta todas las
+identidades y atributos a `games/chess-football-godot/data/scouting_rosters_v1.json`.
+Un test compara los bytes generados con el repositorio en cada PR, evitando
+que Godot y el mánager puedan divergir silenciosamente.
+
+En el partido rápido actual, los **cinco titulares de FC Matthias y de
+Real Enroque** ya aplican velocidad (±10 % sobre el desplazamiento de
+campo; no se altera el movimiento especial del portero) y resistencia
+(±20 % sobre el desgaste al esprintar). Se aplican igual al futbolista
+controlado por humanos y por la IA. Los otros cuatro clubes y los suplentes
+están preparados en el catálogo, pero todavía no hay selector de equipos
+ni sustituciones en Godot. Técnica/pase/remate/defensa/portería siguen
+sin afectar a la simulación física hasta slices específicos posteriores.
+
+La simulación estadística y la validación/reproducción de carreras mánager
+no consumen estos nuevos multiplicadores ni cambian los resultados previos.
