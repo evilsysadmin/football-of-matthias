@@ -739,12 +739,16 @@ func _initialize() -> void:
 		match_node.debug_focus_presentation()
 	_assert_near_corner_composition(match_node)
 	var near_corner_look := near_presenter.smoothed_restart_look_z
+	var near_corner_depth := near_presenter.camera.position.z
 	match_node.set_process(false)
+	# Restore BOTH lens position and pitch angle for a faithful baseline.
+	near_presenter.camera.position.z = ChessFootball3DPresenter.BROADCAST_DEPTH
 	near_presenter.camera.look_at(
 		Vector3(near_presenter.camera.position.x, 0.0,
 			ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z), Vector3.UP
 	)
 	await _save_capture(match_node, "corner-near-before", "VISUAL_CAPTURE_CORNER_NEAR_BEFORE")
+	near_presenter.camera.position.z = near_corner_depth
 	near_presenter.camera.look_at(
 		Vector3(near_presenter.camera.position.x, 0.0, near_corner_look), Vector3.UP
 	)
@@ -837,14 +841,15 @@ func _assert_near_corner_composition(match_node: Node) -> void:
 	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
 	assert(match_node.human_set_piece_available())
 	assert(match_node.set_piece_kind == "CÓRNER")
-	assert(presenter.smoothed_restart_look_z > 3.0)
+	assert(presenter.smoothed_restart_look_z > 2.5)
+	assert(presenter.camera.position.z > ChessFootball3DPresenter.BROADCAST_DEPTH + 5.0)
 	var take: Footballer = match_node.set_piece_player
 	var screen := match_node.get_viewport().get_visible_rect().size
 	var head := presenter.screen_position_for_world(take.global_position, 1.65)
 	var feet := presenter.screen_position_for_world(take.global_position, 0.05)
 	assert(head.x > 22.0 and head.x < screen.x - 22.0)
 	assert(head.y >= match_node.goal_label.position.y + match_node.goal_label.size.y + 8.0)
-	assert(feet.y < screen.y - 45.0, "Near corner taker's selection ring is cropped")
+	assert(feet.y < screen.y - 85.0, "Near corner taker's selection ring is cropped")
 	assert(head.y < feet.y)
 	var goal := presenter.screen_position_for_world(ChessFootballMath.goal_center(0), 1.15)
 	assert(goal.x > 28.0 and goal.x < screen.x - 28.0)
