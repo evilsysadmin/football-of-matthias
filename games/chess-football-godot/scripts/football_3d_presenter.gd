@@ -17,7 +17,9 @@ const FAR_RESTART_LOOK_SHIFT := 2.35
 # With broadcast's camera behind the near touchline, its thrower/receiver
 # feet can fall below the viewport. Tilt towards that edge only for human
 # throw-ins; near corners need a separate horizontal composition review.
-const NEAR_RESTART_LOOK_SHIFT := 6.8
+# Leave enough space below the near thrower for the larger selected-player
+# ring, not just the feet. Calibrated against 1280x720 actual Godot PNGs.
+const NEAR_RESTART_LOOK_SHIFT := 8.3
 const BROADCAST_HEIGHT := 9.8
 const BROADCAST_DEPTH := 17.8
 const TACTICAL_HEIGHT := 27.0
