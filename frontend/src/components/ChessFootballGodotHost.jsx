@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { resolveChessFootballGodotUrl } from '../chessFootballGodotRuntime.js';
+import { footballQuickMatchUrl } from '../footballQuickDifficulty.js';
 import { exitWarRoomBrowserFullscreen, requestWarRoomLandscapeFullscreen, unlockWarRoomOrientation } from './useWarRoomImmersive.js';
 import './ChessFootballGodotHost.css';
 
@@ -22,7 +23,7 @@ function readMobileViewport() {
   };
 }
 
-export default function ChessFootballGodotHost({ onExit }) {
+export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }) {
   const frameRef = useRef(null);
   const [attempt, setAttempt] = useState(0);
   const [runtimeReady, setRuntimeReady] = useState(false);
@@ -124,6 +125,7 @@ export default function ChessFootballGodotHost({ onExit }) {
   };
 
   const mobilePortrait = mobileViewport.coarse && mobileViewport.portrait;
+  const matchUrl = footballQuickMatchUrl(runtime.url, difficulty);
 
 
   const runtimeStatus = bootFailed
@@ -184,9 +186,9 @@ export default function ChessFootballGodotHost({ onExit }) {
       {runtime.url && !bootFailed ? (
         <iframe
           ref={frameRef}
-          key={runtime.url}
+          key={matchUrl}
           className="chess-football-godot-host__frame"
-          src={runtime.url}
+          src={matchUrl}
           title="Chess Football Godot"
           allow="autoplay; fullscreen; gamepad"
           allowFullScreen

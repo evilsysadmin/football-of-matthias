@@ -8,6 +8,7 @@ import { getDevelopedFootballRoster, FOOTBALL_MAX_GROWTH_PER_ATTRIBUTE } from '.
 import { createFootballCareer, editFootballCareer, playFootballCareerRound, startNextFootballSeason, FOOTBALL_CAREER_MAX_SEASONS, readFootballCareer, replayFootballCareer, writeFootballCareer } from '../footballManagerCareer.js';
 import { getFootballClubRoster, getDefaultFootballLineup, FOOTBALL_FIVE_POSITIONS, getFootballFatigue } from '../footballManagerRoster.js';
 import { FOOTBALL_SCOUTING_ATTRIBUTES } from '../footballPlayerProfiles.js';
+import { FOOTBALL_QUICK_DIFFICULTIES, DEFAULT_FOOTBALL_QUICK_DIFFICULTY } from '../footballQuickDifficulty.js';
 import './ChessFootballEntry.css';
 import FootballSaveTransfer from './FootballSaveTransfer.jsx';
 import FootballManagerDesk from './FootballManagerDesk.jsx';
@@ -47,6 +48,7 @@ function FootballSquadDevelopment({ players }) {
 
 export default function ChessFootballEntry({ onExit }) {
   const [view, setView] = useState('welcome');
+  const [quickDifficulty, setQuickDifficulty] = useState(DEFAULT_FOOTBALL_QUICK_DIFFICULTY);
   const scrollSurface = useRef(null);
   const [selectedClubId, setSelectedClubId] = useState(null);
   const [season, setSeason] = useState(null);
@@ -169,7 +171,7 @@ export default function ChessFootballEntry({ onExit }) {
   if (view === 'match') {
     return (
       <Suspense fallback={<div className="chess-football-entry__loading" role="status">Preparando el campo…</div>}>
-        <ChessFootballGodotHost onExit={() => setView('welcome')} />
+        <ChessFootballGodotHost difficulty={quickDifficulty} onExit={() => setView('welcome')} />
       </Suspense>
     );
   }
@@ -200,7 +202,7 @@ export default function ChessFootballEntry({ onExit }) {
             ) : savedCareer.status === 'invalid' ? (
               <p className="chess-football-entry__career-warning" role="status">El último guardado no se puede leer. No se borrará hasta que confirmes una nueva temporada.</p>
             ) : null}
-            <button type="button" className="chess-football-entry__choice chess-football-entry__choice--quick" onClick={startQuickMatch}>
+            <button type="button" className="chess-football-entry__choice chess-football-entry__choice--quick" onClick={() => setView('quick-setup')}>
               <span className="chess-football-entry__choice-icon" aria-hidden="true">⚽</span>
               <small>Salta al campo</small>
               <strong>Partida rápida</strong>
@@ -216,6 +218,25 @@ export default function ChessFootballEntry({ onExit }) {
             </button>
 
           </div>
+        ) : view === 'quick-setup' ? (
+          <section className="chess-football-entry__quick-setup" aria-labelledby="football-quick-setup-title">
+            <span className="chess-football-entry__eyebrow">Partida rápida · FC Matthias vs Real Enroque</span>
+            <h2 id="football-quick-setup-title">Elige a tu rival</h2>
+            <p>Decide cuánto aprieta la CPU. Tu equipo, las estadísticas y las reglas del partido no cambian.</p>
+            <div className="chess-football-entry__quick-levels" role="group" aria-label="Dificultad del rival">
+              {FOOTBALL_QUICK_DIFFICULTIES.map(({ id, label, description }) => (
+                <button key={id} type="button" aria-pressed={quickDifficulty === id}
+                  className={`chess-football-entry__quick-level${quickDifficulty === id ? ' is-selected' : ''}`}
+                  onClick={() => setQuickDifficulty(id)}>
+                  <strong>{label}</strong><span>{description}</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" className="chess-football-entry__quick-kickoff" onClick={startQuickMatch}>
+              Saltar al campo · {FOOTBALL_QUICK_DIFFICULTIES.find(({ id }) => id === quickDifficulty)?.label}
+            </button>
+            <p className="chess-football-entry__quick-hint">Puedes regresar al vestuario desde el menú del partido.</p>
+          </section>
         ) : view === 'manager' ? (
           <section className="chess-football-entry__manager chess-football-entry__manager--selection" aria-labelledby="football-manager-title">
             <span className="chess-football-entry__eyebrow">Modo mánager · Pretemporada</span>
