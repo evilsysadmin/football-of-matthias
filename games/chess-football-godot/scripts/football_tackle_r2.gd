@@ -58,7 +58,7 @@ static func frames_from_image(image: Image, source: Dictionary) -> Array[Texture
 	var rects: Array = source.get("rects", [])
 	if rects.size() != 8 or source.get("cell", {}) != {"width": SOURCE_SIZE.x, "height": SOURCE_SIZE.y}:
 		return frames
-	var rgba := image.duplicate()
+	var rgba: Image = image.duplicate()
 	if rgba.has_mipmaps():
 		rgba.clear_mipmaps()
 	if rgba.get_format() != Image.FORMAT_RGBA8:
@@ -77,7 +77,7 @@ static func frames_from_image(image: Image, source: Dictionary) -> Array[Texture
 			return []
 		# Keep a two-pixel antialias fringe. Figure rectangles come from
 		# connected components, not equal divisions of the original sheet.
-		var crop := rgba.get_region(Rect2i(
+		var crop: Image = rgba.get_region(Rect2i(
 			x - FRAME_MARGIN, y - FRAME_MARGIN,
 			width + FRAME_MARGIN * 2, height + FRAME_MARGIN * 2
 		))
@@ -86,7 +86,7 @@ static func frames_from_image(image: Image, source: Dictionary) -> Array[Texture
 		if target_width > OUTPUT_SIZE.x - 8 or target_height > BOOT_BASELINE - 8:
 			return []
 		crop.resize(target_width, target_height, Image.INTERPOLATE_LANCZOS)
-		var target := Image.create(OUTPUT_SIZE.x, OUTPUT_SIZE.y, false, Image.FORMAT_RGBA8)
+		var target: Image = Image.create(OUTPUT_SIZE.x, OUTPUT_SIZE.y, false, Image.FORMAT_RGBA8)
 		target.fill(Color.TRANSPARENT)
 		target.blit_rect(
 			crop, Rect2i(Vector2i.ZERO, crop.get_size()),
@@ -97,7 +97,7 @@ static func frames_from_image(image: Image, source: Dictionary) -> Array[Texture
 		normalized.append(target)
 	# Atomic conversion: never return partially decoded action animations.
 	for target in normalized:
-		var texture := ImageTexture.create_from_image(target)
+		var texture: ImageTexture = ImageTexture.create_from_image(target)
 		ChessFootballSpriteBank._register_frame_bottom(texture, target)
 		frames.append(texture)
 	return frames
