@@ -617,3 +617,6 @@
 .chess-football-entry__scouting dd { margin: 0; font-size: 1rem; font-weight: 800; color: #f3dfae; font-variant-numeric: tabular-nums; }
 .chess-football-entry__player-card > .chess-football-entry__player-growth { color: #cde1b7; font-weight: 700; }
 .chess-football-entry__player-card > summary:focus-visible { outline: 3px solid #d8c28b; outline-offset: -3px; }
+
+/* Keep expanded scouting entries clear of the fixed 44px ShadowOps ID action. */
+.chess-football-entry__player-card > summary { scroll-margin-top: 72px; }
