@@ -49,6 +49,7 @@ func _initialize() -> void:
 			else:
 				assert(player.global_position.x > center.x)
 	assert(roster_ids.size() == 22)
+	game.camera_mode = "tactical"
 	stage.sync_presentation(2.0, "tactical")
 	# Sprite3D textures and camera transforms must survive multiple real
 	# rendered frames before taking visual evidence of the 22 athletes.
@@ -83,6 +84,7 @@ func _initialize() -> void:
 		var tactical_path := "user://chess-football-xi-tactical.png"
 		assert(viewport.get_texture().get_image().save_png(tactical_path) == OK)
 		print("FOOTBALL_XI_PREVIEW_TACTICAL=" + ProjectSettings.globalize_path(tactical_path))
+		game.camera_mode = "broadcast"
 		stage.sync_presentation(2.0, "broadcast")
 		for render_frame in range(12):
 			stage.sync_presentation(1.0 / 60.0, "broadcast")
