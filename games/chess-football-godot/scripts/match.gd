@@ -802,7 +802,7 @@ func _release_charged_pass() -> bool:
 	passer.play_action("pass", lerpf(0.58, 0.80, ratio))
 	if audio_fx != null:
 		audio_fx.play_pass()
-	ball.release(release_direction, power)
+	ball.release(release_direction, power * passer.pass_power_multiplier())
 	# Desktop directional passes retain the passer at release. The intended
 	# receiver moves toward the flight path and inherits control near arrival.
 	# Explicit touch-target passes keep their existing immediate selection.
@@ -875,7 +875,7 @@ func _release_charged_shot() -> void:
 	if ball.carrier != controlled:
 		return
 	var target := _assisted_shot_target(controlled, aim_y)
-	var power := _shot_power_from_ratio(ratio)
+	var power := _shot_power_from_ratio(ratio) * controlled.shot_power_multiplier()
 	var lift := _safe_shot_lift(
 		controlled,
 		target,
@@ -1446,7 +1446,7 @@ func _ai_attack(player: Footballer) -> void:
 		var shot_target := Vector2(goal.x, aim_y)
 		player.play_action("shoot", 0.78)
 		var distance_ratio := clampf(goal_distance / AI_SHOOT_DISTANCE, 0.0, 1.0)
-		var shot_power := lerpf(AI_SHOT_MIN_POWER, AI_SHOT_MAX_POWER, distance_ratio)
+		var shot_power := lerpf(AI_SHOT_MIN_POWER, AI_SHOT_MAX_POWER, distance_ratio) * player.shot_power_multiplier()
 		var profile_ratio := lerpf(0.18, 0.82, distance_ratio)
 		var shot_lift := _shot_lift_from_ratio(profile_ratio)
 		if audio_fx != null:
@@ -1472,7 +1472,7 @@ func _ai_attack(player: Footballer) -> void:
 		player.play_action("pass", 0.72)
 		if audio_fx != null:
 			audio_fx.play_pass()
-		ball.release(target.global_position - player.global_position, 540.0)
+		ball.release(target.global_position - player.global_position, 540.0 * player.pass_power_multiplier())
 
 func _best_ai_pass_target(player: Footballer) -> Footballer:
 	var forward: float = 1.0 if player.team_id == 0 else -1.0
@@ -1503,9 +1503,9 @@ func _pass_from(player: Footballer, input_direction: Vector2) -> void:
 	var target := _best_pass_target(player, input_direction)
 	if target == null:
 		var fallback := input_direction if input_direction.length_squared() > 0.001 else Vector2.RIGHT
-		ball.release(fallback, 470.0)
+		ball.release(fallback, 470.0 * player.pass_power_multiplier())
 		return
-	ball.release(target.global_position - player.global_position, 540.0)
+	ball.release(target.global_position - player.global_position, 540.0 * player.pass_power_multiplier())
 
 func _best_directional_pass_target(player: Footballer, input_direction: Vector2) -> Footballer:
 	# Never curve a manually aimed pass toward a teammate outside the cone.

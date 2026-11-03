@@ -12,6 +12,10 @@ var scouting_player_id: String = ""
 var scouting_player_name: String = ""
 var scouting_pace: int = 75
 var scouting_endurance: int = 75
+var scouting_passing: int = 75
+var scouting_shooting: int = 75
+var scouting_technique: int = 75
+var technique_control_multiplier: float = 1.0
 var movement_multiplier: float = 1.0
 var stamina_drain_multiplier: float = 1.0
 const MOVE_ACCELERATION := 1650.0
@@ -92,6 +96,12 @@ func _apply_match_scouting() -> void:
 	var stats: Dictionary = profile.get("scouting", {})
 	scouting_pace = int(stats.get("pace", 75))
 	scouting_endurance = int(stats.get("stamina", 75))
+	scouting_passing = int(stats.get("passing", 75))
+	scouting_shooting = int(stats.get("shooting", 75))
+	scouting_technique = int(stats.get("technique", 75))
+	technique_control_multiplier = clampf(
+		1.0 + float(scouting_technique - 75) * 0.0025, 0.93, 1.06
+	)
 	movement_multiplier = 1.0 if role == "keeper" else clampf(
 		1.0 + float(scouting_pace - 75) * 0.005, 0.90, 1.10
 	)
@@ -101,6 +111,14 @@ func _apply_match_scouting() -> void:
 	stamina_drain_multiplier = clampf(
 		1.0 - float(scouting_endurance - 75) * 0.008, 0.90, 1.20
 	)
+
+# Only ball velocity changes for passes/shots; direction and goalkeeper
+# mechanics remain intact. Rating 75 is neutral for legacy actors.
+func pass_power_multiplier() -> float:
+	return clampf(1.0 + float(scouting_passing - 75) * 0.004, 0.86, 1.10)
+
+func shot_power_multiplier() -> float:
+	return clampf(1.0 + float(scouting_shooting - 75) * 0.004, 0.86, 1.10)
 
 func _configure_visual() -> void:
 	if visual == null:
@@ -165,6 +183,9 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		if dribbling
 		else base_speed * (SPRINT_SPEED_MULTIPLIER if actual_sprint else 1.0)
 	)
+	# Technique affects dribbling/carrying only, never off-ball sprints.
+	if has_ball and role != "keeper":
+		speed *= technique_control_multiplier
 	if tackle_recovery_seconds > 0.0:
 		speed *= 0.42
 	if contact_stun_seconds > 0.0:
@@ -203,6 +224,8 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0) -> void:
 	if moving:
 		var keeper_boost := KEEPER_AI_SPEED_MULTIPLIER if role == "keeper" else 1.0
 		desired = offset.normalized() * base_speed * effective_intensity * recovery_scale * keeper_boost
+		if has_ball and role != "keeper":
+			desired *= technique_control_multiplier
 	var acceleration := MOVE_ACCELERATION if desired.length_squared() > 0.001 else MOVE_DECELERATION
 	if role == "keeper":
 		acceleration *= KEEPER_AI_ACCELERATION_MULTIPLIER
