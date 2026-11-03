@@ -332,6 +332,10 @@ func setup(p_match: Node) -> void:
 	_build_ball()
 	_build_camera()
 	sync_presentation(1.0, "broadcast")
+	# The real Godot visual gate proved static XI quads render when they
+	# enter an already-mounted scene. Create them after the first sync,
+	# not inside the off-tree player proxy factory.
+	_enable_xi_raster_bodies()
 	_request_idle_front_from_r2()
 	_request_lateral_run_from_r2()
 	_request_tackle_atlases_from_r2()
@@ -1074,6 +1078,38 @@ func _add_goal_net_grid(
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(instance)
 
+# XI-only raster mirrors the existing AnimatedSprite3D clock and atlas.
+# Initialize after the 3D scene entered the tree, exactly like the real
+# 22-proxy visual diagnostic. The shipped 5v5 has no extra raster nodes.
+func _enable_xi_raster_bodies() -> void:
+	if match_node.match_team_size != 11:
+		return
+	for team in match_node.teams:
+		for player in team:
+			var key: int = int(player.get_instance_id())
+			var driver: AnimatedSprite3D = player_sprites.get(key)
+			var proxy: Node3D = player_nodes.get(key)
+			assert(driver != null and proxy != null)
+			var raster := Sprite3D.new()
+			raster.name = "XI_Raster"
+			raster.texture = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
+			raster.centered = driver.centered
+			raster.pixel_size = driver.pixel_size
+			raster.position = driver.position
+			raster.rotation = driver.rotation
+			raster.scale = driver.scale
+			raster.billboard = driver.billboard
+			raster.alpha_cut = driver.alpha_cut
+			raster.alpha_scissor_threshold = driver.alpha_scissor_threshold
+			raster.shaded = driver.shaded
+			raster.flip_h = driver.flip_h
+			raster.modulate = driver.modulate
+			raster.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			proxy.add_child(raster)
+			xi_raster_sprites[key] = raster
+			driver.hide()
+
+
 func _build_player_proxies() -> void:
 	for team in match_node.teams:
 		for player in team:
@@ -1101,24 +1137,6 @@ func _build_player_proxies() -> void:
 			sprite.flip_h = player.team_id == 1
 			sprite.play("idle")
 			root.add_child(sprite)
-			if match_node.match_team_size == 11:
-				# A plain Sprite3D renders the approved raster reliably across 22
-				# players. AnimatedSprite3D remains the animation-clock authority.
-				var raster := Sprite3D.new()
-				raster.name = "XI_Raster"
-				raster.texture = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
-				raster.centered = sprite.centered
-				raster.pixel_size = sprite.pixel_size
-				raster.position = sprite.position
-				raster.billboard = sprite.billboard
-				raster.alpha_cut = sprite.alpha_cut
-				raster.alpha_scissor_threshold = sprite.alpha_scissor_threshold
-				raster.shaded = sprite.shaded
-				raster.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				raster.flip_h = sprite.flip_h
-				root.add_child(raster)
-				xi_raster_sprites[int(player.get_instance_id())] = raster
-				sprite.hide()
 			if player.role == "keeper":
 				keeper_catch_rigs[int(player.get_instance_id())] = _build_keeper_catch_rig(root, player.team_id)
 
