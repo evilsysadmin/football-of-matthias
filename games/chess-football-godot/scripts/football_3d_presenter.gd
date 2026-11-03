@@ -1108,6 +1108,10 @@ func _enable_xi_raster_bodies() -> void:
 			raster.alpha_cut = driver.alpha_cut
 			raster.alpha_scissor_threshold = driver.alpha_scissor_threshold
 			raster.shaded = driver.shaded
+			# XI-only diagnosis: eliminate turf/depth-buffer occlusion of
+			# distant vertical raster bodies in the full-pitch camera.
+			# The five-a-side material, collision and camera stay unchanged.
+			raster.no_depth_test = true
 			raster.flip_h = driver.flip_h
 			raster.modulate = driver.modulate
 			raster.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
