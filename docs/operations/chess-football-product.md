@@ -243,3 +243,23 @@ verifica que un actor 5v5 conserve la limitación previa.
 reanudaciones, porteros, HUD y cámara con encuadre ampliado. La fuente
 del mánager/journal, los 54 titulares/suplentes históricos y sus partidas
 guardadas no se modifican.
+
+## Slice 11v11 · Ensayo del estadio y los 22 actores en una sola escena
+
+La clase real `match.gd` admite un `match_team_size` local de 11 **solo para
+pruebas**, asignado antes de incorporar la escena al árbol Godot. El partido
+Web estándar sigue inicializándose siempre en 5 y no existe ningún selector
+público de 11v11. Esta vista de ensayo carga los 22 `Footballer` verdaderos,
+sus 22 perfiles del scouting existente, los integra en el mismo
+`ChessFootball3DPresenter` y dibuja el campo físico 4000×2600 en Godot.
+La cámara táctica abre el encuadre para que quepan los 22 actores y la
+broadcast dispone de más distancia; la calibración original 5v5 permanece
+intacta.
+
+Las posiciones de saque de la 4-3-3 se mantienen en su propia mitad,
+con el delantero del equipo que saca cerca del centro. La prueba no inicia
+un encuentro reglamentario 11v11: aún hay lógica de porteros, pases,
+IA, balón, goles y reinicios que se refiere al campo antiguo. Antes de
+activar el nuevo modo, esas reglas deben migrarse y probarse juntas.
+La CI almacena dos PNG Godot 1280×720 de esta vista de ensayo junto
+a los PNG habituales del partido 5v5.

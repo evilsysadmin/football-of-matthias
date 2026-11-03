@@ -318,7 +318,7 @@ func _apply_verified_keeper_catch_frames(textures: Array[Texture2D], team_id: in
 
 func setup(p_match: Node) -> void:
 	match_node = p_match
-	var pitch := ChessFootballMath.PITCH_RECT
+	var pitch: Rect2 = match_node.match_pitch
 	field_width = pitch.size.x * WORLD_SCALE
 	field_depth = pitch.size.y * WORLD_SCALE
 	_build_environment()
@@ -1338,7 +1338,8 @@ func _build_camera() -> void:
 	smoothed_focus_x = focus.x
 	smoothed_lead_x = 0.0
 	last_camera_mode = "broadcast"
-	camera.position = Vector3(focus.x, BROADCAST_HEIGHT, BROADCAST_DEPTH)
+	var scale_factor := 1.35 if match_node.match_team_size == 11 else 1.0
+	camera.position = Vector3(focus.x, BROADCAST_HEIGHT * scale_factor, BROADCAST_DEPTH * scale_factor)
 	camera.look_at(Vector3(focus.x, 0.0, -0.85), Vector3.UP)
 
 func _add_box(position_3d: Vector3, size_3d: Vector3, color: Color) -> MeshInstance3D:
@@ -1916,7 +1917,11 @@ func _sync_camera(delta: float, mode: String) -> void:
 
 	if mode == "tactical":
 		smoothed_restart_look_z = BROADCAST_BASE_LOOK_Z
-		wanted_position = Vector3(0.0, TACTICAL_HEIGHT, 0.35)
+		var tactical_height: float = (
+			maxf(TACTICAL_HEIGHT, field_depth * 1.52)
+			if match_node.match_team_size == 11 else TACTICAL_HEIGHT
+		)
+		wanted_position = Vector3(0.0, tactical_height, 0.35)
 		wanted_look = Vector3.ZERO
 		wanted_fov = 43.0
 	else:
@@ -1968,6 +1973,10 @@ func _sync_camera(delta: float, mode: String) -> void:
 			easing_corner_release
 		)
 		wanted_position.x = clampf(wanted_position.x, -camera_x_limit, camera_x_limit)
+		if match_node.match_team_size == 11:
+			# Wider preview lens framing, without touching the calibrated 5v5 camera.
+			wanted_position.y *= 1.35
+			wanted_position.z *= 1.45
 		var restart_look_z := broadcast_restart_look_z(
 			bool(match_node.set_piece_active),
 			int(match_node.set_piece_team_id),
