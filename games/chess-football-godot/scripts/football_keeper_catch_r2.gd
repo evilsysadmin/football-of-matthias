@@ -32,20 +32,49 @@ static func source_entry(team_id: int) -> Dictionary:
 	return {}
 
 
+# The signed game manifest, not downloaded content or URL query data,
+# chooses which single independent public origin to trust. The old shared
+# Chess Studio CDN does not serve the operator's dedicated 'football' bucket.
+static func trusted_public_root(config: Dictionary) -> String:
+	if config.get("enabled") != true:
+		return ""
+	if config.get("bucket") != "football" or config.get("prefix") != "atlases/v1/":
+		return ""
+	var base := String(config.get("cdn_base", ""))
+	if not base.begins_with("https://") or not base.ends_with("/atlases/v1"):
+		return ""
+	var host := base.trim_prefix("https://").get_slice("/", 0)
+	if host == "assets.chess-studio.shadowops.dpdns.org":
+		return ""
+	if not host.contains(".") or host.begins_with(".") or host.ends_with("."):
+		return ""
+	if host.is_valid_ip_address():
+		return ""
+	for label in host.split("."):
+		if label.is_empty() or label.begins_with("-") or label.ends_with("-"):
+			return ""
+	for ch in host:
+		if "abcdefghijklmnopqrstuvwxyz0123456789-.".find(ch) < 0:
+			return ""
+	return base + "/"
+
+
+static func public_root() -> String:
+	return trusted_public_root(metadata())
+
+
 static func active_entry(team_id: int) -> Dictionary:
 	var config := metadata()
 	var source := source_entry(team_id)
-	if config.get("enabled") != true or source.is_empty():
-		return {}
-	var cdn_base := String(config.get("cdn_base", "")).trim_suffix("/")
-	if not cdn_base.begins_with("https://"):
+	var root := trusted_public_root(config)
+	if root.is_empty() or source.is_empty():
 		return {}
 	var selected: Dictionary = source.duplicate(true)
-	selected["url"] = cdn_base + "/" + String(source["file"])
+	selected["url"] = root + String(source["file"])
 	selected["cell"] = config.get("cell", {})
 	selected["columns"] = config.get("columns", 0)
 	selected["rows"] = config.get("rows", 0)
-	if not ChessFootballR2AtlasLoader.valid_metadata(selected):
+	if not ChessFootballR2AtlasLoader.valid_metadata(selected, root):
 		return {}
 	return selected
 
