@@ -1073,12 +1073,22 @@ func _initialize() -> void:
 	match_node.debug_sync_presentation()
 	assert(match_node.presentation_3d.debug_keeper_catch_hands_visible(keeper))
 	var open_grip_span: float = match_node.presentation_3d.debug_keeper_catch_glove_span(keeper)
-	assert(open_grip_span > 0.58)
+	assert(open_grip_span > 0.52)
+	for side in [-1, 1]:
+		assert(match_node.presentation_3d.debug_keeper_catch_sleeve_length(keeper, side) < 0.85)
+	# The initial ball must remain in an anatomically reachable pocket.
+	var first_catch_ball: Vector3 = match_node.presentation_3d.ball_node.position
+	var first_catch_keeper: Vector3 = match_node.presentation_3d.world_to_stage(keeper.global_position)
+	assert(first_catch_ball.distance_to(first_catch_keeper + Vector3(
+		ChessFootball3DPresenter.KEEPER_CATCH_SIDE,
+		ChessFootball3DPresenter.KEEPER_CATCH_HEIGHT,
+		ChessFootball3DPresenter.KEEPER_CATCH_FRONT,
+	)) <= ChessFootball3DPresenter.KEEPER_CATCH_START_REACH + 0.03)
 	# Advance only the 3D presentation catch blend; physics / possession
 	# remain unchanged. The palms must converge around a chest-height ball.
 	match_node.presentation_3d.sync_presentation(0.25, match_node.camera_mode)
 	var closed_grip_span: float = match_node.presentation_3d.debug_keeper_catch_glove_span(keeper)
-	assert(closed_grip_span < open_grip_span - 0.20)
+	assert(closed_grip_span < open_grip_span - 0.16)
 	assert(closed_grip_span < 0.43)
 	assert(match_node.debug_3d_ball_height() > 1.18)
 	var stage_keeper: Vector3 = match_node.presentation_3d.world_to_stage(keeper.global_position)

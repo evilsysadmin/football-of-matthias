@@ -46,7 +46,9 @@ const KEEPER_CATCH_HEIGHT := 1.25
 const KEEPER_CATCH_FRONT := 0.48
 const KEEPER_CATCH_SIDE := 0.12
 # The gloves first reach wide, then cup the ball during the existing catch blend.
-const KEEPER_CATCH_OPEN_HAND_SPAN := 0.33
+# No visual catch may start more than an arm's reach from the keeper.
+const KEEPER_CATCH_START_REACH := 0.32
+const KEEPER_CATCH_OPEN_HAND_SPAN := 0.29
 const KEEPER_CATCH_CLOSED_HAND_SPAN := 0.188
 const KEEPER_CATCH_BLEND_SECONDS := 0.18
 
@@ -1035,6 +1037,15 @@ func debug_keeper_catch_hands_visible(keeper: Footballer) -> bool:
 	return rig != null and rig.visible
 
 
+func debug_keeper_catch_sleeve_length(keeper: Footballer, side: int) -> float:
+	var rig: Node3D = keeper_catch_rigs.get(int(keeper.get_instance_id()))
+	if rig == null:
+		return INF
+	var suffix := "Left" if side < 0 else "Right"
+	var sleeve := rig.get_node("Sleeve" + suffix) as MeshInstance3D
+	return sleeve.scale.y
+
+
 func debug_keeper_catch_glove_span(keeper: Footballer) -> float:
 	var rig: Node3D = keeper_catch_rigs.get(int(keeper.get_instance_id()))
 	if rig == null:
@@ -1218,10 +1229,12 @@ func sync_presentation(delta: float, mode: String) -> void:
 			if keeper_catch_carrier_id != current_keeper_id:
 				keeper_catch_carrier_id = current_keeper_id
 				keeper_catch_elapsed = 0.0
-				keeper_catch_origin = ball_node.position
-				# No long-flight teleport during scripted resets/replay staging.
-				if keeper_catch_origin.distance_to(target) > 1.55:
-					keeper_catch_origin = target
+				# The previously rendered ball can be in an old scene/restart
+				# or at the outer edge of the save radius. Keep visual contact
+				# inside arm's reach so no hand turns into a telescopic pole.
+				keeper_catch_origin = target + (
+					ball_node.position - target
+				).limit_length(KEEPER_CATCH_START_REACH)
 			keeper_catch_elapsed += maxf(0.0, delta)
 			var progress := smoothstep(
 				0.0, 1.0,
