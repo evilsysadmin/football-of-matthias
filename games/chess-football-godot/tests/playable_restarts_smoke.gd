@@ -16,6 +16,22 @@ func _initialize() -> void:
 	var original_score: Array = match_node.score.duplicate()
 	var pitch := ChessFootballMath.PITCH_RECT
 
+	# Pure framing contract: only the human far touchline has clearance
+	# adjustment. CPU, penalties, near side and normal play stay unchanged.
+	var base_look := ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z
+	var far_spot := Vector2(pitch.get_center().x, pitch.position.y)
+	var near_spot := Vector2(pitch.get_center().x, pitch.end.y)
+	assert(ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "CÓRNER", far_spot) < base_look)
+	assert(ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "SAQUE DE BANDA", far_spot) < base_look)
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.broadcast_restart_look_z(false, 0, "CÓRNER", far_spot), base_look))
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.broadcast_restart_look_z(true, 1, "CÓRNER", far_spot), base_look))
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "PENALTI", far_spot), base_look))
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "SAQUE DE BANDA", near_spot), base_look))
+
 	# FC Matthias earns a throw-in after the rival touched the touchline.
 	match_node.ball.attach_to(match_node.teams[1][2])
 	match_node.ball.release(Vector2.UP, 480.0)
