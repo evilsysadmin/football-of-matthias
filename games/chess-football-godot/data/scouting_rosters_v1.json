@@ -877,5 +877,397 @@
         }
       }
     ]
+  },
+  "eleven": {
+    "fc-matthias": {
+      "lineupIds": [
+        "fc-matthias-por-1",
+        "fc-matthias-def-1",
+        "fc-matthias-def-2",
+        "fc-matthias-def-3",
+        "fc-matthias-def-4",
+        "fc-matthias-med-1",
+        "fc-matthias-med-2",
+        "fc-matthias-med-3",
+        "fc-matthias-del-1",
+        "fc-matthias-del-2",
+        "fc-matthias-del-3"
+      ],
+      "extraPlayers": [
+        {
+          "id": "fc-matthias-def-3",
+          "name": "Héctor Salvat",
+          "role": "DEF",
+          "age": 26,
+          "bio": "Central de corte limpio, domina el juego aéreo y sabe iniciar desde atrás.",
+          "scouting": {
+            "pace": 81,
+            "stamina": 86,
+            "technique": 72,
+            "passing": 75,
+            "shooting": 39,
+            "tackling": 82,
+            "keeping": 8
+          }
+        },
+        {
+          "id": "fc-matthias-def-4",
+          "name": "Unai Cabrera",
+          "role": "DEF",
+          "age": 22,
+          "bio": "Lateral intenso, gana metros por fuera sin descuidar la espalda.",
+          "scouting": {
+            "pace": 74,
+            "stamina": 82,
+            "technique": 71,
+            "passing": 67,
+            "shooting": 35,
+            "tackling": 81,
+            "keeping": 7
+          }
+        },
+        {
+          "id": "fc-matthias-del-3",
+          "name": "Izan Marín",
+          "role": "DEL",
+          "age": 24,
+          "bio": "Extremo incisivo, ataca el intervalo entre lateral y central.",
+          "scouting": {
+            "pace": 88,
+            "stamina": 82,
+            "technique": 84,
+            "passing": 74,
+            "shooting": 81,
+            "tackling": 35,
+            "keeping": 6
+          }
+        }
+      ]
+    },
+    "real-enroque": {
+      "lineupIds": [
+        "real-enroque-por-1",
+        "real-enroque-def-1",
+        "real-enroque-def-2",
+        "real-enroque-def-3",
+        "real-enroque-def-4",
+        "real-enroque-med-1",
+        "real-enroque-med-2",
+        "real-enroque-med-3",
+        "real-enroque-del-1",
+        "real-enroque-del-2",
+        "real-enroque-del-3"
+      ],
+      "extraPlayers": [
+        {
+          "id": "real-enroque-def-3",
+          "name": "Pau Ortega",
+          "role": "DEF",
+          "age": 25,
+          "bio": "Lateral asociativo que combina por dentro y da continuidad a la posesión.",
+          "scouting": {
+            "pace": 72,
+            "stamina": 83,
+            "technique": 82,
+            "passing": 88,
+            "shooting": 31,
+            "tackling": 78,
+            "keeping": 8
+          }
+        },
+        {
+          "id": "real-enroque-def-4",
+          "name": "Jaime Robles",
+          "role": "DEF",
+          "age": 29,
+          "bio": "Central sereno, sobresale leyendo desmarques y saliendo con criterio.",
+          "scouting": {
+            "pace": 68,
+            "stamina": 82,
+            "technique": 76,
+            "passing": 85,
+            "shooting": 30,
+            "tackling": 86,
+            "keeping": 7
+          }
+        },
+        {
+          "id": "real-enroque-del-3",
+          "name": "Nil Cortés",
+          "role": "DEL",
+          "age": 20,
+          "bio": "Extremo habilidoso, busca el uno contra uno con paciencia.",
+          "scouting": {
+            "pace": 84,
+            "stamina": 77,
+            "technique": 88,
+            "passing": 86,
+            "shooting": 79,
+            "tackling": 33,
+            "keeping": 4
+          }
+        }
+      ]
+    },
+    "atletico-torreon": {
+      "lineupIds": [
+        "atletico-torreon-por-1",
+        "atletico-torreon-def-1",
+        "atletico-torreon-def-2",
+        "atletico-torreon-def-3",
+        "atletico-torreon-def-4",
+        "atletico-torreon-med-1",
+        "atletico-torreon-med-2",
+        "atletico-torreon-med-3",
+        "atletico-torreon-del-1",
+        "atletico-torreon-del-2",
+        "atletico-torreon-del-3"
+      ],
+      "extraPlayers": [
+        {
+          "id": "atletico-torreon-def-3",
+          "name": "César Olmedo",
+          "role": "DEF",
+          "age": 27,
+          "bio": "Central expeditivo, agresivo en la marca y fuerte por alto.",
+          "scouting": {
+            "pace": 59,
+            "stamina": 88,
+            "technique": 49,
+            "passing": 54,
+            "shooting": 27,
+            "tackling": 93,
+            "keeping": 6
+          }
+        },
+        {
+          "id": "atletico-torreon-def-4",
+          "name": "Víctor Garrido",
+          "role": "DEF",
+          "age": 24,
+          "bio": "Lateral trabajador, tapa la banda y ayuda siempre al central.",
+          "scouting": {
+            "pace": 70,
+            "stamina": 87,
+            "technique": 56,
+            "passing": 61,
+            "shooting": 32,
+            "tackling": 87,
+            "keeping": 8
+          }
+        },
+        {
+          "id": "atletico-torreon-del-3",
+          "name": "Aitor Benítez",
+          "role": "DEL",
+          "age": 22,
+          "bio": "Atacante de presión incansable, corre al espacio tras cada robo.",
+          "scouting": {
+            "pace": 81,
+            "stamina": 91,
+            "technique": 60,
+            "passing": 56,
+            "shooting": 76,
+            "tackling": 65,
+            "keeping": 6
+          }
+        }
+      ]
+    },
+    "union-alfil": {
+      "lineupIds": [
+        "union-alfil-por-1",
+        "union-alfil-def-1",
+        "union-alfil-def-2",
+        "union-alfil-def-3",
+        "union-alfil-def-4",
+        "union-alfil-med-1",
+        "union-alfil-med-2",
+        "union-alfil-med-3",
+        "union-alfil-del-1",
+        "union-alfil-del-2",
+        "union-alfil-del-3"
+      ],
+      "extraPlayers": [
+        {
+          "id": "union-alfil-def-3",
+          "name": "Biel Navarro",
+          "role": "DEF",
+          "age": 21,
+          "bio": "Carrilero veloz, busca la línea de fondo para poner centros.",
+          "scouting": {
+            "pace": 84,
+            "stamina": 84,
+            "technique": 70,
+            "passing": 77,
+            "shooting": 42,
+            "tackling": 71,
+            "keeping": 4
+          }
+        },
+        {
+          "id": "union-alfil-def-4",
+          "name": "Rodrigo Gil",
+          "role": "DEF",
+          "age": 30,
+          "bio": "Central veterano con gran colocación y salida segura.",
+          "scouting": {
+            "pace": 72,
+            "stamina": 81,
+            "technique": 66,
+            "passing": 74,
+            "shooting": 37,
+            "tackling": 79,
+            "keeping": 7
+          }
+        },
+        {
+          "id": "union-alfil-del-3",
+          "name": "Samuel Torres",
+          "role": "DEL",
+          "age": 23,
+          "bio": "Extremo a pierna cambiada, rompe hacia dentro y dispara.",
+          "scouting": {
+            "pace": 90,
+            "stamina": 75,
+            "technique": 79,
+            "passing": 74,
+            "shooting": 80,
+            "tackling": 39,
+            "keeping": 6
+          }
+        }
+      ]
+    },
+    "deportivo-gambito": {
+      "lineupIds": [
+        "deportivo-gambito-por-1",
+        "deportivo-gambito-def-1",
+        "deportivo-gambito-def-2",
+        "deportivo-gambito-def-3",
+        "deportivo-gambito-def-4",
+        "deportivo-gambito-med-1",
+        "deportivo-gambito-med-2",
+        "deportivo-gambito-med-3",
+        "deportivo-gambito-del-1",
+        "deportivo-gambito-del-2",
+        "deportivo-gambito-del-3"
+      ],
+      "extraPlayers": [
+        {
+          "id": "deportivo-gambito-def-3",
+          "name": "Xavi Ferrán",
+          "role": "DEF",
+          "age": 24,
+          "bio": "Defensa valiente que arriesga el pase vertical para salir jugando.",
+          "scouting": {
+            "pace": 73,
+            "stamina": 65,
+            "technique": 67,
+            "passing": 78,
+            "shooting": 35,
+            "tackling": 67,
+            "keeping": 7
+          }
+        },
+        {
+          "id": "deportivo-gambito-def-4",
+          "name": "Pol Medina",
+          "role": "DEF",
+          "age": 20,
+          "bio": "Lateral ofensivo, todavía aprende cuándo replegar.",
+          "scouting": {
+            "pace": 82,
+            "stamina": 61,
+            "technique": 79,
+            "passing": 77,
+            "shooting": 44,
+            "tackling": 58,
+            "keeping": 6
+          }
+        },
+        {
+          "id": "deportivo-gambito-del-3",
+          "name": "Enzo Lozano",
+          "role": "DEL",
+          "age": 25,
+          "bio": "Delantero creativo de regate y último toque impredecibles.",
+          "scouting": {
+            "pace": 90,
+            "stamina": 70,
+            "technique": 85,
+            "passing": 69,
+            "shooting": 83,
+            "tackling": 22,
+            "keeping": 5
+          }
+        }
+      ]
+    },
+    "peones-del-norte": {
+      "lineupIds": [
+        "peones-del-norte-por-1",
+        "peones-del-norte-def-1",
+        "peones-del-norte-def-2",
+        "peones-del-norte-def-3",
+        "peones-del-norte-def-4",
+        "peones-del-norte-med-1",
+        "peones-del-norte-med-2",
+        "peones-del-norte-med-3",
+        "peones-del-norte-del-1",
+        "peones-del-norte-del-2",
+        "peones-del-norte-del-3"
+      ],
+      "extraPlayers": [
+        {
+          "id": "peones-del-norte-def-3",
+          "name": "Jon Aranda",
+          "role": "DEF",
+          "age": 28,
+          "bio": "Central disciplinado, protege el área y gana duelos por anticipación.",
+          "scouting": {
+            "pace": 61,
+            "stamina": 88,
+            "technique": 52,
+            "passing": 58,
+            "shooting": 35,
+            "tackling": 79,
+            "keeping": 7
+          }
+        },
+        {
+          "id": "peones-del-norte-def-4",
+          "name": "Borja Echevarría",
+          "role": "DEF",
+          "age": 26,
+          "bio": "Defensa de recorrido, recupera la posición tras cada contra.",
+          "scouting": {
+            "pace": 70,
+            "stamina": 86,
+            "technique": 59,
+            "passing": 68,
+            "shooting": 28,
+            "tackling": 84,
+            "keeping": 6
+          }
+        },
+        {
+          "id": "peones-del-norte-del-3",
+          "name": "Asier Domínguez",
+          "role": "DEL",
+          "age": 23,
+          "bio": "Punta móvil, explota los metros libres en transiciones rápidas.",
+          "scouting": {
+            "pace": 85,
+            "stamina": 82,
+            "technique": 70,
+            "passing": 62,
+            "shooting": 74,
+            "tackling": 41,
+            "keeping": 5
+          }
+        }
+      ]
+    }
   }
 }
