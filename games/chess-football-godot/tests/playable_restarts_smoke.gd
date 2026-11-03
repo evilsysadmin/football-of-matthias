@@ -36,6 +36,19 @@ func _initialize() -> void:
 	assert(near_corner_look > base_look)
 	assert(near_corner_look <
 		ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "SAQUE DE BANDA", near_spot))
+	var depth := ChessFootball3DPresenter.BROADCAST_DEPTH
+	var near_corner_depth := ChessFootball3DPresenter.broadcast_corner_camera_depth(
+		true, 0, "CÓRNER", near_spot)
+	assert(near_corner_depth > depth + 5.0)
+	for sample in [
+		[false, 0, "CÓRNER", near_spot],
+		[true, 1, "CÓRNER", near_spot],
+		[true, 0, "CÓRNER", far_spot],
+		[true, 0, "PENALTI", near_spot],
+		[true, 0, "SAQUE DE BANDA", near_spot],
+	]:
+		assert(is_equal_approx(ChessFootball3DPresenter.broadcast_corner_camera_depth(
+			bool(sample[0]), int(sample[1]), String(sample[2]), sample[3]), depth))
 	assert(ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "SAQUE DE BANDA", near_spot) > base_look)
 	assert(is_equal_approx(
 		ChessFootball3DPresenter.broadcast_restart_look_z(false, 0, "SAQUE DE BANDA", near_spot), base_look))
