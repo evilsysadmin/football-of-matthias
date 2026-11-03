@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="256" viewBox="0 0 512 256">
+  <!-- Original repeating equirectangular panels for the in-game football. -->
+  <rect width="512" height="256" fill="#f3f0e7"/>
+  <g stroke="#a8a8a0" stroke-width="3" fill="none" opacity="0.65">
+    <path d="M0 0 V256 M512 0 V256 M0 128 H512"/>
+    <path d="M0 46 L64 8 L128 46 L192 8 L256 46 L320 8 L384 46 L448 8 L512 46"/>
+    <path d="M0 210 L64 248 L128 210 L192 248 L256 210 L320 248 L384 210 L448 248 L512 210"/>
+    <path d="M0 128 L64 88 L128 128 L192 88 L256 128 L320 88 L384 128 L448 88 L512 128"/>
+    <path d="M0 128 L64 168 L128 128 L192 168 L256 128 L320 168 L384 128 L448 168 L512 128"/>
+  </g>
+  <g fill="#242a30" stroke="#73787b" stroke-width="2" stroke-linejoin="round">
+    <polygon points="0,-27 26,-8 16,23 -16,23 -26,-8" transform="translate(64 62) rotate(15)"/>
+    <polygon points="0,-27 26,-8 16,23 -16,23 -26,-8" transform="translate(192 62) rotate(-15)"/>
+    <polygon points="0,-27 26,-8 16,23 -16,23 -26,-8" transform="translate(320 62) rotate(15)"/>
+    <polygon points="0,-27 26,-8 16,23 -16,23 -26,-8" transform="translate(448 62) rotate(-15)"/>
+    <polygon points="0,-27 26,-8 16,23 -16,23 -26,-8" transform="translate(64 194) rotate(-15)"/>
+    <polygon points="0,-27 26,-8 16,23 -16,23 -26,-8" transform="translate(192 194) rotate(15)"/>
+    <polygon points="0,-27 26,-8 16,23 -16,23 -26,-8" transform="translate(320 194) rotate(-15)"/>
+    <polygon points="0,-27 26,-8 16,23 -16,23 -26,-8" transform="translate(448 194) rotate(15)"/>
+    <polygon points="0,-30 29,-10 18,26 -18,26 -29,-10" transform="translate(0 129) rotate(15)"/>
+    <polygon points="0,-30 29,-10 18,26 -18,26 -29,-10" transform="translate(128 129) rotate(-15)"/>
+    <polygon points="0,-30 29,-10 18,26 -18,26 -29,-10" transform="translate(256 129) rotate(15)"/>
+    <polygon points="0,-30 29,-10 18,26 -18,26 -29,-10" transform="translate(384 129) rotate(-15)"/>
+    <polygon points="0,-30 29,-10 18,26 -18,26 -29,-10" transform="translate(512 129) rotate(15)"/>
+  </g>
+</svg>
