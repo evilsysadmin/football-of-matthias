@@ -74,6 +74,8 @@ func _initialize() -> void:
 		presenter.sync_presentation(0.25, "broadcast")
 		presenter.sync_presentation(0.0, "broadcast")
 		assert(sprite.frame == 7)
+		# The real 3D ball must meet the centre of the two painted palms.
+		assert(absf(presenter.ball_node.position.x - presenter.world_to_stage(keeper.global_position).x) < 0.04)
 		assert(not presenter.ball_shadow.visible)
 		assert(match_node.ball.carrier == keeper)
 		match_node.ball.release(Vector2.RIGHT, 200.0)
