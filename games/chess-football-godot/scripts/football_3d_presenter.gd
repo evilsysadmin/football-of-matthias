@@ -93,6 +93,9 @@ var player_sprites: Dictionary = {}
 # bodies in the expanded stadium, while identical Sprite3D textures render.
 # Keep the animated clock/atlas and copy its frame to a single visible quad.
 var xi_raster_sprites: Dictionary = {}
+# Visual diagnosis only: stop changing XI mesh/material state during the
+# first real-Godot capture. Re-enable before the animation regression smoke.
+var xi_raster_hold_for_visual_probe: bool = false
 var player_run_views: Dictionary = {}
 # Keeper run/action poses tick independently in the visible 3D runtime.
 # Hidden authoritative 2D AnimatedSprite2D nodes are not a reliable clock.
@@ -1493,7 +1496,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 			# transform, including depth scale and footline. This is not a second
 			# animation system and changes no gameplay, 5v5 actor or R2 atlas.
 			var xi_raster: Sprite3D = xi_raster_sprites.get(key)
-			if xi_raster != null:
+			if xi_raster != null and not xi_raster_hold_for_visual_probe:
 				# Texture RID/material updates can invalidate a GLES3 billboard
 				# for the entire frame. Switch only on authored frame changes.
 				var next_frame := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)

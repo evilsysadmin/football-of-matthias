@@ -766,21 +766,29 @@ jobs:
           set -euo pipefail
           godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
           log="$RUNNER_TEMP/football-xi-preview-visual.log"
+          set +e
           timeout 60s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/eleven_stadium_preview.gd 2>&1 | tee "$log"
-          # GDScript assertions log SCRIPT ERROR but can still exit 0 AND
-          # print the success marker. Never publish an empty XI image.
-          if grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
+          status=${PIPESTATUS[0]}
+          set -e
+          # Keep failed visual evidence for inspection. Godot can log an
+          # assertion yet still emit a PNG and return success.
+          for mode in tactical broadcast; do
+            marker="FOOTBALL_XI_PREVIEW_${mode^^}"
+            screenshot="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
+            if [[ -n "$screenshot" && -s "$screenshot" ]]; then
+              cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-preview-$mode.png"
+            fi
+          done
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
             echo '::error::The real 11v11 Godot screenshots contain a failed visual assertion.'
             exit 1
           fi
           grep -q 'FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22' "$log"
           for mode in tactical broadcast; do
-            marker="FOOTBALL_XI_PREVIEW_${mode^^}"
-            screenshot="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
-            test -n "$screenshot" && test -s "$screenshot"
-            cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-preview-$mode.png"
+            test -s "$RUNNER_TEMP/chess-football-review/xi-preview-$mode.png"
           done
       - name: Upload visual review
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: chess-football-visual-review
