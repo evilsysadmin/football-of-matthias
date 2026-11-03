@@ -28,6 +28,7 @@ func _initialize() -> void:
 	match_node.debug_force_set_piece_ready()
 	assert(match_node.debug_set_piece_active())
 	assert(match_node.human_set_piece_available())
+	_assert_receiver_discs(match_node, true)
 	assert(match_node.ball.carrier == thrower)
 	match_node._update_set_piece(0.60)
 	assert(match_node.debug_set_piece_active())
@@ -36,6 +37,7 @@ func _initialize() -> void:
 	assert("SAQUE DE BANDA" in match_node.last_goal_text)
 	assert(match_node._release_outfield_set_piece(null, Vector2.DOWN))
 	assert(not match_node.debug_set_piece_active())
+	_assert_receiver_discs(match_node, false)
 	assert(match_node.ball.carrier == null)
 	assert(match_node.ball.velocity.dot(Vector2.DOWN) > 490.0)
 	assert(match_node.ball.last_touch_team_id == 0)
@@ -51,6 +53,7 @@ func _initialize() -> void:
 	assert(match_node.debug_set_piece_team() == 0)
 	match_node.debug_force_set_piece_ready()
 	assert(match_node.human_set_piece_available())
+	_assert_receiver_discs(match_node, true)
 	var corner_taker: Footballer = match_node.ball.carrier
 	var target: Footballer = null
 	for teammate in match_node.teams[0]:
@@ -64,6 +67,7 @@ func _initialize() -> void:
 	var intended_direction: Vector2 = target.global_position - corner_taker.global_position
 	assert(match_node.mobile_release_context_pass())
 	assert(not match_node.debug_set_piece_active())
+	_assert_receiver_discs(match_node, false)
 	assert(match_node.ball.carrier == null)
 	assert(match_node.ball.vertical_velocity > 0.0)
 	assert(match_node.ball.velocity.dot(intended_direction) > 0.0)
@@ -103,7 +107,36 @@ func _initialize() -> void:
 	assert(match_node.debug_human_penalty_ready())
 	assert(match_node.debug_set_piece_active())
 	assert(not match_node.human_set_piece_available())
+	_assert_receiver_discs(match_node, false)
 	assert(match_node.ball.carrier == match_node.teams[0][3] or match_node.ball.carrier.team_id == 0)
 	assert(match_node.score == original_score)
 	print("FOOTBALL_PLAYABLE_RESTARTS_OK throw_corner_touch_timeout_cpu_penalty")
 	quit(0)
+
+
+# The highlighted recipients must match the real touch-pass eligibility,
+# not the goalkeeper, taker, expelled players or rival team. No stale rings
+# should survive a release or appear during penalties.
+func _assert_receiver_discs(match_node: Node, human_ready: bool) -> void:
+	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
+	presenter.sync_presentation(0.0, "broadcast")
+	var eligible_count := 0
+	for team in match_node.teams:
+		for player in team:
+			var proxy: Node3D = presenter.player_nodes.get(player.get_instance_id())
+			assert(proxy != null)
+			var disc := proxy.get_node_or_null("SetPieceReceiverDisc") as MeshInstance3D
+			assert(disc != null and disc.mesh is TorusMesh)
+			assert(disc.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+			var expected: bool = (
+				human_ready
+				and player.team_id == 0
+				and player != match_node.set_piece_player
+				and player.role != "keeper"
+				and not player.sent_off
+			)
+			assert(disc.visible == expected)
+			if expected:
+				eligible_count += 1
+	if human_ready:
+		assert(eligible_count > 0)
