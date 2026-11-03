@@ -27,7 +27,7 @@ func _initialize() -> void:
 	assert(is_equal_approx(stage.field_depth, 36.4))
 	assert(stage.player_sprites.size() == 22)
 	assert(stage.player_nodes.size() == 22)
-	var center := game.match_pitch.get_center()
+	var center: Vector2 = game.match_pitch.get_center()
 	var roster_ids: Dictionary = {}
 	for team_id in range(2):
 		for index in range(11):
