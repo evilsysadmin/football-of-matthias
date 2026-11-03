@@ -1,8 +1,8 @@
 extends SceneTree
 
-# Offline contract for the enabled R2 keeper reception. Synthetic sheets
-# exercise the runtime without network; the workflow independently validates
-# the real public WebPs, CORS, bytes, and the visual captures.
+# Until the independent football bucket has a published HTTPS endpoint,
+# the atlas stays disabled. Synthetic sheets exercise frame conversion,
+# presentation integration and the canonical fallback without any network.
 func _initialize() -> void:
 	var packed := load("res://main.tscn") as PackedScene
 	assert(packed != null)
@@ -16,11 +16,10 @@ func _initialize() -> void:
 	var metadata := ChessFootballKeeperCatchR2.metadata()
 	assert(metadata.get("version") == 1)
 	assert(metadata.get("quality_contract") == "football-keeper-catch-v1")
-	assert(metadata.get("bucket") == "chess-studio-assets")
-	assert(metadata.get("prefix") == "football/atlases/v1/")
-	assert(metadata.get("enabled") == true)
-	assert(String(metadata.get("cdn_base", "")) ==
-		"https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1")
+	assert(metadata.get("bucket") == "football")
+	assert(metadata.get("prefix") == "atlases/v1/")
+	assert(metadata.get("enabled") == false)
+	assert(String(metadata.get("cdn_base", "")).is_empty())
 	assert((metadata.get("entries", []) as Array).size() == 2)
 	assert(ChessFootballKeeperCatchR2.source_entry(-1).is_empty())
 	var original_score: Array = match_node.score.duplicate()
@@ -29,10 +28,7 @@ func _initialize() -> void:
 		var source := ChessFootballKeeperCatchR2.source_entry(team_id)
 		assert(String(source.get("file", "")).ends_with("_keeper_catch_v1.webp"))
 		assert(String(source.get("sha256", "")).length() == 64)
-		var active := ChessFootballKeeperCatchR2.active_entry(team_id)
-		assert(ChessFootballR2AtlasLoader.valid_metadata(active))
-		assert(String(active["url"]).ends_with(String(source["file"])))
-		assert(active["sha256"] == source["sha256"])
+		assert(ChessFootballKeeperCatchR2.active_entry(team_id).is_empty())
 		var keeper: Footballer = match_node.teams[team_id][0]
 		var sprite: AnimatedSprite3D = presenter.player_sprites[keeper.get_instance_id()]
 		var original_run: Texture2D = sprite.sprite_frames.get_frame_texture(&"run", 0)
