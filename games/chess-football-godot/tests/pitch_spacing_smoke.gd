@@ -1,5 +1,7 @@
 extends SceneTree
 
+const Formation = preload("res://scripts/football_match_formation.gd")
+
 # A playable pitch must spread ten footballers in real 3D field coordinates,
 # not merely render larger empty grass around the same packed central scrum.
 func _initialize() -> void:
@@ -57,6 +59,35 @@ func _initialize() -> void:
 	var free_target := pitch.position + Vector2(180.0, 160.0)
 	assert(game._ai_spaced_target(clustered, free_target).distance_to(free_target) < 0.01)
 	assert(game._ai_spaced_target(carrier, same_spot) == same_spot)
+	# The migration contract must preserve every actual 5v5 home coordinate
+	# and describe a well-spaced mirrored 4-3-3 on a larger, centred pitch.
+	assert(game.debug_team_counts() == [5, 5])
+	assert(Formation.FIVE_ROLES.size() == 5)
+	assert(Formation.ELEVEN_ROLES.size() == 11)
+	for team_id in range(2):
+		for index in range(5):
+			var actor: Footballer = game.teams[team_id][index]
+			assert(actor.role == Formation.role_for(5, index))
+			assert(actor.home_position.distance_to(
+				Formation.home_position(5, team_id, index, pitch)
+			) < 0.01)
+	var full_pitch: Rect2 = Formation.ELEVEN_PITCH_RECT
+	assert(full_pitch.size == Vector2(4000.0, 2600.0))
+	assert(full_pitch.get_center() == pitch.get_center())
+	assert(absf(full_pitch.size.x / full_pitch.size.y - 105.0 / 68.0) < 0.01)
+	for team_id in range(2):
+		var positions: Array[Vector2] = []
+		for index in range(11):
+			var pos: Vector2 = Formation.home_position(11, team_id, index, full_pitch)
+			var opposite: Vector2 = Formation.home_position(11, 1 - team_id, index, full_pitch)
+			assert(full_pitch.has_point(pos))
+			assert(absf(pos.x + opposite.x - full_pitch.position.x - full_pitch.end.x) < 0.01)
+			assert(absf(pos.y - opposite.y) < 0.01)
+			for teammate in positions:
+				assert(pos.distance_to(teammate) > 350.0)
+			positions.append(pos)
+		assert(Formation.role_for(11, 0) == "keeper")
+		assert(positions.size() == 11)
 	print("FOOTBALL_WIDTH=%.0f SUPPORT_SPREAD=%.0f" % [
 		pitch.size.y, support_wing.y - support_def.y
 	])
