@@ -1070,7 +1070,11 @@ func _build_ball() -> void:
 	sphere.radius = 0.16
 	sphere.height = 0.32
 	ball_node.mesh = sphere
-	ball_node.material_override = _material(Color(0.965, 0.965, 0.92), 0.40)
+	# The same original dark-panel ball stays recognizable in flight and
+	# between the keeper's pale gloves; only its visual material changes.
+	var ball_material := _material(Color.WHITE, 0.40)
+	ball_material.albedo_texture = preload("res://assets/ball/football_panels.svg")
+	ball_node.material_override = ball_material
 	ball_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(ball_node)
 
