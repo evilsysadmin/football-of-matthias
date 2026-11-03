@@ -721,6 +721,41 @@ func _initialize() -> void:
 	await _save_capture(match_node, "throw-in-near-playable", "VISUAL_CAPTURE_THROW_IN_NEAR_PLAYABLE")
 	assert(match_node._release_outfield_set_piece())
 
+	# The opposite corner has its own camera problem: its taker and selection
+	# ring used to sit at the bottom of the broadcast viewport. This is the
+	# SAME playable Godot corner with old/new view angles, no synthetic poses.
+	match_node.ball.attach_to(match_node.teams[1][1])
+	match_node.ball.release(Vector2.RIGHT, 520.0)
+	match_node.ball.global_position = Vector2(
+		near_pitch.end.x + 24.0, near_pitch.end.y - 44.0
+	)
+	match_node.debug_check_ball_out()
+	assert(match_node.debug_set_piece_kind() == "CÓRNER")
+	assert(match_node.debug_set_piece_team() == 0)
+	match_node.debug_force_set_piece_ready()
+	assert(match_node.human_set_piece_available())
+	match_node.debug_refresh_hud()
+	for _settle in range(3):
+		match_node.debug_focus_presentation()
+	_assert_near_corner_composition(match_node)
+	var near_corner_look := near_presenter.smoothed_restart_look_z
+	var near_corner_depth := near_presenter.camera.position.z
+	match_node.set_process(false)
+	# Restore BOTH lens position and pitch angle for a faithful baseline.
+	near_presenter.camera.position.z = ChessFootball3DPresenter.BROADCAST_DEPTH
+	near_presenter.camera.look_at(
+		Vector3(near_presenter.camera.position.x, 0.0,
+			ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z), Vector3.UP
+	)
+	await _save_capture(match_node, "corner-near-before", "VISUAL_CAPTURE_CORNER_NEAR_BEFORE")
+	near_presenter.camera.position.z = near_corner_depth
+	near_presenter.camera.look_at(
+		Vector3(near_presenter.camera.position.x, 0.0, near_corner_look), Vector3.UP
+	)
+	await _save_capture(match_node, "corner-near-playable", "VISUAL_CAPTURE_CORNER_NEAR_PLAYABLE")
+	assert(match_node._release_outfield_set_piece())
+	match_node.set_process(true)
+
 	match_node.debug_toggle_pause_menu()
 	for _frame in range(4):
 		await process_frame
@@ -799,6 +834,35 @@ func _assert_near_throw_in_bounds(match_node: Node) -> void:
 	assert(feet.y < canvas_size.y - 100.0,
 		"Near touchline thrower's selection ring lacks bottom clearance")
 	assert(feet.y > canvas_size.y * 0.56)
+
+
+
+func _assert_near_corner_composition(match_node: Node) -> void:
+	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
+	assert(match_node.human_set_piece_available())
+	assert(match_node.set_piece_kind == "CÓRNER")
+	assert(presenter.smoothed_restart_look_z > 2.5)
+	assert(presenter.camera.position.z > ChessFootball3DPresenter.BROADCAST_DEPTH + 5.0)
+	var take: Footballer = match_node.set_piece_player
+	var screen := match_node.get_viewport().get_visible_rect().size
+	var head := presenter.screen_position_for_world(take.global_position, 1.65)
+	var feet := presenter.screen_position_for_world(take.global_position, 0.05)
+	assert(head.x > 22.0 and head.x < screen.x - 22.0)
+	assert(head.y >= match_node.goal_label.position.y + match_node.goal_label.size.y + 8.0)
+	assert(feet.y < screen.y - 85.0, "Near corner taker's selection ring is cropped")
+	assert(head.y < feet.y)
+	var goal := presenter.screen_position_for_world(ChessFootballMath.goal_center(0), 1.15)
+	assert(goal.x > 28.0 and goal.x < screen.x - 28.0)
+	assert(goal.y > 150.0 and goal.y < screen.y - 60.0,
+		"Near corner framing loses the goal mouth")
+	var visible_receivers := 0
+	for teammate in match_node.teams[0]:
+		if teammate == take or teammate.role == "keeper" or teammate.sent_off:
+			continue
+		var point := presenter.screen_position_for_player(teammate)
+		if point.x > 18.0 and point.x < screen.x - 18.0 and point.y > 145.0 and point.y < screen.y - 25.0:
+			visible_receivers += 1
+	assert(visible_receivers >= 2, "Near corner framing hides passing options")
 
 func _save_texture_preview(source_path: String, filename: String, marker: String) -> void:
 	var texture := load(source_path) as Texture2D

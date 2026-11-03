@@ -29,10 +29,26 @@ func _initialize() -> void:
 		ChessFootball3DPresenter.broadcast_restart_look_z(true, 1, "CÓRNER", far_spot), base_look))
 	assert(is_equal_approx(
 		ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "PENALTI", far_spot), base_look))
-	# Near corners still use the approved framing: this slice addresses
-	# near-side throw-ins without changing goal-line compositions.
-	assert(is_equal_approx(
-		ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "CÓRNER", near_spot), base_look))
+	# Near corners keep the taker inside the frame without losing the
+	# goalmouth: less tilt than a throw-in, never applied to CPU corners.
+	var near_corner_look := ChessFootball3DPresenter.broadcast_restart_look_z(
+		true, 0, "CÓRNER", near_spot)
+	assert(near_corner_look > base_look)
+	assert(near_corner_look <
+		ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "SAQUE DE BANDA", near_spot))
+	var depth := ChessFootball3DPresenter.BROADCAST_DEPTH
+	var near_corner_depth := ChessFootball3DPresenter.broadcast_corner_camera_depth(
+		true, 0, "CÓRNER", near_spot)
+	assert(near_corner_depth > depth + 5.0)
+	for sample in [
+		[false, 0, "CÓRNER", near_spot],
+		[true, 1, "CÓRNER", near_spot],
+		[true, 0, "CÓRNER", far_spot],
+		[true, 0, "PENALTI", near_spot],
+		[true, 0, "SAQUE DE BANDA", near_spot],
+	]:
+		assert(is_equal_approx(ChessFootball3DPresenter.broadcast_corner_camera_depth(
+			bool(sample[0]), int(sample[1]), String(sample[2]), sample[3]), depth))
 	assert(ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "SAQUE DE BANDA", near_spot) > base_look)
 	assert(is_equal_approx(
 		ChessFootball3DPresenter.broadcast_restart_look_z(false, 0, "SAQUE DE BANDA", near_spot), base_look))

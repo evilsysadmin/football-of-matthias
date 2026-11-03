@@ -19,11 +19,16 @@ const SET_PIECE_CAMERA_PAN_DISTANCE := 1.15
 const BROADCAST_BASE_LOOK_Z := -0.85
 const FAR_RESTART_LOOK_SHIFT := 2.35
 # With broadcast's camera behind the near touchline, its thrower/receiver
-# feet can fall below the viewport. Tilt towards that edge only for human
-# throw-ins; near corners need a separate horizontal composition review.
+# feet can fall below the viewport. The angle needs separate corner/throw-in
+# tuning because goalmouth players sit much farther from the taker.
 # Leave enough space below the near thrower for the larger selected-player
 # ring, not just the feet. Calibrated against 1280x720 actual Godot PNGs.
 const NEAR_RESTART_LOOK_SHIFT := 8.3
+# Near corners span a long diagonal from the taker to the goalmouth.
+# Retreat the same broadcast camera rather than widening its lens: both
+# remain readable, with unaltered player scale rules and no cut-off taker.
+const NEAR_CORNER_LOOK_SHIFT := 3.85
+const NEAR_CORNER_CAMERA_RETREAT := 6.2
 const BROADCAST_HEIGHT := 9.8
 const BROADCAST_DEPTH := 17.8
 const TACTICAL_HEIGHT := 27.0
@@ -669,10 +674,10 @@ func _add_far_roof() -> void:
 func _add_benches() -> void:
 	# The benches used to sit directly in the playable near-touchline
 	# camera foreground. Keep their actual geometry and dimensions, but park
-	# them at the edges of the pitch, outside the centre-of-play broadcast shot.
+	# them beside the end terraces, beyond near-corner camera sightlines.
 	for side_index in range(2):
 		var side := -1.0 if side_index == 0 else 1.0
-		var x := side * field_width * 0.41
+		var x := side * (field_width * 0.5 + 1.0)
 		var base := _add_box(
 			Vector3(x, 0.20, field_depth * 0.5 + 0.68),
 			Vector3(1.7, 0.38, 0.52),
@@ -691,10 +696,26 @@ func _add_benches() -> void:
 func _add_floodlights() -> void:
 	for z_value in [-field_depth * 0.5 - 3.15, field_depth * 0.5 + 3.15]:
 		var z: float = float(z_value)
-		for x_value in [-field_width * 0.43, field_width * 0.43]:
-			var x: float = float(x_value)
-			_add_box(Vector3(x, 2.55, z), Vector3(0.10, 5.10, 0.10), Color(0.20, 0.22, 0.24))
-			_add_box(Vector3(x, 5.02, z), Vector3(1.25, 0.12, 0.26), Color(0.24, 0.26, 0.29))
+		for side_index in range(2):
+			var side := -1.0 if side_index == 0 else 1.0
+			# Near-side poles must not obscure the near corner in broadcast.
+			# Keep all four existing lights; move only the foreground pair
+			# just beyond the actual field/terrace corners.
+			var x := side * (
+				field_width * 0.5 + 2.5 if z > 0.0
+				else field_width * 0.43
+			)
+			var post := _add_box(
+				Vector3(x, 2.55, z), Vector3(0.10, 5.10, 0.10),
+				Color(0.20, 0.22, 0.24)
+			)
+			var bar := _add_box(
+				Vector3(x, 5.02, z), Vector3(1.25, 0.12, 0.26),
+				Color(0.24, 0.26, 0.29)
+			)
+			if z > 0.0:
+				post.name = "NearCornerFloodlightPost_%d" % side_index
+				bar.name = "NearCornerFloodlightBar_%d" % side_index
 			var lamp := OmniLight3D.new()
 			lamp.position = Vector3(x, 4.90, z)
 			lamp.light_color = Color(0.84, 0.90, 1.0)
@@ -1800,7 +1821,7 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 		shadow.scale = Vector3(shadow_scale, 1.0, shadow_scale)
 
 # Human-owned touchline restarts need a little extra camera clearance on
-# either edge: far away from the top chyron, near throw-ins above the bottom crop.
+# either edge: far away from the top chyron, near restarts above the bottom crop.
 # Penalties, CPU restarts, tactical view and normal play remain unaffected.
 static func broadcast_restart_look_z(
 	active: bool, team_id: int, kind: String, spot: Vector2
@@ -1811,9 +1832,25 @@ static func broadcast_restart_look_z(
 	var distance_from_center := spot.y - pitch.get_center().y
 	if distance_from_center <= -pitch.size.y * 0.35:
 		return BROADCAST_BASE_LOOK_Z - FAR_RESTART_LOOK_SHIFT
-	if kind == "SAQUE DE BANDA" and distance_from_center >= pitch.size.y * 0.35:
+	if distance_from_center >= pitch.size.y * 0.35:
+		if kind == "CÓRNER":
+			return BROADCAST_BASE_LOOK_Z + NEAR_CORNER_LOOK_SHIFT
 		return BROADCAST_BASE_LOOK_Z + NEAR_RESTART_LOOK_SHIFT
 	return BROADCAST_BASE_LOOK_Z
+
+
+# Pure framing contract. Only the human near-corner camera retreats;
+# ordinary play, the far corner, CPU corners and all throw-ins keep depth.
+static func broadcast_corner_camera_depth(
+	active: bool, team_id: int, kind: String, spot: Vector2
+) -> float:
+	var pitch := ChessFootballMath.PITCH_RECT
+	if (
+		active and team_id == 0 and kind == "CÓRNER"
+		and spot.y >= pitch.get_center().y + pitch.size.y * 0.35
+	):
+		return BROADCAST_DEPTH + NEAR_CORNER_CAMERA_RETREAT
+	return BROADCAST_DEPTH
 
 
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
@@ -1879,7 +1916,12 @@ func _sync_camera(delta: float, mode: String) -> void:
 		wanted_position = Vector3(
 			smoothed_focus_x + smoothed_lead_x + set_piece_pan,
 			BROADCAST_HEIGHT,
-			BROADCAST_DEPTH,
+			broadcast_corner_camera_depth(
+				bool(match_node.set_piece_active),
+				int(match_node.set_piece_team_id),
+				String(match_node.set_piece_kind),
+				match_node.set_piece_spot,
+			),
 		)
 		wanted_position.x = clampf(wanted_position.x, -field_width * 0.32, field_width * 0.32)
 		var restart_look_z := broadcast_restart_look_z(

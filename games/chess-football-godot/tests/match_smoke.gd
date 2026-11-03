@@ -131,11 +131,31 @@ func _initialize() -> void:
 			"TouchlineBenchCanopy_%d" % bench_side
 		) as MeshInstance3D
 		assert(bench_base != null and bench_canopy != null)
-		assert(absf(bench_base.position.x) > match_node.presentation_3d.field_width * 0.35)
+		assert(absf(bench_base.position.x) > match_node.presentation_3d.field_width * 0.5)
 		assert(is_equal_approx(bench_base.position.x, bench_canopy.position.x))
 		assert(bench_base.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 		assert(bench_canopy.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 		assert(bench_base.position.z > near_trim.position.z)
+	# The near-corner broadcast view is longer than the usual camera
+	# and must not place light poles between the taker and the goalmouth.
+	# Relocate the SAME four existing lamps: no extra draw/light sources.
+	var lamp_count := 0
+	for child in match_node.presentation_3d.get_children():
+		if child is OmniLight3D:
+			lamp_count += 1
+			assert(not child.shadow_enabled)
+	assert(lamp_count == 4)
+	for flood_side in range(2):
+		var post := match_node.presentation_3d.get_node_or_null(
+			"NearCornerFloodlightPost_%d" % flood_side
+		) as MeshInstance3D
+		var bar := match_node.presentation_3d.get_node_or_null(
+			"NearCornerFloodlightBar_%d" % flood_side
+		) as MeshInstance3D
+		assert(post != null and bar != null)
+		assert(absf(post.position.x) > match_node.presentation_3d.field_width * 0.5 + 2.4)
+		assert(is_equal_approx(post.position.x, bar.position.x))
+		assert(post.position.z > match_node.presentation_3d.field_depth * 0.5)
 	# Broadcast HUD must remain readable and click-through outside MENU.
 	var hud := match_node.get_node_or_null("MatchHud") as CanvasLayer
 	assert(hud != null)
