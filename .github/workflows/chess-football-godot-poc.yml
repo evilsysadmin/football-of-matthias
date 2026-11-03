@@ -52,6 +52,7 @@ jobs:
           import os
           from pathlib import Path
           from urllib.request import Request, urlopen
+          from urllib.error import HTTPError
 
           meta = json.loads(Path('games/chess-football-godot/optional_keeper_catch_v1.json').read_text())
           assert meta['enabled'] is True
@@ -73,7 +74,15 @@ jobs:
                   'Origin': origin,
                   'User-Agent': 'Football-keeper-catch-CI/1.0'
               })
-              with urlopen(req, timeout=18) as response:
+              try:
+                  response = urlopen(req, timeout=18)
+              except HTTPError as exc:
+                  raise AssertionError(
+                      f'{name}: public CDN returned HTTP {exc.code}. '
+                      f'Expected key football/atlases/v1/{name} in shared '
+                      f'R2 bucket chess-studio-assets at {base}/{name}'
+                  ) from exc
+              with response:
                   assert response.status == 200, f'{name}: HTTP {response.status}'
                   mime = response.headers.get_content_type()
                   assert mime == 'image/webp', f'{name}: content-type {mime!r}'
