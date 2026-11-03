@@ -1301,7 +1301,7 @@ func _keeper_reading_shot(player: Footballer, line_x: float) -> bool:
 	return (
 		shot_speed >= KEEPER_SHOT_READ_MIN_SPEED
 		and (ball.global_position.x - line_x) * facing_x > 0.0
-		and absf(ball.global_position.x - goal.x) <= KEEPER_SHOT_READ_DISTANCE
+		and absf(ball.global_position.x - goal.x) <= KEEPER_SHOT_READ_DISTANCE * player.keeper_reflex_multiplier()
 	)
 
 func _keeper_pass_lane_clear(player: Footballer, teammate: Footballer) -> bool:
@@ -1419,7 +1419,7 @@ func _keeper_try_save(keeper: Footballer) -> bool:
 		return false
 	if ball.flight_height > KEEPER_SAVE_MAX_HEIGHT:
 		return false
-	if keeper.global_position.distance_to(ball.global_position) > KEEPER_SAVE_RANGE:
+	if keeper.global_position.distance_to(ball.global_position) > KEEPER_SAVE_RANGE * keeper.keeper_reflex_multiplier():
 		return false
 
 	var dive_direction := signf(ball.global_position.y - keeper.global_position.y)
@@ -1591,11 +1591,14 @@ func _tackle_hitbox(
 		and forward_distance <= forward_reach + TACKLE_CONTACT_FORWARD_BONUS
 		and lateral_distance <= TACKLE_FOUL_HALF_WIDTH + (SLIDE_TACKLE_HALF_WIDTH_BONUS if aggressive else 0.0)
 	)
+	# Keep the physical inside/contact/foul limits unchanged. Better
+	# defenders convert a slightly larger *front-on* part to a clean poke.
+	var clean_factor := tackler.clean_tackle_multiplier()
 	var clean := (
 		inside
 		and forward_distance >= -4.0
-		and forward_distance <= TACKLE_CLEAN_FORWARD + TACKLE_HITBOX_FORWARD_BONUS * speed_ratio * 0.5
-		and lateral_distance <= TACKLE_CLEAN_HALF_WIDTH
+		and forward_distance <= (TACKLE_CLEAN_FORWARD + TACKLE_HITBOX_FORWARD_BONUS * speed_ratio * 0.5) * clean_factor
+		and lateral_distance <= TACKLE_CLEAN_HALF_WIDTH * clean_factor
 	)
 	# Normal standing tackles are deliberately forgiving: a glancing side contact
 	# becomes a loose-ball duel instead of a whistle. Fouls are reserved for a

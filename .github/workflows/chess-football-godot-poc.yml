@@ -254,6 +254,21 @@ jobs:
             exit 1
           fi
           grep -q 'chess-football godot smoke: OK' "$log"
+      - name: Scouting · defense and goalkeeper real-contact contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-defense-keeper-scouting.log"
+          set +e
+          timeout 24s "$godot" --headless --quit-after 360 --path games/chess-football-godot --script res://tests/defense_keeper_scouting_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Real tackle/keeper scouting contract failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_DEFENSE_KEEPER_SCOUTING_OK' "$log"
       - name: Scouting · real passing shooting and ball-control smoke
         shell: bash
         run: |

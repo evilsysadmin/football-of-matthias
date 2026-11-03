@@ -182,3 +182,27 @@ ni la movilidad del guardameta. No se cambian saques especiales, penaltis,
 atributos defensivos/portería, el mánager/journal ni el efecto de la dificultad
 CPU. Un smoke Godot mide directamente las velocidades reales de pases,
 tiros y movimiento con/sin posesión, y garantiza cotas y perfiles reales.
+
+## Defensa y Portería · séptimo atributo activo
+
+El partido rápido Godot usa ya los **siete atributos** del scouting.
+**Defensa** ajusta de forma determinista y limitada (×0,88..×1,08, 75
+neutro) la sección frontal de una entrada válida que se considera limpia.
+La zona física de contacto/alcance y las reglas de faltas y tarjetas
+siguen iguales: un jugador con alta Defensa no roba fuera de alcance,
+ni resuelve automáticamente todos los duelos. El choque que solo roza
+continúa generando balón dividido y el sistema de faltas permanece activo.
+
+**Portería** ajusta moderadamente (×0,92..×1,08, 75 neutro) la distancia
+a la que el guardameta empieza a leer una trayectoria de disparo y el
+alcance máximo de su parada. La velocidad lateral del portero, la altura
+máxima alcanzable, la dirección del disparo, las condiciones de velocidad
+del balón y las mecánicas de penaltis no cambian. No existen aciertos
+aleatorios ni animaciones mágicas: incluso con Portería 99 el balón tiene
+que llegar realmente a manos del guardameta.
+
+Los tests Godot comparan la entrada real del central de Defensa 84 contra
+el delantero de Defensa 32 en idéntica geometría, un roce, un intento
+fuera de alcance y la anticipación/parada con y sin la habilidad del
+portero. Los 54 jugadores mantienen perfiles y estadísticas propios.
+No se toca el journal del mánager ni los niveles de dificultad CPU.

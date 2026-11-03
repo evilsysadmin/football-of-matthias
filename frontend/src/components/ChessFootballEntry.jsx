@@ -20,7 +20,7 @@ function FootballSquadDevelopment({ players }) {
   return (
     <details className="chess-football-entry__development" aria-label="Fichas de la plantilla">
       <summary>Plantilla · {players.length} futbolistas{grown ? ` · ${grown} mejorados` : ''}</summary>
-      <p>Abre cada ficha para ver su biografía y sus siete atributos (1–99). La GRL pondera su posición. En Partido rápido, velocidad, resistencia, pase, remate y técnica ya influyen en la cancha. La liga mánager sigue usando ATQ, DEF y fatiga.</p>
+      <p>Abre cada ficha para ver su biografía y sus siete atributos (1–99). La GRL pondera su posición. En Partido rápido, los siete atributos ya influyen en el partido (velocidad, resistencia, técnica, pase, remate, defensa y portería). La liga mánager sigue usando ATQ, DEF y fatiga.</p>
       <ul>
         {players.map((player) => (
           <li key={player.id}>

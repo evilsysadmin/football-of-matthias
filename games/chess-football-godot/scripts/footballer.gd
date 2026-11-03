@@ -15,6 +15,8 @@ var scouting_endurance: int = 75
 var scouting_passing: int = 75
 var scouting_shooting: int = 75
 var scouting_technique: int = 75
+var scouting_tackling: int = 75
+var scouting_keeping: int = 75
 var technique_control_multiplier: float = 1.0
 var movement_multiplier: float = 1.0
 var stamina_drain_multiplier: float = 1.0
@@ -99,6 +101,8 @@ func _apply_match_scouting() -> void:
 	scouting_passing = int(stats.get("passing", 75))
 	scouting_shooting = int(stats.get("shooting", 75))
 	scouting_technique = int(stats.get("technique", 75))
+	scouting_tackling = int(stats.get("tackling", 75))
+	scouting_keeping = int(stats.get("keeping", 75))
 	technique_control_multiplier = clampf(
 		1.0 + float(scouting_technique - 75) * 0.0025, 0.93, 1.06
 	)
@@ -119,6 +123,16 @@ func pass_power_multiplier() -> float:
 
 func shot_power_multiplier() -> float:
 	return clampf(1.0 + float(scouting_shooting - 75) * 0.004, 0.86, 1.10)
+
+# Defense sharpens only the clean front-on section of a real physical
+# tackle; it never extends the contact zone, or bypasses foul checks.
+func clean_tackle_multiplier() -> float:
+	return clampf(1.0 + float(scouting_tackling - 75) * 0.003, 0.88, 1.08)
+
+# Goalkeeping improves early shot recognition and nearby hand reach, not
+# teleportation, immunity to high balls or the keeper's movement speed.
+func keeper_reflex_multiplier() -> float:
+	return clampf(1.0 + float(scouting_keeping - 75) * 0.005, 0.92, 1.08)
 
 func _configure_visual() -> void:
 	if visual == null:
