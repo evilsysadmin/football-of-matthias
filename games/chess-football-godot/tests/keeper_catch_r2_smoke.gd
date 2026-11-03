@@ -1,8 +1,8 @@
 extends SceneTree
 
-# Offline acceptance contract for R2 keeper reception. The two operator WebPs
-# stay disabled until upload; synthetic sheets exercise frame validation and
-# atomic swapping without network, credentials or changing authoritative play.
+# Until the independent football bucket has a published HTTPS endpoint,
+# the atlas stays disabled. Synthetic sheets exercise frame conversion,
+# presentation integration and the canonical fallback without any network.
 func _initialize() -> void:
 	var packed := load("res://main.tscn") as PackedScene
 	assert(packed != null)

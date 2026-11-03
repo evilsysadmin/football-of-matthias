@@ -42,6 +42,73 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.FOOTBALL_SOURCE_SHA }}
+      - name: Verify dedicated football R2 WebPs when public origin is configured
+        id: keeper_r2
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError
+
+          meta = json.loads(Path('games/chess-football-godot/optional_keeper_catch_v1.json').read_text())
+          assert meta['bucket'] == 'football'
+          assert meta['prefix'] == 'atlases/v1/'
+          assert len(meta['entries']) == 2
+          base = str(meta.get('cdn_base', '')).rstrip('/')
+          if meta['enabled'] is not True:
+              assert base == '', 'Disabled R2 bucket should not advertise an unverified public origin'
+              print('FOOTBALL_KEEPER_R2_STAGED awaiting dedicated bucket HTTPS origin; canonical fallback retained')
+              Path(os.environ['GITHUB_OUTPUT']).open('a').write('enabled=false\n')
+              raise SystemExit(0)
+          parsed = urlsplit(base)
+          assert parsed.scheme == 'https' and parsed.hostname and not parsed.username and not parsed.password
+          assert parsed.query == '' and parsed.fragment == ''
+          assert parsed.path.endswith('/atlases/v1'), 'CDN base must point to the dedicated bucket key prefix'
+          assert parsed.hostname != 'assets.chess-studio.shadowops.dpdns.org', (
+              'The old shared Chess Studio CDN cannot serve dedicated football bucket objects')
+          origin = 'https://staging.football.shadowops.dpdns.org'
+          output = Path(os.environ['RUNNER_TEMP']) / 'football-keeper-catch-r2'
+          output.mkdir(parents=True, exist_ok=True)
+          expected = {
+              'fc_matthias': 'fc_matthias_keeper_catch_v1.webp',
+              'real_enroque': 'real_enroque_keeper_catch_v1.webp'
+          }
+          for entry in meta['entries']:
+              name = expected.pop(entry['team'])
+              assert entry['file'] == name
+              assert len(entry['sha256']) == 64
+              req = Request(f'{base}/{name}', headers={
+                  'Origin': origin,
+                  'User-Agent': 'Football-keeper-catch-CI/1.0'
+              })
+              try:
+                  response = urlopen(req, timeout=18)
+              except HTTPError as exc:
+                  raise AssertionError(
+                      f'{name}: dedicated football bucket public URL returned HTTP {exc.code}'
+                  ) from exc
+              with response:
+                  assert response.status == 200, f'{name}: HTTP {response.status}'
+                  mime = response.headers.get_content_type()
+                  assert mime == 'image/webp', f'{name}: content-type {mime!r}'
+                  cors = response.headers.get('Access-Control-Allow-Origin', '')
+                  assert cors in ('*', origin), f'{name}: missing staging CORS ({cors!r})'
+                  raw = response.read(4194305)
+              assert 0 < len(raw) <= 4194304, f'{name}: size outside 4 MiB cap'
+              assert raw[:4] == b'RIFF' and raw[8:12] == b'WEBP', f'{name}: not WebP'
+              digest = hashlib.sha256(raw).hexdigest()
+              assert digest == entry['sha256'], f'{name}: mismatched SHA-256 ({digest})'
+              (output / name).write_bytes(raw)
+              print(f'KEEPER_R2_VERIFIED team={entry["team"]} bytes={len(raw)} sha256={digest} cors={cors}')
+          assert not expected
+          Path(os.environ['GITHUB_OUTPUT']).open('a').write('enabled=true\n')
+          PY
       - name: Restore pinned Godot editor
         uses: actions/cache@v6
         with:
@@ -498,6 +565,24 @@ jobs:
           cp "$atlas_fc_keeper" "$RUNNER_TEMP/chess-football-review/atlas-fc-matthias-keeper.png"
           cp "$atlas_rival_keeper" "$RUNNER_TEMP/chess-football-review/atlas-real-enroque-keeper.png"
           cp "$atlas_directional" "$RUNNER_TEMP/chess-football-review/atlas-directional-run.png"
+      - name: Render verified keeper-catch R2 poses in actual Godot 3D
+        if: steps.keeper_r2.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-keeper-r2-real-visual.log"
+          export FOOTBALL_KEEPER_CATCH_PREVIEW_DIR="$RUNNER_TEMP/football-keeper-catch-r2"
+          timeout 55s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/keeper_catch_r2_visual.gd 2>&1 | tee "$log"
+          grep -q 'FOOTBALL_KEEPER_R2_REAL_GODOT_REVIEW_OK teams=2 poses=8' "$log"
+          for team in FC ENROQUE; do
+            for phase in OPEN CLOSING HELD BROADCAST; do
+              marker="FOOTBALL_KEEPER_R2_CAPTURE_${team}_${phase}"
+              screenshot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
+              test -n "$screenshot" && test -s "$screenshot"
+              cp "$screenshot" "$RUNNER_TEMP/chess-football-review/keeper-r2-${team,,}-${phase,,}.png"
+            done
+          done
       - name: Upload visual review
         uses: actions/upload-artifact@v7
         with:

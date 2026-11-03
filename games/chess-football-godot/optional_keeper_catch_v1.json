@@ -5,7 +5,7 @@
   "prefix": "atlases/v1/",
   "cdn_base": "",
   "quality_contract": "football-keeper-catch-v1",
-  "note": "User uploads both lossless 1024x144 WebP sheets to R2 first. Do not enable until HTTPS/CORS/sha256/visual review succeed. Canonical keeper run remains fallback.",
+  "note": "Independent Cloudflare R2 bucket 'football', keys 'atlases/v1/'. Operator-uploaded assets confirmed in dashboard. Disabled until its own public HTTPS base, 200/CORS/sha256, and actual Godot screenshots are verified. The shared Chess Studio CDN is NOT this bucket.",
   "cell": {
     "width": 128,
     "height": 144

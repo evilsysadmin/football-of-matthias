@@ -1,39 +1,52 @@
-# Football keeper reception · two original R2 WebPs (staged)
+# Recepción del portero · R2 independiente de Football
 
-This is **not** a replacement of the approved goalkeeper run atlas. It stages
-one 8-frame (128×144 per cell, 1024×144 full canvas) transparent **lossless WebP**
-for each club, with real arms/palms in the raster; the ball is still a separate
-Godot 3D object. The original front-view approved keeper body, boots, cap and
-team-specific fabric are retained. These are an initial frontal reception pass,
-not a lateral diving-atlas redesign.
+Football has its own Cloudflare R2 bucket, **`football`**. The operator-confirmed
+Cloudflare dashboard object identifies an uploaded atlas at `atlases/v1/`.
+This is distinct from the shared `chess-studio-assets` bucket used by older
+ShadowOps Infra delivery workflows.
 
-Upload these two operator-provided assets to R2 bucket `football`:
+| Bucket | Object key | Expected SHA-256 |
+| --- | --- | --- |
+| `football` | `atlases/v1/fc_matthias_keeper_catch_v1.webp` | `b6d0beb2bc26f2ef816ef2cdd3ce631d88f5489099d745fd14b3dcf796138089` |
+| `football` | `atlases/v1/real_enroque_keeper_catch_v1.webp` | `8afa136c5c07a8e7be67d0952ef2cc9a7fcbfca08b8313d75c0157e14d613e41` |
 
-| Object key | SHA-256 |
-| --- | --- |
-| `atlases/v1/fc_matthias_keeper_catch_v1.webp` | `b6d0beb2bc26f2ef816ef2cdd3ce631d88f5489099d745fd14b3dcf796138089` |
-| `atlases/v1/real_enroque_keeper_catch_v1.webp` | `8afa136c5c07a8e7be67d0952ef2cc9a7fcbfca08b8313d75c0157e14d613e41` |
+Each atlas has eight transparent original reception poses, 128 × 144 pixels per
+cell (1024 × 144 per sheet). The match ball is separate 3D geometry.
+The canonical goalkeeper run atlas and the 3D glove rig remain the fallback.
 
-Expected public URLs after Infra exposes them:
+**Cloudflare Dashboard object-detail URLs are NOT playable public asset URLs.**
+The existing URL under
+`https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1/`
+returned HTTP 404 in CI because it is **not** the public endpoint of the new
+bucket. Do not point the game to that old shared CDN, and do not move/re-upload
+these objects to `chess-studio-assets` merely to make that URL work.
 
-- `https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1/fc_matthias_keeper_catch_v1.webp`
-- `https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1/real_enroque_keeper_catch_v1.webp`
+## Before enabling the optional atlas
 
-Do not turn on the feature merely because the R2 dashboard shows the objects.
-Check public status 200, correct content type, **exact** bytes/SHA, HTTPS
-and game-origin CORS, plus a staging screenshot at each real catch phase.
+1. In Cloudflare R2 > bucket `football` > Settings > Public Access, find the
+   bucket's actual **Custom Domain** public origin. Prefer a dedicated custom
+   domain with Cloudflare cache for staging and production. For temporary
+   development only, a Cloudflare-managed `r2.dev` public URL can be used,
+   but it is rate-limited.
+2. Record the **actual** HTTPS base URL including `/atlases/v1`; do not
+   guess its hostname. Confirm both public object URLs return HTTP 200 and
+   `Content-Type: image/webp`. The origin
+   `https://staging.football.shadowops.dpdns.org` must receive a matching
+   `Access-Control-Allow-Origin` response. Configure the CORS policy on the
+   **`football`** bucket, not the shared bucket.
+3. Compare each response's exact SHA-256 with the pinned hashes above.
+   Confirm the images decode to 1024 × 144, eight non-clipped cells.
+4. Only then configure `cdn_base`, set `enabled=true`, and adapt the
+   currently shared-CDN-locked loader's allowlist to the **explicit new
+   origin** without weakening validation for other atlases.
+5. Re-run the required PR CI including **actual Godot 1280 × 720 captures**
+   of both teams at catch open, closing, held, broadcast and release, plus
+   Chromium Web boot and fallback. Only after visual approval may a Draft
+   PR become Ready/merged.
 
-The metadata in `optional_keeper_catch_v1.json` starts `enabled=false` and
-`cdn_base=""`. Once verified, set `cdn_base` to the public
-`https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1`,
-then enable in a *separate reviewed PR*. A single R2 request is made per
-club, with the shared strict URL/SHA/WebP/dimension validation. Eight
-individual cells are checked for alpha footprint before installing their
-`keeper_catch` animation atomically. Invalid/missing data leaves the
-existing glove-rig fallback. Catch animation affects no physics, score,
-possession, save chance, keeper reach or authoritative action timer.
+Current manifest deliberately has `enabled=false` and empty `cdn_base`.
+Do not publish a broken active configuration. Failed requests, invalid bytes,
+or missing sheets always retain the original keeper frames and glove rig.
 
-Rollback is immediate: set `enabled=false` and deploy. No source art or
-existing canonical atlas needs removal. The required Godot smoke in CI
-validates both sources, the disabled gate, the eight-frame conversion, and
-the old/new presentation switch without contacting R2.
+Rollback: set `enabled=false`, deploy the previous SHA; keep the original
+atlases untouched. No cloud keys, secrets or R2 object mutation are required.
