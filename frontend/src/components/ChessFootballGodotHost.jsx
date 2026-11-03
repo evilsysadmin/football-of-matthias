@@ -95,6 +95,15 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
     return () => { cancelled = true; };
   }, [attempt]);
 
+  // Godot is hosted in a cross-origin iframe. When it becomes ready,
+  // keyboard focus must move into the game rather than remain on the
+  // outer welcome-screen button. Leave touch/pointer focus unchanged.
+  useEffect(() => {
+    if (!runtimeReady || mobileViewport.coarse) return;
+    const frame = frameRef.current;
+    if (frame && document.activeElement !== frame) frame.focus({ preventScroll: true });
+  }, [runtimeReady, mobileViewport.coarse]);
+
   useEffect(() => {
     if (!runtime.url || runtimeReady) return undefined;
     const timeout = window.setTimeout(() => setBootFailed(true), 20000);
@@ -188,6 +197,7 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
           ref={frameRef}
           key={matchUrl}
           className="chess-football-godot-host__frame"
+          tabIndex={0}
           src={matchUrl}
           title="Chess Football Godot"
           allow="autoplay; fullscreen; gamepad"

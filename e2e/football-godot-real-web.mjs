@@ -95,8 +95,19 @@ try {
   if (process.env.FOOTBALL_CI_KEEPER_R2_BRIDGE === '1') await bridgeVerifiedStagingKeeperR2(page);
   await page.addInitScript(() => {
     window.__chessFootballWebReady = false;
+    // Only the locally served CI release enables the in-game diagnostic.
+    // Unlike Input.action_press smoke tests, these are actual browser events.
+    window.__chessFootballInputProbe = true;
+    window.__chessFootballInputSamples = [];
     window.addEventListener('message', (event) => {
-      if (event.data?.source === 'chess-football-godot' && event.data.type === 'ready') window.__chessFootballWebReady = true;
+      if (event.data?.source !== 'chess-football-godot') return;
+      if (event.data.type === 'ready') window.__chessFootballWebReady = true;
+      if (event.data.type === 'ci-keyboard-sample') {
+        window.__chessFootballInputSamples.push(event.data);
+        if (window.__chessFootballInputSamples.length > 400) {
+          window.__chessFootballInputSamples.shift();
+        }
+      }
     });
   });
   page.on('console', (line) => {
@@ -120,6 +131,71 @@ try {
   await page.waitForTimeout(2500);
   if (failures.length) throw new Error('Web runtime errors: ' + failures.slice(0, 8).join('\n'));
   if (await page.locator('canvas').count() === 0) throw new Error('Godot reported ready without canvas');
+
+  // Regression: browser-only arrow keys appeared in the exported InputMap
+  // but did not control real matches. Focus Godot's canvas and test both
+  // directions/layouts against the actual controlled player's world position.
+  // The gameplay script reports these values only for local CI and never
+  // alters input or player velocity.
+  await page.locator('canvas').click({ position: { x: 500, y: 370 }, timeout: 10000 });
+  await page.waitForFunction(
+    () => window.__chessFootballInputSamples.some((sample) => sample.playable),
+    null, { timeout: 30000 }
+  );
+  async function expectRealMovement(key, axis, sign, requireTravel = false) {
+    const startLength = await page.evaluate(() => window.__chessFootballInputSamples.length);
+    const directionKey = axis === 'x' ? 'dx' : 'dy';
+    const minimumSamples = requireTravel ? 4 : 2;
+    await page.keyboard.down(key);
+    try {
+      // WebGL software renderer is not a 60 FPS clock: require real engine
+      // samples, then check the action received by the exported WebAssembly.
+      await page.waitForFunction(
+        ({ index, directionKey, sign, minimumSamples }) => window.__chessFootballInputSamples
+          .slice(index).filter((sample) => sample.playable &&
+            Number(sample[directionKey]) * sign >= 0.8).length >= minimumSamples,
+        { index: startLength, directionKey, sign, minimumSamples },
+        { timeout: 30000 }
+      );
+    } finally {
+      await page.keyboard.up(key);
+    }
+    const samples = await page.evaluate(
+      (index) => window.__chessFootballInputSamples.slice(index).filter((sample) => sample.playable),
+      startLength
+    );
+    const keySamples = samples.filter((sample) => Number(sample[directionKey]) * sign >= 0.8);
+    if (keySamples.length < minimumSamples) {
+      throw new Error(`Real Godot Web key ${key} not recognized: ${JSON.stringify(samples.slice(-8))}`);
+    }
+
+    // AI/pass handoffs may automatically change which teammate is selected.
+    // Never compare world positions belonging to different real players.
+    const firstById = new Map();
+    let distance = 0;
+    for (const sample of keySamples) {
+      const id = String(sample.player_id);
+      if (!firstById.has(id)) firstById.set(id, Number(sample[axis]));
+      distance = Math.max(distance, (Number(sample[axis]) - firstById.get(id)) * sign);
+    }
+    if (requireTravel && distance < 4) {
+      throw new Error(`Real Godot Web key ${key} did not move same player: ${distance.toFixed(2)} game units`);
+    }
+    console.log('FOOTBALL_REAL_WEB_KEY_' + (requireTravel ? 'MOVE' : 'INPUT') + '_OK',
+      key, axis, 'distance=' + distance.toFixed(2), 'samples=' + keySamples.length);
+    await page.waitForTimeout(120);
+  }
+  // Require observed movement on both arrow axes, then exercise ALL eight
+  // keys against real browser events and the real Godot input vector.
+  await expectRealMovement('ArrowUp', 'y', -1, true);
+  await expectRealMovement('ArrowRight', 'x', 1, true);
+  await expectRealMovement('ArrowDown', 'y', 1);
+  await expectRealMovement('ArrowLeft', 'x', -1);
+  await expectRealMovement('w', 'y', -1);
+  await expectRealMovement('d', 'x', 1);
+  await expectRealMovement('s', 'y', 1);
+  await expectRealMovement('a', 'x', -1);
+
   // Software WebGL in hosted Chromium can stall indefinitely on readPixels.
   // A successful scene handshake and clean browser error log are the hard gate;
   // visual PNG evidence is already produced separately by Godot's capture job.

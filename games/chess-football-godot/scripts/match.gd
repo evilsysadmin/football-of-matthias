@@ -186,6 +186,8 @@ var ai_adapt_human_pressure: float = 0.0
 var ai_adapt_cpu_pressure: float = 0.0
 var ai_adapt_next_sample: float = AI_ADAPT_SAMPLE_SECONDS
 var ai_adapt_next_eval: float = AI_ADAPT_EVAL_SECONDS
+# Real-browser E2E probe, never active outside local 127.0.0.1 CI.
+var ci_web_keyboard_probe: bool = false
 var pause_menu_open: bool = false
 var kickoff_team_id: int = 0
 var kickoff_active: bool = false
@@ -239,6 +241,10 @@ func _ready() -> void:
 	_create_hud()
 	_refresh_hud()
 	if OS.has_feature("web"):
+		ci_web_keyboard_probe = bool(JavaScriptBridge.eval(
+			"location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true",
+			true
+		))
 		JavaScriptBridge.eval("window.parent.postMessage({source:'chess-football-godot', type:'ready'}, '*');")
 
 func _set_quick_difficulty(level: String) -> void:
@@ -250,6 +256,8 @@ func _ai_cpu_intensity(base: float) -> float:
 	return clampf(base * float(quick_difficulty_profile["effort"]), 0.35, 1.0)
 
 func _physics_process(delta: float) -> void:
+	if ci_web_keyboard_probe and Engine.get_physics_frames() % 6 == 0:
+		_emit_ci_web_keyboard_sample()
 	if pause_menu_open:
 		_update_3d_presentation(0.0)
 		return
@@ -287,6 +295,26 @@ func _physics_process(delta: float) -> void:
 	_check_ball_out()
 	_update_3d_presentation(delta)
 	_refresh_hud()
+
+# Playwright presses real browser keys and receives the actual game action
+# and player position. Test-only: no input injection or browser telemetry
+# runs in staging/production.
+func _emit_ci_web_keyboard_sample() -> void:
+	if not is_instance_valid(controlled):
+		return
+	var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var sample := {
+		"source": "chess-football-godot",
+		"type": "ci-keyboard-sample",
+		"player_id": controlled.get_instance_id(),
+		"x": controlled.global_position.x,
+		"y": controlled.global_position.y,
+		"dx": direction.x,
+		"dy": direction.y,
+		"playable": not (kickoff_active or goal_restart_active or set_piece_active or pause_menu_open),
+	}
+	JavaScriptBridge.eval("window.parent.postMessage(%s, '*')" % JSON.stringify(sample))
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:

@@ -1983,12 +1983,22 @@ func _assert_keyboard_movement_map() -> void:
 		var arrow: int = int(binding["arrow"])
 		var expected: Vector2 = binding["vector"]
 		var events := InputMap.action_get_events(action)
-		assert(events.size() == 2, "Movement must keep WASD and one cursor key")
+		# Physical arrow codes are not consistently emitted by every
+		# Web browser; the extra logical arrow is intentionally redundant.
+		assert(events.size() == 3, "Movement needs WASD and both arrow key formats")
 		var physical_keys: Array[int] = []
+		var logical_keys: Array[int] = []
 		for input_event in events:
 			assert(input_event is InputEventKey)
 			physical_keys.append((input_event as InputEventKey).physical_keycode)
+			logical_keys.append((input_event as InputEventKey).keycode)
 		assert(physical_keys.has(letter) and physical_keys.has(arrow))
+		assert(logical_keys.has(arrow), "Logical cursor key missing from Web fallback")
+		var logical_arrow := InputEventKey.new()
+		logical_arrow.keycode = arrow
+		logical_arrow.pressed = true
+		assert(InputMap.event_is_action(logical_arrow, action, true),
+			"Logical cursor key does not trigger movement in InputMap")
 		for physical_key in [letter, arrow]:
 			var press := InputEventKey.new()
 			press.physical_keycode = physical_key
