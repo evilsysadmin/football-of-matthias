@@ -166,3 +166,19 @@ desde la que intenta rematar. Normal preserva los parámetros históricos.
 La dificultad no altera los atributos físicos individuales, el portero,
 el movimiento del balón, los compañeros del jugador ni las carreras mánager.
 La adaptación táctica durante el partido se mantiene encima de cada nivel.
+
+## Siguiente iteración: pase, remate y técnica en Godot
+
+Las mismas fichas de scouting del mánager alimentan ahora cinco atributos
+en Partido rápido. **Pase** modifica la velocidad del balón en pases humanos
+cargados y pases de juego abierto CPU; **Remate**, la fuerza del tiro humano
+y CPU. Ambos van de ×0,86 a ×1,10 alrededor de 75 (neutro). No hay desvíos
+aleatorios: se preservan el objetivo humano y el cálculo de elevación segura
+con la nueva potencia final. La velocidad máxima física del balón se respeta.
+
+**Técnica** afecta a la velocidad de conducción/regate *con posesión*,
+en humanos y CPU, entre ×0,93 y ×1,06; no mejora la carrera sin balón
+ni la movilidad del guardameta. No se cambian saques especiales, penaltis,
+atributos defensivos/portería, el mánager/journal ni el efecto de la dificultad
+CPU. Un smoke Godot mide directamente las velocidades reales de pases,
+tiros y movimiento con/sin posesión, y garantiza cotas y perfiles reales.
