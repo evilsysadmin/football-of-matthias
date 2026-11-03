@@ -286,6 +286,21 @@ jobs:
             exit 1
           fi
           grep -q 'football separate standing/slide tackles with canonical fallback: OK' "$log"
+      - name: R2 tackle v2 source-sized animation/fallback contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-tackle-r2-v2.log"
+          set +e
+          timeout 55s "$godot" --headless --quit-after 420 --path games/chess-football-godot --script res://tests/tackle_r2_v2_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Football R2 tackle v2 normalization or fallback regressed.'
+            exit 1
+          fi
+          grep -q 'football tackle v2 R2 four-sheet staging, frames and fallback: OK' "$log"
       - name: Canonical 3D roster parity smoke
         shell: bash
         run: |
