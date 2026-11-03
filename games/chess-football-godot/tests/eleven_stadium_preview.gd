@@ -47,6 +47,11 @@ func _initialize() -> void:
 			else:
 				assert(player.global_position.x > center.x)
 	assert(roster_ids.size() == 22)
+	# Isolate whether native 3D front-idle art or the whole renderer is hidden.
+	# Runtime match remains frozen during this visual-only diagnostic.
+	for team in game.teams:
+		for player in team:
+			player.visual.play("run")
 	stage.sync_presentation(2.0, "tactical")
 	# Sprite3D textures and camera transforms must survive multiple real
 	# rendered frames before taking visual evidence of the 22 athletes.
