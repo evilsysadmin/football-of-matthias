@@ -170,10 +170,63 @@ func _apply_verified_lateral_run(textures: Array[Texture2D], team_id: int) -> vo
 		for animation in names:
 			if animation == &"idle":
 				continue
+			if animation == &"tackle" and _tackle_r2_loaded.has("%d:tackle" % team_id):
+				continue
 			var poses: Array = ChessFootballSpriteBank.CANONICAL_ACTION_POSES.get(String(animation), [])
 			for index in range(8):
 				var source := index if animation in [&"run", &"sprint"] else int(poses[index])
 				frames.set_frame(animation, index, textures[source])
+	tone_gain_cache.clear()
+
+
+# Four source-sized R2 sheets: standing tackle and slide tackle for each
+# club. They are opt-in until the public endpoint, CORS and bytes are proven.
+var _tackle_r2_loaded: Dictionary = {}
+
+
+func _request_tackle_atlases_from_r2() -> void:
+	if not OS.has_feature("web"):
+		return
+	for team_id in range(2):
+		for animation in [&"tackle", &"slide_tackle"]:
+			var meta := ChessFootballTackleR2.active_entry(team_id, animation)
+			if meta.is_empty():
+				continue
+			var loader := ChessFootballR2AtlasLoader.new()
+			loader.name = "OptionalTackle_%d_%s" % [team_id, String(animation)]
+			add_child(loader)
+			loader.atlas_ready.connect(_on_tackle_atlas_ready.bind(team_id, animation))
+			loader.start(meta)
+
+
+func _on_tackle_atlas_ready(image: Image, team_id: int, animation: StringName) -> void:
+	var source := ChessFootballTackleR2.source_entry(team_id, animation)
+	var textures := ChessFootballTackleR2.frames_from_image(image, source)
+	_apply_verified_tackle_frames(textures, team_id, animation)
+
+
+func _apply_verified_tackle_frames(
+	textures: Array[Texture2D], team_id: int, animation: StringName
+) -> void:
+	if textures.size() != 8 or team_id not in [0, 1] or animation not in [&"tackle", &"slide_tackle"]:
+		return
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null or not sprite.sprite_frames.has_animation(animation):
+			return
+		var bank := sprite.sprite_frames
+		if bank.get_frame_count(animation) != 8:
+			return
+		targets.append(bank)
+	for bank in targets:
+		for index in range(8):
+			bank.set_frame(animation, index, textures[index])
+	_tackle_r2_loaded["%d:%s" % [team_id, String(animation)]] = true
+	# Invalidate only derived tonal calculations. Do not reset running
+	# phases, action animation time, kick/slide collision or match score.
 	tone_gain_cache.clear()
 
 
@@ -191,6 +244,7 @@ func setup(p_match: Node) -> void:
 	sync_presentation(1.0, "broadcast")
 	_request_idle_front_from_r2()
 	_request_lateral_run_from_r2()
+	_request_tackle_atlases_from_r2()
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
