@@ -1993,14 +1993,18 @@ func _assert_keyboard_movement_map() -> void:
 			var press := InputEventKey.new()
 			press.physical_keycode = physical_key
 			press.pressed = true
-			Input.parse_input_event(press)
-			assert(Input.is_action_pressed(action), "Mapped key fails to activate movement")
+			# The headless CI runner has no focused window to dispatch OS key
+			# presses. Check the real InputMap match, then exercise the exact
+			# action it routes to through Godot's action-state API.
+			assert(InputMap.event_is_action(press, action, true),
+				"Physical WASD/cursor key is not mapped to the correct action")
+			Input.action_press(action)
+			assert(Input.is_action_pressed(action), "Mapped action not activated")
 			assert(Input.get_vector(
 				"move_left", "move_right", "move_up", "move_down"
-			).distance_to(expected) < 0.01, "Mapped key has wrong direction")
-			press.pressed = false
-			Input.parse_input_event(press)
-			assert(not Input.is_action_pressed(action), "Movement key stuck after release")
+			).distance_to(expected) < 0.01, "Mapped action has wrong direction")
+			Input.action_release(action)
+			assert(not Input.is_action_pressed(action), "Movement action stuck after release")
 	assert(Input.get_vector(
 		"move_left", "move_right", "move_up", "move_down"
 	).is_zero_approx(), "Movement input must be neutral after all releases")
