@@ -46,9 +46,11 @@ func _initialize() -> void:
 			ChessFootballMath.PITCH_RECT.get_center().y
 		)
 		match_node.ball.attach_to(keeper)
-		# Place the real camera at the possession before starting a fresh
-		# zero-time catch, so the screenshot never captures stale camera motion.
-		match_node.debug_focus_presentation()
+		# Preposition the actual broadcast camera at each end of the
+		# pitch BEFORE resetting the grip clock. A single focus tick can
+		# leave the first frame cropped as the camera crosses the stadium.
+		for _camera_step in range(4):
+			match_node.debug_focus_presentation()
 		presenter.keeper_catch_carrier_id = 0
 		presenter.keeper_catch_elapsed = 0.0
 		presenter.sync_presentation(0.018, "broadcast")
