@@ -50,10 +50,11 @@ func _initialize() -> void:
 	stage.sync_presentation(2.0, "tactical")
 	# Sprite3D textures and camera transforms must survive multiple real
 	# rendered frames before taking visual evidence of the 22 athletes.
-	for render_frame in range(12):
-		stage.sync_presentation(1.0 / 60.0, "tactical")
-		await process_frame
-		await RenderingServer.frame_post_draw
+	if DisplayServer.get_name() != "headless":
+		for render_frame in range(12):
+			stage.sync_presentation(1.0 / 60.0, "tactical")
+			await process_frame
+			await RenderingServer.frame_post_draw
 	var viewport := root.get_viewport()
 	var size := viewport.get_visible_rect().size
 	assert(size.x > 100.0 and size.y > 100.0)
