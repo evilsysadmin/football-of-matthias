@@ -585,3 +585,35 @@
   min-height: 44px;
 }
 .chess-football-entry__history summary:focus-visible { outline: 3px solid #e3d49a; outline-offset: 2px; }
+
+
+/* Scouting cards are deliberately progressive disclosure, including on mobile.
+   The 44px row opens real player details without overcrowding the desk. */
+.chess-football-entry__development { text-align: left; }
+.chess-football-entry__development > summary { font-size: .97rem; min-height: 44px; display: list-item; align-content: center; cursor: pointer; }
+.chess-football-entry__development > p { font-size: .88rem; line-height: 1.5; }
+.chess-football-entry__development li { display: block; padding: 0; }
+.chess-football-entry__player-card { width: 100%; }
+.chess-football-entry__player-card > summary {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: .4rem .8rem; min-height: 44px;
+  padding: .55rem .75rem; cursor: pointer; font-size: .96rem;
+}
+.chess-football-entry__player-card > summary::marker { content: ''; }
+.chess-football-entry__player-card > summary > span { display: grid; gap: .12rem; min-width: 0; }
+.chess-football-entry__player-card > summary small { font-size: .82rem; }
+.chess-football-entry__player-card > summary b { color: #f2d892; font-size: 1rem; white-space: nowrap; }
+.chess-football-entry__player-card > p { padding: 0 .75rem; font-size: .9rem; }
+.chess-football-entry__scouting {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: .4rem; margin: .45rem .75rem .65rem;
+}
+.chess-football-entry__scouting > div {
+  display: flex; justify-content: space-between; align-items: baseline; gap: .4rem;
+  border: 1px solid rgba(239,217,163,.2); border-radius: 7px;
+  padding: .48rem .55rem; background: rgba(9,25,14,.72);
+}
+.chess-football-entry__scouting dt { font-size: .82rem; color: #d9e0cb; }
+.chess-football-entry__scouting dd { margin: 0; font-size: 1rem; font-weight: 800; color: #f3dfae; font-variant-numeric: tabular-nums; }
+.chess-football-entry__player-card > .chess-football-entry__player-growth { color: #cde1b7; font-weight: 700; }
+.chess-football-entry__player-card > summary:focus-visible { outline: 3px solid #d8c28b; outline-offset: -3px; }

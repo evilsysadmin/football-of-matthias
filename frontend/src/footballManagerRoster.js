@@ -1,3 +1,4 @@
+import { getFootballScoutingProfile } from './footballPlayerProfiles.js';
 // Small, fictional and immutable football-five rosters. No transfers, wages,
 // fictional match events or Web Storage until the career model is validated.
 const freeze = Object.freeze;
@@ -23,12 +24,16 @@ export function getFootballClubRoster(club) {
   return freeze(ROLES.map((role, index) => {
     const ordinal = ROLES.slice(0, index + 1).filter((r) => r === role).length;
     const [baseAttack, baseDefense] = PROFILES[index];
+    const attack = Math.min(95, baseAttack + (club.level - 3) * 3);
+    const defense = Math.min(95, baseDefense + (club.level - 3) * 3);
+    const fallbackName = `${FIRST_NAMES[(clubHash + index * 2) % FIRST_NAMES.length]} ${LAST_NAMES[(clubHash + index * 3) % LAST_NAMES.length]}`;
+    const profile = getFootballScoutingProfile(club.id, index, fallbackName, role, attack, defense);
     return freeze({
       id: `${club.id}-${role.toLowerCase()}-${ordinal}`,
-      name: `${FIRST_NAMES[(clubHash + index * 2) % FIRST_NAMES.length]} ${LAST_NAMES[(clubHash + index * 3) % LAST_NAMES.length]}`,
+      ...profile,
       role,
-      attack: Math.min(95, baseAttack + (club.level - 3) * 3),
-      defense: Math.min(95, baseDefense + (club.level - 3) * 3),
+      attack,
+      defense,
     });
   }));
 }

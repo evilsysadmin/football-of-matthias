@@ -115,3 +115,20 @@ hoja de ruta ni autoriza implementarlo todo de golpe**.
 - Entregar en PR pequeñas: contrato de datos → simulación verificable →
   interfaz → vínculo con partidos → profundidad económica. No arrancar
   directamente con una gran reescritura.
+
+## Catálogo de scouting v1 (54 jugadores)
+
+Los seis clubes oficiales tienen ahora nueve futbolistas de identidad estable, nombre
+ficticio propio, edad, mini-biografía y siete atributos de 1 a 99: velocidad,
+resistencia, técnica, pase, remate, defensa y portería. La GRL es una lectura
+ponderada por posición, no una media aritmética universal. El catálogo está en
+`frontend/src/footballPlayerProfiles.js`, indexado en el mismo orden y con los
+mismos IDs de `footballManagerRoster.js` para conservar las carreras.
+
+**Límite deliberado:** estas siete cifras son todavía *scouting* y NO influyen
+en el partido Godot ni en los resultados de liga; la simulación estadística
+mantiene exactamente los valores históricos ATQ/DEF y su desarrollo, fatiga,
+tácticas y journal. La siguiente PR podrá conectar atributos concretos a acciones
+reales en Godot con calibración, prueba visual y contrato de integración, sin
+alterar silenciosamente resultados guardados. Las fichas se consultan desde la
+selección de club y la plantilla del despacho.
