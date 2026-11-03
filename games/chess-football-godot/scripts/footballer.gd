@@ -76,7 +76,7 @@ var last_sprinting: bool = false
 var stamina: float = STAMINA_MAX
 var sprint_exhausted: bool = false
 
-func configure(p_team_id: int, p_index: int, p_role: String, p_position: Vector2, p_color: Color) -> void:
+func configure(p_team_id: int, p_index: int, p_role: String, p_position: Vector2, p_color: Color, p_team_size: int = 5) -> void:
 	team_id = p_team_id
 	squad_index = p_index
 	role = p_role
@@ -84,15 +84,15 @@ func configure(p_team_id: int, p_index: int, p_role: String, p_position: Vector2
 	home_position = p_position
 	ai_target = p_position
 	team_color = p_color
-	_apply_match_scouting()
+	_apply_match_scouting(p_team_size)
 	_configure_visual()
 	queue_redraw()
 
 # Keep goalkeepers' established lateral save speed unchanged. Outfield
 # players use a bounded ±10% pace factor in both human and AI movement;
 # stamina changes sprint drain by -10% to +20% only, never match rules or saved careers.
-func _apply_match_scouting() -> void:
-	var profile: Dictionary = MatchScouting.starter(team_id, squad_index)
+func _apply_match_scouting(p_team_size: int = 5) -> void:
+	var profile: Dictionary = MatchScouting.starter(team_id, squad_index, p_team_size)
 	scouting_player_id = String(profile.get("id", ""))
 	scouting_player_name = String(profile.get("name", ""))
 	var stats: Dictionary = profile.get("scouting", {})

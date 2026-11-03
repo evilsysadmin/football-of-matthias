@@ -206,3 +206,28 @@ el delantero de Defensa 32 en idéntica geometría, un roce, un intento
 fuera de alcance y la anticipación/parada con y sin la habilidad del
 portero. Los 54 jugadores mantienen perfiles y estadísticas propios.
 No se toca el journal del mánager ni los niveles de dificultad CPU.
+
+## Preparación 11v11 · titulares reales sin migrar carreras
+
+La PR #49 establece una cancha futura de **4.000 × 2.600** y posiciones
+espejadas **4-3-3**, pero la partida real sigue siendo **5v5**.
+
+El siguiente slice incorpora **22 perfiles distintos** (11 de FC Matthias
+y 11 de Real Enroque), con rol correcto, nombre, minibio y siete estadísticas.
+Se respeta el catálogo canónico del mánager de **54 jugadores (9 por club)**:
+se añade únicamente una vista `eleven` al snapshot Godot, ensamblada
+determinísticamente desde 7 fichas existentes por club y 4 refuerzos
+ficticios nuevos para la futura modalidad: dos defensas y dos extremos.
+El segundo portero y el delantero suplente **no** se reconvierten a
+centrales falsos. El código fuente del catálogo adicional vive en
+`frontend/src/footballElevenExtras.js`; el JSON de Godot se deriva
+mediante `scripts/generate_football_match_rosters.mjs`.
+
+`FootballMatchScouting.starter(team_id, index, 11)` devuelve el futuro
+once con los siete ratings validados; `Footballer.configure(..., 11)`
+puede asignar uno de estos perfiles a un actor real. Sin ese parámetro,
+ambos conservan por defecto el equipo de 5 y sus nueve fichas antiguas.
+
+**No es todavía un partido 11v11 jugable**: siguen pendientes integración
+del terreno en física y render, IA de 22 jugadores, reanudaciones, cámara,
+HUD y QA Web. Ningún resultado del mánager ni carrera guardada cambia.
