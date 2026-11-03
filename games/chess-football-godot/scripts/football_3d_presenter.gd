@@ -674,10 +674,10 @@ func _add_far_roof() -> void:
 func _add_benches() -> void:
 	# The benches used to sit directly in the playable near-touchline
 	# camera foreground. Keep their actual geometry and dimensions, but park
-	# them at the edges of the pitch, outside the centre-of-play broadcast shot.
+	# them beside the end terraces, beyond near-corner camera sightlines.
 	for side_index in range(2):
 		var side := -1.0 if side_index == 0 else 1.0
-		var x := side * field_width * 0.41
+		var x := side * (field_width * 0.5 + 1.0)
 		var base := _add_box(
 			Vector3(x, 0.20, field_depth * 0.5 + 0.68),
 			Vector3(1.7, 0.38, 0.52),
@@ -696,10 +696,26 @@ func _add_benches() -> void:
 func _add_floodlights() -> void:
 	for z_value in [-field_depth * 0.5 - 3.15, field_depth * 0.5 + 3.15]:
 		var z: float = float(z_value)
-		for x_value in [-field_width * 0.43, field_width * 0.43]:
-			var x: float = float(x_value)
-			_add_box(Vector3(x, 2.55, z), Vector3(0.10, 5.10, 0.10), Color(0.20, 0.22, 0.24))
-			_add_box(Vector3(x, 5.02, z), Vector3(1.25, 0.12, 0.26), Color(0.24, 0.26, 0.29))
+		for side_index in range(2):
+			var side := -1.0 if side_index == 0 else 1.0
+			# Near-side poles must not obscure the near corner in broadcast.
+			# Keep all four existing lights; move only the foreground pair
+			# just beyond the actual field/terrace corners.
+			var x := side * (
+				field_width * 0.5 + 2.5 if z > 0.0
+				else field_width * 0.43
+			)
+			var post := _add_box(
+				Vector3(x, 2.55, z), Vector3(0.10, 5.10, 0.10),
+				Color(0.20, 0.22, 0.24)
+			)
+			var bar := _add_box(
+				Vector3(x, 5.02, z), Vector3(1.25, 0.12, 0.26),
+				Color(0.24, 0.26, 0.29)
+			)
+			if z > 0.0:
+				post.name = "NearCornerFloodlightPost_%d" % side_index
+				bar.name = "NearCornerFloodlightBar_%d" % side_index
 			var lamp := OmniLight3D.new()
 			lamp.position = Vector3(x, 4.90, z)
 			lamp.light_color = Color(0.84, 0.90, 1.0)
