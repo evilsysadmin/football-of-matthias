@@ -36,6 +36,12 @@ func _initialize() -> void:
 	assert(near_corner_look > base_look)
 	assert(near_corner_look <
 		ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "SAQUE DE BANDA", near_spot))
+	# Wider follow is permitted only during the actual corner release,
+	# never during the stationary set piece or ordinary/CPU match tracking.
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.broadcast_live_corner_x_limit_ratio(false), 0.32))
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.broadcast_live_corner_x_limit_ratio(true), 0.39))
 	var depth := ChessFootball3DPresenter.BROADCAST_DEPTH
 	var near_corner_depth := ChessFootball3DPresenter.broadcast_corner_camera_depth(
 		true, 0, "CÓRNER", near_spot)
