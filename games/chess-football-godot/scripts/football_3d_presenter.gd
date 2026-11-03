@@ -40,9 +40,16 @@ const STAMINA_BAR_WIDTH := 0.76
 const STAMINA_BAR_DEPTH := 0.10
 const STAMINA_BAR_Z := 0.62
 # Keeper-only visual grip. No changes to ball authority/collision.
-const KEEPER_CATCH_HEIGHT := 1.02
-const KEEPER_CATCH_FRONT := 0.62
-const KEEPER_CATCH_SIDE := 0.16
+# Secure at chest level; previous hip-height hold made the keeper look
+# as though he was carrying a loose ball in front of the shorts.
+const KEEPER_CATCH_HEIGHT := 1.25
+const KEEPER_CATCH_FRONT := 0.48
+const KEEPER_CATCH_SIDE := 0.12
+# The gloves first reach wide, then cup the ball during the existing catch blend.
+# No visual catch may start more than an arm's reach from the keeper.
+const KEEPER_CATCH_START_REACH := 0.32
+const KEEPER_CATCH_OPEN_HAND_SPAN := 0.29
+const KEEPER_CATCH_CLOSED_HAND_SPAN := 0.188
 const KEEPER_CATCH_BLEND_SECONDS := 0.18
 
 var match_node: Node
@@ -992,7 +999,9 @@ func _build_keeper_catch_rig(parent: Node3D, team_id: int) -> Node3D:
 	return rig
 
 
-func _sync_keeper_catch_hands(carrier: Footballer, ball_at: Vector3) -> void:
+func _sync_keeper_catch_hands(
+	carrier: Footballer, ball_at: Vector3, catch_progress: float
+) -> void:
 	for key in keeper_catch_rigs.keys():
 		var rig: Node3D = keeper_catch_rigs[key]
 		rig.visible = carrier != null and int(carrier.get_instance_id()) == int(key)
@@ -1002,13 +1011,19 @@ func _sync_keeper_catch_hands(carrier: Footballer, ball_at: Vector3) -> void:
 	if rig == null:
 		return
 	var held_ball := ball_at - world_to_stage(carrier.global_position)
+	# Both wrists move in from an open, anticipatory shape instead of appearing
+	# as a rigid pair of grips already locked around a just-arrived ball.
+	var hand_span := lerpf(
+		KEEPER_CATCH_OPEN_HAND_SPAN, KEEPER_CATCH_CLOSED_HAND_SPAN,
+		clampf(catch_progress, 0.0, 1.0),
+	)
 	for side in [-1, 1]:
 		var suffix := "Left" if side < 0 else "Right"
 		var glove := rig.get_node("Glove" + suffix) as MeshInstance3D
 		var sleeve := rig.get_node("Sleeve" + suffix) as MeshInstance3D
-		var palm := held_ball + Vector3(float(side) * 0.188, -0.015, 0.085)
+		var palm := held_ball + Vector3(float(side) * hand_span, -0.015, 0.085)
 		glove.position = palm
-		var shoulder := Vector3(float(side) * 0.29, 0.91, 0.24)
+		var shoulder := Vector3(float(side) * 0.29, 1.08, 0.24)
 		var wrist := palm + Vector3(float(side) * 0.055, -0.065, -0.04)
 		var length := shoulder.distance_to(wrist)
 		sleeve.position = (shoulder + wrist) * 0.5
@@ -1020,6 +1035,24 @@ func _sync_keeper_catch_hands(carrier: Footballer, ball_at: Vector3) -> void:
 func debug_keeper_catch_hands_visible(keeper: Footballer) -> bool:
 	var rig: Node3D = keeper_catch_rigs.get(int(keeper.get_instance_id()))
 	return rig != null and rig.visible
+
+
+func debug_keeper_catch_sleeve_length(keeper: Footballer, side: int) -> float:
+	var rig: Node3D = keeper_catch_rigs.get(int(keeper.get_instance_id()))
+	if rig == null:
+		return INF
+	var suffix := "Left" if side < 0 else "Right"
+	var sleeve := rig.get_node("Sleeve" + suffix) as MeshInstance3D
+	return sleeve.scale.y
+
+
+func debug_keeper_catch_glove_span(keeper: Footballer) -> float:
+	var rig: Node3D = keeper_catch_rigs.get(int(keeper.get_instance_id()))
+	if rig == null:
+		return 0.0
+	var left := rig.get_node("GloveLeft") as MeshInstance3D
+	var right := rig.get_node("GloveRight") as MeshInstance3D
+	return left.global_position.distance_to(right.global_position)
 
 
 func debug_keeper_catch_glove_distance(keeper: Footballer, side: int) -> float:
@@ -1179,6 +1212,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 	if holding_keeper != null and holding_keeper.role != "keeper":
 		holding_keeper = null
 	if ball_node != null:
+		var grip_progress := 1.0
 		var ball_at := world_to_stage(
 			match_node.ball.global_position,
 			0.18 + float(match_node.ball.flight_height) * WORLD_SCALE,
@@ -1195,22 +1229,25 @@ func sync_presentation(delta: float, mode: String) -> void:
 			if keeper_catch_carrier_id != current_keeper_id:
 				keeper_catch_carrier_id = current_keeper_id
 				keeper_catch_elapsed = 0.0
-				keeper_catch_origin = ball_node.position
-				# No long-flight teleport during scripted resets/replay staging.
-				if keeper_catch_origin.distance_to(target) > 1.55:
-					keeper_catch_origin = target
+				# The previously rendered ball can be in an old scene/restart
+				# or at the outer edge of the save radius. Keep visual contact
+				# inside arm's reach so no hand turns into a telescopic pole.
+				keeper_catch_origin = target + (
+					ball_node.position - target
+				).limit_length(KEEPER_CATCH_START_REACH)
 			keeper_catch_elapsed += maxf(0.0, delta)
 			var progress := smoothstep(
 				0.0, 1.0,
 				clampf(keeper_catch_elapsed / KEEPER_CATCH_BLEND_SECONDS, 0.0, 1.0),
 			)
 			ball_at = keeper_catch_origin.lerp(target, progress)
+			grip_progress = progress
 		else:
 			keeper_catch_carrier_id = 0
 			keeper_catch_elapsed = 0.0
 		ball_node.position = ball_at
 		ball_node.rotate_z(match_node.ball.velocity.length() * delta * 0.004)
-		_sync_keeper_catch_hands(holding_keeper, ball_at)
+		_sync_keeper_catch_hands(holding_keeper, ball_at, grip_progress)
 	if ball_shadow != null:
 		# The carried ball is not simultaneously painted at the keeper's boots.
 		ball_shadow.visible = holding_keeper == null
