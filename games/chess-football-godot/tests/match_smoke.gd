@@ -807,6 +807,11 @@ func _initialize() -> void:
 				attackers_in_box_zone += 1
 	assert(attackers_in_box_zone >= 2)
 	match_node.debug_force_set_piece_ready()
+	# Human corners wait for a real player decision instead of vanishing
+	# automatically after the 0.38 s whistle freeze.
+	assert(match_node.debug_set_piece_active())
+	assert(match_node.human_set_piece_available())
+	assert(match_node._release_outfield_set_piece())
 	assert(not match_node.debug_set_piece_active())
 	assert(match_node.ball.carrier == null)
 	assert(match_node.ball.vertical_velocity > 0.0)
