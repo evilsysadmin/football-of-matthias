@@ -2534,7 +2534,9 @@ func mobile_touch_target(
 	}
 
 func mobile_begin_context_pass(player: Footballer) -> bool:
-	if human_set_piece_available():
+	if set_piece_active:
+		if not human_set_piece_available():
+			return false
 		if (
 			player == null or player.sent_off or player.team_id != 0
 			or player == set_piece_player
@@ -2545,14 +2547,14 @@ func mobile_begin_context_pass(player: Footballer) -> bool:
 	return _begin_pass_charge(player)
 
 func mobile_release_context_pass() -> bool:
-	if human_set_piece_available():
+	if set_piece_active:
 		var target := set_piece_touch_target
 		set_piece_touch_target = null
-		return _release_outfield_set_piece(target) if target != null else false
+		return _release_outfield_set_piece(target) if human_set_piece_available() and target != null else false
 	return _release_charged_pass()
 
 func mobile_cancel_context_pass() -> void:
-	if human_set_piece_available():
+	if set_piece_active:
 		set_piece_touch_target = null
 		return
 	_cancel_pass_charge()
@@ -2566,7 +2568,7 @@ func mobile_activate_teammate(player: Footballer) -> bool:
 	return controlled == player
 
 func mobile_activate_opponent(player: Footballer, aggressive: bool = false) -> bool:
-	if player == null or player.sent_off or player.team_id != 1:
+	if set_piece_active or player == null or player.sent_off or player.team_id != 1:
 		return false
 	_cancel_shot_charge()
 	var nearest := _nearest_player_to_ball(0)
@@ -2592,7 +2594,7 @@ func mobile_begin_context_shot(aim_y: float = 0.0) -> bool:
 		penalty_aim_y = wanted_aim
 		_begin_shot_charge(wanted_aim)
 		return true
-	if ball.carrier != controlled or controlled == null:
+	if set_piece_active or ball.carrier != controlled or controlled == null:
 		return false
 	_begin_shot_charge(wanted_aim)
 	return true
