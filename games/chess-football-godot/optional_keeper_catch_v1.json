@@ -1,11 +1,11 @@
 {
   "version": 1,
   "enabled": true,
-  "bucket": "football",
-  "prefix": "atlases/v1/",
+  "bucket": "chess-studio-assets",
+  "prefix": "football/atlases/v1/",
   "cdn_base": "https://assets.chess-studio.shadowops.dpdns.org/football/atlases/v1",
   "quality_contract": "football-keeper-catch-v1",
-  "note": "Enabled for staging after operator upload; CI validates HTTPS 200, CORS, WebP headers and exact hashes before any merge. Failure or invalid frame preserves original keeper glove-rig fallback.",
+  "note": "Enabled for staging only. Assets live in the shared chess-studio-assets bucket under football/atlases/v1/. CI must verify public HTTPS, SHA256 and staging CORS. Missing/mismatched bytes retain the canonical fallback.",
   "cell": {
     "width": 128,
     "height": 144
