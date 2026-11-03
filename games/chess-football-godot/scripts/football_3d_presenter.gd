@@ -9,6 +9,11 @@ const CAMERA_LEAD_SMOOTH_SPEED := 2.10
 const CAMERA_FOCUS_DEAD_ZONE := 0.42
 const SET_PIECE_CAMERA_PAN_SECONDS := 0.38
 const SET_PIECE_CAMERA_PAN_DISTANCE := 1.15
+# The far-touchline thrower/corner taker can end up under the 105-141px
+# event chyron at 1280x720. Aim a little deeper into that far edge while
+# the human decides the restart. Do not change the lens, world or hitboxes.
+const BROADCAST_BASE_LOOK_Z := -0.85
+const FAR_RESTART_LOOK_SHIFT := 2.35
 const BROADCAST_HEIGHT := 9.8
 const BROADCAST_DEPTH := 17.8
 const TACTICAL_HEIGHT := 27.0
@@ -86,6 +91,7 @@ var field_width: float
 var field_depth: float
 var smoothed_focus_x: float = 0.0
 var smoothed_lead_x: float = 0.0
+var smoothed_restart_look_z: float = BROADCAST_BASE_LOOK_Z
 var last_camera_mode: String = "broadcast"
 # Keep the static sponsor signs as the source of truth outside a real goal.
 var ad_default_messages: Array[String] = []
@@ -1751,6 +1757,22 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 		var shadow_scale := clampf(1.0 - maxf(bob, 0.0) * 2.2, 0.76, 1.0)
 		shadow.scale = Vector3(shadow_scale, 1.0, shadow_scale)
 
+# Framing is needed only on the far touchline in human-owned, playable
+# outfield restarts. The near touchline, penalties, CPU restarts, tactical
+# view and ordinary play retain their established camera framing.
+static func broadcast_restart_look_z(
+	active: bool, team_id: int, kind: String, spot: Vector2
+) -> float:
+	var pitch := ChessFootballMath.PITCH_RECT
+	if (
+		active and team_id == 0
+		and kind in ["CÓRNER", "SAQUE DE BANDA"]
+		and spot.y <= pitch.get_center().y - pitch.size.y * 0.35
+	):
+		return BROADCAST_BASE_LOOK_Z - FAR_RESTART_LOOK_SHIFT
+	return BROADCAST_BASE_LOOK_Z
+
+
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
 	if delta <= 0.0:
 		return 0.0
@@ -1772,6 +1794,7 @@ func _sync_camera(delta: float, mode: String) -> void:
 		last_camera_mode = mode
 
 	if mode == "tactical":
+		smoothed_restart_look_z = BROADCAST_BASE_LOOK_Z
 		wanted_position = Vector3(0.0, TACTICAL_HEIGHT, 0.35)
 		wanted_look = Vector3.ZERO
 		wanted_fov = 43.0
@@ -1816,7 +1839,18 @@ func _sync_camera(delta: float, mode: String) -> void:
 			BROADCAST_DEPTH,
 		)
 		wanted_position.x = clampf(wanted_position.x, -field_width * 0.32, field_width * 0.32)
-		wanted_look = Vector3(wanted_position.x, 0.0, -0.85)
+		var restart_look_z := broadcast_restart_look_z(
+			bool(match_node.set_piece_active),
+			int(match_node.set_piece_team_id),
+			String(match_node.set_piece_kind),
+			match_node.set_piece_spot,
+		)
+		smoothed_restart_look_z = lerpf(
+			smoothed_restart_look_z,
+			restart_look_z,
+			_camera_smoothing_factor(CAMERA_FOCUS_SMOOTH_SPEED, delta),
+		)
+		wanted_look = Vector3(wanted_position.x, 0.0, smoothed_restart_look_z)
 		wanted_fov = 37.5
 
 	var t := _camera_smoothing_factor(CAMERA_LERP_SPEED, delta)
@@ -1826,7 +1860,7 @@ func _sync_camera(delta: float, mode: String) -> void:
 	if mode == "broadcast":
 		# Follow the already-smoothed camera body instead of snapping the yaw
 		# toward the raw destination while position is still catching up.
-		look_target = Vector3(camera.position.x, 0.0, -0.85)
+		look_target = Vector3(camera.position.x, 0.0, smoothed_restart_look_z)
 	camera.look_at(look_target, Vector3.UP)
 
 func screen_position_for_world(world: Vector2, height: float = PLAYER_BASE_Y) -> Vector2:
