@@ -206,3 +206,19 @@ el delantero de Defensa 32 en idéntica geometría, un roce, un intento
 fuera de alcance y la anticipación/parada con y sin la habilidad del
 portero. Los 54 jugadores mantienen perfiles y estadísticas propios.
 No se toca el journal del mánager ni los niveles de dificultad CPU.
+
+## Próximo slice 11v11 · Identidades canónicas (sin activar partido aún)
+
+La futura alineación 4-3-3 ya tiene **once titulares distintos** por club
+en `footballElevenRoster.js`, usando ocho de los nueve perfiles históricos
+y tres jugadores adicionales (dos defensas y un delantero/extremo). Los seis
+clubes suman 18 nuevos futbolistas, con nombre, edad, biografía y siete
+atributos válidos. Se conservan los 54 registros y los IDs del mánager.
+El nuevo campo `eleven` del JSON exportado contiene **once IDs** y solo las
+**tres fichas nuevas** por club; Godot resuelve cada titular contra el
+catálogo antiguo y sus tres ampliaciones, sin duplicar perfiles.
+
+**No es un once jugable todavía:** el partido rápido sigue en 5v5, el journal
+sigue calculando alineaciones de cinco y la carrera no incorpora estos
+refuerzos. Falta integrar 22 actores, IA, posiciones de saque, cámaras y
+rendimiento; activar el once sin esos pasos daría resultados engañosos.
