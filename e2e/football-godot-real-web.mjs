@@ -146,7 +146,16 @@ try {
     const startLength = await page.evaluate(() => window.__chessFootballInputSamples.length);
     await page.keyboard.down(key);
     try {
-      await page.waitForTimeout(580);
+      // Hosted Chromium uses software WebGL. Wall-clock 580 ms may advance
+      // only a handful of Godot physics frames; await four REAL 6-frame
+      // samples while the key is down instead of assuming 60 FPS.
+      await page.waitForFunction(
+        ({ index, directionKey, sign }) => window.__chessFootballInputSamples
+          .slice(index).filter((sample) => sample.playable &&
+            Number(sample[directionKey]) * sign >= 0.8).length >= 4,
+        { index: startLength, directionKey: axis === 'x' ? 'dx' : 'dy', sign },
+        { timeout: 30000 }
+      );
     } finally {
       await page.keyboard.up(key);
     }
@@ -166,10 +175,12 @@ try {
     console.log('FOOTBALL_REAL_WEB_KEY_MOVE_OK', key, axis, 'distance=' + distance.toFixed(2));
     await page.waitForTimeout(120);
   }
-  await expectRealMovement('ArrowRight', 'x', 1);
-  await expectRealMovement('d', 'x', 1);
+  // Move vertically first, before dribbling far toward one side of
+  // the pitch, so the sampled player is not already touching a boundary.
   await expectRealMovement('ArrowUp', 'y', -1);
   await expectRealMovement('w', 'y', -1);
+  await expectRealMovement('ArrowRight', 'x', 1);
+  await expectRealMovement('d', 'x', 1);
 
   // Software WebGL in hosted Chromium can stall indefinitely on readPixels.
   // A successful scene handshake and clean browser error log are the hard gate;
