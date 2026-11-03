@@ -222,3 +222,24 @@ catálogo antiguo y sus tres ampliaciones, sin duplicar perfiles.
 sigue calculando alineaciones de cinco y la carrera no incorpora estos
 refuerzos. Falta integrar 22 actores, IA, posiciones de saque, cámaras y
 rendimiento; activar el once sin esos pasos daría resultados engañosos.
+
+## Siguiente slice 11v11 · actores reales en campo grande
+
+Tras el roster 4-3-3 para **los seis clubes** de la PR #50, el motor
+`Footballer.configure(..., team_size=11)` ya consume la ficha correcta
+de `FootballMatchScouting.starter(team_id,index,11)`. Esta selección
+no altera `configure()` sin argumento, que sigue usando el 5v5 canónico.
+
+Cada `Footballer` recibe límites físicos del campo correspondiente;
+`ChessFootballMath.clamp_to_pitch(position, pitch)` admite un rectángulo
+opcional y preserva el antiguo campo por defecto. El smoke crea **22
+actores CharacterBody2D reales** de los dos clubes rápidos con identidades
+distintas, asigna sus siete ratings y verifica movimientos humano y CPU
+fuera de los límites del 5v5, pero dentro del campo grande. También
+verifica que un actor 5v5 conserve la limitación previa.
+
+**No se activa 11 contra 11 en la pantalla de partido**: aún faltan
+árbitro de física/balón con cancha grande, IA de 22 jugadores, tiempos,
+reanudaciones, porteros, HUD y cámara con encuadre ampliado. La fuente
+del mánager/journal, los 54 titulares/suplentes históricos y sus partidas
+guardadas no se modifican.

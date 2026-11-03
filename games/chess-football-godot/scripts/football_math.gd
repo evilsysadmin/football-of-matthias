@@ -24,10 +24,12 @@ const GOAL_FRAME_CROSSBAR_RADIUS := 10.0
 const NEAR_MISS_SIDE_MARGIN := 64.0
 const NEAR_MISS_ABOVE_MARGIN := 52.0
 
-static func clamp_to_pitch(position: Vector2) -> Vector2:
+# The optional pitch is used only by 11v11-ready actors. All existing
+# ball, match and restart callers keep the legacy 5v5 bounds by default.
+static func clamp_to_pitch(position: Vector2, pitch: Rect2 = PITCH_RECT) -> Vector2:
 	return Vector2(
-		clampf(position.x, PITCH_RECT.position.x + 20.0, PITCH_RECT.end.x - 20.0),
-		clampf(position.y, PITCH_RECT.position.y + 20.0, PITCH_RECT.end.y - 20.0)
+		clampf(position.x, pitch.position.x + 20.0, pitch.end.x - 20.0),
+		clampf(position.y, pitch.position.y + 20.0, pitch.end.y - 20.0)
 	)
 
 static func goal_center(attacking_team: int) -> Vector2:
