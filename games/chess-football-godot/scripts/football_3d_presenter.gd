@@ -1466,13 +1466,23 @@ func sync_presentation(delta: float, mode: String) -> void:
 			# animation system and changes no gameplay, 5v5 actor or R2 atlas.
 			var xi_raster: Sprite3D = xi_raster_sprites.get(key)
 			if xi_raster != null:
-				xi_raster.texture = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
-				xi_raster.flip_h = sprite.flip_h
-				xi_raster.pixel_size = sprite.pixel_size
-				xi_raster.position = sprite.position
-				xi_raster.rotation = sprite.rotation
-				xi_raster.scale = sprite.scale
-				xi_raster.modulate = sprite.modulate
+				# Texture RID/material updates can invalidate a GLES3 billboard
+				# for the entire frame. Switch only on authored frame changes.
+				var next_frame := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+				if xi_raster.texture != next_frame:
+					xi_raster.texture = next_frame
+				if xi_raster.flip_h != sprite.flip_h:
+					xi_raster.flip_h = sprite.flip_h
+				if not is_equal_approx(xi_raster.pixel_size, sprite.pixel_size):
+					xi_raster.pixel_size = sprite.pixel_size
+				if xi_raster.position != sprite.position:
+					xi_raster.position = sprite.position
+				if xi_raster.rotation != sprite.rotation:
+					xi_raster.rotation = sprite.rotation
+				if xi_raster.scale != sprite.scale:
+					xi_raster.scale = sprite.scale
+				if xi_raster.modulate != sprite.modulate:
+					xi_raster.modulate = sprite.modulate
 			# The existing secondary motion includes deliberate running bob,
 			# which stays independent from depth and untouched here.
 			var is_controlled: bool = player == match_node.controlled
