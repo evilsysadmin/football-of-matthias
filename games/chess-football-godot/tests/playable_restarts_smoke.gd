@@ -29,7 +29,10 @@ func _initialize() -> void:
 		ChessFootball3DPresenter.broadcast_restart_look_z(true, 1, "CÓRNER", far_spot), base_look))
 	assert(is_equal_approx(
 		ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "PENALTI", far_spot), base_look))
-	assert(ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "CÓRNER", near_spot) > base_look)
+	# Near corners still use the approved framing: this slice addresses
+	# near-side throw-ins without changing goal-line compositions.
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "CÓRNER", near_spot), base_look))
 	assert(ChessFootball3DPresenter.broadcast_restart_look_z(true, 0, "SAQUE DE BANDA", near_spot) > base_look)
 	assert(is_equal_approx(
 		ChessFootball3DPresenter.broadcast_restart_look_z(false, 0, "SAQUE DE BANDA", near_spot), base_look))
