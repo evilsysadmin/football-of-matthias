@@ -111,6 +111,9 @@ func _initialize() -> void:
 			late.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 			late.alpha_scissor_threshold = 0.12
 			late.shaded = false
+			# The mounted raster is proven visible near-camera. Test whether
+			# far XI bodies are masked by stadium turf depth, not missing assets.
+			late.no_depth_test = true
 			late.flip_h = driver.flip_h
 			late.modulate = driver.modulate
 			late.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
