@@ -37,6 +37,10 @@ func _initialize() -> void:
 	# Keep physics/presenter updating exactly as during normal gameplay.
 	for i in range(21):
 		await process_frame
+	# Capture a fresh *authoritative* kickoff after the renderer has settled.
+	# The previous freeze may have expired on slow software-rendered runners.
+	game._prepare_kickoff(0, true)
+	game.kickoff_seconds_remaining = 15.0
 	assert(game.debug_team_counts() == [11, 11])
 	assert(game.match_pitch == Formation.ELEVEN_PITCH_RECT)
 	assert(game.kickoff_active)
