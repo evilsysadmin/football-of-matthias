@@ -648,6 +648,31 @@ func _initialize() -> void:
 	match_node.debug_refresh_hud()
 	match_node.debug_sync_presentation()
 	await _save_capture(match_node, "corner", "VISUAL_CAPTURE_CORNER")
+	# The important user-facing change is AFTER the whistle: both the
+	# corner and the throw-in remain waiting, with an actionable control hint.
+	match_node.debug_force_set_piece_ready()
+	assert(match_node.human_set_piece_available())
+	match_node.debug_refresh_hud()
+	match_node.debug_sync_presentation()
+	await _save_capture(match_node, "corner-playable", "VISUAL_CAPTURE_CORNER_PLAYABLE")
+	assert(match_node._release_outfield_set_piece())
+
+	match_node.ball.attach_to(match_node.teams[1][3])
+	match_node.ball.release(Vector2.UP, 420.0)
+	match_node.ball.global_position = Vector2(
+		ChessFootballMath.PITCH_RECT.get_center().x + 210.0,
+		ChessFootballMath.PITCH_RECT.position.y - 24.0
+	)
+	match_node.debug_check_ball_out()
+	assert(match_node.debug_set_piece_kind() == "SAQUE DE BANDA")
+	assert(match_node.debug_set_piece_team() == 0)
+	match_node.debug_force_set_piece_ready()
+	assert(match_node.human_set_piece_available())
+	match_node.debug_refresh_hud()
+	match_node.debug_focus_presentation()
+	match_node.debug_sync_presentation()
+	await _save_capture(match_node, "throw-in-playable", "VISUAL_CAPTURE_THROW_IN_PLAYABLE")
+	assert(match_node._release_outfield_set_piece())
 
 	match_node.debug_toggle_pause_menu()
 	for _frame in range(4):
