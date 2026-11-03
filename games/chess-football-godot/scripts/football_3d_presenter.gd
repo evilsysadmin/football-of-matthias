@@ -24,9 +24,11 @@ const FAR_RESTART_LOOK_SHIFT := 2.35
 # Leave enough space below the near thrower for the larger selected-player
 # ring, not just the feet. Calibrated against 1280x720 actual Godot PNGs.
 const NEAR_RESTART_LOOK_SHIFT := 8.3
-# Near corners: a smaller angle than throw-ins retains the mouth of the
-# goal while moving the near-corner taker above the bottom of the viewport.
-const NEAR_CORNER_LOOK_SHIFT := 5.8
+# Near corners span a long diagonal from the taker to the goalmouth.
+# Retreat the same broadcast camera rather than widening its lens: both
+# remain readable, with unaltered player scale rules and no cut-off taker.
+const NEAR_CORNER_LOOK_SHIFT := 3.85
+const NEAR_CORNER_CAMERA_RETREAT := 6.2
 const BROADCAST_HEIGHT := 9.8
 const BROADCAST_DEPTH := 17.8
 const TACTICAL_HEIGHT := 27.0
@@ -1821,6 +1823,20 @@ static func broadcast_restart_look_z(
 	return BROADCAST_BASE_LOOK_Z
 
 
+# Pure framing contract. Only the human near-corner camera retreats;
+# ordinary play, the far corner, CPU corners and all throw-ins keep depth.
+static func broadcast_corner_camera_depth(
+	active: bool, team_id: int, kind: String, spot: Vector2
+) -> float:
+	var pitch := ChessFootballMath.PITCH_RECT
+	if (
+		active and team_id == 0 and kind == "CÓRNER"
+		and spot.y >= pitch.get_center().y + pitch.size.y * 0.35
+	):
+		return BROADCAST_DEPTH + NEAR_CORNER_CAMERA_RETREAT
+	return BROADCAST_DEPTH
+
+
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
 	if delta <= 0.0:
 		return 0.0
@@ -1884,7 +1900,12 @@ func _sync_camera(delta: float, mode: String) -> void:
 		wanted_position = Vector3(
 			smoothed_focus_x + smoothed_lead_x + set_piece_pan,
 			BROADCAST_HEIGHT,
-			BROADCAST_DEPTH,
+			broadcast_corner_camera_depth(
+				bool(match_node.set_piece_active),
+				int(match_node.set_piece_team_id),
+				String(match_node.set_piece_kind),
+				match_node.set_piece_spot,
+			),
 		)
 		wanted_position.x = clampf(wanted_position.x, -field_width * 0.32, field_width * 0.32)
 		var restart_look_z := broadcast_restart_look_z(
