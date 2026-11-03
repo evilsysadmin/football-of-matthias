@@ -809,6 +809,11 @@ func _initialize() -> void:
 	for _tick in range(18):
 		match_node._physics_process(1.0 / 60.0)
 	_assert_live_corner_ball_frame(match_node)
+	assert(
+		near_presenter.camera.position.x
+		> near_presenter.field_width * ChessFootball3DPresenter.BROADCAST_X_LIMIT_RATIO + 0.4,
+		"Live near-corner cross is still pinned to the ordinary broadcast edge"
+	)
 	await _save_capture(match_node, "corner-cross-live-450ms", "VISUAL_CAPTURE_CORNER_CROSS_LIVE_450MS")
 	for _tick in range(18):
 		match_node._physics_process(1.0 / 60.0)
