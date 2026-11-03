@@ -56,9 +56,13 @@ func _initialize() -> void:
 		assert(not presenter.debug_keeper_catch_hands_visible(keeper))
 		await _save_keeper(match_node, team_id, "open")
 		presenter.sync_presentation(0.075, "broadcast")
+		# The grip clock advances at the end of sync_presentation; refresh
+		# the visible sprite frame from that updated clock before asserting.
+		presenter.sync_presentation(0.0, "broadcast")
 		assert(sprite.frame >= 2 and sprite.frame <= 5)
 		await _save_keeper(match_node, team_id, "closing")
 		presenter.sync_presentation(0.20, "broadcast")
+		presenter.sync_presentation(0.0, "broadcast")
 		assert(sprite.frame == 7)
 		assert(not presenter.ball_shadow.visible)
 		assert(not presenter.debug_keeper_catch_hands_visible(keeper))
