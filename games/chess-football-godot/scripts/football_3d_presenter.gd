@@ -1084,6 +1084,11 @@ func _add_goal_net_grid(
 func _enable_xi_raster_bodies() -> void:
 	if match_node.match_team_size != 11:
 		return
+	# Godot's raster billboards are only reliable after the first rendered
+	# stadium frame. Two process-frame yields keep the headless test valid:
+	# by the second signal the scene has already completed its first draw.
+	await get_tree().process_frame
+	await get_tree().process_frame
 	for team in match_node.teams:
 		for player in team:
 			var key: int = int(player.get_instance_id())
