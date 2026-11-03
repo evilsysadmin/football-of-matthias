@@ -306,6 +306,7 @@ func _emit_ci_web_keyboard_sample() -> void:
 	var sample := {
 		"source": "chess-football-godot",
 		"type": "ci-keyboard-sample",
+		"player_id": controlled.get_instance_id(),
 		"x": controlled.global_position.x,
 		"y": controlled.global_position.y,
 		"dx": direction.x,
