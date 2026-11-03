@@ -43,6 +43,11 @@ static func starter(team_id: int, squad_index: int) -> Dictionary:
 		return {}
 	for attribute in ATTRIBUTES:
 		var value: Variant = stats.get(attribute)
-		if typeof(value) != TYPE_INT or value < 1 or value > 99:
+		# Godot's JSON decoder represents whole numeric literals as floats.
+		# Accept only finite integral 1..99 ratings, never fractional scouting.
+		if typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT:
+			return {}
+		var rating := float(value)
+		if not is_finite(rating) or rating < 1.0 or rating > 99.0 or floorf(rating) != rating:
 			return {}
 	return player
