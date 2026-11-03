@@ -130,6 +130,49 @@ func _initialize() -> void:
 	assert(match_node.ball.carrier == null)
 	assert(match_node.ball.velocity.length() > 0.0)
 
+	# Returning from a near human corner must be a smooth camera motion,
+	# not an instant reset or a change to gameplay speed. Run the REAL
+	# presenter against a frozen match, checking successive 60 Hz frames.
+	match_node.ball.attach_to(match_node.teams[1][1])
+	match_node.ball.release(Vector2.RIGHT, 520.0)
+	match_node.ball.global_position = Vector2(pitch.end.x + 24.0, pitch.end.y - 44.0)
+	match_node.debug_check_ball_out()
+	assert(match_node.debug_set_piece_kind() == "CÓRNER")
+	assert(match_node.debug_set_piece_team() == 0)
+	match_node.debug_force_set_piece_ready()
+	assert(match_node.human_set_piece_available())
+	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
+	for _settle in range(3):
+		presenter.sync_presentation(1.0, "broadcast")
+	var starting_depth := presenter.camera.position.z
+	var starting_pitch := presenter.smoothed_restart_look_z
+	assert(starting_depth > depth + 5.0)
+	assert(starting_pitch > base_look + 3.0)
+	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
+		"broadcast", true, starting_depth))
+	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
+		"tactical", false, starting_depth))
+	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
+		"broadcast", false, depth))
+	assert(match_node._release_outfield_set_piece())
+	assert(not match_node.debug_set_piece_active())
+	assert(ChessFootball3DPresenter.broadcast_corner_release_active(
+		"broadcast", false, presenter.camera.position.z))
+	presenter.sync_presentation(1.0 / 60.0, "broadcast")
+	assert(presenter.camera.position.z < starting_depth)
+	assert(presenter.camera.position.z > starting_depth - 0.28,
+		"Near-corner camera snaps back on the first live-ball frame")
+	assert(presenter.smoothed_restart_look_z < starting_pitch)
+	assert(presenter.smoothed_restart_look_z > starting_pitch - 0.20,
+		"Near-corner camera pitch snaps on the first live-ball frame")
+	for _frame in range(120):
+		presenter.sync_presentation(1.0 / 60.0, "broadcast")
+	assert(absf(presenter.camera.position.z - depth) < 0.28)
+	assert(absf(presenter.smoothed_restart_look_z - base_look) < 0.20)
+	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
+		"broadcast", false, presenter.camera.position.z))
+	assert(match_node.score == original_score)
+
 	# Rival throw-ins stay automatic after the existing whistle pause.
 	match_node.ball.attach_to(match_node.teams[0][2])
 	match_node.ball.release(Vector2.DOWN, 420.0)
