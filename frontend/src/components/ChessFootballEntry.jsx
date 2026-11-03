@@ -7,6 +7,7 @@ import { FOOTBALL_TRAINING_PLANS } from '../footballManagerTraining.js';
 import { getDevelopedFootballRoster, FOOTBALL_MAX_GROWTH_PER_ATTRIBUTE } from '../footballManagerDevelopment.js';
 import { createFootballCareer, editFootballCareer, playFootballCareerRound, startNextFootballSeason, FOOTBALL_CAREER_MAX_SEASONS, readFootballCareer, replayFootballCareer, writeFootballCareer } from '../footballManagerCareer.js';
 import { getFootballClubRoster, getDefaultFootballLineup, FOOTBALL_FIVE_POSITIONS, getFootballFatigue } from '../footballManagerRoster.js';
+import { FOOTBALL_SCOUTING_ATTRIBUTES } from '../footballPlayerProfiles.js';
 import './ChessFootballEntry.css';
 import FootballSaveTransfer from './FootballSaveTransfer.jsx';
 import FootballManagerDesk from './FootballManagerDesk.jsx';
@@ -14,19 +15,33 @@ import FootballManagerDesk from './FootballManagerDesk.jsx';
 const ChessFootballGodotHost = lazy(() => import('./ChessFootballGodotHost.jsx'));
 
 function FootballSquadDevelopment({ players }) {
+  const grown = players.filter((player) => player.attackGrowth || player.defenseGrowth).length;
   return (
-  <details className="chess-football-entry__development" aria-label="Evolución de la plantilla">
-    <summary>Desarrollo de la plantilla · {players.filter((player) => player.attackGrowth || player.defenseGrowth).length} mejorados</summary>
-    <p>Tras cuatro titularidades: +1 en ataque y defensa. Dos sesiones de remates o repliegue: +1 adicional en su atributo. Máximo +{FOOTBALL_MAX_GROWTH_PER_ATTRIBUTE} por atributo. No se inventan estadísticas individuales.</p>
-    <ul>
-      {players.map((player) => (
-        <li key={player.id}>
-          <span><strong>{player.name}</strong> <small>{player.role} · {player.starts} titularidades</small></span>
-          <span>ATQ {player.attack}{player.attackGrowth ? ` (+${player.attackGrowth})` : ''} · DEF {player.defense}{player.defenseGrowth ? ` (+${player.defenseGrowth})` : ''}</span>
-        </li>
-      ))}
-    </ul>
-  </details>
+    <details className="chess-football-entry__development" aria-label="Fichas de la plantilla">
+      <summary>Plantilla · {players.length} futbolistas{grown ? ` · ${grown} mejorados` : ''}</summary>
+      <p>Abre cada ficha para ver su biografía y sus siete atributos (1–99). La GRL pondera su posición. Por ahora son datos de scouting; la liga sigue usando ATQ, DEF y fatiga.</p>
+      <ul>
+        {players.map((player) => (
+          <li key={player.id}>
+            <details className="chess-football-entry__player-card">
+              <summary>
+                <span><strong>{player.name}</strong><small>{player.role} · {player.age} años · {player.starts} titularidades</small></span>
+                <b>GRL {player.overall}</b>
+              </summary>
+              <p>{player.bio}</p>
+              <dl className="chess-football-entry__scouting">
+                {FOOTBALL_SCOUTING_ATTRIBUTES.map(({ key, label }) => (
+                  <div key={key}><dt>{label}</dt><dd>{player.scouting[key]}</dd></div>
+                ))}
+              </dl>
+              <p className="chess-football-entry__player-growth">
+                Simulación actual: ATQ {player.attack}{player.attackGrowth ? ` (+${player.attackGrowth})` : ''} · DEF {player.defense}{player.defenseGrowth ? ` (+${player.defenseGrowth})` : ''}
+              </p>
+            </details>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -232,9 +247,10 @@ export default function ChessFootballEntry({ onExit }) {
               <div className="chess-football-entry__club-summary">
                 <p><strong>Estilo:</strong> {selectedClub.style}</p>
                 <p><strong>Objetivo propuesto:</strong> {selectedClub.objective}</p>
-                <p>Temporada estadística de seis clubes y diez jornadas, con quinteto y fatiga. La guardamos en el progreso de tu perfil; todavía no hay contratos, fichajes ni conexión con partidos Godot.</p>
+                <p>Liga de seis clubes y diez jornadas, con quinteto y fatiga. La carrera se guarda en este dispositivo; los partidos Godot aún van por separado.</p>
               </div>
             ) : null}
+            {selectedClub ? <FootballSquadDevelopment players={developedRoster} /> : null}
             {replacePending ? (
               <div className="chess-football-entry__career-confirm" role="group" aria-label="Confirmar nueva temporada">
                 <p>Ya existe una carrera guardada. Crear otra sustituirá su historial, resultados y fatiga. Esta acción no se puede deshacer.</p>

@@ -30,6 +30,20 @@ jobs:
       - name: Install with pinned npm workspace resolver
         run: npx --yes npm@11.6.1 install --no-audit --no-fund
       - run: npm --prefix frontend test
+      - name: Build manager frontend
+        run: npm --prefix frontend run build
+      - name: Install Chromium for real scouting UI screenshots
+        run: npx playwright install --with-deps chromium
+      - name: Verify and capture scouting cards in desktop and mobile
+        run: node e2e/standalone.mjs
+      - name: Upload scouting UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-manager-scouting-ui
+          path: .artifacts/standalone/
+          if-no-files-found: warn
+          retention-days: 7
       - run: node tests/identity-gate.test.mjs
       - name: Exercise authority exchange and revocation in the real Workers runtime
         run: npx --yes workerd@1.20261102.1 test tests/identity-workerd.capnp

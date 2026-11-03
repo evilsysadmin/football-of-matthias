@@ -32,6 +32,16 @@ try{
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.getByRole('button',{name:/Modo mánager/}).click();
   await page.screenshot({path:resolve(out,viewport.width+'-manager.png')});
+  await page.getByRole('button',{name:'Elegir FC Matthias'}).click();
+  await page.locator('.chess-football-entry__development > summary').click();
+  const firstPlayer=page.locator('.chess-football-entry__player-card').first();
+  await firstPlayer.locator('summary').click();
+  await firstPlayer.locator('summary').evaluate(el=>el.scrollIntoView({block:'start',inline:'nearest'}));
+  assert.ok(await firstPlayer.getByText('Portero de reflejos felinos',{exact:false}).isVisible());
+  assert.equal(await firstPlayer.locator('.chess-football-entry__scouting dt').count(),7);
+  assert.equal(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'Manager must not overflow horizontally');
+  await page.screenshot({path:resolve(out,viewport.width+'-scouting-card.png')});
+  await firstPlayer.screenshot({path:resolve(out,viewport.width+'-scouting-detail.png')});
   assert.equal(errors.length,0,errors.join('\n'));await page.close();
  }
  console.log('FOOTBALL_STANDALONE_DESKTOP_MOBILE_OK');
