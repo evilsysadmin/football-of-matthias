@@ -90,6 +90,30 @@ func _initialize() -> void:
 		assert(net.mesh.get_surface_count() == 1)
 		assert(net.mesh.get_aabb().size.length() > 1.0)
 		assert(net.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	# Near-touchline broadcast restarts must no longer show a giant parapet
+	# or midfield benches. All elements stay outside gameplay geometry and
+	# remain non-shadow-casting, avoiding runtime draw/light regressions.
+	var near_trim := match_node.presentation_3d.get_node_or_null(
+		"NearTouchlineTrim"
+	) as MeshInstance3D
+	assert(near_trim != null and near_trim.mesh is BoxMesh)
+	assert(near_trim.mesh.size.y <= 0.15)
+	assert(near_trim.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	assert(near_trim.position.z > ChessFootballMath.PITCH_RECT.size.y * 0.5 *
+		ChessFootball3DPresenter.WORLD_SCALE)
+	for bench_side in range(2):
+		var bench_base := match_node.presentation_3d.get_node_or_null(
+			"TouchlineBenchBase_%d" % bench_side
+		) as MeshInstance3D
+		var bench_canopy := match_node.presentation_3d.get_node_or_null(
+			"TouchlineBenchCanopy_%d" % bench_side
+		) as MeshInstance3D
+		assert(bench_base != null and bench_canopy != null)
+		assert(absf(bench_base.position.x) > match_node.presentation_3d.field_width * 0.35)
+		assert(is_equal_approx(bench_base.position.x, bench_canopy.position.x))
+		assert(bench_base.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		assert(bench_canopy.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		assert(bench_base.position.z > near_trim.position.z)
 	# Broadcast HUD must remain readable and click-through outside MENU.
 	var hud := match_node.get_node_or_null("MatchHud") as CanvasLayer
 	assert(hud != null)
