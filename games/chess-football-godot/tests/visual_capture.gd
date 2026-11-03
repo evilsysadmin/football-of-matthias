@@ -653,7 +653,10 @@ func _initialize() -> void:
 	match_node.debug_force_set_piece_ready()
 	assert(match_node.human_set_piece_available())
 	match_node.debug_refresh_hud()
-	match_node.debug_sync_presentation()
+	# Settle the actual broadcast camera before inspecting the actionable
+	# far-corner image. The taker's head must clear the event chyron.
+	match_node.debug_focus_presentation()
+	_assert_far_restart_hud_clearance(match_node)
 	# Real review PNG must contain the new, passive recipient marker.
 	var corner_receiver: Footballer = null
 	for candidate in match_node.teams[0]:
@@ -679,6 +682,7 @@ func _initialize() -> void:
 	assert(match_node.human_set_piece_available())
 	match_node.debug_refresh_hud()
 	match_node.debug_focus_presentation()
+	_assert_far_restart_hud_clearance(match_node)
 	match_node.debug_sync_presentation()
 	await _save_capture(match_node, "throw-in-playable", "VISUAL_CAPTURE_THROW_IN_PLAYABLE")
 	assert(match_node._release_outfield_set_piece())
@@ -727,6 +731,20 @@ func _initialize() -> void:
 		"VISUAL_CAPTURE_ATLAS_DIRECTIONAL_RUN",
 	)
 	quit(0)
+
+
+
+func _assert_far_restart_hud_clearance(match_node: Node) -> void:
+	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
+	assert(match_node.human_set_piece_available())
+	assert(match_node.set_piece_player != null)
+	assert(presenter.smoothed_restart_look_z < -2.6)
+	var head := presenter.screen_position_for_world(
+		match_node.set_piece_player.global_position, 1.65
+	)
+	var chyron_bottom: float = match_node.goal_label.position.y + match_node.goal_label.size.y
+	assert(head.y >= chyron_bottom + 8.0,
+		"Far-side restart taker's head collides with the match event chyron")
 
 func _save_texture_preview(source_path: String, filename: String, marker: String) -> void:
 	var texture := load(source_path) as Texture2D
