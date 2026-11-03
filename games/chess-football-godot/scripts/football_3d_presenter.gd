@@ -1014,8 +1014,10 @@ func _build_player_proxies() -> void:
 			player_sprites[player.get_instance_id()] = sprite
 
 
-# Deliberately small diegetic glove-and-sleeve rig in front of the approved
-# goalkeeper sprite. The authored atlas remains intact, and physics never sees it.
+# The canonical keeper sprite remains untouched. A low-poly visual grip
+# only appears while the keeper actually possesses the ball. Its narrow shirt
+# sleeves lead into dark glove backs and smaller painted palms: no floating
+# yellow spheres or thick tubular forearms at broadcast distance.
 func _build_keeper_catch_rig(parent: Node3D, team_id: int) -> Node3D:
 	var rig := Node3D.new()
 	rig.name = "KeeperCatchHands"
@@ -1026,8 +1028,8 @@ func _build_keeper_catch_rig(parent: Node3D, team_id: int) -> Node3D:
 		var sleeve := MeshInstance3D.new()
 		sleeve.name = "Sleeve" + suffix
 		var sleeve_mesh := CylinderMesh.new()
-		sleeve_mesh.top_radius = 0.047
-		sleeve_mesh.bottom_radius = 0.066
+		sleeve_mesh.top_radius = 0.039
+		sleeve_mesh.bottom_radius = 0.052
 		sleeve_mesh.height = 1.0
 		sleeve.mesh = sleeve_mesh
 		var sleeve_mat := _material(sleeve_color, 0.98)
@@ -1039,19 +1041,34 @@ func _build_keeper_catch_rig(parent: Node3D, team_id: int) -> Node3D:
 		var glove := MeshInstance3D.new()
 		glove.name = "Glove" + suffix
 		var glove_mesh := SphereMesh.new()
-		glove_mesh.radius = 0.085
-		glove_mesh.height = 0.15
-		glove_mesh.radial_segments = 12
-		glove_mesh.rings = 6
+		glove_mesh.radius = 0.074
+		glove_mesh.height = 0.135
+		glove_mesh.radial_segments = 10
+		glove_mesh.rings = 5
 		glove.mesh = glove_mesh
-		# Pale yellow gloves echo the canonical painted palms.
-		var glove_mat := _material(Color(0.83, 0.81, 0.58), 0.95)
+		# The dark leather back gives each glove a cuff/silhouette, not a
+		# second oversized flesh-coloured disk alongside the match ball.
+		var glove_mat := _material(Color(0.28, 0.34, 0.38), 0.95)
 		glove_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		glove.material_override = glove_mat
 		glove.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		rig.add_child(glove)
-	return rig
 
+		var palm := MeshInstance3D.new()
+		palm.name = "GripPalm"
+		var palm_mesh := SphereMesh.new()
+		palm_mesh.radius = 0.046
+		palm_mesh.height = 0.080
+		palm_mesh.radial_segments = 10
+		palm_mesh.rings = 5
+		palm.mesh = palm_mesh
+		palm.position = Vector3(0.0, 0.002, 0.056)
+		var palm_mat := _material(Color(0.83, 0.81, 0.58), 0.95)
+		palm_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		palm.material_override = palm_mat
+		palm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glove.add_child(palm)
+	return rig
 
 func _sync_keeper_catch_hands(
 	carrier: Footballer, ball_at: Vector3, catch_progress: float
