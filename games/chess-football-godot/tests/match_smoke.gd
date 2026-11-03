@@ -127,6 +127,21 @@ func _initialize() -> void:
 	assert(match_node.debug_keeper_track_y_limit() <= ChessFootballMath.GOAL_HALF_HEIGHT * 0.83)
 	assert(ChessFootballMath.GOAL_MAX_FLIGHT_HEIGHT >= 80.0)
 	assert(match_node.debug_3d_ready())
+	# Actual sphere material, not a HUD fake: the ball has dark pentagons
+	# against warm-white leather even when held in front of pale keeper gloves.
+	var match_ball := match_node.presentation_3d.ball_node as MeshInstance3D
+	var ball_material := match_ball.material_override as StandardMaterial3D
+	assert(ball_material != null and ball_material.albedo_texture != null)
+	var ball_art := ball_material.albedo_texture.get_image()
+	assert(ball_art != null and not ball_art.is_empty())
+	var dark_panel := ball_art.get_pixel(
+		int(ball_art.get_width() * 0.25), int(ball_art.get_height() * 0.50)
+	)
+	var light_panel := ball_art.get_pixel(
+		int(ball_art.get_width() * 0.16), int(ball_art.get_height() * 0.43)
+	)
+	assert(dark_panel.r < 0.30 and light_panel.r > 0.80,
+		"Match ball panels are missing or lack contrast")
 	assert(match_node.debug_audio_ready())
 	var audio_names: Array[String] = match_node.debug_audio_stream_names()
 	for expected_audio in [
