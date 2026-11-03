@@ -263,3 +263,16 @@ IA, balón, goles y reinicios que se refiere al campo antiguo. Antes de
 activar el nuevo modo, esas reglas deben migrarse y probarse juntas.
 La CI almacena dos PNG Godot 1280×720 de esta vista de ensayo junto
 a los PNG habituales del partido 5v5.
+
+### XI stadium render contract (preview only)
+
+La previsualización XI usa un `Sprite3D` por actor para representar
+el fotograma seleccionado por el `AnimatedSprite3D` original. El controlador
+de animación, atlas, orientación, footline y escalado sigue siendo el mismo;
+la copia no tiene reloj independiente y se sincroniza en cada frame.
+Esta vía está restringida a `match_team_size == 11` mientras se termina
+la migración; la escena pública 5v5 conserva sus sprites aprobados.
+La cámara táctica XI usa una inclinación aérea suave para que los cuerpos
+de pie no desaparezcan al observar el césped desde una perpendicular.
+Las capturas 1280×720 deben mostrar **los 22 cuerpos**, no únicamente
+sombras ni geometría diagnóstica.

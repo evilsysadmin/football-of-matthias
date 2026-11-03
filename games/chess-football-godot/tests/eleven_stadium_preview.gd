@@ -58,68 +58,23 @@ func _initialize() -> void:
 			stage.sync_presentation(1.0 / 60.0, "tactical")
 			await process_frame
 			await RenderingServer.frame_post_draw
-	# Diagnostic guard: a valid 3D proxy is not sufficient if its authored
-	# raster body is empty/invisible. Keep the instrumented sample small.
-	for sample_id in [0, 10]:
-		var athlete: Footballer = game.teams[0][sample_id]
-		var body: AnimatedSprite3D = stage.player_sprites[athlete.get_instance_id()]
-		var source: Texture2D = body.sprite_frames.get_frame_texture(body.animation, body.frame)
-		assert(source != null)
-		var silhouette: Rect2i = (source as ImageTexture).get_image().get_used_rect()
-		print("FOOTBALL_XI_BODY_SAMPLE index=%d visible=%s tree=%s frame=%s bounds=%s world=%s scale=%s camera=%s color=%s opacity=%.2f pixel=%.4f" % [
-			sample_id, body.visible, body.is_visible_in_tree(), body.animation,
-			silhouette, body.global_position, body.scale, stage.camera.global_position,
-			body.modulate, body.transparency, body.pixel_size,
-		])
-		assert(silhouette.size.y >= 80)
-	# Diagnostic comparison: a plain Sprite3D using the SAME approved raster
-	# frame, beside the actual animated players. If it renders, distinguish
-	# an AnimatedSprite3D path failure from camera/material/lens visibility.
-	var source_actor: Footballer = game.teams[0][10]
-	var animated: AnimatedSprite3D = stage.player_sprites[source_actor.get_instance_id()]
-	var diagnostic := Sprite3D.new()
-	diagnostic.texture = animated.sprite_frames.get_frame_texture(animated.animation, animated.frame)
-	diagnostic.pixel_size = animated.pixel_size
-	diagnostic.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	diagnostic.shaded = false
-	diagnostic.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-	diagnostic.alpha_scissor_threshold = 0.12
-	diagnostic.position = Vector3(-2.0, 1.0, 0.0)
-	diagnostic.name = "XI_StandaloneRasterDiagnostic"
-	stage.add_child(diagnostic)
-	var marker := MeshInstance3D.new()
-	marker.mesh = BoxMesh.new()
-	marker.position = Vector3(2.0, 1.0, 0.0)
-	marker.name = "XI_MeshDiagnostic"
-	stage.add_child(marker)
-	# Isolate whether identical standalone Sprite3D quads also render when
-	# parented to each real athlete proxy. This is an XI preview ONLY; the
-	# existing AnimatedSprite3D remains the authoritative animation clock.
-	# If the static clones appear, the failure is confined to the animated
-	# draw path rather than player transforms, atlas bytes, or camera.
+	# The XI-visible quad must use exactly the same approved authored frame
+	# and pose as the regular AnimatedSprite3D animation driver. One visible
+	# body per player, no diagnostic geometry and no duplicate draw.
+	assert(stage.xi_raster_sprites.size() == 22)
 	for team in game.teams:
 		for athlete in team:
-			var actor_key: int = athlete.get_instance_id()
-			var actual: AnimatedSprite3D = stage.player_sprites[actor_key]
-			var proxy: Node3D = stage.player_nodes[actor_key]
-			var clone := Sprite3D.new()
-			clone.name = "XI_ProxyRasterDiagnostic_%d" % actor_key
-			clone.texture = actual.sprite_frames.get_frame_texture(actual.animation, actual.frame)
-			clone.position = actual.position
-			clone.scale = actual.scale
-			clone.pixel_size = actual.pixel_size
-			clone.centered = actual.centered
-			clone.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			clone.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-			clone.alpha_scissor_threshold = 0.12
-			# XI-only probe: bypass turf depth to isolate missing *far* bodies.
-			clone.no_depth_test = true
-			clone.shaded = false
-			clone.flip_h = actual.flip_h
-			clone.modulate = actual.modulate
-			clone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			proxy.add_child(clone)
-			actual.visible = false # do not double-render if AnimatedSprite3D wakes up
+			var key: int = athlete.get_instance_id()
+			var driver: AnimatedSprite3D = stage.player_sprites[key]
+			var body: Sprite3D = stage.xi_raster_sprites[key]
+			assert(not driver.visible)
+			assert(body != null and body.is_visible_in_tree())
+			assert(body.texture == driver.sprite_frames.get_frame_texture(driver.animation, driver.frame))
+			assert(body.flip_h == driver.flip_h)
+			assert(body.pixel_size == driver.pixel_size)
+			assert(body.position == driver.position)
+			assert(body.scale == driver.scale)
+			assert((body.texture as ImageTexture).get_image().get_used_rect().size.y >= 80)
 	var viewport := root.get_viewport()
 	var size := viewport.get_visible_rect().size
 	assert(size.x > 100.0 and size.y > 100.0)

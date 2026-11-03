@@ -89,6 +89,10 @@ var match_node: Node
 var camera: Camera3D
 var player_nodes: Dictionary = {}
 var player_sprites: Dictionary = {}
+# XI-only raster presenter: Godot's AnimatedSprite3D draws no visible
+# bodies in the expanded stadium, while identical Sprite3D textures render.
+# Keep the animated clock/atlas and copy its frame to a single visible quad.
+var xi_raster_sprites: Dictionary = {}
 var player_run_views: Dictionary = {}
 # Keeper run/action poses tick independently in the visible 3D runtime.
 # Hidden authoritative 2D AnimatedSprite2D nodes are not a reliable clock.
@@ -1097,6 +1101,24 @@ func _build_player_proxies() -> void:
 			sprite.flip_h = player.team_id == 1
 			sprite.play("idle")
 			root.add_child(sprite)
+			if match_node.match_team_size == 11:
+				# A plain Sprite3D renders the approved raster reliably across 22
+				# players. AnimatedSprite3D remains the animation-clock authority.
+				var raster := Sprite3D.new()
+				raster.name = "XI_Raster"
+				raster.texture = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+				raster.centered = sprite.centered
+				raster.pixel_size = sprite.pixel_size
+				raster.position = sprite.position
+				raster.billboard = sprite.billboard
+				raster.alpha_cut = sprite.alpha_cut
+				raster.alpha_scissor_threshold = sprite.alpha_scissor_threshold
+				raster.shaded = sprite.shaded
+				raster.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				raster.flip_h = sprite.flip_h
+				root.add_child(raster)
+				xi_raster_sprites[int(player.get_instance_id())] = raster
+				sprite.hide()
 			if player.role == "keeper":
 				keeper_catch_rigs[int(player.get_instance_id())] = _build_keeper_catch_rig(root, player.team_id)
 
@@ -1439,6 +1461,18 @@ func sync_presentation(delta: float, mode: String) -> void:
 				) - cell_half_height
 			)
 			sprite.position.y += foot_y * sprite.pixel_size * (sprite.scale.y - authored_y)
+			# XI-only visible quad mirrors the authored animated frame and every
+			# transform, including depth scale and footline. This is not a second
+			# animation system and changes no gameplay, 5v5 actor or R2 atlas.
+			var xi_raster: Sprite3D = xi_raster_sprites.get(key)
+			if xi_raster != null:
+				xi_raster.texture = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+				xi_raster.flip_h = sprite.flip_h
+				xi_raster.pixel_size = sprite.pixel_size
+				xi_raster.position = sprite.position
+				xi_raster.rotation = sprite.rotation
+				xi_raster.scale = sprite.scale
+				xi_raster.modulate = sprite.modulate
 			# The existing secondary motion includes deliberate running bob,
 			# which stays independent from depth and untouched here.
 			var is_controlled: bool = player == match_node.controlled
@@ -1918,10 +1952,16 @@ func _sync_camera(delta: float, mode: String) -> void:
 	if mode == "tactical":
 		smoothed_restart_look_z = BROADCAST_BASE_LOOK_Z
 		var tactical_height: float = (
-			maxf(TACTICAL_HEIGHT, field_depth * 1.52)
+			maxf(TACTICAL_HEIGHT, field_depth * 1.36)
 			if match_node.match_team_size == 11 else TACTICAL_HEIGHT
 		)
-		wanted_position = Vector3(0.0, tactical_height, 0.35)
+		# The original near-vertical XI aerial lens views upright raster
+		# players edge-on. A shallow stadiumward tilt keeps all 22 visible
+		# without changing the normal 5v5 tactical camera.
+		var tactical_depth: float = (
+			field_depth * 0.90 if match_node.match_team_size == 11 else 0.35
+		)
+		wanted_position = Vector3(0.0, tactical_height, tactical_depth)
 		wanted_look = Vector3.ZERO
 		wanted_fov = 43.0
 	else:
