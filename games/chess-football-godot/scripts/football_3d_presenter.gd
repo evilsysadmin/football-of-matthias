@@ -1093,11 +1093,6 @@ func _build_player_proxies() -> void:
 			sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 			sprite.alpha_scissor_threshold = 0.12
 			sprite.shaded = false
-			# The XI preview uses an elevated full-pitch camera. Test whether
-			# turf depth occlusion is hiding real raster bodies in its captures.
-			# This temporary preview-only treatment never affects 5v5.
-			if match_node.match_team_size == 11:
-				sprite.no_depth_test = true
 			sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			sprite.flip_h = player.team_id == 1
 			sprite.play("idle")
