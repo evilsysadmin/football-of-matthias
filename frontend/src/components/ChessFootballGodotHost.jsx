@@ -94,6 +94,16 @@ export default function ChessFootballGodotHost({ onExit }) {
     return () => { cancelled = true; };
   }, [attempt]);
 
+  // Godot lives in a cross-origin iframe. Once it reports ready, hand
+  // keyboard focus to that frame: otherwise arrow keys can be consumed by
+  // the outer document instead of reaching InputMap. Pointer/touch users
+  // retain their normal focus behavior.
+  useEffect(() => {
+    if (!runtimeReady || mobileViewport.coarse) return;
+    const frame = frameRef.current;
+    if (frame && document.activeElement !== frame) frame.focus({ preventScroll: true });
+  }, [runtimeReady, mobileViewport.coarse]);
+
   useEffect(() => {
     if (!runtime.url || runtimeReady) return undefined;
     const timeout = window.setTimeout(() => setBootFailed(true), 20000);
@@ -186,6 +196,7 @@ export default function ChessFootballGodotHost({ onExit }) {
           ref={frameRef}
           key={runtime.url}
           className="chess-football-godot-host__frame"
+          tabIndex={0}
           src={runtime.url}
           title="Chess Football Godot"
           allow="autoplay; fullscreen; gamepad"
