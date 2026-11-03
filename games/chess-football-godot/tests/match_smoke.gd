@@ -1979,12 +1979,12 @@ func _assert_keyboard_movement_map() -> void:
 	]
 	for binding in cases:
 		var action: StringName = StringName(binding["action"])
-		var letter: Key = binding["letter"]
-		var arrow: Key = binding["arrow"]
+		var letter: int = int(binding["letter"])
+		var arrow: int = int(binding["arrow"])
 		var expected: Vector2 = binding["vector"]
 		var events := InputMap.action_get_events(action)
 		assert(events.size() == 2, "Movement must keep WASD and one cursor key")
-		var physical_keys: Array[Key] = []
+		var physical_keys: Array[int] = []
 		for input_event in events:
 			assert(input_event is InputEventKey)
 			physical_keys.append((input_event as InputEventKey).physical_keycode)
