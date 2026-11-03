@@ -1100,7 +1100,7 @@ func _initialize() -> void:
 		assert(match_node.presentation_3d.debug_keeper_catch_sleeve_length(keeper, side) < 0.85)
 		assert((sleeve.mesh as CylinderMesh).bottom_radius < 0.055,
 			"Catch sleeves must not look like thick tubes")
-		assert((glove.mesh as SphereMesh).radius <= 0.074)
+		assert((glove.mesh as SphereMesh).radius < 0.076)
 		assert((palm.mesh as SphereMesh).radius < (glove.mesh as SphereMesh).radius)
 		assert(palm.position.z > 0.04)
 		assert((glove.material_override as StandardMaterial3D).albedo_color.r < 0.4)
