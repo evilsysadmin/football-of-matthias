@@ -5,6 +5,24 @@ extends SceneTree
 const Formation = preload("res://scripts/football_match_formation.gd")
 const Scouting = preload("res://scripts/football_match_scouting.gd")
 
+# Validate rendered pixels, not just actor nodes/texture metadata.
+# Ignore scoreboards, spectators and stands; test team kits inside the pitch.
+# A successful headless smoke alone must never approve 22 invisible players.
+func _assert_visible_kit_colors(capture: Image) -> void:
+	var blue_pixels := 0
+	var red_pixels := 0
+	for y in range(190, mini(capture.get_height(), 680), 2):
+		for x in range(180, mini(capture.get_width(), 1100), 2):
+			var color: Color = capture.get_pixel(x, y)
+			if color.b > color.r * 1.5 and color.b > color.g * 1.03 and color.g < 0.57 and color.b > 0.28:
+				blue_pixels += 1
+			if color.r > color.g * 1.43 and color.r > color.b * 1.15 and color.r > 0.33 and color.g < 0.57:
+				red_pixels += 1
+	print("FOOTBALL_XI_RENDERED_KITS blue=%d red=%d" % [blue_pixels, red_pixels])
+	assert(blue_pixels >= 45 and red_pixels >= 45,
+		"XI broadcast must show *both* kits on the pitch, not only shadows")
+
+
 func _initialize() -> void:
 	var packed := load("res://main.tscn") as PackedScene
 	assert(packed != null)
@@ -96,7 +114,9 @@ func _initialize() -> void:
 			await RenderingServer.frame_post_draw
 		await RenderingServer.frame_post_draw
 		var broadcast_path := "user://chess-football-xi-broadcast.png"
-		assert(viewport.get_texture().get_image().save_png(broadcast_path) == OK)
+		var actual_image: Image = viewport.get_texture().get_image()
+		_assert_visible_kit_colors(actual_image)
+		assert(actual_image.save_png(broadcast_path) == OK)
 		print("FOOTBALL_XI_PREVIEW_BROADCAST=" + ProjectSettings.globalize_path(broadcast_path))
 	print("FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22")
 	quit(0)
