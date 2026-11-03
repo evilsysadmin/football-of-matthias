@@ -3,8 +3,9 @@ extends Node2D
 const Presenter3D = preload("res://scripts/football_3d_presenter.gd")
 const FootballAudio = preload("res://scripts/football_audio.gd")
 const QuickDifficulty = preload("res://scripts/football_quick_difficulty.gd")
+const Formation = preload("res://scripts/football_match_formation.gd")
+# Keep live matches 5v5 until 11v11 AI, restarts, camera and scouting are ready.
 const TEAM_SIZE := 5
-const ROLES := ["keeper", "defender", "midfielder", "wing", "forward"]
 const TEAM_COLORS := [Color(0.12, 0.42, 0.92), Color(0.86, 0.18, 0.2)]
 
 const CAMERA_MODE_BROADCAST := "broadcast"
@@ -2802,23 +2803,14 @@ func _update_3d_presentation(delta: float) -> void:
 
 func _spawn_match() -> void:
 	var pitch := ChessFootballMath.PITCH_RECT
-	# Formation is stored in normalized pitch coordinates so enlarging the field
-	# creates actual playable space instead of leaving both teams clustered in
-	# the old 1640x860 footprint.
-	var home_x_ratio := [0.09, 0.26, 0.40, 0.46, 0.58]
-	var home_y_ratio := [0.50, 0.20, 0.53, 0.80, 0.34]
+	# Both current 5v5 and future 11v11 positions share one formation contract.
+	# For now the match remains 5v5; expanding players requires separate slices.
 	for team_id in range(2):
 		for index in range(TEAM_SIZE):
-			var x: float = pitch.position.x + pitch.size.x * float(home_x_ratio[index])
-			if team_id == 1:
-				x = pitch.end.x - pitch.size.x * float(home_x_ratio[index])
-			var position := Vector2(
-				x,
-				pitch.position.y + pitch.size.y * float(home_y_ratio[index]),
-			)
+			var position: Vector2 = Formation.home_position(TEAM_SIZE, team_id, index, pitch)
 			var player := Footballer.new()
 			add_child(player)
-			player.configure(team_id, index, ROLES[index], position, TEAM_COLORS[team_id])
+			player.configure(team_id, index, Formation.role_for(TEAM_SIZE, index), position, TEAM_COLORS[team_id])
 			player.visible = false
 			teams[team_id].append(player)
 	ball = FootballBall.new()
