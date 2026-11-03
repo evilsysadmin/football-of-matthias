@@ -654,6 +654,15 @@ func _initialize() -> void:
 	assert(match_node.human_set_piece_available())
 	match_node.debug_refresh_hud()
 	match_node.debug_sync_presentation()
+	# Real review PNG must contain the new, passive recipient marker.
+	var corner_receiver: Footballer = null
+	for candidate in match_node.teams[0]:
+		if candidate != match_node.set_piece_player and candidate.role != "keeper" and not candidate.sent_off:
+			corner_receiver = candidate
+			break
+	assert(corner_receiver != null)
+	var corner_proxy: Node3D = match_node.presentation_3d.player_nodes.get(corner_receiver.get_instance_id())
+	assert((corner_proxy.get_node("SetPieceReceiverDisc") as MeshInstance3D).visible)
 	await _save_capture(match_node, "corner-playable", "VISUAL_CAPTURE_CORNER_PLAYABLE")
 	assert(match_node._release_outfield_set_piece())
 
