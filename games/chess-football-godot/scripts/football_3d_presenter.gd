@@ -1290,7 +1290,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 				var directional_animation := ChessFootballRunDirection.animation_for(wanted_animation, run_view)
 				if sprite.sprite_frames.has_animation(directional_animation):
 					wanted_animation = directional_animation
-				var authored_catch := (
+				var authored_catch: bool = (
 					player.role == "keeper" and player == holding_keeper
 					and _keeper_catch_r2_loaded.has(int(player.team_id))
 				)
