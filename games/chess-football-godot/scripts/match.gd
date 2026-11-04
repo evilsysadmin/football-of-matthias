@@ -4,8 +4,12 @@ const Presenter3D = preload("res://scripts/football_3d_presenter.gd")
 const FootballAudio = preload("res://scripts/football_audio.gd")
 const QuickDifficulty = preload("res://scripts/football_quick_difficulty.gd")
 const Formation = preload("res://scripts/football_match_formation.gd")
-# Keep live matches 5v5 until 11v11 AI, restarts, camera and scouting are ready.
+# The runtime always uses the current 5v5. Tests can set match_team_size=11
+# BEFORE entering the scene tree to render the full XI together in Godot.
+# Do not expose this preview switch in the browser until all match rules work.
 const TEAM_SIZE := 5
+var match_team_size: int = TEAM_SIZE
+var match_pitch: Rect2 = ChessFootballMath.PITCH_RECT
 const TEAM_COLORS := [Color(0.12, 0.42, 0.92), Color(0.86, 0.18, 0.2)]
 
 const CAMERA_MODE_BROADCAST := "broadcast"
@@ -234,6 +238,8 @@ var pause_menu_button: Button
 var pause_sfx_button: Button
 
 func _ready() -> void:
+	assert(match_team_size == 5 or match_team_size == 11)
+	match_pitch = Formation.ELEVEN_PITCH_RECT if match_team_size == 11 else ChessFootballMath.PITCH_RECT
 	_set_quick_difficulty(QuickDifficulty.read_browser())
 	_spawn_match()
 	_create_audio()
@@ -2719,6 +2725,8 @@ func _check_ball_out() -> void:
 		_prepare_set_piece("SAQUE DE PUERTA", defending_team, Vector2(goal_kick_x, pitch.get_center().y))
 
 func _kickoff_position(team_id: int, player: Footballer) -> Vector2:
+	if match_team_size == 11:
+		return Formation.eleven_kickoff_position(team_id, player.squad_index, match_pitch, kickoff_team_id)
 	var center := ChessFootballMath.PITCH_RECT.get_center()
 	var side := -1.0 if team_id == 0 else 1.0
 	var gap := KICKOFF_TEAM_HALF_GAP if team_id == kickoff_team_id else KICKOFF_RIVAL_HALF_GAP
@@ -2755,8 +2763,9 @@ func _prepare_kickoff(team_id: int, is_initial: bool) -> void:
 			player.global_position = _kickoff_position(id, player)
 			player.velocity = Vector2.ZERO
 
-	var center := ChessFootballMath.PITCH_RECT.get_center()
-	var starter: Footballer = teams[kickoff_team_id][2]
+	var center: Vector2 = match_pitch.get_center()
+	var starter_index := 10 if match_team_size == 11 else 2
+	var starter: Footballer = teams[kickoff_team_id][starter_index]
 	if starter.sent_off:
 		starter = _nearest_outfield_player_to_point(kickoff_team_id, center)
 	starter.global_position = center - starter.ball_anchor()
@@ -2784,8 +2793,10 @@ func _update_kickoff(delta: float) -> void:
 	last_goal_text = ""
 	if audio_fx != null:
 		audio_fx.play_whistle()
-	var starter: Footballer = teams[kickoff_team_id][2]
-	var receiver: Footballer = teams[kickoff_team_id][KICKOFF_RECEIVER_INDEX]
+	var starter_index := 10 if match_team_size == 11 else 2
+	var receiver_index := 6 if match_team_size == 11 else KICKOFF_RECEIVER_INDEX
+	var starter: Footballer = teams[kickoff_team_id][starter_index]
+	var receiver: Footballer = teams[kickoff_team_id][receiver_index]
 	starter.play_action("pass", 0.60)
 	if audio_fx != null:
 		audio_fx.play_pass()
@@ -2802,19 +2813,20 @@ func _update_3d_presentation(delta: float) -> void:
 		presentation_3d.sync_presentation(delta, camera_mode)
 
 func _spawn_match() -> void:
-	var pitch := ChessFootballMath.PITCH_RECT
-	# Both current 5v5 and future 11v11 positions share one formation contract.
-	# For now the match remains 5v5; expanding players requires separate slices.
+	var pitch: Rect2 = match_pitch
 	for team_id in range(2):
-		for index in range(TEAM_SIZE):
-			var position: Vector2 = Formation.home_position(TEAM_SIZE, team_id, index, pitch)
+		for index in range(match_team_size):
+			var position: Vector2 = Formation.home_position(match_team_size, team_id, index, pitch)
 			var player := Footballer.new()
 			add_child(player)
-			player.configure(team_id, index, Formation.role_for(TEAM_SIZE, index), position, TEAM_COLORS[team_id])
+			player.configure(
+				team_id, index, Formation.role_for(match_team_size, index),
+				position, TEAM_COLORS[team_id], match_team_size
+			)
 			player.visible = false
 			teams[team_id].append(player)
 	ball = FootballBall.new()
-	ball.global_position = ChessFootballMath.PITCH_RECT.get_center()
+	ball.global_position = match_pitch.get_center()
 	add_child(ball)
 	ball.visible = false
 

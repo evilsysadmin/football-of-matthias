@@ -76,3 +76,19 @@ static func home_position(team_size: int, team_id: int, squad_index: int, pitch:
 		pitch.position.x + pitch.size.x * ratio_x,
 		pitch.position.y + pitch.size.y * normalized.y,
 	)
+
+# Preview-only kickoff contract for 4-3-3. All outfielders must start in
+# their own half; the kicking side places exactly one striker at midfield.
+# The real 5v5 kickoff remains unchanged until the match migration is ready.
+static func eleven_kickoff_position(team_id: int, squad_index: int, pitch: Rect2, kicking_team: int) -> Vector2:
+	assert(team_id in [0, 1] and kicking_team in [0, 1])
+	assert(squad_index >= 0 and squad_index < 11)
+	var home: Vector2 = home_position(11, team_id, squad_index, pitch)
+	if squad_index == 0:
+		return home
+	var center: Vector2 = pitch.get_center()
+	var side := -1.0 if team_id == 0 else 1.0
+	if team_id == kicking_team and squad_index == 10:
+		return Vector2(center.x + side * 32.0, center.y)
+	var offset := maxf(absf(home.x - center.x), 160.0 if team_id == kicking_team else 230.0)
+	return Vector2(center.x + side * offset, home.y)

@@ -389,6 +389,21 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_ELEVEN_ROSTER_OK' "$log"
+      - name: Full 4-3-3 stadium preview (22 real 3D actors)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-stadium-preview.log"
+          set +e
+          timeout 50s "$godot" --headless --quit-after 650 --path games/chess-football-godot --script res://tests/eleven_stadium_preview.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Football 11v11 combined stadium preview failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22' "$log"
       - name: Keeper live-motion smoke
         shell: bash
         run: |
@@ -745,7 +760,35 @@ jobs:
               cp "$screenshot" "$RUNNER_TEMP/chess-football-review/keeper-r2-${team,,}-${phase,,}.png"
             done
           done
+      - name: Capture 4-3-3 stadium preview (actual Godot 1280x720)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-preview-visual.log"
+          set +e
+          timeout 60s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/eleven_stadium_preview.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          # Keep failed visual evidence for inspection. Godot can log an
+          # assertion yet still emit a PNG and return success.
+          for mode in tactical broadcast; do
+            marker="FOOTBALL_XI_PREVIEW_${mode^^}"
+            screenshot="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
+            if [[ -n "$screenshot" && -s "$screenshot" ]]; then
+              cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-preview-$mode.png"
+            fi
+          done
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
+            echo '::error::The real 11v11 Godot screenshots contain a failed visual assertion.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22' "$log"
+          for mode in tactical broadcast; do
+            test -s "$RUNNER_TEMP/chess-football-review/xi-preview-$mode.png"
+          done
       - name: Upload visual review
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: chess-football-visual-review

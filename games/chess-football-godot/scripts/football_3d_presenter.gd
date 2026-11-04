@@ -89,6 +89,12 @@ var match_node: Node
 var camera: Camera3D
 var player_nodes: Dictionary = {}
 var player_sprites: Dictionary = {}
+# 11v11-only QuadMesh bodies fed by the canonical AnimatedSprite3D frames.
+# Legacy 5v5 continues to render AnimatedSprite3D directly.
+var xi_raster_meshes: Dictionary = {}
+# Mesh fallback for far-camera actor readability in the full 11v11 field.
+# The approved animated raster still overlays each model at close range.
+var xi_actor_models: Dictionary = {}
 var player_run_views: Dictionary = {}
 # Keeper run/action poses tick independently in the visible 3D runtime.
 # Hidden authoritative 2D AnimatedSprite2D nodes are not a reliable clock.
@@ -318,7 +324,7 @@ func _apply_verified_keeper_catch_frames(textures: Array[Texture2D], team_id: in
 
 func setup(p_match: Node) -> void:
 	match_node = p_match
-	var pitch := ChessFootballMath.PITCH_RECT
+	var pitch: Rect2 = match_node.match_pitch
 	field_width = pitch.size.x * WORLD_SCALE
 	field_depth = pitch.size.y * WORLD_SCALE
 	_build_environment()
@@ -328,6 +334,8 @@ func setup(p_match: Node) -> void:
 	_build_ball()
 	_build_camera()
 	sync_presentation(1.0, "broadcast")
+	# Render approved XI atlases as real textured 3D meshes.
+	_build_xi_quad_bodies()
 	_request_idle_front_from_r2()
 	_request_lateral_run_from_r2()
 	_request_tackle_atlases_from_r2()
@@ -1070,6 +1078,104 @@ func _add_goal_net_grid(
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(instance)
 
+# XI-only raster mirrors the existing AnimatedSprite3D clock and atlas.
+# Initialize after the 3D scene entered the tree, exactly like the real
+# 22-proxy visual diagnostic. The shipped 5v5 has no extra raster nodes.
+# In the expanded XI, Godot's GLES3 Sprite3D batches intermittently skip
+# distant bodies. A normal textured QuadMesh renders the approved atlas on
+# the exact same actor transform. The animated Sprite3D remains the clock;
+# only this 11v11 preview uses these static 3D raster meshes.
+func _build_xi_quad_bodies() -> void:
+	if match_node.match_team_size != 11:
+		return
+	for team in match_node.teams:
+		for player in team:
+			var key: int = int(player.get_instance_id())
+			var driver: AnimatedSprite3D = player_sprites.get(key)
+			var proxy: Node3D = player_nodes.get(key)
+			assert(driver != null and proxy != null)
+			var frame_texture: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
+			var panel := QuadMesh.new()
+			panel.size = Vector2(frame_texture.get_width(), frame_texture.get_height()) * driver.pixel_size
+			var material := StandardMaterial3D.new()
+			material.albedo_texture = frame_texture
+			material.albedo_color = driver.modulate
+			material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+			material.alpha_scissor_threshold = 0.12
+			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			material.cull_mode = BaseMaterial3D.CULL_DISABLED
+			# Prevent a distant, vertical raster body from sinking into turf
+			# when the full-pitch aerial camera intersects the field depth.
+			material.no_depth_test = true
+			var quad := MeshInstance3D.new()
+			quad.name = "XI_RasterBody"
+			quad.mesh = panel
+			quad.material_override = material
+			quad.position = driver.position
+			quad.rotation = driver.rotation
+			quad.scale = driver.scale
+			quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			proxy.add_child(quad)
+			xi_raster_meshes[key] = quad
+			driver.hide()
+
+
+# Full-pitch cameras can cull tiny raster billboards in Godot GLES3.
+# Keep a small, physical team-coloured athlete UNDER the approved animated
+# raster, so 22 actors remain identifiable at aerial and distant zooms.
+# Restricted to the unshipped XI preview; 5v5 visuals are untouched.
+func _build_xi_actor_sculpt(root: Node3D, player: Footballer) -> void:
+	var model := Node3D.new()
+	model.name = "XI_KitSculpt"
+	var jersey := _material(player.team_color, 0.86)
+	var shorts := _material(player.team_color.darkened(0.38), 0.91)
+	var skin := _material(Color(0.69, 0.48, 0.33), 0.92)
+	var boots := _material(Color(0.035, 0.046, 0.063), 0.90)
+	var torso := MeshInstance3D.new()
+	torso.name = "Jersey"
+	var body_mesh := CylinderMesh.new()
+	body_mesh.top_radius = 0.24
+	body_mesh.bottom_radius = 0.19
+	body_mesh.height = 0.58
+	torso.mesh = body_mesh
+	torso.position.y = 0.69
+	torso.material_override = jersey
+	torso.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	model.add_child(torso)
+	var head := MeshInstance3D.new()
+	head.name = "Head"
+	var head_mesh := SphereMesh.new()
+	head_mesh.radius = 0.15
+	head_mesh.height = 0.30
+	head.mesh = head_mesh
+	head.position.y = 1.13
+	head.material_override = skin
+	head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	model.add_child(head)
+	for sign in [-1.0, 1.0]:
+		var leg := MeshInstance3D.new()
+		var leg_mesh := CylinderMesh.new()
+		leg_mesh.top_radius = 0.097
+		leg_mesh.bottom_radius = 0.072
+		leg_mesh.height = 0.48
+		leg.mesh = leg_mesh
+		leg.position = Vector3(sign * 0.12, 0.24, 0.0)
+		leg.material_override = shorts
+		leg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		model.add_child(leg)
+		var shoe := MeshInstance3D.new()
+		var shoe_mesh := BoxMesh.new()
+		shoe_mesh.size = Vector3(0.18, 0.095, 0.29)
+		shoe.mesh = shoe_mesh
+		shoe.position = Vector3(sign * 0.12, 0.055, -0.045)
+		shoe.material_override = boots
+		shoe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		model.add_child(shoe)
+	root.add_child(model)
+	xi_actor_models[int(player.get_instance_id())] = model
+
+
 func _build_player_proxies() -> void:
 	for team in match_node.teams:
 		for player in team:
@@ -1097,6 +1203,8 @@ func _build_player_proxies() -> void:
 			sprite.flip_h = player.team_id == 1
 			sprite.play("idle")
 			root.add_child(sprite)
+			if match_node.match_team_size == 11:
+				_build_xi_actor_sculpt(root, player)
 			if player.role == "keeper":
 				keeper_catch_rigs[int(player.get_instance_id())] = _build_keeper_catch_rig(root, player.team_id)
 
@@ -1338,7 +1446,8 @@ func _build_camera() -> void:
 	smoothed_focus_x = focus.x
 	smoothed_lead_x = 0.0
 	last_camera_mode = "broadcast"
-	camera.position = Vector3(focus.x, BROADCAST_HEIGHT, BROADCAST_DEPTH)
+	var scale_factor := 1.35 if match_node.match_team_size == 11 else 1.0
+	camera.position = Vector3(focus.x, BROADCAST_HEIGHT * scale_factor, BROADCAST_DEPTH * scale_factor)
 	camera.look_at(Vector3(focus.x, 0.0, -0.85), Vector3.UP)
 
 func _add_box(position_3d: Vector3, size_3d: Vector3, color: Color) -> MeshInstance3D:
@@ -1438,6 +1547,32 @@ func sync_presentation(delta: float, mode: String) -> void:
 				) - cell_half_height
 			)
 			sprite.position.y += foot_y * sprite.pixel_size * (sprite.scale.y - authored_y)
+			# A visible XI QuadMesh uses the original animation frame, position,
+			# mirroring and footline. No separate animation or physics authority.
+			var xi_quad: MeshInstance3D = xi_raster_meshes.get(key)
+			if xi_quad != null:
+				var panel: QuadMesh = xi_quad.mesh
+				var canvas: StandardMaterial3D = xi_quad.material_override
+				var current_frame: Texture2D = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+				if canvas.albedo_texture != current_frame:
+					canvas.albedo_texture = current_frame
+				var frame_size := Vector2(current_frame.get_width(), current_frame.get_height()) * sprite.pixel_size
+				if panel.size != frame_size:
+					panel.size = frame_size
+				var flip_u: bool = sprite.flip_h
+				var target_uv_scale := Vector3(-1.0, 1.0, 1.0) if flip_u else Vector3.ONE
+				var target_uv_offset := Vector3(1.0, 0.0, 0.0) if flip_u else Vector3.ZERO
+				if canvas.uv1_scale != target_uv_scale:
+					canvas.uv1_scale = target_uv_scale
+					canvas.uv1_offset = target_uv_offset
+				if xi_quad.position != sprite.position:
+					xi_quad.position = sprite.position
+				if xi_quad.rotation != sprite.rotation:
+					xi_quad.rotation = sprite.rotation
+				if xi_quad.scale != sprite.scale:
+					xi_quad.scale = sprite.scale
+				if canvas.albedo_color != sprite.modulate:
+					canvas.albedo_color = sprite.modulate
 			# The existing secondary motion includes deliberate running bob,
 			# which stays independent from depth and untouched here.
 			var is_controlled: bool = player == match_node.controlled
@@ -1916,7 +2051,17 @@ func _sync_camera(delta: float, mode: String) -> void:
 
 	if mode == "tactical":
 		smoothed_restart_look_z = BROADCAST_BASE_LOOK_Z
-		wanted_position = Vector3(0.0, TACTICAL_HEIGHT, 0.35)
+		var tactical_height: float = (
+			maxf(TACTICAL_HEIGHT, field_depth * 1.36)
+			if match_node.match_team_size == 11 else TACTICAL_HEIGHT
+		)
+		# The original near-vertical XI aerial lens views upright raster
+		# players edge-on. A shallow stadiumward tilt keeps all 22 visible
+		# without changing the normal 5v5 tactical camera.
+		var tactical_depth: float = (
+			field_depth * 0.90 if match_node.match_team_size == 11 else 0.35
+		)
+		wanted_position = Vector3(0.0, tactical_height, tactical_depth)
 		wanted_look = Vector3.ZERO
 		wanted_fov = 43.0
 	else:
@@ -1968,6 +2113,10 @@ func _sync_camera(delta: float, mode: String) -> void:
 			easing_corner_release
 		)
 		wanted_position.x = clampf(wanted_position.x, -camera_x_limit, camera_x_limit)
+		if match_node.match_team_size == 11:
+			# Wider preview lens framing, without touching the calibrated 5v5 camera.
+			wanted_position.y *= 1.35
+			wanted_position.z *= 1.45
 		var restart_look_z := broadcast_restart_look_z(
 			bool(match_node.set_piece_active),
 			int(match_node.set_piece_team_id),
