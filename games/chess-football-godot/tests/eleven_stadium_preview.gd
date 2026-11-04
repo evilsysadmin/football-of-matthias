@@ -88,7 +88,7 @@ func _initialize() -> void:
 	assert(stage.player_sprites.size() == 22)
 	assert(stage.player_nodes.size() == 22)
 	assert(stage.xi_raster_meshes.size() == 22)
-	# Every 11v11 actor has a real canonical fallback without a mannequin.
+	# The XI fallback draws ONLY the geometric proxy while WebP is unavailable.
 	var center: Vector2 = game.match_pitch.get_center()
 	var roster_ids: Dictionary = {}
 	for team_id in range(2):
@@ -104,14 +104,15 @@ func _initialize() -> void:
 			var driver: AnimatedSprite3D = stage.player_sprites[key]
 			var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 			assert(not driver.visible)
-			assert(quad != null and quad.is_visible_in_tree())
-			assert(stage.player_nodes[key].get_node_or_null("XI_KitSculpt") == null)
+			assert(quad != null and not quad.visible)
+			var fallback_model := stage.player_nodes[key].get_node_or_null("XI_KitSculpt") as Node3D
+			assert(fallback_model != null and fallback_model.visible)
 			assert(quad.mesh is QuadMesh)
 			var canvas: StandardMaterial3D = quad.material_override
 			var frame: Texture2D = stage._xi_frame_texture(player, driver)
 			assert(canvas.albedo_texture == frame)
-			# No R2 is loaded in this offline preview: every XI athlete must
-			# use the known visible bundled side-run raster, not a mannequin.
+			# No optional R2 is loaded in this offline preview: a single visible
+			# proxy body prevents absent XI actors without raster/model doubling.
 			if player.role != "keeper":
 				assert(frame == driver.sprite_frames.get_frame_texture(&"run", driver.frame % 8))
 			assert((frame as ImageTexture).get_image().get_used_rect().size.y >= 80)
