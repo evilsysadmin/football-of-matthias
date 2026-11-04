@@ -104,15 +104,15 @@ func _initialize() -> void:
 			var driver: AnimatedSprite3D = stage.player_sprites[key]
 			var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 			assert(not driver.visible)
-			assert(quad != null and not quad.visible)
-			var fallback_model := stage.player_nodes[key].get_node_or_null("XI_KitSculpt") as Node3D
-			assert(fallback_model != null and fallback_model.visible)
+			assert(quad != null and quad.is_visible_in_tree())
+			assert(stage.player_nodes[key].get_node_or_null("XI_KitSculpt") == null)
 			assert(quad.mesh is QuadMesh)
 			var canvas: StandardMaterial3D = quad.material_override
 			var frame: Texture2D = stage._xi_frame_texture(player, driver)
 			assert(canvas.albedo_texture == frame)
-			# No optional R2 is loaded in this offline preview: a single visible
-			# proxy body prevents absent XI actors without raster/model doubling.
+			# Offline preview: one canonical sprite from local bytes per player,
+			# no R2 download and no second geometry body.
+			assert(frame == ChessFootballSpriteBank.xi_fallback_texture(player.team_id, player.role == "keeper"))
 			if player.role != "keeper":
 				assert(frame == driver.sprite_frames.get_frame_texture(&"run", driver.frame % 8))
 			assert((frame as ImageTexture).get_image().get_used_rect().size.y >= 80)

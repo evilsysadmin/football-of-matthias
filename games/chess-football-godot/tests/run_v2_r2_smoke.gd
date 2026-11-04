@@ -38,16 +38,21 @@ func _initialize() -> void:
 	var keeper_run := keeper0.sprite_frames.get_frame_texture(&"run", 0)
 	var legacy_idle := first_sprite.sprite_frames.get_frame_texture(&"idle_front", 0)
 	var first_root: Node3D = presenter.player_nodes[first_player.get_instance_id()]
-	assert(first_root.get_node_or_null("XI_KitSculpt") != null)
+	assert(first_root.get_node_or_null("XI_KitSculpt") == null)
 	var local_quad: MeshInstance3D = presenter.xi_raster_meshes[first_player.get_instance_id()]
-	assert(not local_quad.visible)
+	assert(local_quad.is_visible_in_tree())
+	# Four bundled, independently SHA-pinned sprites cover both clubs and
+	# goalkeepers. None depends on a network request.
+	for team_id in range(2):
+		assert(ChessFootballSpriteBank.xi_fallback_texture(team_id) != null)
+		assert(ChessFootballSpriteBank.xi_fallback_texture(team_id, true) != null)
 	# A failed optional R2 fetch must leave the bundled animated footballer,
 	# never reintroduce the original blue cylinder/sculpt placeholder.
 	presenter._apply_verified_run_v2([], 0)
 	assert(first_sprite.sprite_frames.get_frame_texture(&"run_front", 0) == previous)
-	assert(first_root.get_node_or_null("XI_KitSculpt") != null)
+	assert(first_root.get_node_or_null("XI_KitSculpt") == null)
 	assert((local_quad.material_override as StandardMaterial3D).albedo_texture != null)
-	assert(presenter._xi_frame_texture(first_player, first_sprite) == first_sprite.sprite_frames.get_frame_texture(&"run", first_sprite.frame % 8))
+	assert(presenter._xi_frame_texture(first_player, first_sprite) == ChessFootballSpriteBank.xi_fallback_texture(0))
 
 	for team_id in range(2):
 		var meta := ChessFootballRunV2R2.sheet_meta(team_id)
@@ -71,7 +76,7 @@ func _initialize() -> void:
 					assert(sprite.sprite_frames.get_frame_count(anim) == 8)
 					assert(sprite.sprite_frames.get_frame_texture(anim, 0) == textures[row * 8])
 					assert(sprite.sprite_frames.get_frame_texture(anim, 7) == textures[row * 8 + 7])
-			assert(not presenter.player_nodes[key].get_node("XI_KitSculpt").visible)
+			assert(presenter.player_nodes[key].get_node_or_null("XI_KitSculpt") == null)
 			assert(presenter.xi_raster_meshes[key].visible)
 	assert(first_sprite.sprite_frames.get_frame_texture(&"idle_front", 0) == legacy_idle)
 	assert(keeper0.sprite_frames.get_frame_texture(&"run", 0) == keeper_run)
