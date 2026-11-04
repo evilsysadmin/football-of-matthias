@@ -608,7 +608,26 @@ jobs:
           # Production/runtime is fullscreen. Review capture is deliberately
           # pinned windowed at 1280x720 so Xvfb screen defaults cannot change
           # framing or make PNG evidence nondeterministic.
-          timeout 60s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/visual_capture.gd | tee "$log"
+          set +e
+          timeout 60s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/visual_capture.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          # A failed GDScript assert may still exit zero and produce PNGs.
+          # Reject the error while retaining any already-rendered evidence.
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            mkdir -p "$RUNNER_TEMP/chess-football-review"
+            cp "$log" "$RUNNER_TEMP/chess-football-review/visual-capture.log"
+            while IFS= read -r line; do
+              if [[ "$line" =~ ^VISUAL_CAPTURE_[A-Z0-9_]+=(.+\.png)$ ]]; then
+                screenshot="${BASH_REMATCH[1]}"
+                if [[ -s "$screenshot" ]]; then
+                  cp "$screenshot" "$RUNNER_TEMP/chess-football-review/$(basename "$screenshot")"
+                fi
+              fi
+            done < "$log"
+            echo '::error::Chess Football visual capture failed; partial PNGs and logs preserved.'
+            exit 1
+          fi
           kickoff="$(sed -n 's/^VISUAL_CAPTURE_KICKOFF=//p' "$log" | tail -1)"
           kickoff_touch="$(sed -n 's/^VISUAL_CAPTURE_KICKOFF_TOUCH=//p' "$log" | tail -1)"
           directional_runs="$(sed -n 's/^VISUAL_CAPTURE_DIRECTIONAL_RUNS=//p' "$log" | tail -1)"
