@@ -1282,7 +1282,12 @@ func _build_xi_quad_bodies() -> void:
 			material.albedo_texture = frame_texture
 			material.albedo_color = driver.modulate
 			material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-			material.alpha_scissor_threshold = 0.12
+			# The bundled legacy atlas has thin opaque strokes surrounded by
+			# transparent padding. Linear mipmap averaging can reduce distant
+			# actors below the alpha cutout threshold, effectively erasing them.
+			# Preserve a texel-aligned silhouette at XI broadcast/tactical zoom.
+			material.alpha_scissor_threshold = 0.02
+			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 			material.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -1299,8 +1304,12 @@ func _build_xi_quad_bodies() -> void:
 			quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			proxy.add_child(quad)
 			xi_raster_meshes[key] = quad
-			# Avoid drawing both the model AND raster at the same time.
-			quad.visible = false
+			# One visible body per actor: use the bundled canonical raster even
+			# when optional R2 is offline. Keep the legacy sculpt hidden so
+			# switching R2 frames never exposes a second body or a mannequin.
+			var sculpt := xi_actor_models.get(key) as Node3D
+			if sculpt != null:
+				sculpt.hide()
 			driver.hide()
 
 
