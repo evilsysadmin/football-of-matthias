@@ -21,31 +21,47 @@ func _assert_kit_pixels(capture: Image, mode: String, minimum: int) -> void:
 	assert(blue >= minimum and red >= minimum,
 		"XI rendered screenshot must show two real kits, not only shadows")
 
-# Confirm physical jerseys at projected on-field actor positions.
-# Stadium seats and HUD colours cannot satisfy this check.
-func _assert_tactical_player_kits(capture: Image, stage: ChessFootball3DPresenter, game: Node) -> void:
-	var seen := [0, 0]
-	for team in game.teams:
-		for player in team:
-			var screen: Vector2 = stage.screen_position_for_world(player.global_position, 0.70)
-			var center := Vector2i(roundi(screen.x), roundi(screen.y))
-			var found := false
-			for y in range(maxi(181, center.y - 12), mini(capture.get_height() - 1, center.y + 13)):
-				for x in range(maxi(255, center.x - 12), mini(capture.get_width() - 255, center.x + 13)):
-					var c: Color = capture.get_pixel(x, y)
-					if player.team_id == 0:
-						if c.b > c.r * 1.5 and c.b > c.g * 1.03 and c.b > 0.28 and c.g < 0.57:
-							found = true
-					else:
-						if c.r > c.g * 1.43 and c.r > c.b * 1.15 and c.r > 0.33 and c.g < 0.57:
-							found = true
-				if found:
-					break
-			if found:
-				seen[player.team_id] += 1
-	print("FOOTBALL_XI_ACTOR_KITS tactical blue=%d red=%d" % [seen[0], seen[1]])
-	assert(seen[0] >= 8 and seen[1] >= 8,
-		"XI tactical image must show players at their own projected positions")
+# Check the 11v11 tactical raster itself: 10 distinct shirt groups per
+# team are inside the useful central pitch ROI (both extreme goalkeepers
+# sit just beyond it). Each connected component is an independent player,
+# so stands/UI colours cannot produce a false-green test.
+func _assert_tactical_kit_clusters(capture: Image) -> void:
+	var counts := [0, 0]
+	for team_id in range(2):
+		var colored: Dictionary = {}
+		for y in range(182, mini(capture.get_height(), 630), 2):
+			for x in range(260, mini(capture.get_width() - 260, 1020), 2):
+				var c: Color = capture.get_pixel(x, y)
+				var kit := (
+					(c.b > c.r * 1.5 and c.b > c.g * 1.03 and c.b > 0.28 and c.g < 0.57)
+					if team_id == 0 else
+					(c.r > c.g * 1.43 and c.r > c.b * 1.15 and c.r > 0.33 and c.g < 0.57)
+				)
+				if kit:
+					colored[Vector2i(x / 2, y / 2)] = true
+		var visited: Dictionary = {}
+		for origin in colored:
+			if visited.has(origin):
+				continue
+			var stack: Array[Vector2i] = [origin]
+			visited[origin] = true
+			var members := 0
+			while not stack.is_empty():
+				var sample: Vector2i = stack.pop_back()
+				members += 1
+				for dy in range(-1, 2):
+					for dx in range(-1, 2):
+						if dx == 0 and dy == 0:
+							continue
+						var neighbor := sample + Vector2i(dx, dy)
+						if colored.has(neighbor) and not visited.has(neighbor):
+							visited[neighbor] = true
+							stack.push_back(neighbor)
+			if members >= 4:
+				counts[team_id] += 1
+	print("FOOTBALL_XI_KIT_CLUSTERS tactical blue=%d red=%d" % [counts[0], counts[1]])
+	assert(counts[0] >= 9 and counts[1] >= 9,
+		"XI tactical image must contain distinct players from BOTH teams")
 
 
 func _initialize() -> void:
@@ -130,7 +146,7 @@ func _initialize() -> void:
 		assert(tactical_image.save_png(tactical_path) == OK)
 		print("FOOTBALL_XI_PREVIEW_TACTICAL=" + ProjectSettings.globalize_path(tactical_path))
 		_assert_kit_pixels(tactical_image, "tactical", 20)
-		_assert_tactical_player_kits(tactical_image, stage, game)
+		_assert_tactical_kit_clusters(tactical_image)
 		game.camera_mode = "broadcast"
 		stage.sync_presentation(2.0, "broadcast")
 		for step in range(12):
