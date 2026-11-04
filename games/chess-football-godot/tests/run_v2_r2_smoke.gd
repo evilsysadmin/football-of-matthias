@@ -82,5 +82,5 @@ func _initialize() -> void:
 	var before_side := first_sprite.sprite_frames.get_frame_texture(&"run", 0)
 	presenter._apply_verified_lateral_run(textures.slice(16, 24), 0)
 	assert(first_sprite.sprite_frames.get_frame_texture(&"run", 0) == before_side)
-	print("football R2 v2 run: 5 views x 8 frames, canonical-only XI fallback and soft shadow: OK")
+	print("football R2 v2 run: 5 views x 8 frames, XI fallback and soft shadow: OK")
 	quit(0)
