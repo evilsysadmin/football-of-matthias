@@ -46,10 +46,10 @@ try{
    const notice=page.getByTestId('football-release-notice');
    await notice.waitFor();
    assert.ok(await page.getByRole('button',{name:'Actualizar',exact:true}).isVisible());
-   if(viewport.width===390){
-    const entry=await page.getByRole('button',{name:/Modo mánager/}).boundingBox();
-    const toast=await notice.boundingBox();
-    assert.ok(entry&&toast&&entry.y+entry.height<=toast.y,'mobile version banner must not cover manager entry');
+   const toast=await notice.boundingBox();
+   for(const label of [/Partida rápida/,/Modo mánager/]){
+    const entry=await page.getByRole('button',{name:label}).boundingBox();
+    assert.ok(entry&&toast&&entry.y+entry.height<=toast.y,'version banner must not cover game entries');
    }
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'update banner must not cause horizontal overflow');
    await page.screenshot({path:resolve(out,viewport.width+'-new-version-welcome.png')});
