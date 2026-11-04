@@ -4,7 +4,7 @@ extends SceneTree
 # The CI download has already verified HTTPS/CORS/SHA of all three public
 # R2 WebPs. Re-verify exact bytes through the SAME runtime decoder.
 const VIEWS := ["front", "back", "side", "front_diagonal", "back_diagonal"]
-const CROP_SIZE := Vector2i(240, 320)
+const CROP_SIZE := Vector2i(260, 360)
 
 func _initialize() -> void:
 	var asset_dir := OS.get_environment("FOOTBALL_IDLE_R2_PREVIEW_DIR")
@@ -125,7 +125,10 @@ func _capture_actor(game: Node, actor: Footballer, view: String, ticks: int) -> 
 	var target := presenter.world_to_stage(actor.global_position)
 	presenter.camera.position = target + Vector3(0.0, 1.7, 4.8)
 	presenter.camera.look_at(target + Vector3(0.0, 0.78, 0.0), Vector3.UP)
+	# The very first shot otherwise reads the previous broadcast frame:
+	# wait for the GPU to finish the actual newly positioned camera.
 	await process_frame
+	await RenderingServer.frame_post_draw
 	var viewport := game.get_viewport()
 	var image := viewport.get_texture().get_image()
 	assert(image != null and image.get_size() == Vector2i(1280, 720))
