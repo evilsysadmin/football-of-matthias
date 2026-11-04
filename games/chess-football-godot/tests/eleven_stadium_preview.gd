@@ -89,36 +89,6 @@ func _initialize() -> void:
 			stage.sync_presentation(1.0 / 60.0, "tactical")
 			await process_frame
 			await RenderingServer.frame_post_draw
-	# XI-only projection diagnostic: the static raster added after the
-	# tactical camera has drawn becomes visible at near distance. Test
-	# whether Godot culls back-facing billboards at long-pitch distances.
-	# This branch remains Draft until full 22-athlete PNG review.
-	if DisplayServer.get_name() != "headless":
-		for side in game.teams:
-			for athlete in side:
-				var key: int = athlete.get_instance_id()
-				var driver: AnimatedSprite3D = stage.player_sprites[key]
-				var old_face: Sprite3D = stage.xi_raster_sprites[key]
-				var double_face := Sprite3D.new()
-				double_face.name = "XI_DoubleSidedDiagnostic"
-				double_face.texture = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
-				double_face.position = driver.position
-				double_face.rotation = driver.rotation
-				double_face.scale = driver.scale
-				double_face.pixel_size = driver.pixel_size
-				double_face.centered = driver.centered
-				double_face.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-				double_face.double_sided = true
-				double_face.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-				double_face.alpha_scissor_threshold = 0.12
-				double_face.shaded = false
-				double_face.no_depth_test = true
-				double_face.flip_h = driver.flip_h
-				double_face.modulate = driver.modulate
-				double_face.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				stage.player_nodes[key].add_child(double_face)
-				old_face.hide()
-				stage.xi_raster_sprites[key] = double_face
 	# The XI-visible quad must use exactly the same approved authored frame
 	# and pose as the regular AnimatedSprite3D animation driver. One visible
 	# body per player, no diagnostic geometry and no duplicate draw.
