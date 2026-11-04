@@ -45,6 +45,17 @@ jobs:
           "$godot" --version
       - name: Materialize approved canonical assets
         run: python3 scripts/materialize_canonical.py
+      - name: Import Godot project and register script class names
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-import.log"
+          "$godot" --headless --path games/chess-football-godot --editor --quit 2>&1 | tee "$log"
+          if grep -Eq 'SCRIPT ERROR:|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI project import failed.'
+            exit 1
+          fi
       - name: Run real 22-player simulation at 60 Hz
         shell: bash
         run: |

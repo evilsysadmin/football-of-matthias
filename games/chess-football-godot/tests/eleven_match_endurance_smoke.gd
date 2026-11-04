@@ -66,7 +66,7 @@ func _initialize() -> void:
 	var saw_goal := false
 	var saw_kickoff := false
 	var resumed := false
-	var initial_goals := game.score[0] + game.score[1]
+	var initial_goals: int = int(game.score[0]) + int(game.score[1])
 	for tick in range(TICKS):
 		if tick == 480:
 			game._select_player(game.teams[0][10])
