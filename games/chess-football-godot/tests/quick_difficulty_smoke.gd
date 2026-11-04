@@ -49,5 +49,27 @@ func _initialize() -> void:
 	match_node._set_quick_difficulty("bogus")
 	assert(match_node.quick_difficulty == "normal")
 	assert(is_equal_approx(match_node._ai_adaptive_decision_interval(),normal_interval))
-	print("FOOTBALL_QUICK_DIFFICULTY_OK levels=4 CPU_real_tactics player_stats_unchanged")
+	# A nearby CPU cover must actually close goal-side when a human carries
+	# the ball. Easy keeps the positional cushion; neither mode buffs stats.
+	match_node.set_process(false)
+	match_node.set_physics_process(false)
+	var human_carrier: Footballer = match_node.teams[0][4]
+	var cpu_cover: Footballer = match_node.teams[1][2]
+	human_carrier.global_position = match_node.match_pitch.get_center()
+	cpu_cover.global_position = human_carrier.global_position + Vector2(160.0, 0.0)
+	match_node.ball.attach_to(human_carrier)
+	match_node._set_quick_difficulty("easy")
+	var easy_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
+	match_node._set_quick_difficulty("normal")
+	var normal_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
+	assert(easy_cover.x - normal_cover.x > 70.0)
+	assert(normal_cover.x > human_carrier.global_position.x)
+	# No cross-pitch chase, and never change the human-side cover plan.
+	cpu_cover.global_position = human_carrier.global_position + Vector2(350.0, 0.0)
+	assert(match_node._ai_cover_target(cpu_cover, human_carrier.global_position).is_equal_approx(easy_cover))
+	var human_cover: Footballer = match_node.teams[0][1]
+	var human_goal_side: Vector2 = match_node._ai_cover_target(human_cover, human_carrier.global_position)
+	match_node._set_quick_difficulty("easy")
+	assert(match_node._ai_cover_target(human_cover, human_carrier.global_position).is_equal_approx(human_goal_side))
+	print("FOOTBALL_QUICK_DIFFICULTY_OK levels=4 CPU_real_tactics player_stats_unchanged cover_challenge=1 easy_and_human_unchanged=1")
 	quit(0)

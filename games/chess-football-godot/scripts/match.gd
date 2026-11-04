@@ -76,6 +76,10 @@ const AI_SUPPORT_FORWARD := 225.0
 const AI_TEAMMATE_SEPARATION_RADIUS := 130.0
 const AI_TEAMMATE_SEPARATION_MAX_CORRECTION := 110.0
 const AI_COVER_DISTANCE := 150.0
+# Only the CPU's nearby second defender may step up from positional cover to
+# a legal contest. Easy and the human-side support shape remain untouched.
+const AI_CPU_SECOND_PRESS_ACTIVATION := 240.0
+const AI_CPU_SECOND_PRESS_GOAL_SIDE := 58.0
 # Forecast only a short, bounded stretch of a *ground* rebound. Keep the
 # presser and second defender in their existing roles; nobody teleports.
 const AI_LOOSE_BALL_LEAD_SECONDS := 0.14
@@ -1107,7 +1111,19 @@ func _ai_cover_target(player: Footballer, threat_position: Vector2) -> Vector2:
 		goal_side = Vector2.RIGHT if player.team_id == 1 else Vector2.LEFT
 	else:
 		goal_side = goal_side.normalized()
-	var target: Vector2 = threat_position + goal_side * AI_COVER_DISTANCE
+	var cover_distance := AI_COVER_DISTANCE
+	if (
+		player.team_id == 1
+		and quick_difficulty != "easy"
+		and ball.carrier != null
+		and ball.carrier.team_id == 0
+		and player.global_position.distance_to(threat_position) <= AI_CPU_SECOND_PRESS_ACTIVATION
+	):
+		# The old 150-unit cushion left the second presser watching a duel
+		# from beyond legal standing-tackle reach. Close from the goal side
+		# only when already nearby; contact, fouls and stamina are unchanged.
+		cover_distance = AI_CPU_SECOND_PRESS_GOAL_SIDE
+	var target: Vector2 = threat_position + goal_side * cover_distance
 	target.y = lerpf(target.y, player.home_position.y, 0.32)
 	return ChessFootballMath.clamp_to_pitch(target, match_pitch)
 

@@ -49,6 +49,19 @@ func _initialize() -> void:
 	# Cover and interception can protect the ACTUAL far-end goal.
 	var cover: Vector2 = game._ai_cover_target(game.teams[1][5], Vector2(XI.end.x - 420.0, centre.y))
 	assert(XI.has_point(cover) and cover.x > FIVE.end.x + 100.0)
+	# The 11v11 CPU second defender joins a real contest only when nearby.
+	# Preserve goal-side positioning without expanding physical tackle reach.
+	var xi_cover_player: Footballer = game.teams[1][5]
+	var original_cover_position: Vector2 = xi_cover_player.global_position
+	xi_cover_player.global_position = striker.global_position + Vector2(155.0, 0.0)
+	game._set_quick_difficulty("easy")
+	var xi_easy_cover: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
+	game._set_quick_difficulty("normal")
+	var xi_normal_cover: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
+	assert(XI.has_point(xi_normal_cover))
+	assert(xi_normal_cover.x > striker.global_position.x)
+	assert(xi_easy_cover.x - xi_normal_cover.x > 70.0)
+	xi_cover_player.global_position = original_cover_position
 	var right_keeper: Footballer = game.teams[1][0]
 	var left_keeper: Footballer = game.teams[0][0]
 	var guard_right: Vector2 = game._keeper_defensive_target(right_keeper)
