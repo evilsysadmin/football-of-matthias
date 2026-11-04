@@ -208,6 +208,8 @@ try {
   // XI is deliberately unavailable in the public app. The explicit local
   // probe plus loopback origin are required even when the fragment is present.
   // Reboot the SAME exported WASM in Chromium, not a native/mock game.
+  // Hash-only navigation does NOT reload a document: leave the page first.
+  await page.goto('about:blank');
   await page.goto(url + '#football-ci-eleven=1', {
     waitUntil: 'domcontentloaded', timeout: 30000
   });
