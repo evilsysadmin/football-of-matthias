@@ -2680,7 +2680,10 @@ func mobile_touch_target(
 			return {"kind": "goal"}
 
 	var best_player: Footballer = null
-	var best_distance := player_radius
+	# The rival ball carrier has an enlarged touch magnet. Starting the
+	# comparison at player_radius silently cancelled that larger reach.
+	# Still choose the nearest eligible player when touch areas overlap.
+	var best_distance := INF
 	for team in teams:
 		for player in team:
 			if player.sent_off:
