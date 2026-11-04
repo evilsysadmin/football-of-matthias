@@ -60,6 +60,8 @@ jobs:
         run: python3 scripts/check_football_run_v2_r2.py
       - name: Verify R2 animated idle sheets (HTTP, CORS, SHA, layout)
         run: python3 scripts/check_football_idle_r2.py
+      - name: Verify R2 pass/shoot objects and staging CORS (fail closed)
+        run: python3 scripts/check_football_pass_shoot_r2.py
       - name: Verify dedicated football R2 WebPs when public origin is configured
         id: keeper_r2
         shell: bash
@@ -884,6 +886,36 @@ jobs:
             shot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
             test -n "$shot" && test -s "$shot"
             cp "$shot" "$RUNNER_TEMP/chess-football-review/idle-r2-${stage,,}.png"
+          done
+      - name: Capture real 11v11 pass/shoot before/after (two cameras)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-pass-shoot-r2-visual.log"
+          export FOOTBALL_PASS_SHOOT_PREVIEW_DIR="$RUNNER_TEMP/football-pass-shoot-r2"
+          set +e
+          timeout 85s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/pass_shoot_r2_visual.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          for mode in broadcast tactical; do
+            for phase in BEFORE AFTER; do
+              marker="FOOTBALL_PASS_SHOOT_CAPTURE_${phase}_${mode^^}"
+              shot="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
+              if [[ -n "$shot" && -s "$shot" ]]; then
+                cp "$shot" "$RUNNER_TEMP/chess-football-review/pass-shoot-${phase,,}-$mode.png"
+              fi
+            done
+          done
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
+            echo '::error::Real Godot pass/shoot visual capture failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_PASS_SHOOT_REAL_GODOT_REVIEW_OK teams=2 actions=2 phases=3 cameras=2' "$log"
+          for mode in broadcast tactical; do
+            for phase in before after; do
+              test -s "$RUNNER_TEMP/chess-football-review/pass-shoot-$phase-$mode.png"
+            done
           done
       - name: Visual review R2 v2 before/after in actual 11v11 Godot
         shell: bash

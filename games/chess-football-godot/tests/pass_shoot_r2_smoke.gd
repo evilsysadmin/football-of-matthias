@@ -4,12 +4,14 @@ extends SceneTree
 # any player until a whole SHA-verified club atlas becomes available.
 func _initialize() -> void:
 	var contract := ChessFootballPassShootR2.metadata()
-	assert(contract.get("enabled") == false)
+	assert(contract.get("enabled") == true)
 	assert(contract.get("bucket") == "football")
 	assert(contract.get("prefix") == "atlases/v1/")
 	assert((contract.get("entries", []) as Array).size() == 2)
-	assert(ChessFootballPassShootR2.sheet_meta(0).is_empty())
-	assert(ChessFootballPassShootR2.sheet_meta(1).is_empty())
+	assert(not ChessFootballPassShootR2.sheet_meta(0).is_empty())
+	assert(not ChessFootballPassShootR2.sheet_meta(1).is_empty())
+	assert(ChessFootballPassShootR2.sheet_meta(0)["sha256"] == contract["entries"][0]["sha256"])
+	assert(ChessFootballPassShootR2.sheet_meta(1)["sha256"] == contract["entries"][1]["sha256"])
 	assert(ChessFootballPassShootR2.sheet_meta(3).is_empty())
 	assert(ChessFootballPassShootR2.frames_from_image(
 		Image.create(128, 144, false, Image.FORMAT_RGBA8)

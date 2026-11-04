@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "enabled": false,
+  "enabled": true,
   "bucket": "football",
   "prefix": "atlases/v1/",
   "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1",
@@ -17,7 +17,7 @@
     "pass",
     "shoot"
   ],
-  "note": "Offline fallback stays active until the owner uploads both WebPs, SHA/CORS/size verification succeeds and 1280x720 Godot PNGs are visually approved. Never merge based only on a green CI build.",
+  "note": "Staging-only trial. CI blocks unless the public R2 WebPs pass HTTP/CORS/SHA/layout and the real Godot before/after captures are generated. Keep canonical local action fallback and review actual screenshots before Ready or merge.",
   "entries": [
     {
       "team": "fc_matthias",

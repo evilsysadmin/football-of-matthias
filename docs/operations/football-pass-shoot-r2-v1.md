@@ -1,7 +1,7 @@
 # Football pass/shoot · optional candidate v1
 
 This is a visual-only extension to the 3D outfield sprite bank. The canonical
-local run-frame action fallbacks remain until both authored WebPs are published
+local run-frame action fallbacks remain as both authored WebPs are now operator-published
 to the **dedicated** R2 bucket `football` and reviewed in real Godot captures.
 
 - Bucket: `football`; prefix: `atlases/v1/`
@@ -12,8 +12,8 @@ to the **dedicated** R2 bucket `football` and reviewed in real Godot captures.
 - Physical football stays under Godot authority; the ball must never be
   baked into a character sprite.
 
-Next release PR: independently verify HTTP 200, CORS for
+This activation PR independently verifies HTTP 200, CORS for
 `https://staging.football.shadowops.dpdns.org`, exact SHA-256, WebP decode,
 all 16 alpha/footline bounds and real 1280 × 720 captures of both clubs at
-early/impact/follow-through phases. Only then change `enabled` to `true`.
+early/impact/follow-through phases. The manifest is now `enabled: true` only on the Draft branch; its HTTP/CORS/SHA and real Godot captures fail closed in CI. Do not merge until those actual images have been reviewed.
 Do not approve a visual PR based only on CI. Revert `enabled` for rollback.
