@@ -38,14 +38,14 @@ func _initialize() -> void:
 	var keeper_run := keeper0.sprite_frames.get_frame_texture(&"run", 0)
 	var legacy_idle := first_sprite.sprite_frames.get_frame_texture(&"idle_front", 0)
 	var first_root: Node3D = presenter.player_nodes[first_player.get_instance_id()]
-	assert(first_root.get_node_or_null("XI_KitSculpt") != null)
+	assert(not first_root.get_node("XI_KitSculpt").visible)
 	var local_quad: MeshInstance3D = presenter.xi_raster_meshes[first_player.get_instance_id()]
-	assert(not local_quad.visible)
+	assert(local_quad.is_visible_in_tree())
 	# A failed optional R2 fetch must leave the bundled animated footballer,
 	# never reintroduce the original blue cylinder/sculpt placeholder.
 	presenter._apply_verified_run_v2([], 0)
 	assert(first_sprite.sprite_frames.get_frame_texture(&"run_front", 0) == previous)
-	assert(first_root.get_node_or_null("XI_KitSculpt") != null)
+	assert(not first_root.get_node("XI_KitSculpt").visible)
 	assert((local_quad.material_override as StandardMaterial3D).albedo_texture != null)
 	assert(presenter._xi_frame_texture(first_player, first_sprite) == first_sprite.sprite_frames.get_frame_texture(&"run", first_sprite.frame % 8))
 
