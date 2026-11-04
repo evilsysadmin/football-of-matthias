@@ -85,7 +85,7 @@ func _initialize() -> void:
 	# Sprite3D textures and camera transforms must survive multiple real
 	# rendered frames before taking visual evidence of the 22 athletes.
 	if DisplayServer.get_name() != "headless":
-		for render_frame in range(24):
+		for render_frame in range(30):
 			stage.sync_presentation(1.0 / 60.0, "tactical")
 			await process_frame
 			await RenderingServer.frame_post_draw
@@ -123,6 +123,7 @@ func _initialize() -> void:
 	# and pose as the regular AnimatedSprite3D animation driver. One visible
 	# body per player, no diagnostic geometry and no duplicate draw.
 	assert(stage.xi_raster_sprites.size() == 22)
+	assert(stage.xi_raster_remount_complete)
 	for team in game.teams:
 		for athlete in team:
 			var key: int = athlete.get_instance_id()

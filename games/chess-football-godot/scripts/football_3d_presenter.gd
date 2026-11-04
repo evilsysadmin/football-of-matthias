@@ -93,6 +93,7 @@ var player_sprites: Dictionary = {}
 # bodies in the expanded stadium, while identical Sprite3D textures render.
 # Keep the animated clock/atlas and copy its frame to a single visible quad.
 var xi_raster_sprites: Dictionary = {}
+var xi_raster_remount_complete: bool = false
 # Visual diagnosis only: stop changing XI mesh/material state during the
 # first real-Godot capture. Re-enable before the animation regression smoke.
 var xi_raster_hold_for_visual_probe: bool = false
@@ -1096,10 +1097,7 @@ func _enable_xi_raster_bodies() -> void:
 		for _raster_ready_frame in range(2):
 			await get_tree().process_frame
 	else:
-		# In the working 11v11 real-Godot capture, raster faces mounted
-		# after a fully rendered camera warm-up. Wait for *rendered* frames,
-		# never just process_frame ticks; no new clock or network dependency.
-		for _raster_ready_frame in range(20):
+		for _raster_ready_frame in range(8):
 			await RenderingServer.frame_post_draw
 	for team in match_node.teams:
 		for player in team:
@@ -1129,6 +1127,46 @@ func _enable_xi_raster_bodies() -> void:
 			proxy.add_child(raster)
 			xi_raster_sprites[key] = raster
 			driver.hide()
+
+	# The first static XI faces can still be skipped by Godot's raster
+	# batching when the 3D camera/pitch has just compiled. The REAL
+	# 1280x720 gate showed a second set mounted after later draws is visible.
+	# Rebuild only the XI render quads once after 12 more completed frames,
+	# keeping the existing animation clock, actor identity and textures.
+	if DisplayServer.get_name() == "headless":
+		for _raster_ready_frame in range(2):
+			await get_tree().process_frame
+	else:
+		for _raster_ready_frame in range(12):
+			await RenderingServer.frame_post_draw
+	for team in match_node.teams:
+		for player in team:
+			var key: int = int(player.get_instance_id())
+			var driver: AnimatedSprite3D = player_sprites.get(key)
+			var proxy: Node3D = player_nodes.get(key)
+			var previous: Sprite3D = xi_raster_sprites.get(key)
+			if driver == null or proxy == null or previous == null:
+				continue
+			var late := Sprite3D.new()
+			late.name = "XI_RasterReady"
+			late.texture = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
+			late.position = driver.position
+			late.rotation = driver.rotation
+			late.scale = driver.scale
+			late.pixel_size = driver.pixel_size
+			late.centered = driver.centered
+			late.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			late.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+			late.alpha_scissor_threshold = 0.12
+			late.shaded = false
+			late.no_depth_test = true
+			late.flip_h = driver.flip_h
+			late.modulate = driver.modulate
+			late.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			proxy.add_child(late)
+			previous.hide()
+			xi_raster_sprites[key] = late
+	xi_raster_remount_complete = true
 
 
 func _build_player_proxies() -> void:
