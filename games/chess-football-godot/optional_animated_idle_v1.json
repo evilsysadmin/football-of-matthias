@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "enabled": true,
+  "bucket": "football",
+  "prefix": "atlases/v1/",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1",
+  "quality_contract": "football-idle-5views-v1",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "columns": 8,
+  "rows": 5,
+  "footline": 132,
+  "fps": 7,
+  "loop": true,
+  "views": [
+    "front",
+    "back",
+    "side",
+    "front_diagonal",
+    "back_diagonal"
+  ],
+  "entries": [
+    {
+      "kind": "fc_matthias",
+      "file": "fc_matthias_idle_v1.webp",
+      "sha256": "ff410746fbb6bfe20b39b7fb99d6e7185d6a27f1416922d0742e0325e9ccb5ed"
+    },
+    {
+      "kind": "real_enroque",
+      "file": "real_enroque_idle_v1.webp",
+      "sha256": "71835fc75eb1e3e9f59c3ebb128ba74dd145ec7df7f6f43562f7af12f5fdc87f"
+    },
+    {
+      "kind": "keeper",
+      "file": "keeper_idle_v1.webp",
+      "sha256": "2ef0cc83f5ba2801ae47cabdfa3c337e9ef7dc75104bef9d3d587c87f42283e3"
+    }
+  ]
+}
