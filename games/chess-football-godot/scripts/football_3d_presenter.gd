@@ -1096,7 +1096,10 @@ func _enable_xi_raster_bodies() -> void:
 		for _raster_ready_frame in range(2):
 			await get_tree().process_frame
 	else:
-		for _raster_ready_frame in range(8):
+		# In the working 11v11 real-Godot capture, raster faces mounted
+		# after a fully rendered camera warm-up. Wait for *rendered* frames,
+		# never just process_frame ticks; no new clock or network dependency.
+		for _raster_ready_frame in range(20):
 			await RenderingServer.frame_post_draw
 	for team in match_node.teams:
 		for player in team:

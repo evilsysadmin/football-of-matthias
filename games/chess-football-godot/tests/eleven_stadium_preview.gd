@@ -85,41 +85,10 @@ func _initialize() -> void:
 	# Sprite3D textures and camera transforms must survive multiple real
 	# rendered frames before taking visual evidence of the 22 athletes.
 	if DisplayServer.get_name() != "headless":
-		for render_frame in range(12):
+		for render_frame in range(24):
 			stage.sync_presentation(1.0 / 60.0, "tactical")
 			await process_frame
 			await RenderingServer.frame_post_draw
-	# Diagnostic: only the quads added AFTER the tactical camera has
-	# rendered previously appeared in our real-PNG review. Remount the
-	# visible XI faces at this exact lifecycle boundary to isolate timing.
-	# Keep the original animation driver and its authored atlas untouched.
-	for side in game.teams:
-		for athlete in side:
-			var key: int = athlete.get_instance_id()
-			var driver: AnimatedSprite3D = stage.player_sprites[key]
-			var proxy: Node3D = stage.player_nodes[key]
-			var previous: Sprite3D = stage.xi_raster_sprites[key]
-			var late := Sprite3D.new()
-			late.name = "XI_LateRaster_%d" % key
-			late.texture = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
-			late.position = driver.position
-			late.rotation = driver.rotation
-			late.scale = driver.scale
-			late.pixel_size = driver.pixel_size
-			late.centered = driver.centered
-			late.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			late.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-			late.alpha_scissor_threshold = 0.12
-			late.shaded = false
-			# The mounted raster is proven visible near-camera. Test whether
-			# far XI bodies are masked by stadium turf depth, not missing assets.
-			late.no_depth_test = true
-			late.flip_h = driver.flip_h
-			late.modulate = driver.modulate
-			late.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			proxy.add_child(late)
-			previous.hide()
-			stage.xi_raster_sprites[key] = late
 	# The XI-visible quad must use exactly the same approved authored frame
 	# and pose as the regular AnimatedSprite3D animation driver. One visible
 	# body per player, no diagnostic geometry and no duplicate draw.
