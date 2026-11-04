@@ -348,9 +348,16 @@ try {
   if (await page.locator('canvas').count() === 0) {
     throw new Error('XI Web runtime reported ready without canvas');
   }
-  // This is an actual canvas click. Never wait for unrelated scheduled
-  // navigations from Godot: the subsequent input probe verifies readiness.
-  await page.locator('canvas').click({ position: { x: 500, y: 370 }, timeout: 10000, noWaitAfter: true });
+  // The first 5v5 boot already exercised Playwright's real canvas.click.
+  // After a full WASM reboot in software WebGL, locator.click can hang in
+  // actionability/scroll checks during ReadPixels GPU stalls despite a real,
+  // visible canvas. Send a real browser pointer click directly, without
+  // waiting for a visual GPU readback. Never synthesize Godot Input actions.
+  await page.mouse.click(500, 370);
+  await page.waitForFunction(
+    () => document.activeElement?.tagName === 'CANVAS',
+    null, { timeout: 10000 }
+  );
   await page.waitForFunction(
     () => window.__chessFootballInputSamples.some((sample) =>
       sample.playable && sample.team_size === 11 && sample.team_players === 22 &&
