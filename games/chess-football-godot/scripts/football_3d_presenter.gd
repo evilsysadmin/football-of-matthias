@@ -113,6 +113,9 @@ var ball_shadow: MeshInstance3D
 var keeper_catch_rigs: Dictionary = {}
 # A keeper switches only after all eight verified CDN frames arrive.
 var _keeper_catch_r2_loaded: Dictionary = {}
+# A successful R2 idle replacement is atomic for its entire actor family.
+# Legacy one-frame front responses must not overwrite animated frame zero.
+var _animated_idle_r2_loaded: Dictionary = {}
 var keeper_catch_carrier_id: int = 0
 var keeper_catch_origin: Vector3 = Vector3.ZERO
 var keeper_catch_elapsed: float = 0.0
@@ -127,6 +130,79 @@ var last_camera_mode: String = "broadcast"
 var ad_default_messages: Array[String] = []
 var ad_default_accents: Array[Color] = []
 var ad_last_goal_team: int = -1
+
+func _request_animated_idle_from_r2() -> void:
+	if not OS.has_feature("web"):
+		return
+	# Exactly three requests per presenter, never one request per footballer.
+	for kind in ChessFootballIdleR2.KINDS:
+		var meta := ChessFootballIdleR2.sheet_meta(kind)
+		if meta.is_empty():
+			continue
+		var loader := ChessFootballR2AtlasLoader.new()
+		loader.name = "AnimatedIdleR2_" + kind
+		add_child(loader)
+		loader.atlas_ready.connect(_on_animated_idle_ready.bind(kind))
+		loader.start(meta, ChessFootballIdleR2.TRUSTED_ROOT)
+
+
+func _on_animated_idle_ready(image: Image, kind: String) -> void:
+	var textures := ChessFootballIdleR2.frames_from_image(image, kind)
+	if textures.size() != ChessFootballIdleR2.FRAME_COUNT * ChessFootballIdleR2.ROW_COUNT:
+		return
+	var away_keeper_textures: Array[Texture2D] = []
+	if kind == "keeper":
+		away_keeper_textures = ChessFootballIdleR2.frames_from_image(image, kind, true)
+		if away_keeper_textures.size() != textures.size():
+			return
+	_apply_animated_idle_frames(kind, textures, away_keeper_textures)
+
+
+func _apply_animated_idle_frames(
+	kind: String, textures: Array[Texture2D], away_keeper_textures: Array[Texture2D]
+) -> void:
+	if kind not in ChessFootballIdleR2.KINDS:
+		return
+	if textures.size() != ChessFootballIdleR2.FRAME_COUNT * ChessFootballIdleR2.ROW_COUNT:
+		return
+	if kind == "keeper" and away_keeper_textures.size() != textures.size():
+		return
+	var targets: Array[AnimatedSprite3D] = []
+	var teams: Array[int] = []
+	for team in match_node.teams:
+		for player in team:
+			var player_kind := "keeper" if player.role == "keeper" else (
+				"fc_matthias" if player.team_id == 0 else "real_enroque"
+			)
+			if player_kind != kind:
+				continue
+			var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+			if sprite == null:
+				return
+			var bank := sprite.sprite_frames
+			for anim in ChessFootballIdleR2.IDLE_ANIMATIONS:
+				var name := StringName(anim)
+				if not bank.has_animation(name) or bank.get_frame_count(name) not in [1, 8]:
+					return
+			targets.append(sprite)
+			teams.append(int(player.team_id))
+	if targets.is_empty():
+		return
+	for index in range(targets.size()):
+		var bank := targets[index].sprite_frames
+		var chosen: Array[Texture2D] = (
+			away_keeper_textures if kind == "keeper" and teams[index] == 1 else textures
+		)
+		for row in range(ChessFootballIdleR2.IDLE_ANIMATIONS.size()):
+			var name := StringName(ChessFootballIdleR2.IDLE_ANIMATIONS[row])
+			bank.clear(name)
+			bank.set_animation_speed(name, 7.0)
+			bank.set_animation_loop(name, true)
+			for frame_id in range(ChessFootballIdleR2.FRAME_COUNT):
+				bank.add_frame(name, chosen[row * ChessFootballIdleR2.FRAME_COUNT + frame_id])
+	_animated_idle_r2_loaded[kind] = true
+	tone_gain_cache.clear()
+
 
 func _request_idle_front_from_r2() -> void:
 	# The shared loader owns URL validation, single-fetch, timeout and SHA.
@@ -158,6 +234,11 @@ func _apply_idle_front_textures(textures: Array[Texture2D]) -> void:
 				continue
 			var frames := sprite.sprite_frames
 			if not frames.has_animation(&"idle_front"):
+				continue
+			var player_kind := "keeper" if player.role == "keeper" else (
+				"fc_matthias" if player.team_id == 0 else "real_enroque"
+			)
+			if bool(_animated_idle_r2_loaded.get(player_kind, false)):
 				continue
 			var index: int = 2 + int(player.team_id) if player.role == "keeper" else int(player.team_id)
 			frames.set_frame(&"idle_front", 0, textures[index])
@@ -337,6 +418,7 @@ func setup(p_match: Node) -> void:
 	# Render approved XI atlases as real textured 3D meshes.
 	_build_xi_quad_bodies()
 	_request_idle_front_from_r2()
+	_request_animated_idle_from_r2()
 	_request_lateral_run_from_r2()
 	_request_tackle_atlases_from_r2()
 	_request_keeper_catch_atlases_from_r2()
@@ -1701,7 +1783,9 @@ func _sync_visible_animation(
 	var previous: StringName = names.get(key, &"")
 	var phase: float = float(phases.get(key, 0.0))
 	if previous != wanted or sprite.animation != wanted:
-		if not (_keeper_locomotion(previous) and _keeper_locomotion(wanted)):
+		var keep_run_phase := _keeper_locomotion(previous) and _keeper_locomotion(wanted)
+		var keep_idle_phase := String(previous).begins_with("idle") and String(wanted).begins_with("idle")
+		if not keep_run_phase and not keep_idle_phase:
 			phase = 0.0
 			if not is_keeper and _keeper_locomotion(wanted):
 				# Retain the roster's deterministic staggered starting stride.
@@ -1717,7 +1801,11 @@ func _sync_visible_animation(
 		# A stationary actor must not run in place.
 		if player.velocity.length() >= 12.0:
 			phase += advance * maxf(player.visual.speed_scale, 0.0)
-	elif not String(wanted).begins_with("idle"):
+	elif String(wanted).begins_with("idle"):
+		# Old one-frame fallback holds; new eight-frame R2 idle breathes in place.
+		if count > 1:
+			phase += advance
+	else:
 		phase += advance * maxf(player.visual.speed_scale, 0.0)
 	if frames.get_animation_loop(wanted):
 		phase = fposmod(phase, float(count))
@@ -1856,7 +1944,13 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 	var tilt_degrees := sin(phase) * 0.7
 	var facing_sign := -1.0 if sprite.flip_h else 1.0
 
-	if animation_name == "run" or animation_name.begins_with("run_"):
+	if animation_name == "idle" or animation_name.begins_with("idle_"):
+		# The authored eight-frame cycle supplies its own breathing/weight shift.
+		# No synthetic ground bob, tilt or sway: boots stay planted.
+		bob = 0.0
+		lateral_sway = 0.0
+		tilt_degrees = 0.0
+	elif animation_name == "run" or animation_name.begins_with("run_"):
 		bob = absf(sin(phase)) * (PLAYER_RUN_BOB + 0.014) * moving_weight
 		lateral_sway = sin(phase) * 0.029 * moving_weight
 		stretch_x = 0.97 + absf(cos(phase)) * 0.018
