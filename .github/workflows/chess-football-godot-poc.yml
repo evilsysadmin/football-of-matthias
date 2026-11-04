@@ -542,7 +542,7 @@ jobs:
             echo '::error::R2 v2 run, 11v11 body fallback or soft shadow regressed'
             exit 1
           fi
-          grep -q 'football R2 v2 run: 5 views x 8 frames, XI fallback and soft shadow: OK' "$log"
+          grep -q 'football R2 v2 run: 5 views x 8 frames, canonical-only XI fallback and soft shadow: OK' "$log"
       - name: Staged R2 lateral-run parity and rollback smoke
         shell: bash
         run: |
