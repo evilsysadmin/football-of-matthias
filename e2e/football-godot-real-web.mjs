@@ -180,6 +180,62 @@ async function bridgeVerifiedRunV2R2(page) {
   if (expected.size) throw new Error('Missing R2 v2 club sheet');
 }
 
+// Playwright's ephemeral http://127.0.0.1 origin is intentionally NOT in
+// Cloudflare's CORS allowlist. The live staging-origin check runs above in
+// Godot CI; here we re-fetch and verify exact public bytes before fulfilling
+// ONLY these two immutable URLs for the localhost-only WASM smoke test.
+async function bridgeVerifiedStagingPassShootR2(page) {
+  if (process.env.CI !== 'true') throw new Error('Football action bridge is CI-only');
+  const manifest = JSON.parse(readFileSync('games/chess-football-godot/optional_pass_shoot_v1.json', 'utf8'));
+  if (manifest.enabled !== true) return;
+  const base = 'https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1';
+  const expected = new Map([
+    ['fc_matthias', ['fc_matthias_pass_shoot_v1.webp', 'ad286ff56d0f1461efaa9aad20fc349203ed9a90b3ea3e45f60d41493b9c2b24']],
+    ['real_enroque', ['real_enroque_pass_shoot_v1.webp', '5dae02988c73e1353a17d3ef521949049a1b41c89b97fc01a5042cca691afc36']]
+  ]);
+  if (manifest.bucket !== 'football' || manifest.prefix !== 'atlases/v1/' ||
+      manifest.cdn_base !== base || manifest.columns !== 8 || manifest.rows !== 2 ||
+      manifest.fps !== 10 || JSON.stringify(manifest.animations) !== JSON.stringify(['pass', 'shoot']) ||
+      !Array.isArray(manifest.entries) || manifest.entries.length !== expected.size) {
+    throw new Error('Unexpected Football action R2 origin, layout or entries');
+  }
+  const stagingOrigin = 'https://staging.football.shadowops.dpdns.org';
+  for (const entry of manifest.entries) {
+    const known = expected.get(entry.team);
+    if (!known || entry.file !== known[0] || entry.sha256 !== known[1]) {
+      throw new Error('Unexpected Football pass/shoot sheet: ' + entry.file);
+    }
+    expected.delete(entry.team);
+    const url = base + '/' + entry.file;
+    const response = await fetch(url, {
+      headers: { Origin: stagingOrigin, 'User-Agent': 'Football-actions-Web-CI/1.0' },
+      signal: AbortSignal.timeout(15000)
+    });
+    const cors = response.headers.get('access-control-allow-origin');
+    if (response.status !== 200 ||
+        !response.headers.get('content-type')?.toLowerCase().startsWith('image/webp') ||
+        (cors !== '*' && cors !== stagingOrigin)) {
+      throw new Error('Public R2 action requires valid HTTP, WebP and staging CORS: ' + url);
+    }
+    const data = Buffer.from(await response.arrayBuffer());
+    if (data.length < 25 || data.length > 4194304 ||
+        data.toString('ascii', 0, 4) !== 'RIFF' ||
+        data.toString('ascii', 8, 12) !== 'WEBP' ||
+        data.toString('ascii', 12, 16) !== 'VP8L' ||
+        createHash('sha256').update(data).digest('hex') !== known[1]) {
+      throw new Error('Public Football action SHA/WebP mismatch: ' + url);
+    }
+    await page.route(url, route => route.fulfill({
+      status: 200, contentType: 'image/webp',
+      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+      body: data
+    }));
+    console.log('FOOTBALL_WEB_CI_PASS_SHOOT_R2_VERIFIED', entry.team,
+      'bytes=' + data.length, 'sha256=' + known[1], 'staging_cors=' + cors);
+  }
+  if (expected.size) throw new Error('Missing verified Football action club sheet');
+}
+
 const server = createServer((req, res) => {
   try {
     let path = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
@@ -203,6 +259,7 @@ try {
     await bridgeVerifiedStagingKeeperR2(page);
     await bridgeVerifiedStagingAnimatedIdleR2(page);
     await bridgeVerifiedRunV2R2(page);
+    await bridgeVerifiedStagingPassShootR2(page);
   }
   await page.addInitScript(() => {
     window.__chessFootballWebReady = false;
