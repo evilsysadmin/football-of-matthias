@@ -37,11 +37,16 @@ func _initialize() -> void:
 	var keeper0: AnimatedSprite3D = presenter.player_sprites[game.teams[0][0].get_instance_id()]
 	var keeper_run := keeper0.sprite_frames.get_frame_texture(&"run", 0)
 	var legacy_idle := first_sprite.sprite_frames.get_frame_texture(&"idle_front", 0)
-	var model: Node3D = presenter.xi_actor_models[first_player.get_instance_id()]
-	assert(model.visible)
+	var first_root: Node3D = presenter.player_nodes[first_player.get_instance_id()]
+	assert(first_root.get_node_or_null("XI_KitSculpt") == null)
+	var local_quad: MeshInstance3D = presenter.xi_raster_meshes[first_player.get_instance_id()]
+	assert(local_quad.is_visible_in_tree())
+	# A failed optional R2 fetch must leave the bundled animated footballer,
+	# never reintroduce the original blue cylinder/sculpt placeholder.
 	presenter._apply_verified_run_v2([], 0)
 	assert(first_sprite.sprite_frames.get_frame_texture(&"run_front", 0) == previous)
-	assert(model.visible)
+	assert(first_root.get_node_or_null("XI_KitSculpt") == null)
+	assert((local_quad.material_override as StandardMaterial3D).albedo_texture != null)
 
 	for team_id in range(2):
 		var meta := ChessFootballRunV2R2.sheet_meta(team_id)
@@ -65,7 +70,7 @@ func _initialize() -> void:
 					assert(sprite.sprite_frames.get_frame_count(anim) == 8)
 					assert(sprite.sprite_frames.get_frame_texture(anim, 0) == textures[row * 8])
 					assert(sprite.sprite_frames.get_frame_texture(anim, 7) == textures[row * 8 + 7])
-			assert(not presenter.xi_actor_models[key].visible)
+			assert(presenter.player_nodes[key].get_node_or_null("XI_KitSculpt") == null)
 	assert(first_sprite.sprite_frames.get_frame_texture(&"idle_front", 0) == legacy_idle)
 	assert(keeper0.sprite_frames.get_frame_texture(&"run", 0) == keeper_run)
 	var key: int = first_player.get_instance_id()
@@ -77,5 +82,5 @@ func _initialize() -> void:
 	var before_side := first_sprite.sprite_frames.get_frame_texture(&"run", 0)
 	presenter._apply_verified_lateral_run(textures.slice(16, 24), 0)
 	assert(first_sprite.sprite_frames.get_frame_texture(&"run", 0) == before_side)
-	print("football R2 v2 run: 5 views x 8 frames, XI fallback and soft shadow: OK")
+	print("football R2 v2 run: 5 views x 8 frames, canonical-only XI fallback and soft shadow: OK")
 	quit(0)

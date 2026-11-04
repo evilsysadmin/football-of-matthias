@@ -88,7 +88,7 @@ func _initialize() -> void:
 	assert(stage.player_sprites.size() == 22)
 	assert(stage.player_nodes.size() == 22)
 	assert(stage.xi_raster_meshes.size() == 22)
-	assert(stage.xi_actor_models.size() == 22)
+	# Every 11v11 actor has a real canonical fallback without a mannequin.
 	var center: Vector2 = game.match_pitch.get_center()
 	var roster_ids: Dictionary = {}
 	for team_id in range(2):
@@ -105,10 +105,7 @@ func _initialize() -> void:
 			var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 			assert(not driver.visible)
 			assert(quad != null and quad.is_visible_in_tree())
-			var sculpt: Node3D = stage.xi_actor_models[key]
-			assert(sculpt != null and sculpt.is_visible_in_tree())
-			assert(sculpt.get_node("Jersey") is MeshInstance3D)
-			assert(sculpt.get_node("Head") is MeshInstance3D)
+			assert(stage.player_nodes[key].get_node_or_null("XI_KitSculpt") == null)
 			assert(quad.mesh is QuadMesh)
 			var canvas: StandardMaterial3D = quad.material_override
 			var frame: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)

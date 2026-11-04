@@ -17,7 +17,14 @@ func _initialize() -> void:
 	game.set_physics_process(false)
 	var presenter: ChessFootball3DPresenter = game.presentation_3d
 	assert(presenter != null)
-	assert(presenter.xi_actor_models.size() == 22)
+	assert(presenter.xi_raster_meshes.size() == 22)
+	# The BEFORE screenshot must already show real local football sprites.
+	# R2 is an optional texture upgrade, not permission to draw mannequins.
+	for team in game.teams:
+		for player in team:
+			var key: int = player.get_instance_id()
+			assert(presenter.player_nodes[key].get_node_or_null("XI_KitSculpt") == null)
+			assert(presenter.xi_raster_meshes[key].is_visible_in_tree())
 	for team in game.teams:
 		for player in team:
 			if player.role != "keeper":
@@ -42,7 +49,7 @@ func _initialize() -> void:
 		for player in game.teams[team_id]:
 			if player.role == "keeper":
 				continue
-			assert(not presenter.xi_actor_models[player.get_instance_id()].visible)
+			assert(presenter.player_nodes[player.get_instance_id()].get_node_or_null("XI_KitSculpt") == null)
 			assert(presenter.xi_raster_meshes[player.get_instance_id()].visible)
 	presenter.sync_presentation(0.11, "broadcast")
 	await _capture(game, "AFTER", "football-run-v2-after.png")
