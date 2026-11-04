@@ -21,6 +21,35 @@ func _assert_kit_pixels(capture: Image, mode: String, minimum: int) -> void:
 	assert(blue >= minimum and red >= minimum,
 		"XI rendered screenshot must show two real kits, not only shadows")
 
+# Confirm physical jerseys at projected on-field actor positions.
+# Stadium seats and HUD colours cannot satisfy this check.
+func _assert_tactical_player_kits(capture: Image, stage: ChessFootball3DPresenter, game: Node) -> void:
+	var seen := [0, 0]
+	for team in game.teams:
+		for player in team:
+			var screen: Vector2 = stage.screen_position_for_world(player.global_position, 0.70)
+			var center := Vector2i(roundi(screen.x), roundi(screen.y))
+			var found := false
+			for y in range(maxi(181, center.y - 12), mini(capture.get_height() - 1, center.y + 13)):
+				for x in range(maxi(255, center.x - 12), mini(capture.get_width() - 255, center.x + 13)):
+					var c: Color = capture.get_pixel(x, y)
+					if player.team_id == 0:
+						if c.b > c.r * 1.5 and c.b > c.g * 1.03 and c.b > 0.28 and c.g < 0.57:
+							found = true
+					else:
+						if c.r > c.g * 1.43 and c.r > c.b * 1.15 and c.r > 0.33 and c.g < 0.57:
+							found = true
+				if found:
+					break
+			if found:
+				break
+			if found:
+				seen[player.team_id] += 1
+	print("FOOTBALL_XI_ACTOR_KITS tactical blue=%d red=%d" % [seen[0], seen[1]])
+	assert(seen[0] >= 8 and seen[1] >= 8,
+		"XI tactical image must show players at their own projected positions")
+
+
 func _initialize() -> void:
 	var packed := load("res://main.tscn") as PackedScene
 	assert(packed != null)
@@ -45,6 +74,7 @@ func _initialize() -> void:
 	assert(stage.player_sprites.size() == 22)
 	assert(stage.player_nodes.size() == 22)
 	assert(stage.xi_raster_meshes.size() == 22)
+	assert(stage.xi_actor_models.size() == 22)
 	var center: Vector2 = game.match_pitch.get_center()
 	var roster_ids: Dictionary = {}
 	for team_id in range(2):
@@ -61,6 +91,10 @@ func _initialize() -> void:
 			var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 			assert(not driver.visible)
 			assert(quad != null and quad.is_visible_in_tree())
+			var sculpt: Node3D = stage.xi_actor_models[key]
+			assert(sculpt != null and sculpt.is_visible_in_tree())
+			assert(sculpt.get_node("Jersey") is MeshInstance3D)
+			assert(sculpt.get_node("Head") is MeshInstance3D)
 			assert(quad.mesh is QuadMesh)
 			var canvas: StandardMaterial3D = quad.material_override
 			var frame: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
@@ -98,6 +132,7 @@ func _initialize() -> void:
 		assert(tactical_image.save_png(tactical_path) == OK)
 		print("FOOTBALL_XI_PREVIEW_TACTICAL=" + ProjectSettings.globalize_path(tactical_path))
 		_assert_kit_pixels(tactical_image, "tactical", 20)
+		_assert_tactical_player_kits(tactical_image, stage, game)
 		game.camera_mode = "broadcast"
 		stage.sync_presentation(2.0, "broadcast")
 		for step in range(12):

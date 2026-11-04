@@ -92,6 +92,9 @@ var player_sprites: Dictionary = {}
 # 11v11-only QuadMesh bodies fed by the canonical AnimatedSprite3D frames.
 # Legacy 5v5 continues to render AnimatedSprite3D directly.
 var xi_raster_meshes: Dictionary = {}
+# Mesh fallback for far-camera actor readability in the full 11v11 field.
+# The approved animated raster still overlays each model at close range.
+var xi_actor_models: Dictionary = {}
 var player_run_views: Dictionary = {}
 # Keeper run/action poses tick independently in the visible 3D runtime.
 # Hidden authoritative 2D AnimatedSprite2D nodes are not a reliable clock.
@@ -1118,6 +1121,61 @@ func _build_xi_quad_bodies() -> void:
 			driver.hide()
 
 
+# Full-pitch cameras can cull tiny raster billboards in Godot GLES3.
+# Keep a small, physical team-coloured athlete UNDER the approved animated
+# raster, so 22 actors remain identifiable at aerial and distant zooms.
+# Restricted to the unshipped XI preview; 5v5 visuals are untouched.
+func _build_xi_actor_sculpt(root: Node3D, player: Footballer) -> void:
+	var model := Node3D.new()
+	model.name = "XI_KitSculpt"
+	var jersey := _material(player.team_color, 0.86)
+	var shorts := _material(player.team_color.darkened(0.38), 0.91)
+	var skin := _material(Color(0.69, 0.48, 0.33), 0.92)
+	var boots := _material(Color(0.035, 0.046, 0.063), 0.90)
+	var torso := MeshInstance3D.new()
+	torso.name = "Jersey"
+	var body_mesh := CylinderMesh.new()
+	body_mesh.top_radius = 0.24
+	body_mesh.bottom_radius = 0.19
+	body_mesh.height = 0.58
+	torso.mesh = body_mesh
+	torso.position.y = 0.69
+	torso.material_override = jersey
+	torso.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	model.add_child(torso)
+	var head := MeshInstance3D.new()
+	head.name = "Head"
+	var head_mesh := SphereMesh.new()
+	head_mesh.radius = 0.15
+	head_mesh.height = 0.30
+	head.mesh = head_mesh
+	head.position.y = 1.13
+	head.material_override = skin
+	head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	model.add_child(head)
+	for sign in [-1.0, 1.0]:
+		var leg := MeshInstance3D.new()
+		var leg_mesh := CylinderMesh.new()
+		leg_mesh.top_radius = 0.097
+		leg_mesh.bottom_radius = 0.072
+		leg_mesh.height = 0.48
+		leg.mesh = leg_mesh
+		leg.position = Vector3(sign * 0.12, 0.24, 0.0)
+		leg.material_override = shorts
+		leg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		model.add_child(leg)
+		var shoe := MeshInstance3D.new()
+		var shoe_mesh := BoxMesh.new()
+		shoe_mesh.size = Vector3(0.18, 0.095, 0.29)
+		shoe.mesh = shoe_mesh
+		shoe.position = Vector3(sign * 0.12, 0.055, -0.045)
+		shoe.material_override = boots
+		shoe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		model.add_child(shoe)
+	root.add_child(model)
+	xi_actor_models[int(player.get_instance_id())] = model
+
+
 func _build_player_proxies() -> void:
 	for team in match_node.teams:
 		for player in team:
@@ -1145,6 +1203,8 @@ func _build_player_proxies() -> void:
 			sprite.flip_h = player.team_id == 1
 			sprite.play("idle")
 			root.add_child(sprite)
+			if match_node.match_team_size == 11:
+				_build_xi_actor_sculpt(root, player)
 			if player.role == "keeper":
 				keeper_catch_rigs[int(player.get_instance_id())] = _build_keeper_catch_rig(root, player.team_id)
 
