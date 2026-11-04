@@ -60,7 +60,7 @@ func _initialize() -> void:
 	var xi_normal_cover: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
 	assert(XI.has_point(xi_normal_cover))
 	assert(xi_normal_cover.x > striker.global_position.x)
-	assert(xi_normal_cover.distance_to(striker.global_position) + 55.0 < xi_easy_cover.distance_to(striker.global_position))
+	assert(xi_easy_cover.x - xi_normal_cover.x > 70.0)
 	xi_cover_player.global_position = original_cover_position
 	var right_keeper: Footballer = game.teams[1][0]
 	var left_keeper: Footballer = game.teams[0][0]
