@@ -44,16 +44,18 @@ static func in_goal_mouth(position: Vector2, pitch: Rect2 = PITCH_RECT) -> bool:
 static func ball_fits_under_crossbar(flight_height: float) -> bool:
 	return flight_height <= GOAL_MAX_FLIGHT_HEIGHT
 
-static func close_shot_miss_at_goal_line(point: Vector2, height: float, attacking_team: int) -> bool:
+static func close_shot_miss_at_goal_line(
+	point: Vector2, height: float, attacking_team: int, pitch: Rect2 = PITCH_RECT
+) -> bool:
 	if attacking_team not in [0, 1]:
 		return false
 	var crossed: bool = (
-		point.x > PITCH_RECT.end.x + 10.0 if attacking_team == 0
-		else point.x < PITCH_RECT.position.x - 10.0
+		point.x > pitch.end.x + 10.0 if attacking_team == 0
+		else point.x < pitch.position.x - 10.0
 	)
 	if not crossed:
 		return false
-	var offset_y := absf(point.y - PITCH_RECT.get_center().y)
+	var offset_y := absf(point.y - pitch.get_center().y)
 	var outside_post := (
 		offset_y > GOAL_HALF_HEIGHT + GOAL_FRAME_POST_RADIUS
 		and offset_y <= GOAL_HALF_HEIGHT + GOAL_FRAME_POST_RADIUS + NEAR_MISS_SIDE_MARGIN

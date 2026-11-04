@@ -284,6 +284,21 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_XI_GOAL_LINE_OK' "$log"
+      - name: XI · real touchlines, corners, goal kicks and spread
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-restarts.log"
+          set +e
+          timeout 35s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/eleven_restarts_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI touchlines, corners or goal kicks failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_RESTARTS_OK' "$log"
       - name: Scouting · defense and goalkeeper real-contact contract
         shell: bash
         run: |
