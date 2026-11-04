@@ -23,7 +23,7 @@ function readMobileViewport() {
   };
 }
 
-export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }) {
+export default function ChessFootballGodotHost({ onExit, difficulty = 'normal', teamSize = 5 }) {
   const frameRef = useRef(null);
   const [attempt, setAttempt] = useState(0);
   const [runtimeReady, setRuntimeReady] = useState(false);
@@ -134,7 +134,7 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
   };
 
   const mobilePortrait = mobileViewport.coarse && mobileViewport.portrait;
-  const matchUrl = footballQuickMatchUrl(runtime.url, difficulty);
+  const matchUrl = footballQuickMatchUrl(runtime.url, difficulty, teamSize);
 
 
   const runtimeStatus = bootFailed

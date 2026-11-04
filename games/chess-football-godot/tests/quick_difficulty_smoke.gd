@@ -3,6 +3,7 @@ const Difficulty = preload("res://scripts/football_quick_difficulty.gd")
 func _initialize() -> void:
 	assert(Difficulty.from_hash("#football-difficulty=easy") == "easy")
 	assert(Difficulty.from_hash("#football-difficulty=hard") == "hard")
+	assert(Difficulty.from_hash("#football-difficulty=hard&football-team-size=11") == "hard")
 	assert(Difficulty.from_hash("#football-difficulty=expert") == "expert")
 	for invalid in ["", "#football-difficulty=foo", "#football-difficulty=expert%0A", "#other=hard"]:
 		assert(Difficulty.from_hash(invalid) == "normal")

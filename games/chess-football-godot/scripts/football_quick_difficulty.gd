@@ -17,7 +17,7 @@ static func from_hash(fragment: String) -> String:
 	var prefix := "#football-difficulty="
 	if not fragment.begins_with(prefix):
 		return DEFAULT
-	return normalize(fragment.trim_prefix(prefix))
+	return normalize(fragment.trim_prefix(prefix).get_slice("&", 0))
 
 static func read_browser() -> String:
 	if not OS.has_feature("web"):

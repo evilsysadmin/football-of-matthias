@@ -5,8 +5,9 @@ const FootballAudio = preload("res://scripts/football_audio.gd")
 const QuickDifficulty = preload("res://scripts/football_quick_difficulty.gd")
 const Formation = preload("res://scripts/football_match_formation.gd")
 # Default playable match stays 5v5. Native tests may set XI before tree entry.
-# Only the loopback Playwright CI probe may request an XI in exported Web.
-# No public browser mode or manager integration is enabled here.
+# XI is only exposed from the authenticated staging parent and its pinned
+# staging CDN runtime, plus the existing loopback-only Playwright probe.
+# No production XI or manager integration is enabled here.
 const TEAM_SIZE := 5
 var match_team_size: int = TEAM_SIZE
 var match_pitch: Rect2 = ChessFootballMath.PITCH_RECT
@@ -238,13 +239,16 @@ var pause_menu_button: Button
 var pause_sfx_button: Button
 
 func _ready() -> void:
-	# Exercise the 22-player scene in an actual Web export without exposing
-	# unfinished XI gameplay to staging users or bypassing ShadowOps ID.
-	# A URL fragment alone cannot enable XI: the local CI probe is also required.
-	if OS.has_feature("web") and bool(JavaScriptBridge.eval(
-		"location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true && location.hash === '#football-ci-eleven=1'",
-		true
-	)):
+	# CI keeps the loopback-only probe. The staging preview additionally
+	# requires the dedicated CDN release path and the authenticated staging
+	# parent as referrer: a fragment alone cannot enable XI in production.
+	var xi_from_browser := false
+	if OS.has_feature("web"):
+		xi_from_browser = bool(JavaScriptBridge.eval(
+			"(location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true && location.hash === '#football-ci-eleven=1') || (location.hostname === 'assets.chess-studio.shadowops.dpdns.org' && location.pathname.startsWith('/football-of-matthias/staging/releases/') && location.pathname.endsWith('/index.html') && document.referrer.startsWith('https://staging.football.shadowops.dpdns.org/') && new URLSearchParams(location.hash.slice(1)).get('football-team-size') === '11')",
+			true
+		))
+	if xi_from_browser:
 		match_team_size = 11
 	assert(match_team_size == 5 or match_team_size == 11)
 	match_pitch = Formation.ELEVEN_PITCH_RECT if match_team_size == 11 else ChessFootballMath.PITCH_RECT
