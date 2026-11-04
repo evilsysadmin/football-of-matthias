@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "enabled": true,
+  "bucket": "football",
+  "prefix": "atlases/v2/",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v2",
+  "quality_contract": "football-run-5views-v2",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "columns": 8,
+  "rows": 5,
+  "views": [
+    "front",
+    "back",
+    "side",
+    "front_diagonal",
+    "back_diagonal"
+  ],
+  "fps": 12,
+  "entries": [
+    {
+      "kind": "fc_matthias",
+      "file": "fc_matthias_run_v2_clean.webp",
+      "sha256": "d686ad08291910bdbfb8454135f917e939b727c7498e3a3b8a93f919cbe48a2f"
+    },
+    {
+      "kind": "real_enroque",
+      "file": "real_enroque_run_v2_clean.webp",
+      "sha256": "4f02d84e6a337389d1bdbeac22ef78eacea8dd32076bc8807bd80ed1466172dd"
+    }
+  ],
+  "shadow_candidate": {
+    "file": "outfield_soft_shadows_v2_clean.webp",
+    "sha256": "5bc31e03a2eaba6c18a9c03bd9e2bccbccced76b131320556a36c8af970547e6",
+    "enabled": false,
+    "reason": "Visual preflight: 39 of 40 cells lack a usable shadow; use procedural ground-contact shader instead."
+  }
+}

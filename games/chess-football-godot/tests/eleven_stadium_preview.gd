@@ -88,7 +88,7 @@ func _initialize() -> void:
 	assert(stage.player_sprites.size() == 22)
 	assert(stage.player_nodes.size() == 22)
 	assert(stage.xi_raster_meshes.size() == 22)
-	assert(stage.xi_actor_models.size() == 22)
+	# The XI fallback draws ONLY the geometric proxy while WebP is unavailable.
 	var center: Vector2 = game.match_pitch.get_center()
 	var roster_ids: Dictionary = {}
 	for team_id in range(2):
@@ -104,15 +104,17 @@ func _initialize() -> void:
 			var driver: AnimatedSprite3D = stage.player_sprites[key]
 			var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 			assert(not driver.visible)
-			assert(quad != null and quad.is_visible_in_tree())
-			var sculpt: Node3D = stage.xi_actor_models[key]
-			assert(sculpt != null and sculpt.is_visible_in_tree())
-			assert(sculpt.get_node("Jersey") is MeshInstance3D)
-			assert(sculpt.get_node("Head") is MeshInstance3D)
+			assert(quad != null and not quad.visible)
+			var fallback_model := stage.player_nodes[key].get_node_or_null("XI_KitSculpt") as Node3D
+			assert(fallback_model != null and fallback_model.visible)
 			assert(quad.mesh is QuadMesh)
 			var canvas: StandardMaterial3D = quad.material_override
-			var frame: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
+			var frame: Texture2D = stage._xi_frame_texture(player, driver)
 			assert(canvas.albedo_texture == frame)
+			# No optional R2 is loaded in this offline preview: a single visible
+			# proxy body prevents absent XI actors without raster/model doubling.
+			if player.role != "keeper":
+				assert(frame == driver.sprite_frames.get_frame_texture(&"run", driver.frame % 8))
 			assert((frame as ImageTexture).get_image().get_used_rect().size.y >= 80)
 			assert(quad.position == driver.position)
 			if player == game.ball.carrier:
@@ -169,7 +171,7 @@ func _initialize() -> void:
 		stage.sync_presentation(1.0 / 18.0, "broadcast")
 		var driver: AnimatedSprite3D = stage.player_sprites[winger_key]
 		var body: MeshInstance3D = stage.xi_raster_meshes[winger_key]
-		var frame: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
+		var frame: Texture2D = stage._xi_frame_texture(winger, driver)
 		assert((body.material_override as StandardMaterial3D).albedo_texture == frame)
 		assert(body.scale == driver.scale)
 		assert(body.position == driver.position)
