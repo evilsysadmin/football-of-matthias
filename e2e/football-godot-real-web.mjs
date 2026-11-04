@@ -236,6 +236,63 @@ async function bridgeVerifiedStagingPassShootR2(page) {
   if (expected.size) throw new Error('Missing verified Football action club sheet');
 }
 
+// CI-only localhost bridge for two real, immutable Football R2 carry sprites.
+// Actual browser staging CORS remains restricted: verify that response first.
+async function bridgeVerifiedStagingCarryDribbleR2(page) {
+  if (process.env.CI !== 'true') throw new Error('Football carry R2 bridge is CI-only');
+  const meta = JSON.parse(readFileSync('games/chess-football-godot/optional_carry_dribble_v1.json', 'utf8'));
+  if (meta.enabled !== true) return;
+  const base = 'https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1';
+  const expected = new Map([
+    ['fc_matthias', ['fc_matthias_carry_dribble_v1.webp', 'd77d23b1a19bd454a829e6a2368aeefbeaa0ca42ee5b1a2ec530218437a0ef9d']],
+    ['real_enroque', ['real_enroque_carry_dribble_v1.webp', '39606797cb05c582c598cb5b599cc59104e3926a963bbc445dc0444aaa80bbeb']]
+  ]);
+  if (meta.bucket !== 'football' || meta.prefix !== 'atlases/v1/' ||
+      meta.cdn_base !== base || meta.columns !== 8 || meta.rows !== 2 ||
+      meta.quality_contract !== 'football-carry-dribble-side-v1' ||
+      meta.cell?.width !== 128 || meta.cell?.height !== 144 ||
+      JSON.stringify(meta.animations) !== JSON.stringify(['carry', 'dribble']) ||
+      meta.fps?.carry !== 12 || meta.fps?.dribble !== 36 ||
+      !Array.isArray(meta.entries) || meta.entries.length !== expected.size) {
+    throw new Error('Unexpected Football carry R2 root, layout or entries');
+  }
+  const origin = 'https://staging.football.shadowops.dpdns.org';
+  for (const entry of meta.entries) {
+    const known = expected.get(entry.team);
+    if (!known || entry.file !== known[0] || entry.sha256 !== known[1]) {
+      throw new Error('Unexpected Football carry/dribble sheet: ' + entry.file);
+    }
+    expected.delete(entry.team);
+    const url = base + '/' + entry.file;
+    const response = await fetch(url, {
+      headers: { Origin: origin, 'User-Agent': 'Football-carry-Web-CI/1.0' },
+      signal: AbortSignal.timeout(15000)
+    });
+    const cors = response.headers.get('access-control-allow-origin');
+    if (response.status !== 200 ||
+        !response.headers.get('content-type')?.toLowerCase().startsWith('image/webp') ||
+        (cors !== '*' && cors !== origin)) {
+      throw new Error('R2 carry/dribble failed HTTP, content type or staging CORS: ' + url);
+    }
+    const data = Buffer.from(await response.arrayBuffer());
+    if (data.length < 25 || data.length > 4194304 ||
+        data.toString('ascii', 0, 4) !== 'RIFF' ||
+        data.toString('ascii', 8, 12) !== 'WEBP' ||
+        data.toString('ascii', 12, 16) !== 'VP8L' ||
+        data[20] !== 0x2f ||
+        createHash('sha256').update(data).digest('hex') !== known[1]) {
+      throw new Error('R2 carry/dribble bytes invalid: ' + url);
+    }
+    await page.route(url, route => route.fulfill({
+      status: 200, contentType: 'image/webp',
+      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+      body: data
+    }));
+    console.log('FOOTBALL_WEB_CI_CARRY_DRIBBLE_R2_VERIFIED', entry.team, data.length);
+  }
+  if (expected.size) throw new Error('Missing Football carry/dribble club');
+}
+
 const server = createServer((req, res) => {
   try {
     let path = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
@@ -260,6 +317,7 @@ try {
     await bridgeVerifiedStagingAnimatedIdleR2(page);
     await bridgeVerifiedRunV2R2(page);
     await bridgeVerifiedStagingPassShootR2(page);
+    await bridgeVerifiedStagingCarryDribbleR2(page);
   }
   await page.addInitScript(() => {
     window.__chessFootballWebReady = false;

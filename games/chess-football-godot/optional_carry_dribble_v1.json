@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "enabled": true,
+  "bucket": "football",
+  "prefix": "atlases/v1/",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1",
+  "quality_contract": "football-carry-dribble-side-v1",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "columns": 8,
+  "rows": 2,
+  "footline": 132,
+  "animations": [
+    "carry",
+    "dribble"
+  ],
+  "fps": {
+    "carry": 12,
+    "dribble": 36
+  },
+  "note": "Staging-only candidate. CI enforces exact public R2 bytes, staging CORS and real 1280x720 Godot images; inspect those PNGs on the exact SHA before Ready/merge. Never modify ball physics.",
+  "entries": [
+    {
+      "team": "fc_matthias",
+      "file": "fc_matthias_carry_dribble_v1.webp",
+      "sha256": "d77d23b1a19bd454a829e6a2368aeefbeaa0ca42ee5b1a2ec530218437a0ef9d"
+    },
+    {
+      "team": "real_enroque",
+      "file": "real_enroque_carry_dribble_v1.webp",
+      "sha256": "39606797cb05c582c598cb5b599cc59104e3926a963bbc445dc0444aaa80bbeb"
+    }
+  ]
+}
