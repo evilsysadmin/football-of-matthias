@@ -32,12 +32,14 @@ static func clamp_to_pitch(position: Vector2, pitch: Rect2 = PITCH_RECT) -> Vect
 		clampf(position.y, pitch.position.y + 20.0, pitch.end.y - 20.0)
 	)
 
-static func goal_center(attacking_team: int) -> Vector2:
-	var x := PITCH_RECT.end.x if attacking_team == 0 else PITCH_RECT.position.x
-	return Vector2(x, PITCH_RECT.get_center().y)
+# Both pitch sizes share one authoritative geometry helper. Keep the
+# historical default for every 5v5 caller and existing saved game.
+static func goal_center(attacking_team: int, pitch: Rect2 = PITCH_RECT) -> Vector2:
+	var x := pitch.end.x if attacking_team == 0 else pitch.position.x
+	return Vector2(x, pitch.get_center().y)
 
-static func in_goal_mouth(position: Vector2) -> bool:
-	return absf(position.y - PITCH_RECT.get_center().y) <= GOAL_HALF_HEIGHT
+static func in_goal_mouth(position: Vector2, pitch: Rect2 = PITCH_RECT) -> bool:
+	return absf(position.y - pitch.get_center().y) <= GOAL_HALF_HEIGHT
 
 static func ball_fits_under_crossbar(flight_height: float) -> bool:
 	return flight_height <= GOAL_MAX_FLIGHT_HEIGHT
@@ -69,13 +71,14 @@ static func goal_frame_collision(
 	current_position: Vector2,
 	previous_height: float,
 	current_height: float,
+	pitch: Rect2 = PITCH_RECT,
 ) -> Dictionary:
 	var delta_x: float = current_position.x - previous_position.x
 	if absf(delta_x) < 0.001:
 		return {}
 
-	var center_y: float = PITCH_RECT.get_center().y
-	var goal_lines: Array[float] = [PITCH_RECT.position.x, PITCH_RECT.end.x]
+	var center_y: float = pitch.get_center().y
+	var goal_lines: Array[float] = [pitch.position.x, pitch.end.x]
 	for goal_x in goal_lines:
 		var from_side: float = previous_position.x - goal_x
 		var to_side: float = current_position.x - goal_x

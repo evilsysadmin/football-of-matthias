@@ -276,3 +276,20 @@ La cámara táctica XI usa una inclinación aérea suave para que los cuerpos
 de pie no desaparezcan al observar el césped desde una perpendicular.
 Las capturas 1280×720 deben mostrar **los 22 cuerpos**, no únicamente
 sombras ni geometría diagnóstica.
+
+
+## 11v11 · geometría del gol (primer incremento de reglas)
+
+La previsualización XI conserva el campo amplio 4-3-3 y sigue sin habilitarse
+como Partida rápida pública. El primer corte funcional utiliza su
+`match_pitch` real para **marcar goles y colisionar con los dos postes y el
+travesaño**; el balón que sólo atraviesa la antigua línea 5v5 no puede
+marcar ni rebotar en una portería fantasma.
+
+Los métodos de geometría de `ChessFootballMath` aceptan un campo opcional,
+pero su valor por defecto continúa siendo el campo histórico de 5v5.
+El smoke de Godot comprueba el gol en ambas porterías XI, disparos altos,
+tiros fuera de los palos, contacto de poste, travesaño y ausencia de
+colisión en la vieja línea. **Todavía faltan** adaptar los saques de banda,
+esquina, puerta, posiciones objetivo de IA y el resto de las reglas al
+campo grande. No activar aún el 11v11 jugable.
