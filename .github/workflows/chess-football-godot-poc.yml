@@ -903,6 +903,22 @@ jobs:
           path: ${{ runner.temp }}/football-xi-fallback/
           if-no-files-found: error
           retention-days: 3
+      # Draft-only materialization: emit content-safe, bounded chunks from
+      # verified, public artwork. Remove once the tiny local fallback is in Git.
+      - name: Materialize four reviewed fallback text assets
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          root=Path(os.environ['RUNNER_TEMP'])/'football-xi-fallback'
+          names=['fc_matthias_xi_fallback.b64','real_enroque_xi_fallback.b64','keeper_0_xi_fallback.b64','keeper_1_xi_fallback.b64']
+          for name in names:
+              encoded=(root/name).read_text().strip()
+              assert 1000<len(encoded)<100000
+              for offset in range(0,len(encoded),1600):
+                  print(f'FOOTBALL_XI_EXPORT_CHUNK name={name} offset={offset} value={encoded[offset:offset+1600]}')
+          PY
       - name: Render verified keeper-catch R2 poses in actual Godot 3D
         if: steps.keeper_r2.outputs.enabled == 'true'
         shell: bash
