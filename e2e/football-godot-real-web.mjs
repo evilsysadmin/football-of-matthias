@@ -226,7 +226,10 @@ try {
   if (await page.locator('canvas').count() === 0) {
     throw new Error('XI Web runtime reported ready without canvas');
   }
-  await page.locator('canvas').click({ position: { x: 500, y: 370 }, timeout: 10000 });
+  // In software WebGL, clicking the second scene can hang during GPU
+  // readPixels/actionability checks. Focus the real canvas directly, then
+  // send genuine keyboard events and assert actual Godot world movement.
+  await page.locator('canvas').focus({ timeout: 10000 });
   await page.waitForFunction(
     () => window.__chessFootballInputSamples.some((sample) =>
       sample.playable && sample.team_size === 11 && sample.team_players === 22 &&
