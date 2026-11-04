@@ -1977,6 +1977,7 @@ func _resolve_goal_frame_collision(
 		ball.global_position,
 		previous_height,
 		ball.flight_height,
+		match_pitch,
 	)
 	if hit.is_empty():
 		return ""
@@ -1993,7 +1994,7 @@ func _resolve_goal_frame_collision(
 	var impact_speed := incoming.length()
 	ball.global_position.x = goal_x - travel_sign * GOAL_FRAME_REBOUND_OFFSET
 	if kind == "post":
-		var center_y := ChessFootballMath.PITCH_RECT.get_center().y
+		var center_y := match_pitch.get_center().y
 		var post_y := center_y + (
 			ChessFootballMath.GOAL_HALF_HEIGHT
 			if float(hit["contact_y"]) >= center_y
@@ -2029,13 +2030,15 @@ func _resolve_goal_frame_collision(
 	return kind
 
 func _check_goal() -> void:
-	if not ChessFootballMath.in_goal_mouth(ball.global_position):
+	if not ChessFootballMath.in_goal_mouth(ball.global_position, match_pitch):
 		return
 	if not ChessFootballMath.ball_fits_under_crossbar(ball.flight_height):
 		return
-	if ball.global_position.x > ChessFootballMath.PITCH_RECT.end.x + 8.0:
+	# Do not score as soon as the ball crosses the old 5v5 line while
+	# travelling toward the expanded XI goal. Same path for both pitches.
+	if ball.global_position.x > match_pitch.end.x + 8.0:
 		_score_goal(0)
-	elif ball.global_position.x < ChessFootballMath.PITCH_RECT.position.x - 8.0:
+	elif ball.global_position.x < match_pitch.position.x - 8.0:
 		_score_goal(1)
 
 func _score_goal(team_id: int) -> void:
