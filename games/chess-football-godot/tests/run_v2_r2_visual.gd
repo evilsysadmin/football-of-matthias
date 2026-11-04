@@ -18,13 +18,12 @@ func _initialize() -> void:
 	var presenter: ChessFootball3DPresenter = game.presentation_3d
 	assert(presenter != null)
 	assert(presenter.xi_raster_meshes.size() == 22)
-	# The BEFORE screenshot must have 22 visible players and only one
-	# body per actor while optional R2 is unavailable.
+	# Both states must have 22 raster sprites visible, with no duplicate model.
 	for team in game.teams:
 		for player in team:
 			var key: int = player.get_instance_id()
-			assert(presenter.player_nodes[key].get_node("XI_KitSculpt").visible)
-			assert(not presenter.xi_raster_meshes[key].visible)
+			assert(not presenter.player_nodes[key].get_node("XI_KitSculpt").visible)
+			assert(presenter.xi_raster_meshes[key].is_visible_in_tree())
 	for team in game.teams:
 		for player in team:
 			if player.role != "keeper":
