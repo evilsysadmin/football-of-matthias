@@ -21,26 +21,20 @@ static func sheet_meta(kind: String) -> Dictionary:
 	if not value is Dictionary:
 		return {}
 	var contract: Dictionary = value
-	print("FOOTBALL_IDLE_META_DEBUG kind=", kind,
-		" enabled=", contract.get("enabled"), " quality=", contract.get("quality_contract"),
-		" bucket=", contract.get("bucket"), " prefix=", contract.get("prefix"),
-		" cdn_match=", contract.get("cdn_base") == TRUSTED_ROOT.trim_suffix("/"),
-		" cell_match=", contract.get("cell") == {"width": WIDTH, "height": HEIGHT},
-		" geometry_match=", contract.get("columns") == FRAME_COUNT and contract.get("rows") == ROW_COUNT,
-		" fps=", contract.get("fps"), " footline=", contract.get("footline"),
-		" views_match=", contract.get("views") == ["front", "back", "side", "front_diagonal", "back_diagonal"]
-	)
 	if contract.get("enabled") != true or contract.get("quality_contract") != "football-idle-5views-v1":
 		return {}
 	if contract.get("bucket") != "football" or contract.get("prefix") != "atlases/v1/":
 		return {}
 	if contract.get("cdn_base") != TRUSTED_ROOT.trim_suffix("/"):
 		return {}
-	if contract.get("cell") != {"width": WIDTH, "height": HEIGHT}:
+	# Godot JSON parses numbers as floating-point Variants. Compare the
+	# concrete dimensions, not Dictionary<int> to Dictionary<float>.
+	var cell: Variant = contract.get("cell", {})
+	if not cell is Dictionary or int(cell.get("width", 0)) != WIDTH or int(cell.get("height", 0)) != HEIGHT:
 		return {}
-	if contract.get("columns") != FRAME_COUNT or contract.get("rows") != ROW_COUNT:
+	if int(contract.get("columns", 0)) != FRAME_COUNT or int(contract.get("rows", 0)) != ROW_COUNT:
 		return {}
-	if contract.get("fps") != 7 or contract.get("footline") != 132:
+	if int(contract.get("fps", 0)) != 7 or int(contract.get("footline", 0)) != 132:
 		return {}
 	if contract.get("views") != ["front", "back", "side", "front_diagonal", "back_diagonal"]:
 		return {}
