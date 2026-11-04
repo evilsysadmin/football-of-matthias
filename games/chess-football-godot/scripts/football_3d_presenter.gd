@@ -1292,7 +1292,10 @@ func _build_xi_quad_bodies() -> void:
 			material.alpha_scissor_threshold = 0.02
 			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			# Rotate only around world Y. A fully camera-facing billboard
+			# tilts back with the broadcast camera and lifts the visible boots
+			# away from the real grass contact/shadow point on distant players.
+			material.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 			material.cull_mode = BaseMaterial3D.CULL_DISABLED
 			# Prevent a distant, vertical raster body from sinking into turf
 			# when the full-pitch aerial camera intersects the field depth.
@@ -2161,6 +2164,19 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 		stretch_x *= 1.0 + 0.070 * contact_weight
 		stretch_y *= 1.0 - 0.065 * contact_weight
 		tilt_degrees += player.contact_sway_sign * 16.0 * contact_weight
+
+	# The authored XI frames already contain running weight transfer.
+	# Synthetic vertical bob raises the boots above the ground shadow in
+	# broadcast, most visibly for small distant players. Keep it for 5v5
+	# and for XI actions such as slide, save and celebrations, but not
+	# for ordinary XI locomotion.
+	if (
+		match_node.match_team_size == 11
+		and (animation_name in ["run", "sprint"]
+			or animation_name.begins_with("run_")
+			or animation_name.begins_with("sprint_"))
+	):
+		bob = 0.0
 
 	# One body-height reference for both teams, all views and all roles.
 	var canonical_scale := _canonical_body_scale(sprite, player.role)
