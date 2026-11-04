@@ -40,5 +40,17 @@
   outline-offset: 3px;
 }
 @media (max-width: 440px) {
-  .football-release-notice { right: 1rem; width: auto; }
+  /* Keep the quick-match and manager entry buttons usable on phone screens. */
+  .football-release-notice {
+    right: 1rem;
+    width: auto;
+    padding: .55rem .6rem;
+    flex-wrap: nowrap;
+    gap: .35rem;
+  }
+  .football-release-notice__copy { min-width: 0; flex: 1 1 auto; gap: 0; }
+  .football-release-notice__copy strong { font-size: 12px; line-height: 1.25; }
+  .football-release-notice__copy span { display: none; }
+  .football-release-notice__actions { flex: 0 0 auto; flex-wrap: nowrap; gap: .25rem; }
+  .football-release-notice__actions button { min-height: 44px; font-size: 12px; padding: .4rem .5rem; }
 }
