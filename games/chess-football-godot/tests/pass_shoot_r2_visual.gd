@@ -74,7 +74,7 @@ func _render_matrix(game: Node, stage: ChessFootball3DPresenter,
 		actor.global_position = game.match_pitch.get_center()
 		for action_row in range(ACTIONS.size()):
 			for phase_index in range(PHASES.size()):
-				var pose := PHASES[phase_index]
+				var pose: int = int(PHASES[phase_index])
 				var shot := await _capture(game, stage, actor, ACTIONS[action_row], pose, mode)
 				var x := (team_id * 3 + phase_index) * CROP.x
 				var y := action_row * CROP.y
