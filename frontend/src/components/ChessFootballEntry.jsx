@@ -8,7 +8,7 @@ import { getDevelopedFootballRoster, FOOTBALL_MAX_GROWTH_PER_ATTRIBUTE } from '.
 import { createFootballCareer, editFootballCareer, playFootballCareerRound, startNextFootballSeason, FOOTBALL_CAREER_MAX_SEASONS, readFootballCareer, replayFootballCareer, writeFootballCareer } from '../footballManagerCareer.js';
 import { getFootballClubRoster, getDefaultFootballLineup, FOOTBALL_FIVE_POSITIONS, getFootballFatigue } from '../footballManagerRoster.js';
 import { FOOTBALL_SCOUTING_ATTRIBUTES } from '../footballPlayerProfiles.js';
-import { FOOTBALL_QUICK_DIFFICULTIES, DEFAULT_FOOTBALL_QUICK_DIFFICULTY } from '../footballQuickDifficulty.js';
+import { FOOTBALL_QUICK_DIFFICULTIES, DEFAULT_FOOTBALL_QUICK_DIFFICULTY, footballStagingElevenEnabled } from '../footballQuickDifficulty.js';
 import './ChessFootballEntry.css';
 import ReleaseUpdateNotice from './ReleaseUpdateNotice.jsx';
 import FootballSaveTransfer from './FootballSaveTransfer.jsx';
@@ -50,6 +50,8 @@ function FootballSquadDevelopment({ players }) {
 export default function ChessFootballEntry({ onExit }) {
   const [view, setView] = useState('welcome');
   const [quickDifficulty, setQuickDifficulty] = useState(DEFAULT_FOOTBALL_QUICK_DIFFICULTY);
+  const [quickTeamSize, setQuickTeamSize] = useState(5);
+  const elevenPreview = typeof window !== 'undefined' && footballStagingElevenEnabled(window.location.hostname);
   const scrollSurface = useRef(null);
   const [selectedClubId, setSelectedClubId] = useState(null);
   const [season, setSeason] = useState(null);
@@ -172,7 +174,7 @@ export default function ChessFootballEntry({ onExit }) {
   if (view === 'match') {
     return (
       <Suspense fallback={<div className="chess-football-entry__loading" role="status">Preparando el campo…</div>}>
-        <ChessFootballGodotHost difficulty={quickDifficulty} onExit={() => setView('welcome')} />
+        <ChessFootballGodotHost difficulty={quickDifficulty} teamSize={elevenPreview ? quickTeamSize : 5} onExit={() => setView('welcome')} />
       </Suspense>
     );
   }
@@ -224,6 +226,16 @@ export default function ChessFootballEntry({ onExit }) {
             <span className="chess-football-entry__eyebrow">Partida rápida · FC Matthias vs Real Enroque</span>
             <h2 id="football-quick-setup-title">Elige a tu rival</h2>
             <p>Decide cuánto aprieta la CPU. Tu equipo, las estadísticas y las reglas del partido no cambian.</p>
+            {elevenPreview ? (
+              <div className="chess-football-entry__quick-team-sizes" role="group" aria-label="Formato de partido · pruebas en staging">
+                <button type="button" className="chess-football-entry__quick-team-size" aria-pressed={quickTeamSize === 5} onClick={() => setQuickTeamSize(5)}>
+                  5v5 · Clásico
+                </button>
+                <button type="button" className="chess-football-entry__quick-team-size" aria-pressed={quickTeamSize === 11} onClick={() => setQuickTeamSize(11)}>
+                  11v11 · En pruebas
+                </button>
+              </div>
+            ) : null}
             <div className="chess-football-entry__quick-levels" role="group" aria-label="Dificultad del rival">
               {FOOTBALL_QUICK_DIFFICULTIES.map(({ id, label, description }) => (
                 <button key={id} type="button" aria-pressed={quickDifficulty === id}
@@ -234,7 +246,7 @@ export default function ChessFootballEntry({ onExit }) {
               ))}
             </div>
             <button type="button" className="chess-football-entry__quick-kickoff" onClick={startQuickMatch}>
-              Saltar al campo · {FOOTBALL_QUICK_DIFFICULTIES.find(({ id }) => id === quickDifficulty)?.label}
+              Saltar al campo{elevenPreview && quickTeamSize === 11 ? ' · 11v11' : ''} · {FOOTBALL_QUICK_DIFFICULTIES.find(({ id }) => id === quickDifficulty)?.label}
             </button>
             <p className="chess-football-entry__quick-hint">Puedes regresar al vestuario desde el menú del partido.</p>
           </section>

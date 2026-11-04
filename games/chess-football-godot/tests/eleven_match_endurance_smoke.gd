@@ -57,6 +57,10 @@ func _initialize() -> void:
 	var cpu := 0
 	var loose := 0
 	var moving_cpu := 0
+	var injected_throw := false
+	var injected_corner := false
+	var injected_goal_kick := false
+	var injected_goal := false
 	var saw_throw := false
 	var done_throw := false
 	var saw_corner := false
@@ -74,23 +78,32 @@ func _initialize() -> void:
 			game.ball.release(Vector2(1.0, 0.25), 780.0)
 		if tick == 930:
 			game.ball.attach_to(game.teams[1][10])
-		if tick == 1320:
+		# Natural AI play may create a real throw/corner/kickoff on an
+		# injection tick. Defer each scripted out-ball until open play rather
+		# than forcibly overwrite an active restart. Each stage remains
+		# bounded by the next milestone within the same 60s simulation.
+		var open_play: bool = not (game.kickoff_active or game.goal_restart_active
+			or game.set_piece_active)
+		if tick >= 1320 and tick < 2040 and not injected_throw and open_play:
 			_kick_out(game, game.teams[1][8],
 				Vector2(PITCH.get_center().x - 300.0, PITCH.position.y - 30.0))
-		if tick == 2040:
-			assert(saw_throw and done_throw)
+			injected_throw = true
+		if tick >= 2040 and tick < 2700 and not injected_corner and open_play:
+			assert(saw_throw and done_throw, "XI throw-in did not complete before corner")
 			_kick_out(game, game.teams[1][3],
 				Vector2(PITCH.end.x + 30.0, PITCH.position.y + 110.0))
-		if tick == 2700:
-			assert(saw_corner and done_corner)
+			injected_corner = true
+		if tick >= 2700 and tick < 3060 and not injected_goal_kick and open_play:
+			assert(saw_corner and done_corner, "XI corner did not complete before goal kick")
 			_kick_out(game, game.teams[0][10],
 				Vector2(PITCH.end.x + 30.0, PITCH.get_center().y + 285.0))
-		if tick == 3060:
-			assert(saw_goal_kick and done_goal_kick)
-			assert(not game.set_piece_active and not game.goal_restart_active)
+			injected_goal_kick = true
+		if tick >= 3060 and not injected_goal and open_play:
+			assert(saw_goal_kick and done_goal_kick, "XI goal kick did not complete before goal")
 			game.ball.attach_to(game.teams[0][10])
 			game.ball.release(Vector2.RIGHT, 0.0, 0.0, true)
 			game.ball.global_position = Vector2(PITCH.end.x + 25.0, PITCH.get_center().y)
+			injected_goal = true
 		game._physics_process(STEP)
 		if tick >= 1320 and tick < 2040:
 			saw_throw = saw_throw or (game.set_piece_active and
@@ -125,6 +138,8 @@ func _initialize() -> void:
 	assert(game.match_seconds >= float(TICKS) * STEP - 0.01)
 	assert(active > 1000 and loose > 0 and cpu > 0 and human > 0)
 	assert(moving_cpu >= 50)
+	assert(injected_throw and injected_corner and injected_goal_kick and injected_goal,
+		"XI endurance did not execute all staged restart injections")
 	assert(saw_throw and done_throw and saw_corner and done_corner)
 	assert(saw_goal_kick and done_goal_kick and saw_goal and saw_kickoff and resumed)
 	assert(game.score[0] + game.score[1] >= initial_goals + 1)

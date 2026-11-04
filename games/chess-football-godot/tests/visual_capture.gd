@@ -810,7 +810,7 @@ func _initialize() -> void:
 			max_ball_distance_from_corner,
 			match_node.ball.global_position.distance_to(live_corner_ball_start)
 		)
-	_assert_live_corner_ball_frame(match_node)
+	_assert_live_corner_ball_frame(match_node, true)
 	assert(match_node.ball.flight_height > 1.0)
 	assert(match_node.ball.global_position.distance_to(live_corner_ball_start) > 60.0)
 	await _save_capture(match_node, "corner-cross-live-150ms", "VISUAL_CAPTURE_CORNER_CROSS_LIVE_150MS")
@@ -960,9 +960,18 @@ func _assert_near_corner_composition(match_node: Node) -> void:
 
 # Live-flight assertion uses the rendered 3D ball height, not its flat
 # simulation coordinate: a high cross must be visible above the crowd.
-func _assert_live_corner_ball_frame(match_node: Node) -> void:
+# After the initial flight, a legal catch or out-of-play restart ends the
+# cross: subsequent screenshots show that state, not an in-flight ball.
+func _assert_live_corner_ball_frame(match_node: Node, require_flight: bool = false) -> void:
+	if match_node.debug_set_piece_active():
+		assert(not require_flight, "Corner cross returned to a set piece before the initial flight")
+		print("FOOTBALL_LIVE_CORNER_ENDED=restart")
+		return
+	if match_node.ball.carrier != null:
+		assert(not require_flight, "Corner cross was caught before the initial flight")
+		print("FOOTBALL_LIVE_CORNER_ENDED=interception")
+		return
 	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
-	assert(not match_node.debug_set_piece_active())
 	var ball_screen := presenter.screen_position_for_world(
 		match_node.ball.global_position,
 		0.18 + float(match_node.ball.flight_height) * ChessFootball3DPresenter.WORLD_SCALE
