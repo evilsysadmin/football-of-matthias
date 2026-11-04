@@ -1,0 +1,44 @@
+.football-release-notice {
+  position: fixed;
+  z-index: 20000;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  width: min(440px, calc(100vw - 2rem));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .85rem;
+  padding: 1rem;
+  border: 1px solid #82996b;
+  border-radius: 13px;
+  background: #11231a;
+  color: #f4e9d1;
+  box-shadow: 0 10px 32px #000b;
+  font: 500 14px/1.4 system-ui, sans-serif;
+}
+.football-release-notice__copy { display: grid; gap: .3rem; flex: 1 1 190px; }
+.football-release-notice__copy strong { font-size: 15px; }
+.football-release-notice__copy span { color: #ced8c5; }
+.football-release-notice__actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.football-release-notice__actions button {
+  min-height: 44px;
+  padding: .55rem .85rem;
+  border: 1px solid #82996b;
+  border-radius: 8px;
+  color: #f4e9d1;
+  background: #1d3325;
+  cursor: pointer;
+}
+.football-release-notice__actions button.is-primary {
+  color: #11231a;
+  background: #d7e9ae;
+  font-weight: 800;
+}
+.football-release-notice__actions button:focus-visible {
+  outline: 2px solid #d7e9ae;
+  outline-offset: 3px;
+}
+@media (max-width: 440px) {
+  .football-release-notice { right: 1rem; width: auto; }
+}
