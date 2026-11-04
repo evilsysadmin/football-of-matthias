@@ -16,9 +16,9 @@ Upload only these files to dedicated Cloudflare R2 bucket **football**:
 - `atlases/v1/fc_matthias_carry_dribble_v1.webp`
 - `atlases/v1/real_enroque_carry_dribble_v1.webp`
 
-`optional_carry_dribble_v1.json` pins SHA-256 and remains **enabled:false**
-until verified public URL HTTP 200, staging-origin CORS, exact SHA-256 and real
-Godot 1280x720 before/after screenshots (ball carrier in broadcast/tactical,
-both clubs). Do not merge until the real visual gate is green on the exact PR
+`optional_carry_dribble_v1.json` pins SHA-256 and is now **enabled:true only on the PR branch**.
+CI fails closed unless both real public objects pass HTTP 200, staging-origin
+CORS, exact SHA-256, layout and runtime decoding, plus 1280x720 before/after
+Godot screenshots for broadcast and tactical views. Do not merge until the real visual gate is green on the exact PR
 SHA and those screenshots are personally inspected. Rollback simply disables
 the metadata or reverts the PR. No new paid infra or R2 writes from GitHub.

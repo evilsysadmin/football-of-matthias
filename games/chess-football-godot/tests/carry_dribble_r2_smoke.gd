@@ -4,12 +4,14 @@ extends SceneTree
 # with synthetic textures and guarantees unchanged real match authority.
 func _initialize() -> void:
 	var contract := ChessFootballCarryDribbleR2.metadata()
-	assert(contract.get("enabled") == false)
+	assert(contract.get("enabled") == true)
 	assert(contract.get("bucket") == "football")
 	assert(contract.get("prefix") == "atlases/v1/")
 	assert((contract.get("entries", []) as Array).size() == 2)
-	assert(ChessFootballCarryDribbleR2.sheet_meta(0).is_empty())
-	assert(ChessFootballCarryDribbleR2.sheet_meta(1).is_empty())
+	assert(not ChessFootballCarryDribbleR2.sheet_meta(0).is_empty())
+	assert(not ChessFootballCarryDribbleR2.sheet_meta(1).is_empty())
+	assert(ChessFootballCarryDribbleR2.sheet_meta(0)["sha256"] == contract["entries"][0]["sha256"])
+	assert(ChessFootballCarryDribbleR2.sheet_meta(1)["sha256"] == contract["entries"][1]["sha256"])
 	assert(ChessFootballCarryDribbleR2.sheet_meta(2).is_empty())
 	assert(ChessFootballCarryDribbleR2.animation_for(&"run", "side", "", true, false) == &"carry")
 	assert(ChessFootballCarryDribbleR2.animation_for(&"sprint", "side", "", true, true) == &"dribble")
