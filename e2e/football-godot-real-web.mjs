@@ -127,6 +127,59 @@ async function bridgeVerifiedStagingAnimatedIdleR2(page) {
   if (expected.size) throw new Error('Missing dedicated idle R2 sheets');
 }
 
+// CI's loopback origin is NOT staging and correctly has no bucket CORS.
+// Verify the real public R2 response first, then fulfill only these two exact
+// paths with their same SHA-pinned bytes for local Chromium/WASM smoke.
+async function bridgeVerifiedRunV2R2(page) {
+  if (process.env.CI !== 'true') throw new Error('R2 v2 localhost bridge is CI-only');
+  const config = JSON.parse(readFileSync('games/chess-football-godot/optional_run_v2.json', 'utf8'));
+  const base = 'https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v2';
+  const expected = new Map([
+    ['fc_matthias', ['fc_matthias_run_v2_clean.webp', 'd686ad08291910bdbfb8454135f917e939b727c7498e3a3b8a93f919cbe48a2f']],
+    ['real_enroque', ['real_enroque_run_v2_clean.webp', '4f02d84e6a337389d1bdbeac22ef78eacea8dd32076bc8807bd80ed1466172dd']]
+  ]);
+  if (config.enabled !== true || config.bucket !== 'football' ||
+      config.prefix !== 'atlases/v2/' || config.cdn_base !== base ||
+      config.columns !== 8 || config.rows !== 5 ||
+      config.shadow_candidate?.enabled !== false ||
+      !Array.isArray(config.entries) || config.entries.length !== 2) {
+    throw new Error('Unexpected R2 v2 public root, geometry or shadow enablement');
+  }
+  const origin = 'https://staging.football.shadowops.dpdns.org';
+  for (const entry of config.entries) {
+    const known = expected.get(entry.kind);
+    if (!known || entry.file !== known[0] || entry.sha256 !== known[1]) {
+      throw new Error('R2 v2 atlas entry is not pinned');
+    }
+    expected.delete(entry.kind);
+    const url = base + '/' + entry.file;
+    const response = await fetch(url, {
+      headers: { Origin: origin, 'User-Agent': 'Football-run-v2-Web-CI/1.0' },
+      signal: AbortSignal.timeout(15000)
+    });
+    const cors = response.headers.get('access-control-allow-origin');
+    if (response.status !== 200 ||
+        !response.headers.get('content-type')?.toLowerCase().startsWith('image/webp') ||
+        (cors !== '*' && cors !== origin)) {
+      throw new Error('R2 v2 requires HTTP 200, WebP and staging CORS: ' + url);
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length < 25 || bytes.length > 4194304 ||
+        bytes.toString('ascii', 0, 4) !== 'RIFF' ||
+        bytes.toString('ascii', 8, 12) !== 'WEBP' ||
+        createHash('sha256').update(bytes).digest('hex') !== known[1]) {
+      throw new Error('SHA mismatch for v2 R2 WebP: ' + url);
+    }
+    await page.route(url, route => route.fulfill({
+      status: 200, contentType: 'image/webp',
+      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+      body: bytes
+    }));
+    console.log('FOOTBALL_WEB_RUN_V2_R2_VERIFIED', entry.kind, bytes.length);
+  }
+  if (expected.size) throw new Error('Missing R2 v2 club sheet');
+}
+
 const server = createServer((req, res) => {
   try {
     let path = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
@@ -149,6 +202,7 @@ try {
   if (process.env.FOOTBALL_CI_KEEPER_R2_BRIDGE === '1') {
     await bridgeVerifiedStagingKeeperR2(page);
     await bridgeVerifiedStagingAnimatedIdleR2(page);
+    await bridgeVerifiedRunV2R2(page);
   }
   await page.addInitScript(() => {
     window.__chessFootballWebReady = false;
