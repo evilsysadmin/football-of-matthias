@@ -92,8 +92,6 @@ var player_sprites: Dictionary = {}
 # 11v11-only QuadMesh bodies fed by the canonical AnimatedSprite3D frames.
 # Legacy 5v5 continues to render AnimatedSprite3D directly.
 var xi_raster_meshes: Dictionary = {}
-# Temporary XI fallback until exact optional WebP sheets verify.
-var xi_actor_models: Dictionary = {}
 # All XI athletes (including when optional R2 is unavailable) must use
 # their canonical local raster. No geometric proxy on the playing field.
 var player_run_views: Dictionary = {}
@@ -160,19 +158,6 @@ func _on_animated_idle_ready(image: Image, kind: String) -> void:
 		if away_keeper_textures.size() != textures.size():
 			return
 	_apply_animated_idle_frames(kind, textures, away_keeper_textures)
-	# Keepers have no v2 run sheet: a verified 5-view keeper idle sheet
-	# already supplies a valid raster body and can replace the fallback sculpt.
-	if kind == "keeper" and _animated_idle_r2_loaded.has("keeper"):
-		for team in match_node.teams:
-			for player in team:
-				if player.role != "keeper":
-					continue
-				var key: int = player.get_instance_id()
-				var model_proxy := xi_actor_models.get(key) as Node3D
-				var raster := xi_raster_meshes.get(key) as MeshInstance3D
-				if model_proxy != null and raster != null:
-					model_proxy.hide()
-					raster.show()
 
 
 func _apply_animated_idle_frames(
@@ -313,17 +298,8 @@ func _apply_verified_run_v2(textures: Array[Texture2D], team_id: int) -> void:
 				for frame_id in range(ChessFootballRunV2R2.COLUMNS):
 					frames.set_frame(anim, frame_id, textures[row * ChessFootballRunV2R2.COLUMNS + frame_id])
 	_run_v2_r2_loaded[team_id] = true
-	# On verified success, switch the entire club from its provisional
-	# no-duplicate model to the real 8-frame raster in one visual update.
-	for player in match_node.teams[team_id]:
-		if player.role == "keeper":
-			continue
-		var key: int = player.get_instance_id()
-		var model_proxy := xi_actor_models.get(key) as Node3D
-		var raster := xi_raster_meshes.get(key) as MeshInstance3D
-		if model_proxy != null and raster != null:
-			model_proxy.hide()
-			raster.show()
+	# Optional R2 replaces textures only. The bundled canonical raster
+	# remains the visible fallback if no R2 atlas can be validated.
 	tone_gain_cache.clear()
 
 
@@ -1299,60 +1275,7 @@ func _build_xi_quad_bodies() -> void:
 			quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			proxy.add_child(quad)
 			xi_raster_meshes[key] = quad
-			# Avoid drawing both the model AND raster at the same time.
-			quad.visible = false
 			driver.hide()
-
-
-func _build_xi_actor_sculpt(root: Node3D, player: Footballer) -> void:
-	var model := Node3D.new()
-	model.name = "XI_KitSculpt"
-	var jersey := _material(player.team_color, 0.86)
-	var shorts := _material(player.team_color.darkened(0.38), 0.91)
-	var skin := _material(Color(0.69, 0.48, 0.33), 0.92)
-	var boots := _material(Color(0.035, 0.046, 0.063), 0.90)
-	var torso := MeshInstance3D.new()
-	torso.name = "Jersey"
-	var body_mesh := CylinderMesh.new()
-	body_mesh.top_radius = 0.24
-	body_mesh.bottom_radius = 0.19
-	body_mesh.height = 0.58
-	torso.mesh = body_mesh
-	torso.position.y = 0.69
-	torso.material_override = jersey
-	torso.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	model.add_child(torso)
-	var head := MeshInstance3D.new()
-	head.name = "Head"
-	var head_mesh := SphereMesh.new()
-	head_mesh.radius = 0.15
-	head_mesh.height = 0.30
-	head.mesh = head_mesh
-	head.position.y = 1.13
-	head.material_override = skin
-	head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	model.add_child(head)
-	for sign in [-1.0, 1.0]:
-		var leg := MeshInstance3D.new()
-		var leg_mesh := CylinderMesh.new()
-		leg_mesh.top_radius = 0.097
-		leg_mesh.bottom_radius = 0.072
-		leg_mesh.height = 0.48
-		leg.mesh = leg_mesh
-		leg.position = Vector3(sign * 0.12, 0.24, 0.0)
-		leg.material_override = shorts
-		leg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		model.add_child(leg)
-		var shoe := MeshInstance3D.new()
-		var shoe_mesh := BoxMesh.new()
-		shoe_mesh.size = Vector3(0.18, 0.095, 0.29)
-		shoe.mesh = shoe_mesh
-		shoe.position = Vector3(sign * 0.12, 0.055, -0.045)
-		shoe.material_override = boots
-		shoe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		model.add_child(shoe)
-	root.add_child(model)
-	xi_actor_models[int(player.get_instance_id())] = model
 
 
 func _soft_contact_shadow_material() -> ShaderMaterial:
@@ -1402,8 +1325,8 @@ func _build_player_proxies() -> void:
 			sprite.flip_h = player.team_id == 1
 			sprite.play("idle")
 			root.add_child(sprite)
-			if match_node.match_team_size == 11:
-				_build_xi_actor_sculpt(root, player)
+			# The XI_RasterBody is the ONLY 11v11 athlete geometry;
+			# never add XI_KitSculpt, even when optional R2 is offline.
 			if player.role == "keeper":
 				keeper_catch_rigs[int(player.get_instance_id())] = _build_keeper_catch_rig(root, player.team_id)
 
