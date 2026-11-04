@@ -89,14 +89,9 @@ var match_node: Node
 var camera: Camera3D
 var player_nodes: Dictionary = {}
 var player_sprites: Dictionary = {}
-# XI-only raster presenter: Godot's AnimatedSprite3D draws no visible
-# bodies in the expanded stadium, while identical Sprite3D textures render.
-# Keep the animated clock/atlas and copy its frame to a single visible quad.
-var xi_raster_sprites: Dictionary = {}
-var xi_raster_remount_complete: bool = false
-# Visual diagnosis only: stop changing XI mesh/material state during the
-# first real-Godot capture. Re-enable before the animation regression smoke.
-var xi_raster_hold_for_visual_probe: bool = false
+# 11v11-only QuadMesh bodies fed by the canonical AnimatedSprite3D frames.
+# Legacy 5v5 continues to render AnimatedSprite3D directly.
+var xi_raster_meshes: Dictionary = {}
 var player_run_views: Dictionary = {}
 # Keeper run/action poses tick independently in the visible 3D runtime.
 # Hidden authoritative 2D AnimatedSprite2D nodes are not a reliable clock.
@@ -336,10 +331,8 @@ func setup(p_match: Node) -> void:
 	_build_ball()
 	_build_camera()
 	sync_presentation(1.0, "broadcast")
-	# The real Godot visual gate proved static XI quads render when they
-	# enter an already-mounted scene. Create them after the first sync,
-	# not inside the off-tree player proxy factory.
-	_enable_xi_raster_bodies()
+	# Render approved XI atlases as real textured 3D meshes.
+	_build_xi_quad_bodies()
 	_request_idle_front_from_r2()
 	_request_lateral_run_from_r2()
 	_request_tackle_atlases_from_r2()
@@ -1085,88 +1078,44 @@ func _add_goal_net_grid(
 # XI-only raster mirrors the existing AnimatedSprite3D clock and atlas.
 # Initialize after the 3D scene entered the tree, exactly like the real
 # 22-proxy visual diagnostic. The shipped 5v5 has no extra raster nodes.
-func _enable_xi_raster_bodies() -> void:
+# In the expanded XI, Godot's GLES3 Sprite3D batches intermittently skip
+# distant bodies. A normal textured QuadMesh renders the approved atlas on
+# the exact same actor transform. The animated Sprite3D remains the clock;
+# only this 11v11 preview uses these static 3D raster meshes.
+func _build_xi_quad_bodies() -> void:
 	if match_node.match_team_size != 11:
 		return
-	# The earlier process_frame-only warmup does not guarantee that the
-	# renderer has actually submitted a 3D draw. Our successful 22-static
-	# diagnostic added these same quads AFTER completed frame_post_draw events.
-	# Headless has no GPU frames: use process_frame there, not a blocking
-	# rendering signal. Neither path runs for the default public 5v5.
-	if DisplayServer.get_name() == "headless":
-		for _raster_ready_frame in range(2):
-			await get_tree().process_frame
-	else:
-		for _raster_ready_frame in range(8):
-			await RenderingServer.frame_post_draw
 	for team in match_node.teams:
 		for player in team:
 			var key: int = int(player.get_instance_id())
 			var driver: AnimatedSprite3D = player_sprites.get(key)
 			var proxy: Node3D = player_nodes.get(key)
 			assert(driver != null and proxy != null)
-			var raster := Sprite3D.new()
-			raster.name = "XI_Raster"
-			raster.texture = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
-			raster.centered = driver.centered
-			raster.pixel_size = driver.pixel_size
-			raster.position = driver.position
-			raster.rotation = driver.rotation
-			raster.scale = driver.scale
-			raster.billboard = driver.billboard
-			raster.alpha_cut = driver.alpha_cut
-			raster.alpha_scissor_threshold = driver.alpha_scissor_threshold
-			raster.shaded = driver.shaded
-			# XI-only diagnosis: eliminate turf/depth-buffer occlusion of
-			# distant vertical raster bodies in the full-pitch camera.
-			# The five-a-side material, collision and camera stay unchanged.
-			raster.no_depth_test = true
-			raster.flip_h = driver.flip_h
-			raster.modulate = driver.modulate
-			raster.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			proxy.add_child(raster)
-			xi_raster_sprites[key] = raster
+			var frame_texture: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
+			var panel := QuadMesh.new()
+			panel.size = Vector2(frame_texture.get_width(), frame_texture.get_height()) * driver.pixel_size
+			var material := StandardMaterial3D.new()
+			material.albedo_texture = frame_texture
+			material.albedo_color = driver.modulate
+			material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+			material.alpha_scissor_threshold = 0.12
+			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			material.cull_mode = BaseMaterial3D.CULL_DISABLED
+			# Prevent a distant, vertical raster body from sinking into turf
+			# when the full-pitch aerial camera intersects the field depth.
+			material.no_depth_test = true
+			var quad := MeshInstance3D.new()
+			quad.name = "XI_RasterBody"
+			quad.mesh = panel
+			quad.material_override = material
+			quad.position = driver.position
+			quad.rotation = driver.rotation
+			quad.scale = driver.scale
+			quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			proxy.add_child(quad)
+			xi_raster_meshes[key] = quad
 			driver.hide()
-
-	# The first static XI faces can still be skipped by Godot's raster
-	# batching when the 3D camera/pitch has just compiled. The REAL
-	# 1280x720 gate showed a second set mounted after later draws is visible.
-	# Rebuild only the XI render quads once after 12 more completed frames,
-	# keeping the existing animation clock, actor identity and textures.
-	if DisplayServer.get_name() == "headless":
-		for _raster_ready_frame in range(2):
-			await get_tree().process_frame
-	else:
-		for _raster_ready_frame in range(12):
-			await RenderingServer.frame_post_draw
-	for team in match_node.teams:
-		for player in team:
-			var key: int = int(player.get_instance_id())
-			var driver: AnimatedSprite3D = player_sprites.get(key)
-			var proxy: Node3D = player_nodes.get(key)
-			var previous: Sprite3D = xi_raster_sprites.get(key)
-			if driver == null or proxy == null or previous == null:
-				continue
-			var late := Sprite3D.new()
-			late.name = "XI_RasterReady"
-			late.texture = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
-			late.position = driver.position
-			late.rotation = driver.rotation
-			late.scale = driver.scale
-			late.pixel_size = driver.pixel_size
-			late.centered = driver.centered
-			late.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			late.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-			late.alpha_scissor_threshold = 0.12
-			late.shaded = false
-			late.no_depth_test = true
-			late.flip_h = driver.flip_h
-			late.modulate = driver.modulate
-			late.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			proxy.add_child(late)
-			previous.hide()
-			xi_raster_sprites[key] = late
-	xi_raster_remount_complete = true
 
 
 func _build_player_proxies() -> void:
@@ -1538,28 +1487,32 @@ func sync_presentation(delta: float, mode: String) -> void:
 				) - cell_half_height
 			)
 			sprite.position.y += foot_y * sprite.pixel_size * (sprite.scale.y - authored_y)
-			# XI-only visible quad mirrors the authored animated frame and every
-			# transform, including depth scale and footline. This is not a second
-			# animation system and changes no gameplay, 5v5 actor or R2 atlas.
-			var xi_raster: Sprite3D = xi_raster_sprites.get(key)
-			if xi_raster != null and not xi_raster_hold_for_visual_probe:
-				# Texture RID/material updates can invalidate a GLES3 billboard
-				# for the entire frame. Switch only on authored frame changes.
-				var next_frame := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
-				if xi_raster.texture != next_frame:
-					xi_raster.texture = next_frame
-				if xi_raster.flip_h != sprite.flip_h:
-					xi_raster.flip_h = sprite.flip_h
-				if not is_equal_approx(xi_raster.pixel_size, sprite.pixel_size):
-					xi_raster.pixel_size = sprite.pixel_size
-				if xi_raster.position != sprite.position:
-					xi_raster.position = sprite.position
-				if xi_raster.rotation != sprite.rotation:
-					xi_raster.rotation = sprite.rotation
-				if xi_raster.scale != sprite.scale:
-					xi_raster.scale = sprite.scale
-				if xi_raster.modulate != sprite.modulate:
-					xi_raster.modulate = sprite.modulate
+			# A visible XI QuadMesh uses the original animation frame, position,
+			# mirroring and footline. No separate animation or physics authority.
+			var xi_quad: MeshInstance3D = xi_raster_meshes.get(key)
+			if xi_quad != null:
+				var panel: QuadMesh = xi_quad.mesh
+				var canvas: StandardMaterial3D = xi_quad.material_override
+				var current_frame: Texture2D = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+				if canvas.albedo_texture != current_frame:
+					canvas.albedo_texture = current_frame
+				var frame_size := Vector2(current_frame.get_width(), current_frame.get_height()) * sprite.pixel_size
+				if panel.size != frame_size:
+					panel.size = frame_size
+				var flip_u: bool = sprite.flip_h
+				var target_uv_scale := Vector3(-1.0, 1.0, 1.0) if flip_u else Vector3.ONE
+				var target_uv_offset := Vector3(1.0, 0.0, 0.0) if flip_u else Vector3.ZERO
+				if canvas.uv1_scale != target_uv_scale:
+					canvas.uv1_scale = target_uv_scale
+					canvas.uv1_offset = target_uv_offset
+				if xi_quad.position != sprite.position:
+					xi_quad.position = sprite.position
+				if xi_quad.rotation != sprite.rotation:
+					xi_quad.rotation = sprite.rotation
+				if xi_quad.scale != sprite.scale:
+					xi_quad.scale = sprite.scale
+				if canvas.albedo_color != sprite.modulate:
+					canvas.albedo_color = sprite.modulate
 			# The existing secondary motion includes deliberate running bob,
 			# which stays independent from depth and untouched here.
 			var is_controlled: bool = player == match_node.controlled
