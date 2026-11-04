@@ -47,6 +47,8 @@ static var _cached_3d_frame_luminance: Dictionary = {}
 # Always provide a visible player-shaped local raster for an XI actor.
 # Unavailable or tampered files cannot silently become a coloured manikin.
 static func xi_fallback_texture(team_id: int, is_keeper: bool = false) -> Texture2D:
+	if team_id not in [0, 1]:
+		return null
 	var key: String = ("keeper_%d_xi_fallback" % team_id) if is_keeper else (
 		"fc_matthias_xi_fallback" if team_id == 0 else "real_enroque_xi_fallback"
 	)
