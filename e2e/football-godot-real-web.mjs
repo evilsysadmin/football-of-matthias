@@ -139,7 +139,9 @@ try {
   // alters input or player velocity.
   await page.locator('canvas').click({ position: { x: 500, y: 370 }, timeout: 10000 });
   await page.waitForFunction(
-    () => window.__chessFootballInputSamples.some((sample) => sample.playable),
+    () => window.__chessFootballInputSamples.some((sample) =>
+      sample.playable && sample.team_size === 5 && sample.team_players === 10 &&
+      sample.pitch_width === 2480 && sample.pitch_height === 1680),
     null, { timeout: 30000 }
   );
   async function expectRealMovement(key, axis, sign, requireTravel = false) {
@@ -202,6 +204,33 @@ try {
   await page.screenshot({ path: resolve(output, 'real-web-kickoff.png'), timeout: 4000 })
     .catch((error) => console.warn('Optional software-WebGL screenshot unavailable: ' + error.message));
   console.log('CHESS_FOOTBALL_REAL_WEB_READY OK');
+
+  // XI is deliberately unavailable in the public app. The explicit local
+  // probe plus loopback origin are required even when the fragment is present.
+  // Reboot the SAME exported WASM in Chromium, not a native/mock game.
+  // Hash-only navigation does NOT reload a document: leave the page first.
+  await page.goto('about:blank');
+  await page.goto(url + '#football-ci-eleven=1', {
+    waitUntil: 'domcontentloaded', timeout: 30000
+  });
+  await page.waitForFunction(() => window.__chessFootballWebReady === true, null, { timeout: 60000 });
+  if (await page.locator('canvas').count() === 0) {
+    throw new Error('XI Web runtime reported ready without canvas');
+  }
+  await page.locator('canvas').click({ position: { x: 500, y: 370 }, timeout: 10000 });
+  await page.waitForFunction(
+    () => window.__chessFootballInputSamples.some((sample) =>
+      sample.playable && sample.team_size === 11 && sample.team_players === 22 &&
+      sample.pitch_width === 4000 && sample.pitch_height === 2600),
+    null, { timeout: 60000 }
+  );
+  // Native endurance tests cover tactics and restarts; here confirm browser
+  // input drives a real player on the full-size XI pitch as well.
+  await expectRealMovement('ArrowRight', 'x', 1, true);
+  if (failures.length) throw new Error('XI Web runtime errors: ' + failures.slice(-8).join('\\n'));
+  await page.screenshot({ path: resolve(output, 'real-web-xi-kickoff.png'), timeout: 4000 })
+    .catch((error) => console.warn('Optional XI software-WebGL screenshot unavailable: ' + error.message));
+  console.log('FOOTBALL_XI_REAL_WEB_OK players=22 pitch=4000x2600');
 } catch (error) {
   if (page) await page.screenshot({ path: resolve(output, 'real-web-failure.png'), timeout: 10000 }).catch(() => {});
   console.error('REAL GODOT WEB BOOT FAILURE:', String(error));

@@ -4,9 +4,9 @@ const Presenter3D = preload("res://scripts/football_3d_presenter.gd")
 const FootballAudio = preload("res://scripts/football_audio.gd")
 const QuickDifficulty = preload("res://scripts/football_quick_difficulty.gd")
 const Formation = preload("res://scripts/football_match_formation.gd")
-# The runtime always uses the current 5v5. Tests can set match_team_size=11
-# BEFORE entering the scene tree to render the full XI together in Godot.
-# Do not expose this preview switch in the browser until all match rules work.
+# Default playable match stays 5v5. Native tests may set XI before tree entry.
+# Only the loopback Playwright CI probe may request an XI in exported Web.
+# No public browser mode or manager integration is enabled here.
 const TEAM_SIZE := 5
 var match_team_size: int = TEAM_SIZE
 var match_pitch: Rect2 = ChessFootballMath.PITCH_RECT
@@ -238,6 +238,14 @@ var pause_menu_button: Button
 var pause_sfx_button: Button
 
 func _ready() -> void:
+	# Exercise the 22-player scene in an actual Web export without exposing
+	# unfinished XI gameplay to staging users or bypassing ShadowOps ID.
+	# A URL fragment alone cannot enable XI: the local CI probe is also required.
+	if OS.has_feature("web") and bool(JavaScriptBridge.eval(
+		"location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true && location.hash === '#football-ci-eleven=1'",
+		true
+	)):
+		match_team_size = 11
 	assert(match_team_size == 5 or match_team_size == 11)
 	match_pitch = Formation.ELEVEN_PITCH_RECT if match_team_size == 11 else ChessFootballMath.PITCH_RECT
 	_set_quick_difficulty(QuickDifficulty.read_browser())
@@ -319,6 +327,10 @@ func _emit_ci_web_keyboard_sample() -> void:
 		"dx": direction.x,
 		"dy": direction.y,
 		"playable": not (kickoff_active or goal_restart_active or set_piece_active or pause_menu_open),
+		"team_size": match_team_size,
+		"team_players": teams[0].size() + teams[1].size(),
+		"pitch_width": match_pitch.size.x,
+		"pitch_height": match_pitch.size.y,
 	}
 	JavaScriptBridge.eval("window.parent.postMessage(%s, '*')" % JSON.stringify(sample))
 
