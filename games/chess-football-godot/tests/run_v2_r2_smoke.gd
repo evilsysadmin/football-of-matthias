@@ -47,6 +47,10 @@ func _initialize() -> void:
 	for team_id in range(2):
 		assert(ChessFootballSpriteBank.xi_fallback_texture(team_id) != null)
 		assert(ChessFootballSpriteBank.xi_fallback_texture(team_id, true) != null)
+	assert(ChessFootballSpriteBank.xi_fallback_texture(-1) == null)
+	assert(ChessFootballSpriteBank.xi_fallback_texture(2, true) == null)
+	assert(ChessFootballSpriteBank.xi_fallback_texture(0) != ChessFootballSpriteBank.xi_fallback_texture(1))
+	assert(ChessFootballSpriteBank.xi_fallback_texture(0, true) != ChessFootballSpriteBank.xi_fallback_texture(1, true))
 	# A failed optional R2 fetch must leave the bundled animated footballer,
 	# never reintroduce the original blue cylinder/sculpt placeholder.
 	presenter._apply_verified_run_v2([], 0)
