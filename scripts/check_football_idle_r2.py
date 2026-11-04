@@ -6,6 +6,7 @@ staging CORS against the SHA-pinned, local Godot contract.
 """
 import hashlib
 import json
+import os
 from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -61,6 +62,12 @@ def main() -> None:
         assert len(data) <= 4_194_304, "oversized R2 atlas"
         assert hashlib.sha256(data).hexdigest() == sha, f"R2 SHA mismatch: {kind}"
         assert dimensions(data) == (1024, 720), f"R2 dimensions mismatch: {kind}"
+        # Keep exact SHA/CORS-verified bytes for the real Godot visual gate.
+        # Do not ever write downloaded CDN images into the Git checkout.
+        if os.environ.get("RUNNER_TEMP"):
+            folder = Path(os.environ["RUNNER_TEMP"]) / "football-idle-r2"
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / filename).write_bytes(data)
         print(f"FOOTBALL_IDLE_R2_VERIFIED kind={kind} bytes={len(data)} sha256={sha} cors={cors}")
     assert seen == KNOWN_FILES.keys()
 
