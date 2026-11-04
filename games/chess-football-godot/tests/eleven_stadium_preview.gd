@@ -42,8 +42,6 @@ func _assert_tactical_player_kits(capture: Image, stage: ChessFootball3DPresente
 				if found:
 					break
 			if found:
-				break
-			if found:
 				seen[player.team_id] += 1
 	print("FOOTBALL_XI_ACTOR_KITS tactical blue=%d red=%d" % [seen[0], seen[1]])
 	assert(seen[0] >= 8 and seen[1] >= 8,
