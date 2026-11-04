@@ -112,10 +112,9 @@ func _initialize() -> void:
 			var canvas: StandardMaterial3D = quad.material_override
 			var frame: Texture2D = stage._xi_frame_texture(player, driver)
 			assert(canvas.albedo_texture == frame)
-			# No optional R2 is loaded: canonical side-run must remain visible.
-			# Actual rendered-pixel clusters below guard against invisible bodies.
-			if player.role != "keeper":
-				assert(frame == driver.sprite_frames.get_frame_texture(&"run", driver.frame % 8))
+			# Offline XI must honour the real authored idle/directional frame.
+			# Rendered-pixel clusters below guard against invisible bodies.
+			assert(frame == driver.sprite_frames.get_frame_texture(driver.animation, driver.frame))
 			assert((frame as ImageTexture).get_image().get_used_rect().size.y >= 80)
 			assert(quad.position == driver.position)
 			if player == game.ball.carrier:

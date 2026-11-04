@@ -543,6 +543,21 @@ jobs:
             exit 1
           fi
           grep -Eq 'football R2 v2 run: 5 views x 8 frames, (canonical-only )?XI fallback and soft shadow: OK' "$log"
+      - name: XI directional frame and grounded boots at both camera pitches
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-direction-ground.log"
+          set +e
+          timeout 45s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/xi_direction_ground_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI direction or boot-ground contact failed'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_DIRECTION_GROUND_OK clubs=2 views=4 cameras=2 boot_gap_px_lt_4' "$log"
       - name: Staged R2 lateral-run parity and rollback smoke
         shell: bash
         run: |

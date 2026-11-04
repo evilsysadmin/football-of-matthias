@@ -1244,19 +1244,22 @@ func _add_goal_net_grid(
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(instance)
 
-# The optional five-view R2 atlas is not guaranteed to be available on the
-# first frame (or offline). Legacy directional frames are valid assets, but
-# can disappear at XI broadcast distance on GLES3/WebGL. Until verified
-# R2 arrives, show the known-good bundled lateral athlete animation on
-# EVERY outfield QuadMesh, including idle/action poses. Never substitute
-# a coloured geometric mannequin or hide an actor.
-func _xi_frame_texture(player: Footballer, driver: AnimatedSprite3D) -> Texture2D:
+# The XI quad always reuses the live sprite driver's canonical frame,
+# including real idle, run direction and action poses while R2 is offline.
+# Nearest filtering and the lowered alpha threshold on the quad preserve
+# those local sprites at full-pitch zoom (the regression is pixel-tested).
+func _xi_frame_texture(_player: Footballer, driver: AnimatedSprite3D) -> Texture2D:
 	var frames := driver.sprite_frames
-	if player.role != "keeper" and not _run_v2_r2_loaded.has(int(player.team_id)):
-		var count := frames.get_frame_count(&"run")
+	if frames.has_animation(driver.animation):
+		var count := frames.get_frame_count(driver.animation)
 		if count > 0:
-			return frames.get_frame_texture(&"run", driver.frame % count)
-	return frames.get_frame_texture(driver.animation, driver.frame)
+			return frames.get_frame_texture(driver.animation, clampi(driver.frame, 0, count - 1))
+	# Fail closed to the known local raster if a transitional state names a
+	# missing animation; never substitute a geometric placeholder.
+	var run_count := frames.get_frame_count(&"run")
+	if run_count > 0:
+		return frames.get_frame_texture(&"run", driver.frame % run_count)
+	return null
 
 
 # XI-only raster mirrors the existing AnimatedSprite3D clock and atlas.
@@ -1289,7 +1292,10 @@ func _build_xi_quad_bodies() -> void:
 			material.alpha_scissor_threshold = 0.02
 			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			# Rotate only around world Y. A fully camera-facing billboard
+			# tilts back with the broadcast camera and lifts the visible boots
+			# away from the real grass contact/shadow point on distant players.
+			material.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 			material.cull_mode = BaseMaterial3D.CULL_DISABLED
 			# Prevent a distant, vertical raster body from sinking into turf
 			# when the full-pitch aerial camera intersects the field depth.
@@ -2158,6 +2164,19 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 		stretch_x *= 1.0 + 0.070 * contact_weight
 		stretch_y *= 1.0 - 0.065 * contact_weight
 		tilt_degrees += player.contact_sway_sign * 16.0 * contact_weight
+
+	# The authored XI frames already contain running weight transfer.
+	# Synthetic vertical bob raises the boots above the ground shadow in
+	# broadcast, most visibly for small distant players. Keep it for 5v5
+	# and for XI actions such as slide, save and celebrations, but not
+	# for ordinary XI locomotion.
+	if (
+		match_node.match_team_size == 11
+		and (animation_name in ["run", "sprint"]
+			or animation_name.begins_with("run_")
+			or animation_name.begins_with("sprint_"))
+	):
+		bob = 0.0
 
 	# One body-height reference for both teams, all views and all roles.
 	var canonical_scale := _canonical_body_scale(sprite, player.role)

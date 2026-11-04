@@ -47,7 +47,7 @@ func _initialize() -> void:
 	assert(first_sprite.sprite_frames.get_frame_texture(&"run_front", 0) == previous)
 	assert(not first_root.get_node("XI_KitSculpt").visible)
 	assert((local_quad.material_override as StandardMaterial3D).albedo_texture != null)
-	assert(presenter._xi_frame_texture(first_player, first_sprite) == first_sprite.sprite_frames.get_frame_texture(&"run", first_sprite.frame % 8))
+	assert(presenter._xi_frame_texture(first_player, first_sprite) == first_sprite.sprite_frames.get_frame_texture(first_sprite.animation, first_sprite.frame))
 
 	for team_id in range(2):
 		var meta := ChessFootballRunV2R2.sheet_meta(team_id)
@@ -80,6 +80,7 @@ func _initialize() -> void:
 	first_player._sync_locomotion(false)
 	presenter._sync_visible_animation(key, first_player, first_sprite, &"run_back", 0.23)
 	assert(first_sprite.frame > 0)
+	assert(presenter._xi_frame_texture(first_player, first_sprite) == first_sprite.sprite_frames.get_frame_texture(&"run_back", first_sprite.frame))
 	# A late legacy v1 response must not overwrite the v2 side-run.
 	var before_side := first_sprite.sprite_frames.get_frame_texture(&"run", 0)
 	presenter._apply_verified_lateral_run(textures.slice(16, 24), 0)
