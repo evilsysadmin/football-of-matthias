@@ -190,5 +190,78 @@ func _initialize() -> void:
 
 	controls.debug_force_controls_visible(false)
 	assert(not controls.debug_controls_visible())
+	match_node.queue_free()
+	await process_frame
+
+	# XI uses exactly the same mobile controls. Exercise the *real* 22-player
+	# scene and full pitch, not a five-player mock, before public activation.
+	var xi = packed.instantiate()
+	xi.match_team_size = 11
+	root.add_child(xi)
+	for _frame in range(6):
+		await process_frame
+		await physics_frame
+	xi.set_physics_process(false)
+	assert(xi.debug_team_counts() == [11, 11])
+	assert(xi.match_pitch.size == Vector2(4000.0, 2600.0))
+	xi.debug_prepare_kickoff(0)
+	xi.debug_force_kickoff_ready()
+	xi.camera_mode = "tactical"
+	xi.presentation_3d.sync_presentation(2.0, "tactical")
+	var xi_touch = xi.get_node_or_null("MobileControls")
+	assert(xi_touch != null)
+	xi_touch.debug_force_controls_visible(true)
+	assert(xi_touch.debug_controls_visible())
+	var xi_before: Vector2 = xi.controlled.global_position
+	assert(xi_touch.debug_touch_down(41, joystick_start))
+	assert(xi_touch.debug_touch_move(41, joystick_start + Vector2(68.0, 0.0)))
+	assert(Input.get_action_strength("move_right") > 0.80)
+	xi._handle_human(0.12)
+	assert(xi.controlled.global_position.x > xi_before.x)
+	assert(xi_touch.debug_touch_up(41, joystick_start + Vector2(68.0, 0.0)))
+	assert(Input.get_action_strength("move_right") < 0.01)
+
+	# With no human possession, tapping one of ten outfield teammates
+	# selects precisely that player, even on the wider tactical XI camera.
+	xi.ball.attach_to(xi.teams[1][10])
+	var xi_defender: Footballer = xi.teams[0][1]
+	var xi_defender_screen: Vector2 = xi.mobile_player_screen_position(xi_defender)
+	assert(xi_defender_screen.x > 0.0 and xi_defender_screen.x < 1280.0)
+	assert(xi_touch.debug_touch_down(42, xi_defender_screen))
+	assert(xi_touch.debug_touch_up(42, xi_defender_screen))
+	assert(xi.controlled == xi_defender)
+
+	# Real contextual teammate pass still hands off to the selected receiver.
+	var xi_passer: Footballer = xi.teams[0][10]
+	xi._select_player(xi_passer)
+	xi.ball.attach_to(xi_passer)
+	var xi_receiver_screen: Vector2 = xi.mobile_player_screen_position(xi_defender)
+	assert(xi.mobile_touch_target(xi_receiver_screen).get("player") == xi_defender)
+	assert(xi_touch.debug_touch_down(43, xi_receiver_screen))
+	assert(xi_touch.debug_touch_up(43, xi_receiver_screen))
+	assert(xi.ball.carrier == null and xi.controlled == xi_defender)
+
+	# A rival carrying the ball has a 1.24x magnet. Its former search
+	# cutoff of 76px cancelled the promised 94px reach. Move other actors
+	# away so this tests the *actual* 85px tap instead of an overlap.
+	var xi_carrier: Footballer = xi.teams[1][10]
+	var displaced := 0
+	for team in xi.teams:
+		for player: Footballer in team:
+			if player != xi_carrier:
+				player.global_position = xi.match_pitch.position + Vector2(
+					160.0 + displaced * 11.0, 160.0 + displaced * 6.0
+				)
+				displaced += 1
+	xi_carrier.global_position = xi.match_pitch.get_center()
+	xi.ball.attach_to(xi_carrier)
+	xi.presentation_3d.sync_presentation(2.0, "tactical")
+	var xi_carrier_screen: Vector2 = xi.mobile_player_screen_position(xi_carrier)
+	assert(xi_carrier_screen.x > 85.0 and xi_carrier_screen.x < 1190.0)
+	var magnet_probe: Vector2 = xi_carrier_screen + Vector2(85.0, 0.0)
+	assert(xi.mobile_touch_target(magnet_probe, 76.0).get("player") == xi_carrier)
+	assert(xi.mobile_touch_target(xi_carrier_screen + Vector2(105.0, 0.0), 76.0).is_empty())
+	xi_touch.debug_force_controls_visible(false)
+	print("FOOTBALL_XI_TOUCH_OK players=22 joystick=1 teammate=1 pass=1 carrier_magnet=1")
 	print("chess-football mobile touch smoke: OK")
 	quit(0)
