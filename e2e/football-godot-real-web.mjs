@@ -73,6 +73,60 @@ async function bridgeVerifiedStagingKeeperR2(page) {
   if (expected.size !== 0) throw new Error('Missing a keeper R2 team');
 }
 
+// Cloudflare deliberately allows staging, NOT ephemeral 127.0.0.1 ports.
+// This CI-only bridge verifies genuine public R2 bytes and staging CORS first,
+// then supplies those exact bytes to the exported WASM on localhost.
+async function bridgeVerifiedStagingAnimatedIdleR2(page) {
+  if (process.env.CI !== 'true') throw new Error('Animated idle R2 bridge is CI-only');
+  const meta = JSON.parse(readFileSync('games/chess-football-godot/optional_animated_idle_v1.json', 'utf8'));
+  if (meta.enabled !== true) return;
+  const base = 'https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1';
+  const expected = new Map([
+    ['fc_matthias', ['fc_matthias_idle_v1.webp', 'ff410746fbb6bfe20b39b7fb99d6e7185d6a27f1416922d0742e0325e9ccb5ed']],
+    ['real_enroque', ['real_enroque_idle_v1.webp', '71835fc75eb1e3e9f59c3ebb128ba74dd145ec7df7f6f43562f7af12f5fdc87f']],
+    ['keeper', ['keeper_idle_v1.webp', '2ef0cc83f5ba2801ae47cabdfa3c337e9ef7dc75104bef9d3d587c87f42283e3']]
+  ]);
+  if (meta.bucket !== 'football' || meta.prefix !== 'atlases/v1/' || meta.cdn_base !== base ||
+      meta.columns !== 8 || meta.rows !== 5 || !Array.isArray(meta.entries) ||
+      meta.entries.length !== expected.size) {
+    throw new Error('Unexpected animated idle R2 origin, geometry or entries');
+  }
+  const stagingOrigin = 'https://staging.football.shadowops.dpdns.org';
+  for (const entry of meta.entries) {
+    const sheet = expected.get(entry.kind);
+    if (!sheet || sheet[0] !== entry.file || sheet[1] !== entry.sha256) {
+      throw new Error('Unpinned animated idle WebP entry');
+    }
+    expected.delete(entry.kind);
+    const url = base + '/' + entry.file;
+    const response = await fetch(url, {
+      headers: { Origin: stagingOrigin, 'User-Agent': 'Football-idle-real-Web-CI/1.0' },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (response.status !== 200 || !response.headers.get('content-type')?.toLowerCase().startsWith('image/webp')) {
+      throw new Error('Public R2 idle WebP unavailable: ' + url + ' HTTP ' + response.status);
+    }
+    const cors = response.headers.get('access-control-allow-origin');
+    if (cors !== '*' && cors !== stagingOrigin) {
+      throw new Error('R2 idle staging CORS missing for ' + entry.kind + ': ' + JSON.stringify(cors));
+    }
+    const raw = Buffer.from(await response.arrayBuffer());
+    if (!raw.length || raw.length > 4194304 ||
+        raw.toString('ascii', 0, 4) !== 'RIFF' || raw.toString('ascii', 8, 12) !== 'WEBP' ||
+        createHash('sha256').update(raw).digest('hex') !== sheet[1]) {
+      throw new Error('R2 idle WebP byte integrity mismatch: ' + entry.kind);
+    }
+    await page.route(url, (route) => route.fulfill({
+      status: 200, contentType: 'image/webp',
+      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+      body: raw
+    }));
+    console.log('FOOTBALL_WEB_CI_IDLE_R2_VERIFIED', entry.kind,
+      'bytes=' + raw.length, 'sha256=' + sheet[1], 'staging_cors=' + cors);
+  }
+  if (expected.size) throw new Error('Missing dedicated idle R2 sheets');
+}
+
 const server = createServer((req, res) => {
   try {
     let path = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
@@ -92,7 +146,10 @@ let page;
 try {
   browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
-  if (process.env.FOOTBALL_CI_KEEPER_R2_BRIDGE === '1') await bridgeVerifiedStagingKeeperR2(page);
+  if (process.env.FOOTBALL_CI_KEEPER_R2_BRIDGE === '1') {
+    await bridgeVerifiedStagingKeeperR2(page);
+    await bridgeVerifiedStagingAnimatedIdleR2(page);
+  }
   await page.addInitScript(() => {
     window.__chessFootballWebReady = false;
     // Only the locally served CI release enables the in-game diagnostic.
