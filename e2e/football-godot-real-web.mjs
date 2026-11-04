@@ -261,13 +261,28 @@ try {
     const minimumSamples = requireTravel ? 4 : 2;
     await page.keyboard.down(key);
     try {
-      // WebGL software renderer is not a 60 FPS clock: require real engine
-      // samples, then check the action received by the exported WebAssembly.
+      // WebGL software rendering can deliver four real input samples BEFORE
+      // a player has advanced four world units. Keep the physical key down
+      // until the exported engine proves BOTH direction and signed travel
+      // by the SAME player; otherwise we release early and falsely fail.
+      // A genuine blocked input still times out and fails the hard gate.
       await page.waitForFunction(
-        ({ index, directionKey, sign, minimumSamples }) => window.__chessFootballInputSamples
-          .slice(index).filter((sample) => sample.playable &&
-            Number(sample[directionKey]) * sign >= 0.8).length >= minimumSamples,
-        { index: startLength, directionKey, sign, minimumSamples },
+        ({ index, directionKey, sign, minimumSamples, axis, requireTravel }) => {
+          const matching = window.__chessFootballInputSamples
+            .slice(index).filter((sample) => sample.playable &&
+              Number(sample[directionKey]) * sign >= 0.8);
+          if (matching.length < minimumSamples) return false;
+          if (!requireTravel) return true;
+          const firstById = new Map();
+          for (const sample of matching) {
+            const id = String(sample.player_id);
+            const position = Number(sample[axis]);
+            if (!firstById.has(id)) firstById.set(id, position);
+            if ((position - firstById.get(id)) * sign >= 4) return true;
+          }
+          return false;
+        },
+        { index: startLength, directionKey, sign, minimumSamples, axis, requireTravel },
         { timeout: 30000 }
       );
     } finally {
