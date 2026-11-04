@@ -89,5 +89,74 @@ try{
   await firstPlayer.screenshot({path:resolve(out,viewport.width+'-scouting-detail.png')});
   assert.equal(errors.length,0,errors.join('\n'));await page.close();
  }
+ // This is a UI contract test, not a bypass or live ShadowOps-ID session.
+ // Serve the exact standalone build through a simulated staging origin so
+ // hostname-gated XI controls and iframe launch can be exercised end-to-end.
+ const stagingOrigin='https://staging.football.shadowops.dpdns.org';
+ const runtimeIndex='https://assets.chess-studio.shadowops.dpdns.org/football-of-matthias/staging/releases/1234567890abcdef/index.html';
+ for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
+  const page=await browser.newPage({viewport});
+  const errors=[];page.on('pageerror',error=>errors.push(String(error)));
+  await page.route(stagingOrigin+'/**',async route=>{
+   const pathname=new URL(route.request().url()).pathname;
+   if(pathname==='/api/football/session'){
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({subject:'11111111-1111-4111-8111-111111111111',expires_at:Math.floor(Date.now()/1000)+120})});return;
+   }
+   if(pathname==='/runtime.json'){
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:1,release:'1234567890abcdef',index:runtimeIndex,sourceSha:currentBuild})});return;
+   }
+   if(pathname==='/release.json'){
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({application:'football-of-matthias',source_sha:currentBuild})});return;
+   }
+   const file=resolve(root,'.'+pathname);
+   if((file!==root&&!file.startsWith(root+sep))||!existsSync(file===root?resolve(root,'index.html'):file)){
+    await route.fulfill({status:404,body:'not found'});return;
+   }
+   const resolved=file===root?resolve(root,'index.html'):file;
+   await route.fulfill({status:200,contentType:({'.js':'text/javascript','.css':'text/css','.html':'text/html','.json':'application/json'})[extname(resolved)]||'application/octet-stream',body:readFileSync(resolved)});
+  });
+  // A tiny fake exported iframe tests the parent/ready contract. The actual
+  // Godot WASM and its 22 real actors are separately checked in real-web CI.
+  await page.route('https://assets.chess-studio.shadowops.dpdns.org/**',route=>route.fulfill({
+   status:200,contentType:'text/html',
+   body:'<!doctype html><title>Godot handshake fixture</title><script>parent.postMessage({source:"chess-football-godot",type:"ready",team_size:location.hash.includes("football-team-size=11")?11:5},"*")</script>',
+  }));
+  await page.route('https://id-staging.shadowops.dpdns.org/**',route=>route.fulfill({
+   status:401,headers:{'Access-Control-Allow-Origin':stagingOrigin,'Access-Control-Allow-Credentials':'true','Content-Type':'application/json'},body:'{}',
+  }));
+  await page.goto(stagingOrigin+'/');
+  await page.getByRole('button',{name:/Partida rápida/}).click();
+  await page.getByRole('heading',{name:'Elige a tu rival'}).waitFor();
+  assert.equal(await page.locator('.chess-football-entry__quick-team-size').count(),2);
+  assert.equal(await page.getByRole('button',{name:'5v5 · Clásico'}).getAttribute('aria-pressed'),'true','5v5 must remain default');
+  await page.getByRole('button',{name:'11v11 · En pruebas'}).click();
+  await page.getByRole('button',{name:/^Difícil\b/}).click();
+  assert.equal(await page.getByRole('button',{name:'11v11 · En pruebas'}).getAttribute('aria-pressed'),'true');
+  assert.ok(await page.getByRole('button',{name:'Saltar al campo · 11v11 · Difícil'}).isVisible());
+  assert.ok(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),'XI selector must not overflow viewport');
+  await page.screenshot({path:resolve(out,viewport.width+'-staging-xi-selector.png')});
+  await page.getByRole('button',{name:'Saltar al campo · 11v11 · Difícil'}).click();
+  const frame=page.locator('iframe.chess-football-godot-host__frame');
+  await frame.waitFor();
+  assert.equal(await frame.getAttribute('src'),runtimeIndex+'#football-difficulty=hard&football-team-size=11');
+  assert.equal(await frame.getAttribute('referrerpolicy'),'origin');
+  await page.waitForFunction(()=>document.querySelector('.chess-football-godot-host')?.dataset.runtimeReady==='true');
+  assert.equal(await page.locator('.chess-football-godot-host__fallback').count(),0);
+  await page.getByRole('button',{name:'Salir de Chess Football'}).click();
+  await page.getByRole('button',{name:/Partida rápida/}).click();
+  await page.getByRole('button',{name:'5v5 · Clásico'}).click();
+  // Reapply the level on the second entry: the parent may remount the
+  // setup screen when the game exits, but the URL must still be exact.
+  await page.getByRole('button',{name:/^Difícil\b/}).click();
+  assert.equal(await page.getByRole('button',{name:'5v5 · Clásico'}).getAttribute('aria-pressed'),'true');
+  await page.getByRole('button',{name:'Saltar al campo · Difícil'}).click();
+  const five=page.locator('iframe.chess-football-godot-host__frame');
+  await five.waitFor();
+  assert.equal(await five.getAttribute('src'),runtimeIndex+'#football-difficulty=hard');
+  await page.waitForFunction(()=>document.querySelector('.chess-football-godot-host')?.dataset.runtimeReady==='true');
+  assert.equal(errors.length,0,errors.join('\n'));
+  await page.close();
+ }
+ console.log('FOOTBALL_STAGING_XI_SELECTOR_BROWSER_OK sizes=5+11 viewports=1280+390');
  console.log('FOOTBALL_STANDALONE_DESKTOP_MOBILE_OK');
 }finally{await browser.close();await new Promise(ok=>server.close(ok));}
