@@ -3,6 +3,15 @@ extends RefCounted
 
 const MANIFEST_PATH := "res://assets/players/manifest.json"
 const ASSET_ROOT := "res://assets/players/"
+const XI_FALLBACK_ROOT := ASSET_ROOT + "xi_fallback/"
+# Four audited PNG frames extracted from SHA-pinned, user-owned R2 assets.
+# The full multi-view atlases remain in R2; only these 128x144 sprites ship.
+const XI_FALLBACK_DIGESTS := {
+	"fc_matthias_xi_fallback": "7d8f0afb254d602e4f4dda67381992f52dcf705d27a8a24c4c27a1a128ab60b7",
+	"real_enroque_xi_fallback": "671b5ede72470bd57c9fe945bf15b4cad2f888b07323dc5b3f8746f038be1a38",
+	"keeper_0_xi_fallback": "a11dc07e3453a713865e0d97709b39594dcc963879c97973339351cd669142f3",
+	"keeper_1_xi_fallback": "6ccc426686e99207c3eb8365f5c3a8d43f0f19b499782552d8e542474355d0ac",
+}
 const OPTIONAL_IDLE_META_PATH := "res://optional_idle_front_v1.json"
 const OPTIONAL_LATERAL_META_PATH := "res://optional_lateral_run_v1.json"
 const TEAM_KEYS := ["fc_matthias", "real_enroque"]
@@ -19,6 +28,7 @@ const CANONICAL_ACTION_POSES := {
 }
 
 static var _cached_manifest: Dictionary = {}
+static var _cached_xi_fallback: Dictionary = {}
 static var _cached_optional_idle_meta: Dictionary = {}
 static var _cached_run_textures: Dictionary = {}
 static var _cached_3d_run_frames: Dictionary = {}
@@ -33,6 +43,40 @@ static var _cached_3d_frame_heights: Dictionary = {}
 # Per-frame opaque-pixel luminance is gathered from already decoded CPU
 # pixels during atlas slicing. No texture readbacks in the 3D game loop.
 static var _cached_3d_frame_luminance: Dictionary = {}
+
+# Always provide a visible player-shaped local raster for an XI actor.
+# Unavailable or tampered files cannot silently become a coloured manikin.
+static func xi_fallback_texture(team_id: int, is_keeper: bool = false) -> Texture2D:
+	var key: String = ("keeper_%d_xi_fallback" % team_id) if is_keeper else (
+		"fc_matthias_xi_fallback" if team_id == 0 else "real_enroque_xi_fallback"
+	)
+	if not XI_FALLBACK_DIGESTS.has(key):
+		return null
+	if _cached_xi_fallback.has(key):
+		return _cached_xi_fallback[key]
+	var encoded := FileAccess.get_file_as_string(XI_FALLBACK_ROOT + key + ".b64").strip_edges()
+	if encoded.is_empty():
+		push_error("Football XI: missing approved local sprite: " + key)
+		return null
+	var raw := Marshalls.base64_to_raw(encoded)
+	var hash := HashingContext.new()
+	if hash.start(HashingContext.HASH_SHA256) != OK or hash.update(raw) != OK:
+		return null
+	if hash.finish().hex_encode() != String(XI_FALLBACK_DIGESTS[key]):
+		push_error("Football XI: local sprite SHA mismatch: " + key)
+		return null
+	var image := Image.new()
+	if image.load_png_from_buffer(raw) != OK or image.get_size() != Vector2i(128, 144):
+		push_error("Football XI: invalid local raster: " + key)
+		return null
+	var box := image.get_used_rect()
+	if box.size.x < 45 or box.size.y < 90 or box.end.y > 142:
+		return null
+	var texture := ImageTexture.create_from_image(image)
+	_register_frame_bottom(texture, image)
+	_cached_xi_fallback[key] = texture
+	return texture
+
 
 static func manifest() -> Dictionary:
 	if not _cached_manifest.is_empty():
