@@ -2109,7 +2109,7 @@ func _nearest_outfield_player_to_point(team_id: int, point: Vector2) -> Football
 func _restart_receiver(team_id: int, restarter: Footballer, kind: String) -> Footballer:
 	var best: Footballer = null
 	var best_score := INF
-	var target_goal := ChessFootballMath.goal_center(team_id)
+	var target_goal := ChessFootballMath.goal_center(team_id, match_pitch)
 	for teammate in teams[team_id]:
 		if teammate.sent_off or teammate == restarter:
 			continue
@@ -2117,7 +2117,7 @@ func _restart_receiver(team_id: int, restarter: Footballer, kind: String) -> Foo
 		if kind == "CÓRNER":
 			score_value = teammate.global_position.distance_squared_to(target_goal)
 		elif kind == "SAQUE DE PUERTA":
-			score_value = teammate.global_position.distance_squared_to(ChessFootballMath.PITCH_RECT.get_center())
+			score_value = teammate.global_position.distance_squared_to(match_pitch.get_center())
 		if score_value < best_score:
 			best_score = score_value
 			best = teammate
@@ -2126,10 +2126,99 @@ func _restart_receiver(team_id: int, restarter: Footballer, kind: String) -> Foo
 func _place_restart_player(player: Footballer, position: Vector2) -> void:
 	if player == null or player.sent_off:
 		return
-	player.global_position = ChessFootballMath.clamp_to_pitch(position)
+	player.global_position = ChessFootballMath.clamp_to_pitch(position, match_pitch)
 	player.velocity = Vector2.ZERO
 
+# The XI has ten outfielders, not four. Its restarts must use distinct
+# full-pitch lanes instead of recycling the 5v5's three/four-slot formations.
+# Keep this behind the preview-only match_team_size switch.
+func _arrange_xi_restart_formation(kind: String) -> void:
+	var center: Vector2 = match_pitch.get_center()
+	var direction := 1.0 if set_piece_team_id == 0 else -1.0
+	var opponent_id := 1 - set_piece_team_id
+	if kind == "CÓRNER":
+		var target_goal: Vector2 = ChessFootballMath.goal_center(set_piece_team_id, match_pitch)
+		var attack_number := 0
+		for player in teams[set_piece_team_id]:
+			if player == set_piece_player:
+				continue
+			if player.role == "keeper":
+				_place_restart_player(player, player.home_position)
+				continue
+			var lane := attack_number % 5
+			var row := floori(float(attack_number) / 5.0)
+			var offset_y := float([-260.0, -130.0, 0.0, 130.0, 260.0][lane])
+			var depth := 190.0 + float(row) * 245.0 + float(lane) * 13.0
+			_place_restart_player(player, Vector2(
+				target_goal.x - direction * depth, target_goal.y + offset_y
+			))
+			attack_number += 1
+		var defense_number := 0
+		for defender in teams[opponent_id]:
+			if defender.role == "keeper":
+				_place_restart_player(defender, Vector2(
+					target_goal.x - direction * 65.0, target_goal.y
+				))
+				continue
+			var lane := defense_number % 5
+			var row := floori(float(defense_number) / 5.0)
+			var offset_y := float([-290.0, -145.0, 0.0, 145.0, 290.0][lane])
+			var depth := 105.0 + float(row) * 220.0 + float(lane) * 16.0
+			_place_restart_player(defender, Vector2(
+					target_goal.x - direction * depth, target_goal.y + offset_y
+			))
+			defense_number += 1
+		return
+	if kind == "SAQUE DE PUERTA":
+		# The large 4-3-3 starts from real persistent home coordinates,
+		# keeping distribution wide instead of stacking ten receivers.
+		for team in teams:
+			for player in team:
+				if player != set_piece_player:
+					_place_restart_player(player, player.home_position)
+		return
+	# Touchline: preserve the real team spread; create only three
+	# nearby passing options, with opposing players outside the buffer.
+	var candidates: Array[Footballer] = []
+	for teammate in teams[set_piece_team_id]:
+		if teammate != set_piece_player:
+			_place_restart_player(teammate, teammate.home_position)
+		if teammate != set_piece_player and teammate.role != "keeper" and not teammate.sent_off:
+			candidates.append(teammate)
+	var inward_y := 1.0 if set_piece_spot.y < center.y else -1.0
+	var slots: Array[Vector2] = [
+		Vector2(-130.0 * direction, 155.0 * inward_y),
+		Vector2(140.0 * direction, 215.0 * inward_y),
+		Vector2(330.0 * direction, 95.0 * inward_y),
+	]
+	for offset in slots:
+		var best: Footballer = null
+		var best_distance := INF
+		for candidate in candidates:
+			var distance: float = candidate.home_position.distance_squared_to(set_piece_spot + offset)
+			if distance < best_distance:
+				best_distance = distance
+				best = candidate
+		if best == null:
+			break
+		_place_restart_player(best, set_piece_spot + offset)
+		candidates.erase(best)
+	for opponent in teams[opponent_id]:
+		if opponent.role == "keeper":
+			_place_restart_player(opponent, opponent.home_position)
+			continue
+		var home: Vector2 = opponent.home_position
+		var offset: Vector2 = home - set_piece_spot
+		if offset.length() < 160.0:
+			var away: Vector2 = offset.normalized() if offset.length_squared() > 0.001 else Vector2(0.0, inward_y)
+			home = set_piece_spot + away * 160.0
+		_place_restart_player(opponent, home)
+
+
 func _arrange_set_piece_formation(kind: String) -> void:
+	if match_team_size == 11 and kind in ["SAQUE DE BANDA", "CÓRNER", "SAQUE DE PUERTA"]:
+		_arrange_xi_restart_formation(kind)
+		return
 	var pitch := ChessFootballMath.PITCH_RECT
 	var center := pitch.get_center()
 	var direction := 1.0 if set_piece_team_id == 0 else -1.0
@@ -2280,7 +2369,7 @@ func _prepare_set_piece(kind: String, team_id: int, spot: Vector2) -> void:
 	set_piece_seconds_remaining = RESTART_FREEZE_SECONDS
 	set_piece_team_id = clampi(team_id, 0, 1)
 	set_piece_kind = kind
-	set_piece_spot = ChessFootballMath.clamp_to_pitch(spot)
+	set_piece_spot = ChessFootballMath.clamp_to_pitch(spot, match_pitch)
 
 	for id in range(2):
 		for player in teams[id]:
@@ -2380,7 +2469,7 @@ func _release_outfield_set_piece(
 	# and ordinary free-kick restarts should not whistle again and pepper the match
 	# with duplicate beeps.
 	var receiver := _restart_receiver(set_piece_team_id, restarter, set_piece_kind)
-	var direction := ChessFootballMath.PITCH_RECT.get_center() - restarter.global_position
+	var direction := match_pitch.get_center() - restarter.global_position
 	var power := RESTART_THROW_POWER
 	var lift := 0.0
 	if explicit_target != null:
@@ -2687,7 +2776,7 @@ func mobile_cancel_context_shot() -> void:
 func _check_ball_out() -> void:
 	if goal_restart_active or kickoff_active or set_piece_active or ball.carrier != null:
 		return
-	var pitch := ChessFootballMath.PITCH_RECT
+	var pitch := match_pitch
 	var point := ball.global_position
 	var last_touch := ball.last_touch_team_id
 
@@ -2702,7 +2791,7 @@ func _check_ball_out() -> void:
 	var beyond_left := point.x < pitch.position.x - RESTART_OUT_MARGIN
 	if not beyond_right and not beyond_left:
 		return
-	if ChessFootballMath.in_goal_mouth(point) and ChessFootballMath.ball_fits_under_crossbar(ball.flight_height):
+	if ChessFootballMath.in_goal_mouth(point, match_pitch) and ChessFootballMath.ball_fits_under_crossbar(ball.flight_height):
 		return
 
 	var attacking_team := 0 if beyond_right else 1
@@ -2714,7 +2803,7 @@ func _check_ball_out() -> void:
 		and ball.shot_flight_seconds <= 3.0
 		and last_touch == attacking_team
 		and ChessFootballMath.close_shot_miss_at_goal_line(
-			point, ball.flight_height, attacking_team
+			point, ball.flight_height, attacking_team, match_pitch
 		)
 		and audio_fx != null
 	):

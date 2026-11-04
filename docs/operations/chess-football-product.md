@@ -293,3 +293,21 @@ tiros fuera de los palos, contacto de poste, travesaño y ausencia de
 colisión en la vieja línea. **Todavía faltan** adaptar los saques de banda,
 esquina, puerta, posiciones objetivo de IA y el resto de las reglas al
 campo grande. No activar aún el 11v11 jugable.
+
+
+## 11v11 · Saques en el campo completo
+
+En la previsualización XI, los saques de banda (ambas bandas), los córneres
+(ambos fondos) y los saques de puerta (ambas porterías) se detectan y
+colocan sobre el rectángulo 4000×2600, no sobre las antiguas líneas 5v5.
+Los diez jugadores de campo ya no comparten por error las tres o cuatro
+posiciones de saque del modo arcade: se mantienen los carriles 4-3-3,
+con tres receptores próximos en banda, dos filas diferenciadas de
+atacantes/defensores en los córneres y distribución amplia en saques de
+puerta. El 5v5 permanece en su flujo original.
+
+La prueba `eleven_restarts_smoke.gd` recorre los seis fondos/bandas,
+reanudaciones humanas y CPU, puntos de saque, espaciado del XI y la
+ausencia de saques fantasma en los viejos límites. Falta todavía ajustar
+las decisiones de IA y el resto de situaciones especiales para activar
+el 11v11 al público.
