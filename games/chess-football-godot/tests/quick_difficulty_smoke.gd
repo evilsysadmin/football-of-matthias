@@ -62,7 +62,7 @@ func _initialize() -> void:
 	var easy_cover := match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
 	match_node._set_quick_difficulty("normal")
 	var normal_cover := match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
-	assert(normal_cover.distance_to(human_carrier.global_position) + 55.0 < easy_cover.distance_to(human_carrier.global_position))
+	assert(easy_cover.x - normal_cover.x > 70.0)
 	assert(normal_cover.x > human_carrier.global_position.x)
 	# No cross-pitch chase, and never change the human-side cover plan.
 	cpu_cover.global_position = human_carrier.global_position + Vector2(350.0, 0.0)
