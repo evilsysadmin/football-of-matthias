@@ -35,11 +35,11 @@ static func sheet_meta(team_id: int) -> Dictionary:
 	var entries: Variant = contract.get("entries", [])
 	if not entries is Array or entries.size() != 2:
 		return {}
-	var kind := KINDS[team_id]
+	var kind: String = String(KINDS[team_id])
 	for entry in entries:
 		if not entry is Dictionary or entry.get("kind") != kind:
 			continue
-		var file_name := kind + "_run_v2_clean.webp"
+		var file_name: String = kind + "_run_v2_clean.webp"
 		if entry.get("file") != file_name:
 			return {}
 		var meta := {
