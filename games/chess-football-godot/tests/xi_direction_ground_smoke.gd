@@ -40,7 +40,7 @@ func _initialize() -> void:
 				assert(quad.is_visible_in_tree())
 				var material := quad.material_override as StandardMaterial3D
 				assert(material != null)
-				var tactical := mode == "tactical"
+				var tactical: bool = mode == "tactical"
 				assert(material.billboard_mode == (
 					BaseMaterial3D.BILLBOARD_ENABLED if tactical
 					else BaseMaterial3D.BILLBOARD_FIXED_Y
