@@ -1220,6 +1220,21 @@ func _add_goal_net_grid(
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(instance)
 
+# The optional five-view R2 atlas is not guaranteed to be available on the
+# first frame (or offline). Legacy directional frames are valid assets, but
+# can disappear at XI broadcast distance on GLES3/WebGL. Until verified
+# R2 arrives, show the known-good bundled lateral athlete animation on
+# EVERY outfield QuadMesh, including idle/action poses. Never substitute
+# a coloured geometric mannequin or hide an actor.
+func _xi_frame_texture(player: Footballer, driver: AnimatedSprite3D) -> Texture2D:
+	var frames := driver.sprite_frames
+	if player.role != "keeper" and not _run_v2_r2_loaded.has(int(player.team_id)):
+		var count := frames.get_frame_count(&"run")
+		if count > 0:
+			return frames.get_frame_texture(&"run", driver.frame % count)
+	return frames.get_frame_texture(driver.animation, driver.frame)
+
+
 # XI-only raster mirrors the existing AnimatedSprite3D clock and atlas.
 # Initialize after the 3D scene entered the tree, exactly like the real
 # 22-actor visual diagnostic. The shipped 5v5 has no extra raster nodes.
@@ -1236,7 +1251,7 @@ func _build_xi_quad_bodies() -> void:
 			var driver: AnimatedSprite3D = player_sprites.get(key)
 			var proxy: Node3D = player_nodes.get(key)
 			assert(driver != null and proxy != null)
-			var frame_texture: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
+			var frame_texture: Texture2D = _xi_frame_texture(player, driver)
 			var panel := QuadMesh.new()
 			panel.size = Vector2(frame_texture.get_width(), frame_texture.get_height()) * driver.pixel_size
 			var material := StandardMaterial3D.new()
@@ -1662,7 +1677,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 			if xi_quad != null:
 				var panel: QuadMesh = xi_quad.mesh
 				var canvas: StandardMaterial3D = xi_quad.material_override
-				var current_frame: Texture2D = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+				var current_frame: Texture2D = _xi_frame_texture(player, sprite)
 				if canvas.albedo_texture != current_frame:
 					canvas.albedo_texture = current_frame
 				var frame_size := Vector2(current_frame.get_width(), current_frame.get_height()) * sprite.pixel_size

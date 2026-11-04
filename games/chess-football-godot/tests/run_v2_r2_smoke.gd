@@ -47,6 +47,7 @@ func _initialize() -> void:
 	assert(first_sprite.sprite_frames.get_frame_texture(&"run_front", 0) == previous)
 	assert(first_root.get_node_or_null("XI_KitSculpt") == null)
 	assert((local_quad.material_override as StandardMaterial3D).albedo_texture != null)
+	assert(presenter._xi_frame_texture(first_player, first_sprite) == first_sprite.sprite_frames.get_frame_texture(&"run", first_sprite.frame % 8))
 
 	for team_id in range(2):
 		var meta := ChessFootballRunV2R2.sheet_meta(team_id)

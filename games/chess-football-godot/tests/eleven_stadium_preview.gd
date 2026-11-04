@@ -108,8 +108,12 @@ func _initialize() -> void:
 			assert(stage.player_nodes[key].get_node_or_null("XI_KitSculpt") == null)
 			assert(quad.mesh is QuadMesh)
 			var canvas: StandardMaterial3D = quad.material_override
-			var frame: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
+			var frame: Texture2D = stage._xi_frame_texture(player, driver)
 			assert(canvas.albedo_texture == frame)
+			# No R2 is loaded in this offline preview: every XI athlete must
+			# use the known visible bundled side-run raster, not a mannequin.
+			if player.role != "keeper":
+				assert(frame == driver.sprite_frames.get_frame_texture(&"run", driver.frame % 8))
 			assert((frame as ImageTexture).get_image().get_used_rect().size.y >= 80)
 			assert(quad.position == driver.position)
 			if player == game.ball.carrier:
@@ -166,7 +170,7 @@ func _initialize() -> void:
 		stage.sync_presentation(1.0 / 18.0, "broadcast")
 		var driver: AnimatedSprite3D = stage.player_sprites[winger_key]
 		var body: MeshInstance3D = stage.xi_raster_meshes[winger_key]
-		var frame: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, driver.frame)
+		var frame: Texture2D = stage._xi_frame_texture(winger, driver)
 		assert((body.material_override as StandardMaterial3D).albedo_texture == frame)
 		assert(body.scale == driver.scale)
 		assert(body.position == driver.position)
