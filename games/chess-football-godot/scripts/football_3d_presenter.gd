@@ -116,6 +116,9 @@ var _keeper_catch_r2_loaded: Dictionary = {}
 # A successful R2 idle replacement is atomic for its entire actor family.
 # Legacy one-frame front responses must not overwrite animated frame zero.
 var _animated_idle_r2_loaded: Dictionary = {}
+# v2 run replaces only outfield locomotion after every pose verifies.
+var _run_v2_r2_loaded: Dictionary = {}
+var _contact_shadow_material: ShaderMaterial
 var keeper_catch_carrier_id: int = 0
 var keeper_catch_origin: Vector3 = Vector3.ZERO
 var keeper_catch_elapsed: float = 0.0
@@ -248,6 +251,65 @@ func _apply_idle_front_textures(textures: Array[Texture2D]) -> void:
 
 # Staged activation: metadata remains disabled until Infra has publicly
 # accredited both R2 sheets and exact byte/CORS parity.
+func _request_run_v2_from_r2() -> void:
+	if not OS.has_feature("web"):
+		return
+	# One download per team, NOT per outfield player.
+	for team_id in range(2):
+		var meta := ChessFootballRunV2R2.sheet_meta(team_id)
+		if meta.is_empty():
+			continue
+		var loader := ChessFootballR2AtlasLoader.new()
+		loader.name = "RunV2R2_%d" % team_id
+		add_child(loader)
+		loader.atlas_ready.connect(_on_run_v2_ready.bind(team_id))
+		loader.start(meta, ChessFootballRunV2R2.TRUSTED_ROOT)
+
+
+func _on_run_v2_ready(image: Image, team_id: int) -> void:
+	_apply_verified_run_v2(ChessFootballRunV2R2.frames_from_image(image), team_id)
+
+
+func _apply_verified_run_v2(textures: Array[Texture2D], team_id: int) -> void:
+	if team_id not in [0, 1] or textures.size() != ChessFootballRunV2R2.COLUMNS * ChessFootballRunV2R2.ROWS:
+		return
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null:
+			return
+		var frames := sprite.sprite_frames
+		for base in ["run", "sprint"]:
+			for named in ChessFootballRunV2R2.ANIMATIONS:
+				var anim := StringName(named.replace("run", base))
+				if not frames.has_animation(anim) or frames.get_frame_count(anim) != 8:
+					return
+		targets.append(frames)
+	if targets.is_empty():
+		return
+	# All-or-nothing change for this club's outfield animations only.
+	# Idle, tackles, passes, shots, goalkeepers and the 2D match authority
+	# retain their existing assets and phase clocks.
+	for frames in targets:
+		for row in range(ChessFootballRunV2R2.ROWS):
+			for base in ["run", "sprint"]:
+				var anim := StringName(ChessFootballRunV2R2.ANIMATIONS[row].replace("run", base))
+				for frame_id in range(ChessFootballRunV2R2.COLUMNS):
+					frames.set_frame(anim, frame_id, textures[row * ChessFootballRunV2R2.COLUMNS + frame_id])
+	_run_v2_r2_loaded[team_id] = true
+	# The original XI proxy sculpt becomes a *fallback*, never a second
+	# body underneath the verified raster and its shared animation clock.
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var model := xi_actor_models.get(player.get_instance_id()) as Node3D
+		if model != null:
+			model.hide()
+	tone_gain_cache.clear()
+
+
 func _request_lateral_run_from_r2() -> void:
 	if not OS.has_feature("web"):
 		return
@@ -268,6 +330,10 @@ func _on_lateral_run_atlas_ready(image: Image, team_id: int) -> void:
 
 
 func _apply_verified_lateral_run(textures: Array[Texture2D], team_id: int) -> void:
+	# An older v1 request may complete after the v2 atlas. It must not
+	# overwrite the newly validated running frames.
+	if _run_v2_r2_loaded.has(team_id):
+		return
 	# Keep all original run phases, FPS, action indices and facing animations;
 	# switching only the eight side frames cannot change game simulation.
 	if textures.size() != 8 or team_id not in [0, 1]:
@@ -420,6 +486,7 @@ func setup(p_match: Node) -> void:
 	_request_idle_front_from_r2()
 	_request_animated_idle_from_r2()
 	_request_lateral_run_from_r2()
+	_request_run_v2_from_r2()
 	_request_tackle_atlases_from_r2()
 	_request_keeper_catch_atlases_from_r2()
 
@@ -1258,6 +1325,26 @@ func _build_xi_actor_sculpt(root: Node3D, player: Footballer) -> void:
 	xi_actor_models[int(player.get_instance_id())] = model
 
 
+func _soft_contact_shadow_material() -> ShaderMaterial:
+	if _contact_shadow_material != null:
+		return _contact_shadow_material
+	var shader := Shader.new()
+	shader.code = """shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
+uniform float strength : hint_range(0.0, 1.0) = 0.27;
+void fragment() {
+	vec2 offset = (UV - vec2(0.5)) * 2.0;
+	float distance_to_center = length(offset);
+	float feather = 1.0 - smoothstep(0.05, 1.0, distance_to_center);
+	ALBEDO = vec3(0.018, 0.025, 0.019);
+	ALPHA = feather * feather * strength;
+}
+"""
+	_contact_shadow_material = ShaderMaterial.new()
+	_contact_shadow_material.shader = shader
+	return _contact_shadow_material
+
+
 func _build_player_proxies() -> void:
 	for team in match_node.teams:
 		for player in team:
@@ -1290,15 +1377,17 @@ func _build_player_proxies() -> void:
 			if player.role == "keeper":
 				keeper_catch_rigs[int(player.get_instance_id())] = _build_keeper_catch_rig(root, player.team_id)
 
+			# One feathered ground decal per player, no ink-black cylinder
+			# and no baked shadow attached to the animated body texture.
 			var shadow := MeshInstance3D.new()
 			shadow.name = "ContactShadow"
-			var shadow_mesh := CylinderMesh.new()
-			shadow_mesh.top_radius = 0.30
-			shadow_mesh.bottom_radius = 0.30
-			shadow_mesh.height = 0.010
+			var shadow_mesh := QuadMesh.new()
+			shadow_mesh.size = Vector2(0.74, 0.46)
 			shadow.mesh = shadow_mesh
+			shadow.rotation.x = -PI * 0.5
 			shadow.position.y = 0.012
-			shadow.material_override = _material(Color(0.012, 0.020, 0.015), 1.0)
+			shadow.material_override = _soft_contact_shadow_material()
+			shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			root.add_child(shadow)
 
 			var active_disc := MeshInstance3D.new()
