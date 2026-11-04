@@ -133,6 +133,37 @@ func _initialize() -> void:
 				])
 	game.camera_mode = "tactical"
 	stage.sync_presentation(1.0, "tactical")
+	# XI-only visual diagnosis: reuse approved footballer PNGs through a
+	# standard 3D textured quad instead of SpriteBase3D's raster batching.
+	# If these show both teams, the source/poses and camera are proven sound.
+	if DisplayServer.get_name() != "headless":
+		for side in game.teams:
+			for athlete in side:
+				var key: int = athlete.get_instance_id()
+				var source: Sprite3D = stage.xi_raster_sprites[key]
+				var panel := QuadMesh.new()
+				panel.size = Vector2(
+					source.texture.get_width() * source.pixel_size,
+					source.texture.get_height() * source.pixel_size
+				)
+				var canvas := StandardMaterial3D.new()
+				canvas.albedo_texture = source.texture
+				canvas.albedo_color = source.modulate
+				canvas.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+				canvas.alpha_scissor_threshold = 0.12
+				canvas.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				canvas.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+				canvas.cull_mode = BaseMaterial3D.CULL_DISABLED
+				var quad := MeshInstance3D.new()
+				quad.name = "XI_TexturedQuadDiagnostic"
+				quad.mesh = panel
+				quad.material_override = canvas
+				quad.position = source.position
+				quad.rotation = source.rotation
+				quad.scale = source.scale
+				quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				stage.player_nodes[key].add_child(quad)
+				source.hide()
 	var viewport := root.get_viewport()
 	var size := viewport.get_visible_rect().size
 	assert(size.x > 100.0 and size.y > 100.0)
