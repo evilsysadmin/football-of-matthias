@@ -28,8 +28,8 @@ func _initialize() -> void:
 	for team_id in range(2):
 		var meta := ChessFootballRunV2R2.sheet_meta(team_id)
 		assert(not meta.is_empty())
-		var kind := ChessFootballRunV2R2.KINDS[team_id]
-		var filename := kind + "_run_v2_clean.webp"
+		var kind: String = String(ChessFootballRunV2R2.KINDS[team_id])
+		var filename: String = kind + "_run_v2_clean.webp"
 		var path := directory.path_join(filename)
 		assert(FileAccess.file_exists(path), "Missing SHA-verified R2 WebP: " + path)
 		var bytes := FileAccess.get_file_as_bytes(path)
