@@ -207,8 +207,6 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal', 
           tabIndex={0}
           src={matchUrl}
           title="Chess Football Godot"
-          // Send only the staging origin, never a URL or session token, so
-          // Godot can verify the XI preview's authenticated parent host.
           referrerPolicy="origin"
           allow="autoplay; fullscreen; gamepad"
           allowFullScreen
