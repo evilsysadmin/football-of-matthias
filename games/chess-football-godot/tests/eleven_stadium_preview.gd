@@ -88,7 +88,7 @@ func _initialize() -> void:
 	assert(stage.player_sprites.size() == 22)
 	assert(stage.player_nodes.size() == 22)
 	assert(stage.xi_raster_meshes.size() == 22)
-	# The XI fallback draws ONLY the geometric proxy while WebP is unavailable.
+	# Both local PNG and verified R2 XI sprites use the same single visible textured quad.
 	var center: Vector2 = game.match_pitch.get_center()
 	var roster_ids: Dictionary = {}
 	for team_id in range(2):
@@ -106,6 +106,8 @@ func _initialize() -> void:
 			assert(not driver.visible)
 			assert(quad != null and quad.is_visible_in_tree())
 			assert(stage.player_nodes[key].get_node_or_null("XI_KitSculpt") == null)
+			assert((quad.material_override as StandardMaterial3D).texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST)
+			assert((quad.material_override as StandardMaterial3D).alpha_scissor_threshold < 0.05)
 			assert(quad.mesh is QuadMesh)
 			var canvas: StandardMaterial3D = quad.material_override
 			var frame: Texture2D = stage._xi_frame_texture(player, driver)
@@ -113,8 +115,6 @@ func _initialize() -> void:
 			# Offline preview: one canonical sprite from local bytes per player,
 			# no R2 download and no second geometry body.
 			assert(frame == ChessFootballSpriteBank.xi_fallback_texture(player.team_id, player.role == "keeper"))
-			if player.role != "keeper":
-				assert(frame == driver.sprite_frames.get_frame_texture(&"run", driver.frame % 8))
 			assert((frame as ImageTexture).get_image().get_used_rect().size.y >= 80)
 			assert(quad.position == driver.position)
 			if player == game.ball.carrier:

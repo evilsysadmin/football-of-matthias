@@ -41,6 +41,7 @@ func _initialize() -> void:
 	assert(first_root.get_node_or_null("XI_KitSculpt") == null)
 	var local_quad: MeshInstance3D = presenter.xi_raster_meshes[first_player.get_instance_id()]
 	assert(local_quad.is_visible_in_tree())
+	assert((local_quad.material_override as StandardMaterial3D).texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST)
 	# Four bundled, independently SHA-pinned sprites cover both clubs and
 	# goalkeepers. None depends on a network request.
 	for team_id in range(2):

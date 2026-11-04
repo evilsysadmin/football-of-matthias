@@ -1262,7 +1262,10 @@ func _build_xi_quad_bodies() -> void:
 			material.albedo_texture = frame_texture
 			material.albedo_color = driver.modulate
 			material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-			material.alpha_scissor_threshold = 0.12
+			# Match the proven XI distance-rendering fix from main/#68.
+			# Preserve opaque texels at tactical zoom without mipmap erasure.
+			material.alpha_scissor_threshold = 0.02
+			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 			material.cull_mode = BaseMaterial3D.CULL_DISABLED
