@@ -821,7 +821,7 @@ func _release_charged_pass() -> bool:
 	return true
 
 func _assisted_shot_target(player: Footballer, aim_y: float) -> Vector2:
-	var goal := ChessFootballMath.goal_center(player.team_id)
+	var goal := ChessFootballMath.goal_center(player.team_id, match_pitch)
 	var safe_half_span := maxf(
 		12.0,
 		ChessFootballMath.GOAL_HALF_HEIGHT
@@ -917,7 +917,8 @@ func _update_ai(delta: float) -> void:
 					# A pass aimed at this teammate should be received by *this*
 					# runner, not accidentally by whoever was closest at release.
 					target = ChessFootballMath.clamp_to_pitch(
-						ball.global_position + ball.velocity * PASS_RECEIVER_LEAD_SECONDS
+						ball.global_position + ball.velocity * PASS_RECEIVER_LEAD_SECONDS,
+						match_pitch
 					)
 					intensity = 1.0
 				elif player == presser:
@@ -945,7 +946,8 @@ func _update_ai(delta: float) -> void:
 						player.home_position.lerp(
 							ball.carrier.global_position,
 							AI_DEFENSIVE_SHIFT_RATIO,
-						)
+						),
+						match_pitch
 					)
 					intensity = _ai_adaptive_intensity(AI_TEAM_PRESS_INTENSITY)
 
@@ -989,7 +991,7 @@ func _ai_loose_ball_pursuit_point() -> Vector2:
 	var lead: Vector2 = (
 		ball.velocity * AI_LOOSE_BALL_LEAD_SECONDS
 	).limit_length(AI_LOOSE_BALL_LEAD_MAX_DISTANCE)
-	return ChessFootballMath.clamp_to_pitch(ball.global_position + lead)
+	return ChessFootballMath.clamp_to_pitch(ball.global_position + lead, match_pitch)
 
 
 func _ai_press_role_margin(nearest_distance: float) -> float:
@@ -1077,12 +1079,13 @@ func _ai_spaced_target(player: Footballer, target: Vector2) -> Vector2:
 		)
 		correction += direction * (AI_TEAMMATE_SEPARATION_RADIUS - distance)
 	return ChessFootballMath.clamp_to_pitch(
-		target + correction.limit_length(AI_TEAMMATE_SEPARATION_MAX_CORRECTION)
+		target + correction.limit_length(AI_TEAMMATE_SEPARATION_MAX_CORRECTION),
+		match_pitch
 	)
 
 
 func _ai_cover_target(player: Footballer, threat_position: Vector2) -> Vector2:
-	var own_goal: Vector2 = ChessFootballMath.goal_center(1 - player.team_id)
+	var own_goal: Vector2 = ChessFootballMath.goal_center(1 - player.team_id, match_pitch)
 	var goal_side: Vector2 = own_goal - threat_position
 	if goal_side.length_squared() < 1.0:
 		goal_side = Vector2.RIGHT if player.team_id == 1 else Vector2.LEFT
@@ -1090,7 +1093,7 @@ func _ai_cover_target(player: Footballer, threat_position: Vector2) -> Vector2:
 		goal_side = goal_side.normalized()
 	var target: Vector2 = threat_position + goal_side * AI_COVER_DISTANCE
 	target.y = lerpf(target.y, player.home_position.y, 0.32)
-	return ChessFootballMath.clamp_to_pitch(target)
+	return ChessFootballMath.clamp_to_pitch(target, match_pitch)
 
 func _reset_ai_adaptation() -> void:
 	ai_adaptive_level = 0
@@ -1108,7 +1111,7 @@ func _record_ai_pressure(team_id: int, amount: float = 1.0) -> void:
 func _sample_ai_adaptation() -> void:
 	if ball.carrier == null:
 		return
-	var pitch := ChessFootballMath.PITCH_RECT
+	var pitch := match_pitch
 	var center_x := pitch.get_center().x
 	var danger_offset := pitch.size.x * 0.15
 	if ball.carrier.team_id == 0 and ball.global_position.x > center_x + danger_offset:
@@ -1168,7 +1171,7 @@ func _ai_decision_ready(player: Footballer) -> bool:
 	return true
 
 func _ai_dribble_target(player: Footballer) -> Vector2:
-	var goal := ChessFootballMath.goal_center(player.team_id)
+	var goal := ChessFootballMath.goal_center(player.team_id, match_pitch)
 	var direction := (goal - player.global_position).normalized()
 	var target := player.global_position + direction * AI_DRIBBLE_LOOKAHEAD
 	var threat := _nearest_opponent_to(player)
@@ -1178,7 +1181,7 @@ func _ai_dribble_target(player: Footballer) -> Vector2:
 		if distance < pressure_radius:
 			var escape := (player.global_position - threat.global_position).normalized()
 			target += escape * (pressure_radius - distance) * 0.9
-	return ChessFootballMath.clamp_to_pitch(target)
+	return ChessFootballMath.clamp_to_pitch(target, match_pitch)
 
 func _ai_support_target(player: Footballer) -> Vector2:
 	if ball.carrier == null:
@@ -1208,7 +1211,14 @@ func _ai_support_target(player: Footballer) -> Vector2:
 			+ forward * (_ai_adaptive_support_forward() + role_push + absf(lane_offset) * 0.18),
 		lerpf(player.home_position.y, ball.carrier.global_position.y + lane_offset, 0.26)
 	)
-	return ChessFootballMath.clamp_to_pitch(target)
+	if match_team_size == 11:
+		# Preserve the XI's genuine 4-3-3 rows and wide lanes while moving
+		# support toward the ball. Never funnel ten teammates into one
+		# narrow column, and do not alter the existing 5v5 support plan.
+		var weight := 0.50 if player.role in ["wing", "forward"] else 0.36
+		target.x = lerpf(player.home_position.x, target.x, weight)
+		target.y = lerpf(player.home_position.y, ball.carrier.global_position.y, 0.18)
+	return ChessFootballMath.clamp_to_pitch(target, match_pitch)
 
 func _nearest_opponent_to(player: Footballer) -> Footballer:
 	var opponents: Array = teams[1 - player.team_id]
@@ -1274,7 +1284,7 @@ func _update_keeper_ai(player: Footballer, delta: float) -> void:
 # gets the full goal mouth. Incoming shots are read on the actual trajectory
 # rather than by blindly following the current position of the ball.
 func _keeper_defensive_target(player: Footballer) -> Vector2:
-	var own_goal := ChessFootballMath.goal_center(1 - player.team_id)
+	var own_goal := ChessFootballMath.goal_center(1 - player.team_id, match_pitch)
 	var facing_x := 1.0 if player.team_id == 0 else -1.0
 	var reference := ball.carrier.global_position if ball.carrier != null else ball.global_position
 	var danger_distance := absf(reference.x - own_goal.x)
@@ -1302,7 +1312,7 @@ func _keeper_defensive_target(player: Footballer) -> Vector2:
 func _keeper_reading_shot(player: Footballer, line_x: float) -> bool:
 	if ball.carrier != null or ball.flight_height > KEEPER_SAVE_MAX_HEIGHT:
 		return false
-	var goal := ChessFootballMath.goal_center(1 - player.team_id)
+	var goal := ChessFootballMath.goal_center(1 - player.team_id, match_pitch)
 	var facing_x := 1.0 if player.team_id == 0 else -1.0
 	var shot_speed := -ball.velocity.x * facing_x
 	return (
@@ -1413,7 +1423,7 @@ func _keeper_try_save(keeper: Footballer) -> bool:
 	if ball.velocity.length() < KEEPER_SAVE_MIN_SPEED:
 		return false
 
-	var pitch := ChessFootballMath.PITCH_RECT
+	var pitch := match_pitch
 	if ball.global_position.x < pitch.position.x or ball.global_position.x > pitch.end.x:
 		return false
 
@@ -1421,7 +1431,7 @@ func _keeper_try_save(keeper: Footballer) -> bool:
 	if not moving_toward_goal:
 		return false
 
-	var own_goal := ChessFootballMath.goal_center(1 - keeper.team_id)
+	var own_goal := ChessFootballMath.goal_center(1 - keeper.team_id, match_pitch)
 	if absf(ball.global_position.y - own_goal.y) > ChessFootballMath.GOAL_HALF_HEIGHT + KEEPER_SAVE_Y_MARGIN:
 		return false
 	if ball.flight_height > KEEPER_SAVE_MAX_HEIGHT:
@@ -1445,7 +1455,7 @@ func _keeper_try_save(keeper: Footballer) -> bool:
 func _ai_attack(player: Footballer) -> void:
 	if ball.carrier != player:
 		return
-	var goal := ChessFootballMath.goal_center(player.team_id)
+	var goal := ChessFootballMath.goal_center(player.team_id, match_pitch)
 	var goal_distance := player.global_position.distance_to(goal)
 	if goal_distance < AI_SHOOT_DISTANCE * float(quick_difficulty_profile["shoot"]):
 		var defending_keeper: Footballer = teams[1 - player.team_id][0]
@@ -1490,7 +1500,7 @@ func _best_ai_pass_target(player: Footballer) -> Footballer:
 			continue
 		var offset: Vector2 = teammate.global_position - player.global_position
 		var distance: float = offset.length()
-		if distance < 90.0 or distance > 560.0:
+		if distance < 90.0 or distance > (820.0 if match_team_size == 11 else 560.0):
 			continue
 		var progress: float = offset.x * forward
 		var nearest_opponent: Footballer = _nearest_opponent_to(teammate)
@@ -1654,7 +1664,7 @@ func _auto_dribble_direction(player: Footballer) -> Vector2:
 	if not pressure_nearby:
 		return forward
 
-	var pitch := ChessFootballMath.PITCH_RECT
+	var pitch := match_pitch
 	var candidates: Array[Vector2] = [
 		(forward * 0.72 + Vector2.UP * 0.69).normalized(),
 		(forward * 0.72 + Vector2.DOWN * 0.69).normalized(),
@@ -1663,7 +1673,7 @@ func _auto_dribble_direction(player: Footballer) -> Vector2:
 	var best_score := -INF
 	for candidate in candidates:
 		var raw_target := player.global_position + candidate * DRIBBLE_AUTO_LOOKAHEAD
-		var target := ChessFootballMath.clamp_to_pitch(raw_target)
+		var target := ChessFootballMath.clamp_to_pitch(raw_target, match_pitch)
 		var unclamped_ratio := (
 			target.distance_to(player.global_position)
 			/ maxf(DRIBBLE_AUTO_LOOKAHEAD, 1.0)

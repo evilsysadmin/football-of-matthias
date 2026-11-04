@@ -311,3 +311,23 @@ reanudaciones humanas y CPU, puntos de saque, espaciado del XI y la
 ausencia de saques fantasma en los viejos límites. Falta todavía ajustar
 las decisiones de IA y el resto de situaciones especiales para activar
 el 11v11 al público.
+
+
+## 11v11 · primera adaptación táctica del motor Godot
+
+Las decisiones de IA que necesitan campo y porterías usan ahora el rectángulo
+activo `match_pitch`: disparos humanos asistidos y de CPU, conducción,
+persecución de balones sueltos, presión de cobertura, límites de los
+objetivos y lectura/paradas del guardameta en ambas porterías. De este
+modo, nadie persigue la antigua portería ni desaparece por un límite
+fantasma de 5v5. El XI puede buscar un pase a 820 unidades, frente a
+las 560 históricas del arcade. En ataque, los apoyos del 4-3-3 conservan
+una proporción de su línea y banda de origen en vez de ocupar todos la
+misma columna. **El 5v5 conserva el comportamiento previo.**
+
+El smoke `eleven_ai_pitch_smoke.gd` prueba directamente las decisiones
+reales sobre 22 actores (disparo a la portería correcta, amplitud de
+carriles, desmarque, pase largo, persecución fuera del campo antiguo,
+portero y disparos). Esta adaptación no activa aún el 11v11 como
+partida pública: faltan ajustes del resto de reglas y una simulación
+prolongada de partidos 11v11.
