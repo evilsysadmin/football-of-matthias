@@ -38,7 +38,10 @@ static func sheet_meta(team_id: int) -> Dictionary:
 		return {}
 	if contract.get("animations") != ["carry", "dribble"]:
 		return {}
-	if contract.get("fps") != {"carry": 12, "dribble": 36}:
+	# JSON numeric variants are not guaranteed to compare equal to an
+	# in-code Dictionary literal. Validate the two FPS values explicitly.
+	var fps: Variant = contract.get("fps", {})
+	if not fps is Dictionary or int(fps.get("carry", 0)) != 12 or int(fps.get("dribble", 0)) != 36:
 		return {}
 	var entries: Variant = contract.get("entries", [])
 	if not entries is Array or entries.size() != 2:
