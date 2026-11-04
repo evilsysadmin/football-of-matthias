@@ -74,6 +74,10 @@ func _initialize() -> void:
 			else:
 				assert(player.global_position.x > center.x)
 	assert(roster_ids.size() == 22)
+	# Whole-pitch projections belong to the aerial lens; broadcast follows
+	# the ball and deliberately excludes some distant players.
+	game.camera_mode = "tactical"
+	stage.sync_presentation(2.0, "tactical")
 	var viewport := root.get_viewport()
 	var bounds := viewport.get_visible_rect().size
 	assert(bounds.x > 100.0 and bounds.y > 100.0)
