@@ -10,6 +10,7 @@ import { getFootballClubRoster, getDefaultFootballLineup, FOOTBALL_FIVE_POSITION
 import { FOOTBALL_SCOUTING_ATTRIBUTES } from '../footballPlayerProfiles.js';
 import { FOOTBALL_QUICK_DIFFICULTIES, DEFAULT_FOOTBALL_QUICK_DIFFICULTY } from '../footballQuickDifficulty.js';
 import './ChessFootballEntry.css';
+import ReleaseUpdateNotice from './ReleaseUpdateNotice.jsx';
 import FootballSaveTransfer from './FootballSaveTransfer.jsx';
 import FootballManagerDesk from './FootballManagerDesk.jsx';
 
@@ -456,6 +457,7 @@ export default function ChessFootballEntry({ onExit }) {
           </section>
         )}
       </div>
+      <ReleaseUpdateNotice deferReload={view !== 'welcome'} />
     </main>
   );
 }
