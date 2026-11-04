@@ -258,8 +258,13 @@ try {
   // Software WebGL in hosted Chromium can stall indefinitely on readPixels.
   // A successful scene handshake and clean browser error log are the hard gate;
   // visual PNG evidence is already produced separately by Godot's capture job.
-  await page.screenshot({ path: resolve(output, 'real-web-kickoff.png'), timeout: 4000 })
-    .catch((error) => console.warn('Optional software-WebGL screenshot unavailable: ' + error.message));
+  // Hosted software WebGL stalls on readPixels, sometimes delaying the
+  // NEXT navigation for tens of seconds. Actual visual evidence is captured
+  // by the native Godot runner; no extra Chromium GPU readback is required.
+  if (process.env.FOOTBALL_CI_OPTIONAL_WEB_SCREENSHOT === '1') {
+    await page.screenshot({ path: resolve(output, 'real-web-kickoff.png'), timeout: 4000 })
+      .catch((error) => console.warn('Optional software-WebGL screenshot unavailable: ' + error.message));
+  }
   console.log('CHESS_FOOTBALL_REAL_WEB_READY OK');
 
   // XI is deliberately unavailable in the public app. The explicit local
@@ -274,7 +279,9 @@ try {
   if (await page.locator('canvas').count() === 0) {
     throw new Error('XI Web runtime reported ready without canvas');
   }
-  await page.locator('canvas').click({ position: { x: 500, y: 370 }, timeout: 10000 });
+  // This is an actual canvas click. Never wait for unrelated scheduled
+  // navigations from Godot: the subsequent input probe verifies readiness.
+  await page.locator('canvas').click({ position: { x: 500, y: 370 }, timeout: 10000, noWaitAfter: true });
   await page.waitForFunction(
     () => window.__chessFootballInputSamples.some((sample) =>
       sample.playable && sample.team_size === 11 && sample.team_players === 22 &&
