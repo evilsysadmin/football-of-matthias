@@ -4,7 +4,7 @@ extends SceneTree
 # Each composite contains cropped *real viewport pixels*: two clubs, pass
 # and shoot, frames 0/4/7, before (canonical fallback) and after (R2).
 # No synthetic sprites are used to pass the gate.
-const CROP := Vector2i(240, 340)
+const CROP := Vector2i(260, 480)
 const PHASES := [0, 4, 7]
 const ACTIONS := [&"pass", &"shoot"]
 
@@ -67,7 +67,7 @@ func _initialize() -> void:
 
 func _render_matrix(game: Node, stage: ChessFootball3DPresenter,
 		targets: Array[Footballer], mode: String) -> Image:
-	var matrix := Image.create(CROP.x * 6, CROP.y * 4, false, Image.FORMAT_RGBA8)
+	var matrix := Image.create(CROP.x * 6, CROP.y * 2, false, Image.FORMAT_RGBA8)
 	matrix.fill(Color("#103a2d"))
 	for team_id in range(2):
 		var actor: Footballer = targets[team_id]
@@ -80,9 +80,6 @@ func _render_matrix(game: Node, stage: ChessFootball3DPresenter,
 				var y := action_row * CROP.y
 				matrix.blit_rect(shot, Rect2i(Vector2i.ZERO, CROP), Vector2i(x, y))
 		actor.global_position = Vector2(-9999.0, -9999.0)
-	# Render the same sequence twice (lower rows) for enlarged visual inspection.
-	matrix.blit_rect(matrix, Rect2i(0, 0, CROP.x * 6, CROP.y * 2),
-		Vector2i(0, CROP.y * 2))
 	return matrix
 
 
@@ -117,7 +114,10 @@ func _capture(game: Node, stage: ChessFootball3DPresenter,
 		"Real Godot viewport must be 1280x720")
 	var center: Vector2 = stage.camera.unproject_position(driver.global_position)
 	var x := clampi(int(center.x) - CROP.x / 2, 0, screenshot.get_width() - CROP.x)
-	var y := clampi(int(center.y) - CROP.y / 2, 0, screenshot.get_height() - CROP.y)
+	# The tactical Y-facing billboard projects the head far above the
+	# driver's footline. Include the FULL silhouette, not only legs.
+	var top_bias := 100 if mode == "tactical" else 0
+	var y := clampi(int(center.y) - CROP.y / 2 - top_bias, 0, screenshot.get_height() - CROP.y)
 	return screenshot.get_region(Rect2i(x, y, CROP.x, CROP.y))
 
 
