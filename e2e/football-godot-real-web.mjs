@@ -101,7 +101,10 @@ try {
     window.__chessFootballInputSamples = [];
     window.addEventListener('message', (event) => {
       if (event.data?.source !== 'chess-football-godot') return;
-      if (event.data.type === 'ready') window.__chessFootballWebReady = true;
+      if (event.data.type === 'ready') {
+        window.__chessFootballReadyTeamSize = event.data.team_size;
+        window.__chessFootballWebReady = true;
+      }
       if (event.data.type === 'ci-keyboard-sample') {
         window.__chessFootballInputSamples.push(event.data);
         if (window.__chessFootballInputSamples.length > 400) {
@@ -128,6 +131,9 @@ try {
   console.log('Launching actual Godot Web release:', url);
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForFunction(() => window.__chessFootballWebReady === true, null, { timeout: 60000 });
+  if (await page.evaluate(() => window.__chessFootballReadyTeamSize) !== 5) {
+    throw new Error('5v5 Web ready handshake returned incorrect team size');
+  }
   await page.waitForTimeout(2500);
   if (failures.length) throw new Error('Web runtime errors: ' + failures.slice(0, 8).join('\n'));
   if (await page.locator('canvas').count() === 0) throw new Error('Godot reported ready without canvas');
@@ -214,6 +220,9 @@ try {
     waitUntil: 'domcontentloaded', timeout: 30000
   });
   await page.waitForFunction(() => window.__chessFootballWebReady === true, null, { timeout: 60000 });
+  if (await page.evaluate(() => window.__chessFootballReadyTeamSize) !== 11) {
+    throw new Error('XI Web ready handshake returned incorrect team size');
+  }
   if (await page.locator('canvas').count() === 0) {
     throw new Error('XI Web runtime reported ready without canvas');
   }

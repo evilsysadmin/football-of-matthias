@@ -264,7 +264,7 @@ func _ready() -> void:
 			"location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true",
 			true
 		))
-		JavaScriptBridge.eval("window.parent.postMessage({source:'chess-football-godot', type:'ready'}, '*');")
+		JavaScriptBridge.eval("window.parent.postMessage({source:'chess-football-godot', type:'ready', team_size:%d}, '*');" % match_team_size)
 
 func _set_quick_difficulty(level: String) -> void:
 	quick_difficulty = QuickDifficulty.normalize(level)
