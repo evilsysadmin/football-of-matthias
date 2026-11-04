@@ -56,6 +56,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.FOOTBALL_SOURCE_SHA }}
+      - name: Verify R2 v2 run and rejected sparse shadows (HTTP CORS SHA)
+        run: python3 scripts/check_football_run_v2_r2.py
       - name: Verify R2 animated idle sheets (HTTP, CORS, SHA, layout)
         run: python3 scripts/check_football_idle_r2.py
       - name: Verify dedicated football R2 WebPs when public origin is configured
@@ -526,6 +528,21 @@ jobs:
             exit 1
           fi
           grep -q 'football R2 5-view animated idle, 8-frame phase, 22 actors and fallback: OK' "$log"
+      - name: R2 v2 five-view run, 11v11 raster and soft-shadow fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-run-v2-r2-smoke.log"
+          set +e
+          timeout 45s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/run_v2_r2_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::R2 v2 run, 11v11 body fallback or soft shadow regressed'
+            exit 1
+          fi
+          grep -q 'football R2 v2 run: 5 views x 8 frames, XI fallback and soft shadow: OK' "$log"
       - name: Staged R2 lateral-run parity and rollback smoke
         shell: bash
         run: |
@@ -837,6 +854,28 @@ jobs:
             shot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
             test -n "$shot" && test -s "$shot"
             cp "$shot" "$RUNNER_TEMP/chess-football-review/idle-r2-${stage,,}.png"
+          done
+      - name: Visual review R2 v2 before/after in actual 11v11 Godot
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-run-v2-visual.log"
+          export FOOTBALL_RUN_V2_PREVIEW_DIR="$RUNNER_TEMP/football-run-v2-r2"
+          set +e
+          timeout 70s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/run_v2_r2_visual.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
+            echo '::error::R2 v2 real Godot visual assertion failed'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_RUN_V2_REAL_GODOT_REVIEW_OK teams=2 outfield=20 shadows=22' "$log"
+          for phase in BEFORE AFTER; do
+            marker="FOOTBALL_RUN_V2_CAPTURE_${phase}"
+            shot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
+            test -n "$shot" && test -s "$shot"
+            cp "$shot" "$RUNNER_TEMP/chess-football-review/run-v2-${phase,,}.png"
           done
       - name: Render verified keeper-catch R2 poses in actual Godot 3D
         if: steps.keeper_r2.outputs.enabled == 'true'
