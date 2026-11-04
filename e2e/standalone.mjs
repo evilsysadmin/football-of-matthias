@@ -145,6 +145,10 @@ try{
   await page.getByRole('button',{name:'Salir de Chess Football'}).click();
   await page.getByRole('button',{name:/Partida rápida/}).click();
   await page.getByRole('button',{name:'5v5 · Clásico'}).click();
+  // Reapply the level on the second entry: the parent may remount the
+  // setup screen when the game exits, but the URL must still be exact.
+  await page.getByRole('button',{name:/^Difícil\b/}).click();
+  assert.equal(await page.getByRole('button',{name:'5v5 · Clásico'}).getAttribute('aria-pressed'),'true');
   await page.getByRole('button',{name:'Saltar al campo · Difícil'}).click();
   const five=page.locator('iframe.chess-football-godot-host__frame');
   await five.waitFor();
