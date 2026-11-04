@@ -1244,19 +1244,22 @@ func _add_goal_net_grid(
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(instance)
 
-# The optional five-view R2 atlas is not guaranteed to be available on the
-# first frame (or offline). Legacy directional frames are valid assets, but
-# can disappear at XI broadcast distance on GLES3/WebGL. Until verified
-# R2 arrives, show the known-good bundled lateral athlete animation on
-# EVERY outfield QuadMesh, including idle/action poses. Never substitute
-# a coloured geometric mannequin or hide an actor.
-func _xi_frame_texture(player: Footballer, driver: AnimatedSprite3D) -> Texture2D:
+# The XI quad always reuses the live sprite driver's canonical frame,
+# including real idle, run direction and action poses while R2 is offline.
+# Nearest filtering and the lowered alpha threshold on the quad preserve
+# those local sprites at full-pitch zoom (the regression is pixel-tested).
+func _xi_frame_texture(_player: Footballer, driver: AnimatedSprite3D) -> Texture2D:
 	var frames := driver.sprite_frames
-	if player.role != "keeper" and not _run_v2_r2_loaded.has(int(player.team_id)):
-		var count := frames.get_frame_count(&"run")
+	if frames.has_animation(driver.animation):
+		var count := frames.get_frame_count(driver.animation)
 		if count > 0:
-			return frames.get_frame_texture(&"run", driver.frame % count)
-	return frames.get_frame_texture(driver.animation, driver.frame)
+			return frames.get_frame_texture(driver.animation, clampi(driver.frame, 0, count - 1))
+	# Fail closed to the known local raster if a transitional state names a
+	# missing animation; never substitute a geometric placeholder.
+	var run_count := frames.get_frame_count(&"run")
+	if run_count > 0:
+		return frames.get_frame_texture(&"run", driver.frame % run_count)
+	return null
 
 
 # XI-only raster mirrors the existing AnimatedSprite3D clock and atlas.
