@@ -20,6 +20,12 @@ func _assert_kit_pixels(capture: Image, mode: String, minimum: int) -> void:
 	print("FOOTBALL_XI_RENDERED_KITS mode=%s blue=%d red=%d" % [mode, blue, red])
 	assert(blue >= minimum and red >= minimum,
 		"XI rendered screenshot must show two real kits, not only shadows")
+	# A fixed-Y quad viewed from directly above becomes a flat horizontal
+	# streak even though the old connected-component counter still passes.
+	# This is below the pre-regression main/#68 red-shirt pixel baseline
+	# (500 samples) while rejecting the flattened #69 image (356).
+	if mode == "tactical":
+		assert(red >= 400, "XI tactical bodies look foreshortened/flat from overhead camera")
 
 # Check the 11v11 tactical raster itself: 10 distinct shirt groups per
 # team are inside the useful central pitch ROI (both extreme goalkeepers
@@ -128,6 +134,8 @@ func _initialize() -> void:
 	# the ball and deliberately excludes some distant players.
 	game.camera_mode = "tactical"
 	stage.sync_presentation(2.0, "tactical")
+	for quad in stage.xi_raster_meshes.values():
+		assert((quad.material_override as StandardMaterial3D).billboard_mode == BaseMaterial3D.BILLBOARD_ENABLED)
 	var viewport := root.get_viewport()
 	var bounds := viewport.get_visible_rect().size
 	assert(bounds.x > 100.0 and bounds.y > 100.0)
@@ -151,6 +159,8 @@ func _initialize() -> void:
 		_assert_tactical_kit_clusters(tactical_image)
 		game.camera_mode = "broadcast"
 		stage.sync_presentation(2.0, "broadcast")
+		for quad in stage.xi_raster_meshes.values():
+			assert((quad.material_override as StandardMaterial3D).billboard_mode == BaseMaterial3D.BILLBOARD_FIXED_Y)
 		for step in range(12):
 			stage.sync_presentation(1.0 / 60.0, "broadcast")
 			await process_frame

@@ -1248,6 +1248,22 @@ func _add_goal_net_grid(
 # including real idle, run direction and action poses while R2 is offline.
 # Nearest filtering and the lowered alpha threshold on the quad preserve
 # those local sprites at full-pitch zoom (the regression is pixel-tested).
+# A tactical camera looks steeply downward; an upright FIXED_Y billboard
+# looks like a flattened scrap of cloth from above. Use a camera-facing
+# billboard there, but translate its centre so the actual boot pixel stays
+# on exactly the same ground point as the upright broadcast billboard.
+# All offsets are presentation-only and are recalculated each frame.
+static func xi_tactical_foot_anchor_offset(
+	view_camera: Camera3D, frame: Texture2D, pixel_size: float, scale_y: float
+) -> Vector3:
+	if view_camera == null or frame == null:
+		return Vector3.ZERO
+	var foot_pixels: float = ChessFootballSpriteBank.frame_bottom(frame) - float(frame.get_height()) * 0.5
+	var foot_extent: float = foot_pixels * pixel_size * scale_y
+	var camera_up: Vector3 = view_camera.global_transform.basis.y.normalized()
+	return (camera_up - Vector3.UP) * foot_extent
+
+
 func _xi_frame_texture(_player: Footballer, driver: AnimatedSprite3D) -> Texture2D:
 	var frames := driver.sprite_frames
 	if frames.has_animation(driver.animation):
@@ -1781,8 +1797,24 @@ func sync_presentation(delta: float, mode: String) -> void:
 				if canvas.uv1_scale != target_uv_scale:
 					canvas.uv1_scale = target_uv_scale
 					canvas.uv1_offset = target_uv_offset
-				if xi_quad.position != sprite.position:
-					xi_quad.position = sprite.position
+				# Keep tactical silhouettes fully visible to the overhead camera
+				# while anchoring the *same* boot pixel to the ground shadow.
+				# Broadcast uses a genuinely upright billboard; tactical
+				# faces the camera with a compensating 3D centre translation.
+				var tactical_billboard := mode == "tactical"
+				var wanted_billboard := (
+					BaseMaterial3D.BILLBOARD_ENABLED if tactical_billboard
+					else BaseMaterial3D.BILLBOARD_FIXED_Y
+				)
+				if canvas.billboard_mode != wanted_billboard:
+					canvas.billboard_mode = wanted_billboard
+				var body_offset := (
+					xi_tactical_foot_anchor_offset(camera, current_frame, sprite.pixel_size, sprite.scale.y)
+					if tactical_billboard else Vector3.ZERO
+				)
+				var wanted_position := sprite.position + body_offset
+				if xi_quad.position != wanted_position:
+					xi_quad.position = wanted_position
 				if xi_quad.rotation != sprite.rotation:
 					xi_quad.rotation = sprite.rotation
 				if xi_quad.scale != sprite.scale:
