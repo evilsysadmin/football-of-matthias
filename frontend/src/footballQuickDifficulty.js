@@ -21,7 +21,7 @@ export function footballQuickMatchUrl(url, difficulty = DEFAULT_FOOTBALL_QUICK_D
   // Fragments are read by Godot at boot, never sent to the release CDN.
   const stagingRelease = result.protocol === 'https:'
     && result.hostname === 'assets.chess-studio.shadowops.dpdns.org'
-    && /^\\/football-of-matthias\\/staging\\/releases\\/[0-9a-f]{16}\\/index\\.html$/.test(result.pathname);
+    && /^\/football-of-matthias\/staging\/releases\/[0-9a-f]{16}\/index\.html$/.test(result.pathname);
   const previewXi = stagingRelease && teamSize === 11;
   result.hash = `football-difficulty=${normalizeFootballQuickDifficulty(difficulty)}${previewXi ? '&football-team-size=11' : ''}`;
   return result.href;
