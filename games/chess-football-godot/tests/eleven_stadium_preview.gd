@@ -105,6 +105,34 @@ func _initialize() -> void:
 			# While diagnosing frozen raster geometry, the hidden driver may
 			# continue following the camera and advance independently.
 			assert((body.texture as ImageTexture).get_image().get_used_rect().size.y >= 80)
+	# Frame-by-frame rendering bugs need *per-athlete* camera evidence,
+	# not a scene-node count. Measure actual projected body height versus
+	# distance (all 22 players in both broadcast and aerial tactical views).
+	# This only logs in the XI visual test, never in shipped gameplay.
+	for probe_mode in ["tactical", "broadcast"]:
+		game.camera_mode = probe_mode
+		stage.sync_presentation(1.0, probe_mode)
+		for side in game.teams:
+			for athlete in side:
+				var probe_key: int = athlete.get_instance_id()
+				var face: Sprite3D = stage.xi_raster_sprites[probe_key]
+				var height_world: float = (
+					float(face.texture.get_height()) * face.pixel_size * absf(face.scale.y)
+				)
+				var up: Vector3 = face.global_position + Vector3.UP * (height_world * 0.5)
+				var down: Vector3 = face.global_position - Vector3.UP * (height_world * 0.5)
+				var projected_height: float = (
+					stage.camera.unproject_position(up).distance_to(
+						stage.camera.unproject_position(down)
+					)
+				)
+				print("FOOTBALL_XI_PROJECTION mode=%s team=%d index=%d px=%.2f behind=%s visible=%s face=%s" % [
+					probe_mode, athlete.team_id, athlete.squad_index,
+					projected_height, stage.camera.is_position_behind(face.global_position),
+					face.is_visible_in_tree(), face.global_position
+				])
+	game.camera_mode = "tactical"
+	stage.sync_presentation(1.0, "tactical")
 	var viewport := root.get_viewport()
 	var size := viewport.get_visible_rect().size
 	assert(size.x > 100.0 and size.y > 100.0)
