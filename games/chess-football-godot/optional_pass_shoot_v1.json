@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "enabled": false,
+  "bucket": "football",
+  "prefix": "atlases/v1/",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v1",
+  "quality_contract": "football-pass-shoot-v1",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "columns": 8,
+  "rows": 2,
+  "footline": 132,
+  "fps": 10,
+  "animations": [
+    "pass",
+    "shoot"
+  ],
+  "note": "Offline fallback stays active until the owner uploads both WebPs, SHA/CORS/size verification succeeds and 1280x720 Godot PNGs are visually approved. Never merge based only on a green CI build.",
+  "entries": [
+    {
+      "team": "fc_matthias",
+      "file": "fc_matthias_pass_shoot_v1.webp",
+      "sha256": "ad286ff56d0f1461efaa9aad20fc349203ed9a90b3ea3e45f60d41493b9c2b24"
+    },
+    {
+      "team": "real_enroque",
+      "file": "real_enroque_pass_shoot_v1.webp",
+      "sha256": "5dae02988c73e1353a17d3ef521949049a1b41c89b97fc01a5042cca691afc36"
+    }
+  ]
+}

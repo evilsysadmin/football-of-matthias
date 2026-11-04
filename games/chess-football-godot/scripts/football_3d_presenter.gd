@@ -119,6 +119,8 @@ var _keeper_catch_r2_loaded: Dictionary = {}
 var _animated_idle_r2_loaded: Dictionary = {}
 # v2 run replaces only outfield locomotion after every pose verifies.
 var _run_v2_r2_loaded: Dictionary = {}
+# Authored action replacement becomes active per-club only after full verification.
+var _pass_shoot_r2_loaded: Dictionary = {}
 var _contact_shadow_material: ShaderMaterial
 var keeper_catch_carrier_id: int = 0
 var keeper_catch_origin: Vector3 = Vector3.ZERO
@@ -378,10 +380,58 @@ func _apply_verified_lateral_run(textures: Array[Texture2D], team_id: int) -> vo
 				continue
 			if animation == &"tackle" and _tackle_r2_loaded.has("%d:tackle" % team_id):
 				continue
+			if animation in [&"pass", &"shoot"] and _pass_shoot_r2_loaded.has(team_id):
+				continue
 			var poses: Array = ChessFootballSpriteBank.CANONICAL_ACTION_POSES.get(String(animation), [])
 			for index in range(8):
 				var source := index if animation in [&"run", &"sprint"] else int(poses[index])
 				frames.set_frame(animation, index, textures[source])
+	tone_gain_cache.clear()
+
+
+# A single verified 2x8 sheet supplies both actions for one club.
+# Never request one image per footballer and never touch match authority.
+func _request_pass_shoot_from_r2() -> void:
+	if not OS.has_feature("web"):
+		return
+	for team_id in range(2):
+		var meta := ChessFootballPassShootR2.sheet_meta(team_id)
+		if meta.is_empty():
+			continue
+		var loader := ChessFootballR2AtlasLoader.new()
+		loader.name = "OptionalPassShootR2_%d" % team_id
+		add_child(loader)
+		loader.atlas_ready.connect(_on_pass_shoot_ready.bind(team_id))
+		loader.start(meta, ChessFootballPassShootR2.TRUSTED_ROOT)
+
+
+func _on_pass_shoot_ready(image: Image, team_id: int) -> void:
+	_apply_verified_pass_shoot_frames(ChessFootballPassShootR2.frames_from_image(image), team_id)
+
+
+func _apply_verified_pass_shoot_frames(textures: Array[Texture2D], team_id: int) -> void:
+	if team_id not in [0, 1] or textures.size() != 16:
+		return
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null:
+			return
+		var frames := sprite.sprite_frames
+		for animation in ChessFootballPassShootR2.ANIMATIONS:
+			if not frames.has_animation(animation) or frames.get_frame_count(animation) != 8:
+				return
+		targets.append(frames)
+	if targets.is_empty():
+		return
+	for frames in targets:
+		for row in range(ChessFootballPassShootR2.ROWS):
+			var animation: StringName = ChessFootballPassShootR2.ANIMATIONS[row]
+			for index in range(ChessFootballPassShootR2.COLUMNS):
+				frames.set_frame(animation, index, textures[row * 8 + index])
+	_pass_shoot_r2_loaded[team_id] = true
 	tone_gain_cache.clear()
 
 
@@ -504,6 +554,7 @@ func setup(p_match: Node) -> void:
 	_request_animated_idle_from_r2()
 	_request_lateral_run_from_r2()
 	_request_run_v2_from_r2()
+	_request_pass_shoot_from_r2()
 	_request_tackle_atlases_from_r2()
 	_request_keeper_catch_atlases_from_r2()
 
