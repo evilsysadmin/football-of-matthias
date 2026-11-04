@@ -121,6 +121,8 @@ var _animated_idle_r2_loaded: Dictionary = {}
 var _run_v2_r2_loaded: Dictionary = {}
 # Authored action replacement becomes active per-club only after full verification.
 var _pass_shoot_r2_loaded: Dictionary = {}
+# Verified side-view carrier animations. Never alter the 2D ball or physics.
+var _carry_dribble_r2_loaded: Dictionary = {}
 var _contact_shadow_material: ShaderMaterial
 var keeper_catch_carrier_id: int = 0
 var keeper_catch_origin: Vector3 = Vector3.ZERO
@@ -435,6 +437,58 @@ func _apply_verified_pass_shoot_frames(textures: Array[Texture2D], team_id: int)
 	tone_gain_cache.clear()
 
 
+# Download at most one carry/dribble atlas per club, never one per actor.
+# The candidate contract stays disabled until public R2/CORS/SHA approval.
+func _request_carry_dribble_from_r2() -> void:
+	if not OS.has_feature("web"):
+		return
+	for team_id in range(2):
+		var meta := ChessFootballCarryDribbleR2.sheet_meta(team_id)
+		if meta.is_empty():
+			continue
+		var loader := ChessFootballR2AtlasLoader.new()
+		loader.name = "OptionalCarryDribbleR2_%d" % team_id
+		add_child(loader)
+		loader.atlas_ready.connect(_on_carry_dribble_ready.bind(team_id))
+		loader.start(meta, ChessFootballCarryDribbleR2.TRUSTED_ROOT)
+
+
+func _on_carry_dribble_ready(image: Image, team_id: int) -> void:
+	_apply_verified_carry_dribble_frames(
+		ChessFootballCarryDribbleR2.frames_from_image(image), team_id
+	)
+
+
+func _apply_verified_carry_dribble_frames(textures: Array[Texture2D], team_id: int) -> void:
+	if team_id not in [0, 1] or textures.size() != 16:
+		return
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null:
+			return
+		var frames := sprite.sprite_frames
+		for animation in ChessFootballCarryDribbleR2.ANIMATIONS:
+			if frames.has_animation(animation):
+				return
+		targets.append(frames)
+	if targets.is_empty():
+		return
+	# All 10 outfield SpriteFrames receive all 16 verified poses or none.
+	for frames in targets:
+		for row in range(ChessFootballCarryDribbleR2.ROWS):
+			var name: StringName = ChessFootballCarryDribbleR2.ANIMATIONS[row]
+			frames.add_animation(name)
+			frames.set_animation_speed(name, 12.0 if row == 0 else 36.0)
+			frames.set_animation_loop(name, row == 0)
+			for frame_id in range(ChessFootballCarryDribbleR2.COLUMNS):
+				frames.add_frame(name, textures[row * 8 + frame_id])
+	_carry_dribble_r2_loaded[team_id] = true
+	tone_gain_cache.clear()
+
+
 # Four source-sized R2 sheets: standing tackle and slide tackle for each
 # club. They are opt-in until the public endpoint, CORS and bytes are proven.
 var _tackle_r2_loaded: Dictionary = {}
@@ -555,6 +609,7 @@ func setup(p_match: Node) -> void:
 	_request_lateral_run_from_r2()
 	_request_run_v2_from_r2()
 	_request_pass_shoot_from_r2()
+	_request_carry_dribble_from_r2()
 	_request_tackle_atlases_from_r2()
 	_request_keeper_catch_atlases_from_r2()
 
@@ -1782,6 +1837,15 @@ func sync_presentation(delta: float, mode: String) -> void:
 				var directional_animation := ChessFootballRunDirection.animation_for(wanted_animation, run_view)
 				if sprite.sprite_frames.has_animation(directional_animation):
 					wanted_animation = directional_animation
+				# Side-facing real ball carriers may use verified 3D-only
+				# carry/dribble poses. Gameplay and other facing views are untouched.
+				var carrier_action := ChessFootballCarryDribbleR2.animation_for(
+					wanted_animation, run_view, player.role,
+					player.has_ball and match_node.ball.carrier == player,
+					player.dribble_active(),
+				)
+				if sprite.sprite_frames.has_animation(carrier_action):
+					wanted_animation = carrier_action
 				var authored_catch: bool = (
 					player.role == "keeper" and player == holding_keeper
 					and _keeper_catch_r2_loaded.has(int(player.team_id))
