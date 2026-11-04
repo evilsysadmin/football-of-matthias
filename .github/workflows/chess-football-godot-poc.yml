@@ -56,6 +56,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.FOOTBALL_SOURCE_SHA }}
+      - name: Verify R2 animated idle sheets (HTTP, CORS, SHA, layout)
+        run: python3 scripts/check_football_idle_r2.py
       - name: Verify dedicated football R2 WebPs when public origin is configured
         id: keeper_r2
         shell: bash
@@ -509,6 +511,21 @@ jobs:
             exit 1
           fi
           grep -q 'football optional idle-front R2 fallback smoke: OK' "$log"
+      - name: Optional R2 animated idle five-view, frame-clock and rollback smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-animated-idle-r2.log"
+          set +e
+          timeout 45s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/animated_idle_r2_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Animated idle R2 integrity, 3D phase or fallback regressed.'
+            exit 1
+          fi
+          grep -q 'football R2 5-view animated idle, 8-frame phase, 22 actors and fallback: OK' "$log"
       - name: Staged R2 lateral-run parity and rollback smoke
         shell: bash
         run: |
@@ -806,6 +823,21 @@ jobs:
           cp "$atlas_fc_keeper" "$RUNNER_TEMP/chess-football-review/atlas-fc-matthias-keeper.png"
           cp "$atlas_rival_keeper" "$RUNNER_TEMP/chess-football-review/atlas-real-enroque-keeper.png"
           cp "$atlas_directional" "$RUNNER_TEMP/chess-football-review/atlas-directional-run.png"
+      - name: Capture R2 animated idle in real Godot 3D (five views, before/after)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-idle-r2-real-visual.log"
+          export FOOTBALL_IDLE_R2_PREVIEW_DIR="$RUNNER_TEMP/football-idle-r2"
+          timeout 75s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/animated_idle_r2_visual.gd 2>&1 | tee "$log"
+          grep -q 'FOOTBALL_IDLE_R2_REAL_GODOT_REVIEW_OK actors=4 views=5 phases=2' "$log"
+          for stage in BEFORE AFTER MOTION; do
+            marker="FOOTBALL_IDLE_R2_CAPTURE_${stage}"
+            shot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
+            test -n "$shot" && test -s "$shot"
+            cp "$shot" "$RUNNER_TEMP/chess-football-review/idle-r2-${stage,,}.png"
+          done
       - name: Render verified keeper-catch R2 poses in actual Godot 3D
         if: steps.keeper_r2.outputs.enabled == 'true'
         shell: bash
