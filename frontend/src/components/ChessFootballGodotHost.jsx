@@ -23,7 +23,7 @@ function readMobileViewport() {
   };
 }
 
-export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }) {
+export default function ChessFootballGodotHost({ onExit, difficulty = 'normal', teamSize = 5 }) {
   const frameRef = useRef(null);
   const [attempt, setAttempt] = useState(0);
   const [runtimeReady, setRuntimeReady] = useState(false);
@@ -73,6 +73,13 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
       const message = event.data;
       if (!message || message.source !== 'chess-football-godot') return;
       if (message.type === 'ready') {
+        // An outdated CDN runtime must not silently launch 5v5 when XI was
+        // selected. Fail visibly so the player can retry or choose 5v5.
+        if (teamSize === 11 && message.team_size !== 11) {
+          setRuntimeReady(false);
+          setBootFailed(true);
+          return;
+        }
         setBootFailed(false);
         setRuntimeReady(true);
       } else if (message.type === 'exit') {
@@ -82,7 +89,7 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
     };
     window.addEventListener('message', handleRuntimeMessage);
     return () => window.removeEventListener('message', handleRuntimeMessage);
-  }, [onExit]);
+  }, [onExit, teamSize]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,7 +141,7 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
   };
 
   const mobilePortrait = mobileViewport.coarse && mobileViewport.portrait;
-  const matchUrl = footballQuickMatchUrl(runtime.url, difficulty);
+  const matchUrl = footballQuickMatchUrl(runtime.url, difficulty, teamSize);
 
 
   const runtimeStatus = bootFailed
@@ -187,7 +194,7 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
       {bootFailed ? (
         <div className="chess-football-godot-host__fallback" role="alert">
           <h2>Chess Football no ha arrancado</h2>
-          <p>El juego no confirmó que estuviera listo. Puedes reintentar o salir sin quedar atrapado en una pantalla negra.</p>
+          <p>El juego no confirmó el arranque o el formato seleccionado. Puedes reintentar o salir sin quedar atrapado en una pantalla negra.</p>
           <button type="button" onClick={() => setAttempt((value) => value + 1)}>Reintentar</button>
           <button type="button" onClick={exitFootball}>Salir de Chess Football</button>
         </div>
@@ -200,6 +207,7 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
           tabIndex={0}
           src={matchUrl}
           title="Chess Football Godot"
+          referrerPolicy="origin"
           allow="autoplay; fullscreen; gamepad"
           allowFullScreen
           
