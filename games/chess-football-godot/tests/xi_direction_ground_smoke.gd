@@ -40,19 +40,33 @@ func _initialize() -> void:
 				assert(quad.is_visible_in_tree())
 				var material := quad.material_override as StandardMaterial3D
 				assert(material != null)
-				assert(material.billboard_mode == BaseMaterial3D.BILLBOARD_FIXED_Y)
+				var tactical := mode == "tactical"
+				assert(material.billboard_mode == (
+					BaseMaterial3D.BILLBOARD_ENABLED if tactical
+					else BaseMaterial3D.BILLBOARD_FIXED_Y
+				))
 				assert(material.texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST)
 				assert(material.alpha_scissor_threshold < 0.05)
 				var actual_frame: Texture2D = stage._xi_frame_texture(player, sprite)
 				assert(actual_frame != null and material.albedo_texture == actual_frame)
-				assert(quad.position == sprite.position and quad.scale == sprite.scale)
+				assert(quad.scale == sprite.scale)
 				var frame_foot := ChessFootballSpriteBank.frame_bottom(actual_frame)
 				var half_height := float(actual_frame.get_height()) * 0.5
-				# The billboard faces the camera only around Y. Its local
-				# negative Y points down to the boots regardless of pitch.
-				var boot_world := quad.to_global(Vector3(
-					0.0, -(frame_foot - half_height) * sprite.pixel_size, 0.0
-				))
+				var foot_extent: float = (frame_foot - half_height) * sprite.pixel_size * sprite.scale.y
+				var up_axis: Vector3 = (
+					stage.camera.global_transform.basis.y.normalized() if tactical
+					else Vector3.UP
+				)
+				var required_offset: Vector3 = (
+					stage.xi_tactical_foot_anchor_offset(
+						stage.camera, actual_frame, sprite.pixel_size, sprite.scale.y
+					) if tactical else Vector3.ZERO
+				)
+				assert(quad.position.is_equal_approx(sprite.position + required_offset))
+				# Shader billboards rotate the mesh on GPU: to_global() alone
+				# cannot represent the tilted-camera boot point. Reconstruct
+				# it using the same camera-up vector as the shader.
+				var boot_world: Vector3 = quad.global_position - up_axis * foot_extent
 				var shadow := stage.player_nodes[key].get_node("ContactShadow") as MeshInstance3D
 				var shadow_world := shadow.global_position
 				assert(absf(boot_world.y - shadow_world.y) < 0.050,
