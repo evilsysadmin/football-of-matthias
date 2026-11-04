@@ -43,8 +43,15 @@ try{
    assert.equal(await page.getByTestId('football-release-notice').count(),0,'same build is not an update');
    publishedBuild='b'.repeat(40)===currentBuild?'d'.repeat(40):'b'.repeat(40);
    await page.evaluate(()=>window.dispatchEvent(new Event('online')));
-   await page.getByTestId('football-release-notice').waitFor();
+   const notice=page.getByTestId('football-release-notice');
+   await notice.waitFor();
    assert.ok(await page.getByRole('button',{name:'Actualizar',exact:true}).isVisible());
+   if(viewport.width===390){
+    const entry=await page.getByRole('button',{name:/Modo mánager/}).boundingBox();
+    const toast=await notice.boundingBox();
+    assert.ok(entry&&toast&&entry.y+entry.height<=toast.y,'mobile version banner must not cover manager entry');
+   }
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'update banner must not cause horizontal overflow');
    await page.screenshot({path:resolve(out,viewport.width+'-new-version-welcome.png')});
    await page.getByRole('button',{name:'Ahora no'}).click();
    assert.equal(await page.getByTestId('football-release-notice').count(),0);
