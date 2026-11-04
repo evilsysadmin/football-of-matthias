@@ -877,6 +877,32 @@ jobs:
             test -n "$shot" && test -s "$shot"
             cp "$shot" "$RUNNER_TEMP/chess-football-review/run-v2-${phase,,}.png"
           done
+      - name: Extract four small XI fallback sprites from SHA-verified R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          export FOOTBALL_RUN_V2_PREVIEW_DIR="$RUNNER_TEMP/football-run-v2-r2"
+          export FOOTBALL_IDLE_R2_PREVIEW_DIR="$RUNNER_TEMP/football-idle-r2"
+          export FOOTBALL_XI_FALLBACK_EXPORT_DIR="$RUNNER_TEMP/football-xi-fallback"
+          mkdir -p "$FOOTBALL_XI_FALLBACK_EXPORT_DIR"
+          log="$RUNNER_TEMP/football-xi-fallback-export.log"
+          set +e
+          timeout 45s "$godot" --headless --path games/chess-football-godot --script res://tests/export_xi_fallback.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
+            echo '::error::Failed to derive trusted XI fallback PNGs'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_FALLBACK_EXPORTED actors=4' "$log"
+      - name: Upload generated XI fallback candidates for review
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-xi-fallback-candidates
+          path: ${{ runner.temp }}/football-xi-fallback/
+          if-no-files-found: error
+          retention-days: 3
       - name: Render verified keeper-catch R2 poses in actual Godot 3D
         if: steps.keeper_r2.outputs.enabled == 'true'
         shell: bash
