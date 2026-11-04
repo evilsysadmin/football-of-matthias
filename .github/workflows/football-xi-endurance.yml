@@ -1,0 +1,62 @@
+name: Football · XI match endurance
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: football-xi-endurance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  xi-endurance:
+    name: XI · 60s live match and restart recovery
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_RELEASE: '4.7.2-stable'
+      GODOT_EDITOR_SHA256: 'cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Restore pinned Godot editor
+        uses: actions/cache@v6
+        with:
+          path: .godot-ci/${{ env.GODOT_VERSION }}
+          key: chess-football-godot-${{ runner.os }}-${{ runner.arch }}-${{ env.GODOT_RELEASE }}
+      - name: Install pinned editor when cache misses
+        shell: bash
+        run: |
+          set -euo pipefail
+          directory="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION"
+          godot="$directory/godot"
+          if [[ ! -x "$godot" ]]; then
+            mkdir -p "$directory"
+            archive="$RUNNER_TEMP/football-godot-editor.zip"
+            curl -fL --retry 3 "https://github.com/godotengine/godot-builds/releases/download/$GODOT_RELEASE/Godot_v${GODOT_RELEASE}_linux.x86_64.zip" -o "$archive"
+            echo "$GODOT_EDITOR_SHA256  $archive" | sha256sum -c -
+            unzip -q "$archive" -d "$directory"
+            mv "$directory/Godot_v${GODOT_RELEASE}_linux.x86_64" "$godot"
+            chmod +x "$godot"
+          fi
+          "$godot" --version
+      - name: Materialize approved canonical assets
+        run: python3 scripts/materialize_canonical.py
+      - name: Run real 22-player simulation at 60 Hz
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-endurance.log"
+          set +e
+          timeout 110s "$godot" --headless --quit-after 12000 --path games/chess-football-godot --script res://tests/eleven_match_endurance_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI match physics or real restart recovery failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_ENDURANCE_60S_OK' "$log"
