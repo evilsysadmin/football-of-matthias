@@ -2211,7 +2211,14 @@ func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "") -> float
 func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D, proxy: Node3D) -> void:
 	var animation_name := String(sprite.animation)
 	var frame_count := maxi(1, sprite.sprite_frames.get_frame_count(sprite.animation))
-	var phase := TAU * float(sprite.frame) / float(frame_count)
+	# The visible 3D sprite changes texels on whole frames, but its secondary
+	# weight transfer must follow the sub-frame clock. Quantizing sway/bob to
+	# sprite.frame made each eight-pose run hitch at broadcast zoom.
+	var phase_frames: float = float(sprite.frame)
+	if _keeper_locomotion(sprite.animation):
+		var phases: Dictionary = keeper_visual_phases if player.role == "keeper" else outfield_visual_phases
+		phase_frames = float(phases.get(player.get_instance_id(), phase_frames))
+	var phase := TAU * phase_frames / float(frame_count)
 	var speed_ratio := clampf(player.velocity.length() / maxf(player.base_speed, 1.0), 0.0, 1.4)
 	var moving_weight := clampf(speed_ratio, 0.0, 1.0)
 	var bob := sin(phase) * 0.012
