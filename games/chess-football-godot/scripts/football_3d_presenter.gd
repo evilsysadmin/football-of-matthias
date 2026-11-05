@@ -1967,6 +1967,20 @@ func sync_presentation(delta: float, mode: String) -> void:
 			proxy.position = world_to_stage(player.global_position)
 			if player.visual != null:
 				var wanted_animation := StringName(player.visual.animation)
+				# XI's VISIBLE outfield quad must reflect actual ground motion.
+				# Some AI/support-player paths can leave the hidden 2D source on
+				# its idle frame while the 2D CharacterBody is already travelling.
+				# Derive locomotion from authoritative velocity/stamina, never
+				# from possession or hidden sprite playback. Preserve locked
+				# passes, shots, tackles and celebrations, as well as 5v5/keepers.
+				if (
+					match_node.match_team_size == 11
+					and player.role != "keeper"
+					and player.action_lock_seconds <= 0.0
+				):
+					wanted_animation = xi_outfield_motion_animation(
+						player.velocity, player.last_sprinting
+					)
 				# Keep locomotion animations in phase with the authoritative 2D actor.
 				# Non-locomotion actions preserve their established side-facing frames.
 				var run_view := ChessFootballRunDirection.view_for_velocity(
@@ -2218,6 +2232,17 @@ static func _keeper_locomotion(animation_name: StringName) -> bool:
 # outfield pose by actual displacement only. This supports future 12-pose
 # atlases without pretending that the current approved 8 poses are new art.
 # Keep 5v5, keeper clocks, match physics and every authored atlas untouched.
+# The XI raster is the body users see. Treat CharacterBody2D velocity as
+# the source of truth for its gait, even when its hidden 2D visual is stale.
+# Apply this only outside active action locks; the 5v5/keeper path is untouched.
+static func xi_outfield_motion_animation(
+	movement: Vector2, sprinting: bool
+) -> StringName:
+	if movement.length_squared() < 12.0 * 12.0:
+		return &"idle"
+	return &"sprint" if sprinting else &"run"
+
+
 static func xi_outfield_stride_advance(
 	travel_speed: float, delta: float, frame_count: int,
 	base_fps: float, sprinting: bool
