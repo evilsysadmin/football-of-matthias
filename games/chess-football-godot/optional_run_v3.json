@@ -1,0 +1,35 @@
+{
+  "version": 3,
+  "enabled": true,
+  "bucket": "football",
+  "prefix": "atlases/v3/",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v3",
+  "quality_contract": "football-run-5views-v3",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "columns": 12,
+  "rows": 5,
+  "views": [
+    "front",
+    "back",
+    "side",
+    "front_diagonal",
+    "back_diagonal"
+  ],
+  "fps": 18,
+  "entries": [
+    {
+      "kind": "fc_matthias",
+      "file": "fc_matthias_run_v3_clean.webp",
+      "sha256": "8208785adbda34a893c8445299c32a04714932feabcb8aa41ae39b8a1f9177af"
+    },
+    {
+      "kind": "real_enroque",
+      "file": "real_enroque_run_v3_clean.webp",
+      "sha256": "be73bb8fee9b1fa830ae7f405c533cb4e2fc7538c9fe248c65b0f9e63a655e01"
+    }
+  ],
+  "note": "Exact 12x5 lossless RGBA atlases. V2 remains the atomic fallback when V3 download, SHA, CORS or layout fails. 18 poses/sec preserves V2 cycle duration at 12 poses."
+}
