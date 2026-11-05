@@ -36,6 +36,24 @@ try{
   await page.screenshot({path:resolve(out,viewport.width+'-login.png')});
   await page.goto('http://127.0.0.1:'+server.address().port+'/');
   await page.getByRole('button',{name:/Modo mánager/}).waitFor();
+  await page.waitForFunction(() => {
+    const art=document.querySelector('.chess-football-entry__welcome-art');
+    return art?.complete && art.naturalWidth===1280;
+  });
+  assert.equal(await page.getByRole('heading',{name:'Football of Matthias'}).count(),1);
+  assert.equal(await page.getByText(/El vestuario/i).count(),0,'Retired vestuario label must not return');
+  assert.equal(await page.locator('.chess-football-entry__welcome-scene').count(),1);
+  const quick=page.getByRole('button',{name:/Partida rápida/});
+  const manager=page.getByRole('button',{name:/Modo mánager/});
+  const quickBox=await quick.boundingBox(),managerBox=await manager.boundingBox();
+  assert.ok(quickBox&&managerBox&&quickBox.width>=150&&managerBox.width>=150,'Both football modes must retain a usable hit area');
+  assert.ok(quickBox.x+quickBox.width<=managerBox.x,'Home actions must not overlap');
+  const quickLabelOpacity=await page.locator('.chess-football-entry__choice--quick strong').evaluate(el=>getComputedStyle(el).opacity);
+  assert.equal(quickLabelOpacity,viewport.width>700?'0':'1','Desktop baked art and mobile readable labels must not duplicate');
+  const transfer=page.locator('.football-transfer > summary');
+  await transfer.click();
+  assert.ok(await page.getByRole('button',{name:'Exportar carrera',exact:true}).isVisible(),'Transfer remains accessible under new art');
+  await transfer.click();
   await page.getByRole('button',{name:'Salir de ShadowOps ID',exact:true}).click({trial:true});
   await page.screenshot({path:resolve(out,viewport.width+'-welcome.png')});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
