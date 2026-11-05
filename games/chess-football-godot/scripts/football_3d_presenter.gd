@@ -2241,6 +2241,29 @@ static func xi_outfield_motion_animation(
 	return &"sprint" if sprinting else &"run"
 
 
+# Normal off-ball support movement is usually 60-85% of maximum pace.
+# The old 168/180 world-pixel gait covered multiple boot-lengths per loop,
+# making teammates move across the grass before the next foot plant.
+# Only the XI NON-CARRIER shortens that cycle; attackers with the ball,
+# goalkeepers and historical 5v5 keep their existing cadence and assets.
+const XI_OFFBALL_RUN_CYCLE_PX := 112.0
+const XI_OFFBALL_SPRINT_CYCLE_PX := 132.0
+
+
+static func xi_offball_stride_advance(
+	travel_speed: float, delta: float, frame_count: int,
+	base_fps: float, sprinting: bool
+) -> float:
+	if travel_speed <= 0.0 or delta <= 0.0 or frame_count < 1 or base_fps <= 0.0:
+		return 0.0
+	var cycle_px: float = (
+		XI_OFFBALL_SPRINT_CYCLE_PX if sprinting else XI_OFFBALL_RUN_CYCLE_PX
+	)
+	var fps: float = travel_speed * float(frame_count) / cycle_px
+	# Preserve each authored frame at normal browser refresh rates.
+	return delta * minf(fps, base_fps * 1.35)
+
+
 static func xi_outfield_stride_advance(
 	travel_speed: float, delta: float, frame_count: int,
 	base_fps: float, sprinting: bool
@@ -2289,11 +2312,23 @@ func _sync_visible_animation(
 		# A stationary actor must not run in place.
 		if player.velocity.length() >= 12.0:
 			if not is_keeper and match_node.match_team_size == 11:
-				phase += xi_outfield_stride_advance(
-					player.velocity.length(), delta, count,
-					frames.get_animation_speed(wanted),
-					String(wanted).begins_with("sprint")
+				var visible_sprinting: bool = String(wanted).begins_with("sprint")
+				var off_ball: bool = (
+					not player.has_ball and match_node.ball.carrier != player
 				)
+				# Shorter off-ball footstep distance means actual AI support runs
+				# visibly cycle through all the painted leg poses, rather than
+				# drifting across the grass with a slow, disconnected gait.
+				if off_ball:
+					phase += xi_offball_stride_advance(
+						player.velocity.length(), delta, count,
+						frames.get_animation_speed(wanted), visible_sprinting
+					)
+				else:
+					phase += xi_outfield_stride_advance(
+						player.velocity.length(), delta, count,
+						frames.get_animation_speed(wanted), visible_sprinting
+					)
 			else:
 				phase += advance * maxf(player.visual.speed_scale, 0.0)
 	elif String(wanted).begins_with("idle"):

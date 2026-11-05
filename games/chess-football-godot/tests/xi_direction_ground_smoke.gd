@@ -191,6 +191,20 @@ func _initialize() -> void:
 		/ run_advance, 1.5
 	))
 	assert(is_equal_approx(stage.xi_outfield_stride_advance(10000.0, 0.10, 8, 12.0, false), 1.62))
+	# The short off-ball cycle must advance each leg pose sooner at the
+	# cruising support speed used by real midfielders (70% effort).
+	var old_support: float = stage.xi_outfield_stride_advance(175.0, 0.1, 12, 18.0, false)
+	var new_support: float = stage.xi_offball_stride_advance(175.0, 0.1, 12, 18.0, false)
+	assert(new_support > old_support * 1.4)
+	assert(is_equal_approx(
+		new_support, 175.0 * 12.0 / stage.XI_OFFBALL_RUN_CYCLE_PX * 0.1
+	))
+	assert(stage.xi_offball_stride_advance(0.0, 0.1, 12, 18.0, false) == 0.0)
+	assert(stage.xi_offball_stride_advance(175.0, 0.0, 12, 18.0, false) == 0.0)
+	assert(stage.xi_offball_stride_advance(330.0, 0.1, 12, 22.5, true) >
+		stage.xi_outfield_stride_advance(330.0, 0.1, 12, 22.5, true))
+	assert(stage.xi_offball_stride_advance(10000.0, 0.1, 12, 18.0, false) <= 2.43)
+
 	var runner: Footballer = game.teams[0][2]
 	var runner_key: int = runner.get_instance_id()
 	var runner_sprite: AnimatedSprite3D = stage.player_sprites[runner_key]
@@ -208,7 +222,16 @@ func _initialize() -> void:
 	stage.outfield_visual_phases[runner_key] = 0.0
 	stage._sync_visible_animation(runner_key, runner, runner_sprite, &"run", 0.10)
 	var fast_phase: float = stage.outfield_visual_phases[runner_key]
-	assert(fast_phase > slow_phase * 3.0)
+	# A bounded high-speed frame clock saturates at 1.35× authored FPS.
+	# Pace ratings above the neutral 250 px/s should not be forced to
+	# exceed that cap just to satisfy the old >3.0 acceleration heuristic.
+	assert(fast_phase > slow_phase * 2.65)
+	assert(is_equal_approx(
+		fast_phase, stage.xi_offball_stride_advance(
+			runner.base_speed, 0.10, runner_sprite.sprite_frames.get_frame_count(&"run"),
+			runner_sprite.sprite_frames.get_animation_speed(&"run"), false
+		)
+	))
 	# Rendering cadence must not mutate physics or move any actor.
 	assert(is_equal_approx(runner.velocity.length(), runner.base_speed))
 	# 5v5 stays on the original Sprite3D renderer and has no XI quads.

@@ -102,8 +102,13 @@ func _initialize() -> void:
 			athlete.last_sprinting = false
 			athlete.visual.play(&"idle")
 			athlete.visual.pause()
+		var start_location: Vector2 = samples[0].global_position
 		for frame_id in range(3):
 			for tick in range(11):
+				# Real body displacement as well as active foot frames. The old
+				# three-frame capture animated mannequins standing in one tile.
+				for athlete in samples:
+					athlete.global_position += athlete.velocity / 60.0
 				stage.sync_presentation(1.0 / 60.0, "broadcast")
 			for _settle in range(3):
 				await process_frame
@@ -115,5 +120,79 @@ func _initialize() -> void:
 			print("FOOTBALL_XI_OFFBALL_CAPTURE_%d=%s" % [
 				frame_id, ProjectSettings.globalize_path(path)
 			])
+		assert(samples[0].global_position.distance_to(start_location) > 115.0,
+			"Real visual capture must move the athlete while legs animate")
+	# A distinct-colour 12-pose V3 club swap is validated on the ACTUAL
+	# off-ball AI pathway, not on a runner whose velocity was assigned by a
+	# test while he stood still. Every index must be rendered during normal
+	# support play, in both team materials, without skipping frames.
+	var atlas := Image.create(1536, 720, false, Image.FORMAT_RGBA8)
+	atlas.fill(Color.TRANSPARENT)
+	for row in range(5):
+		for frame_id in range(12):
+			var frame_color := Color.from_hsv(float(frame_id) / 12.0, 0.72, 0.87)
+			atlas.fill_rect(
+				Rect2i(frame_id * 128 + 28 + frame_id % 4, row * 144 + 7, 68, 128),
+				frame_color
+			)
+	var v3_textures: Array[Texture2D] = ChessFootballRunV3R2.frames_from_image(atlas)
+	assert(v3_textures.size() == 60)
+	for team_id in range(2):
+		stage._apply_verified_run_v3(v3_textures, team_id)
+		assert(stage._run_v3_r2_loaded.has(team_id))
+		var runner: Footballer = game.teams[team_id][6]
+		assert(runner != game.controlled and not runner.has_ball)
+		runner.action_lock_seconds = 0.0
+		runner.velocity = Vector2.ZERO
+		runner.last_sprinting = false
+		runner.global_position = game.match_pitch.get_center() + Vector2(
+			-650.0, -360.0 if team_id == 0 else 360.0
+		)
+		var origin: Vector2 = runner.global_position
+		var target: Vector2 = origin + Vector2(1200.0, 0.0)
+		var runner_key: int = runner.get_instance_id()
+		stage.outfield_visual_phases.erase(runner_key)
+		stage.outfield_visual_names.erase(runner_key)
+		var observed: Dictionary = {}
+		var last_index := -1
+		var travelled: float = 0.0
+		var advanced: float = 0.0
+		for tick in range(120):
+			# CharacterBody2D.move_and_slide() must run on a physics tick.
+			# The old synchronous SceneTree test advanced its visual clock
+			# but did not reliably move the actor's collision body.
+			await physics_frame
+			var before: Vector2 = runner.global_position
+			runner.move_ai(1.0 / 60.0, target, 0.70)
+			travelled += before.distance_to(runner.global_position)
+			stage.sync_presentation(1.0 / 60.0, "broadcast")
+			var sprite: AnimatedSprite3D = stage.player_sprites[runner_key]
+			var quad: MeshInstance3D = stage.xi_raster_meshes[runner_key]
+			var material: StandardMaterial3D = quad.material_override
+			assert(sprite.sprite_frames.get_frame_count(sprite.animation) == 12)
+			assert(String(sprite.animation).begins_with("run"))
+			var now_index: int = sprite.frame
+			if last_index >= 0:
+				assert((now_index - last_index + 12) % 12 <= 1,
+					"12-pose AI runner skipped a painted stride frame")
+			last_index = now_index
+			observed[now_index] = true
+			assert(material.albedo_texture ==
+				sprite.sprite_frames.get_frame_texture(sprite.animation, now_index),
+				"Visible QuadMesh is out of sync with the active V3 frame")
+			advanced += stage.xi_offball_stride_advance(
+				runner.velocity.length(), 1.0 / 60.0, 12,
+				sprite.sprite_frames.get_animation_speed(sprite.animation), false
+			)
+		print("FOOTBALL_XI_OFFBALL_REAL_TRAVEL team=%d turf=%.2f v=%.2f frames=%d" %
+			[team_id, travelled, runner.velocity.length(), observed.size()])
+		assert(travelled > 200.0 and travelled < 430.0,
+			"AI test must cover real, sustained grass displacement")
+		assert(observed.size() == 12,
+			"Moving off-ball V3 must render ALL twelve stride poses, not six")
+		assert(absf(advanced / 12.0 - travelled / stage.XI_OFFBALL_RUN_CYCLE_PX) < 0.22,
+			"Visible off-ball gait does not follow actual physical travel distance")
+		print("FOOTBALL_XI_OFFBALL_12_FRAME_SEQUENCE team=%d frames=%d travel=%.1f" %
+			[team_id, observed.size(), travelled])
 	print("FOOTBALL_XI_OFFBALL_GAIT_OK teams=2 noncarriers=4 poses=6 visual_source=velocity legacy_5v5=unchanged")
 	quit(0)
