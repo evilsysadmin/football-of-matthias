@@ -180,8 +180,8 @@ func _initialize() -> void:
 		comparison.blit_rect(after_crop, Rect2i(Vector2i.ZERO, CELL), Vector2i(CELL.x, 0))
 		var compare_path: String = "user://xi-v3-width-on-off-" + mode + ".png"
 		assert(comparison.save_png(compare_path) == OK)
-		print("FOOTBALL_XI_V3_WIDTH_RENDER_DELTA camera=%s before_scale=%.4f after_scale=%.4f changed_pixels=%d"
-			% [mode, before_scale_x, after_scale_x, changed_pixels])
+		print("FOOTBALL_XI_V3_WIDTH_RENDER_DELTA camera=%s changed_pixels=%d before_scale=%.4f after_scale=%.4f"
+			% [mode, changed_pixels, before_scale_x, after_scale_x])
 		print("FOOTBALL_XI_V3_WIDTH_CAPTURE_" + mode.to_upper() + "="
 			+ ProjectSettings.globalize_path(compare_path))
 		if changed_pixels <= 12:
