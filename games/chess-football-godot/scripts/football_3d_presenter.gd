@@ -1533,6 +1533,12 @@ func _build_xi_quad_bodies() -> void:
 			# tilts back with the broadcast camera and lifts the visible boots
 			# away from the real grass contact/shadow point on distant players.
 			material.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+			# Critical: Godot billboard shaders discard MeshInstance3D.scale
+			# unless KEEP_SCALE is enabled. Earlier per-view and depth corrections
+			# changed sprite/quad transforms but NOT the visible pixel silhouette.
+			# Keep the real authored scale in BOTH fixed-Y broadcast and full
+			# camera-facing tactical modes. The foot anchor already uses it.
+			material.billboard_keep_scale = true
 			material.cull_mode = BaseMaterial3D.CULL_DISABLED
 			# Prevent a distant, vertical raster body from sinking into turf
 			# when the full-pitch aerial camera intersects the field depth.
