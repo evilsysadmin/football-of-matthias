@@ -1967,12 +1967,9 @@ func sync_presentation(delta: float, mode: String) -> void:
 			proxy.position = world_to_stage(player.global_position)
 			if player.visual != null:
 				var wanted_animation := StringName(player.visual.animation)
-				# XI's VISIBLE outfield quad must reflect actual ground motion.
-				# Some AI/support-player paths can leave the hidden 2D source on
-				# its idle frame while the 2D CharacterBody is already travelling.
-				# Derive locomotion from authoritative velocity/stamina, never
-				# from possession or hidden sprite playback. Preserve locked
-				# passes, shots, tackles and celebrations, as well as 5v5/keepers.
+				# XI's VISIBLE off-ball raster must reflect physical movement even
+				# if the hidden 2D sprite briefly remains in an idle state. Keep
+				# possession/carry, locked actions, keeper and 5v5 rendering intact.
 				if (
 					match_node.match_team_size == 11
 					and player.role != "keeper"
@@ -2234,9 +2231,8 @@ static func _keeper_locomotion(animation_name: StringName) -> bool:
 # outfield pose by actual displacement only. This supports future 12-pose
 # atlases without pretending that the current approved 8 poses are new art.
 # Keep 5v5, keeper clocks, match physics and every authored atlas untouched.
-# The XI raster is the body users see. Treat CharacterBody2D velocity as
-# the source of truth for its gait, even when its hidden 2D visual is stale.
-# Apply this only outside active action locks; the 5v5/keeper path is untouched.
+# The XI raster must follow actual CharacterBody2D movement, rather than
+# relying on the hidden 2D animation state during support/AI transitions.
 static func xi_outfield_motion_animation(
 	movement: Vector2, sprinting: bool
 ) -> StringName:
@@ -2706,6 +2702,17 @@ static func xi_broadcast_lane_look_z(ball_spot: Vector2, pitch: Rect2) -> float:
 	)
 
 
+# Match play has no authored restart shift, so both positive (near) and
+# negative (far) lanes must control the lens. Preserve stronger special-shot
+# framing ONLY when a human restart actually requested it.
+static func xi_broadcast_target_look_z(lane_z: float, restart_z: float) -> float:
+	if is_equal_approx(restart_z, BROADCAST_BASE_LOOK_Z):
+		return lane_z
+	if restart_z > BROADCAST_BASE_LOOK_Z:
+		return maxf(restart_z, lane_z)
+	return minf(restart_z, lane_z)
+
+
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
 	if delta <= 0.0:
 		return 0.0
@@ -2812,10 +2819,7 @@ func _sync_camera(delta: float, mode: String) -> void:
 			var lane_z: float = xi_broadcast_lane_look_z(
 				match_node.ball.global_position, match_node.match_pitch
 			)
-			if restart_look_z >= BROADCAST_BASE_LOOK_Z:
-				restart_look_z = maxf(restart_look_z, lane_z)
-			else:
-				restart_look_z = minf(restart_look_z, lane_z)
+			restart_look_z = xi_broadcast_target_look_z(lane_z, restart_look_z)
 		if easing_corner_release:
 			restart_look_z = maxf(
 				restart_look_z,
