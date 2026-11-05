@@ -57,16 +57,27 @@ func _initialize() -> void:
 					stage.camera.global_transform.basis.y.normalized() if tactical
 					else Vector3.UP
 				)
-				var required_offset: Vector3 = (
-					stage.xi_tactical_foot_anchor_offset(
-						stage.camera, actual_frame, sprite.pixel_size, sprite.scale.y
-					) if tactical else Vector3.ZERO
+				var right_axis: Vector3 = stage.camera.global_transform.basis.x.normalized()
+				if not tactical:
+					right_axis.y = 0.0
+					right_axis = right_axis.normalized()
+				var required_offset: Vector3 = stage.xi_rotated_foot_anchor_offset(
+					stage.camera, actual_frame, sprite.pixel_size, sprite.scale.y,
+					quad.rotation.z, tactical
 				)
 				assert(quad.position.is_equal_approx(sprite.position + required_offset))
-				# Shader billboards rotate the mesh on GPU: to_global() alone
-				# cannot represent the tilted-camera boot point. Reconstruct
-				# it using the same camera-up vector as the shader.
-				var boot_world: Vector3 = quad.global_position - up_axis * foot_extent
+				if direction != Vector2.ZERO:
+					assert(absf(quad.rotation.z) >= deg_to_rad(2.0),
+						"Running XI pose must test a real tilted billboard")
+				else:
+					assert(absf(quad.rotation.z) < 0.001)
+				# The GPU rotates the billboard, so reconstruct its lowest opaque
+				# pixel using the same local lean and camera axes as the renderer.
+				# An unrotated foot estimate can hide a genuine floating runner.
+				var boot_world: Vector3 = (
+					quad.global_position
+					+ (right_axis * sin(quad.rotation.z) - up_axis * cos(quad.rotation.z)) * foot_extent
+				)
 				var shadow := stage.player_nodes[key].get_node("ContactShadow") as MeshInstance3D
 				# The far-side shadow must grow with the same compensation as
 				# its visible XI body; otherwise the player appears airborne.

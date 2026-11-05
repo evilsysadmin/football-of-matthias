@@ -1359,15 +1359,37 @@ func _add_goal_net_grid(
 # billboard there, but translate its centre so the actual boot pixel stays
 # on exactly the same ground point as the upright broadcast billboard.
 # All offsets are presentation-only and are recalculated each frame.
-static func xi_tactical_foot_anchor_offset(
-	view_camera: Camera3D, frame: Texture2D, pixel_size: float, scale_y: float
+# The frame's lowest opaque pixel is not directly beneath its centre when
+# the runner leans. Resolve that *rotated* boot pixel in billboard space,
+# then shift the quad so it stays at the same world-ground point as the
+# static contact shadow. FIXED_Y broadcast has a horizontal right axis;
+# camera-facing tactical uses the full camera up/right basis.
+# Caller supplies the FINAL perspective-corrected Y scale. No GPU readback.
+static func xi_rotated_foot_anchor_offset(
+	view_camera: Camera3D, frame: Texture2D, pixel_size: float,
+	scale_y: float, tilt_radians: float, tactical: bool
 ) -> Vector3:
 	if view_camera == null or frame == null:
 		return Vector3.ZERO
 	var foot_pixels: float = ChessFootballSpriteBank.frame_bottom(frame) - float(frame.get_height()) * 0.5
 	var foot_extent: float = foot_pixels * pixel_size * scale_y
-	var camera_up: Vector3 = view_camera.global_transform.basis.y.normalized()
-	return (camera_up - Vector3.UP) * foot_extent
+	var right_axis: Vector3 = view_camera.global_transform.basis.x.normalized()
+	var up_axis := Vector3.UP
+	if tactical:
+		up_axis = view_camera.global_transform.basis.y.normalized()
+	else:
+		# A fixed-Y billboard never pitches its local horizontal axis.
+		right_axis.y = 0.0
+		right_axis = right_axis.normalized()
+	var rotated_up := up_axis * cos(tilt_radians) - right_axis * sin(tilt_radians)
+	return (rotated_up - Vector3.UP) * foot_extent
+
+
+# Compatibility helper: zero-lean tactical stance uses the same anchor.
+static func xi_tactical_foot_anchor_offset(
+	view_camera: Camera3D, frame: Texture2D, pixel_size: float, scale_y: float
+) -> Vector3:
+	return xi_rotated_foot_anchor_offset(view_camera, frame, pixel_size, scale_y, 0.0, true)
 
 
 func _xi_frame_texture(_player: Footballer, driver: AnimatedSprite3D) -> Texture2D:
@@ -1934,9 +1956,12 @@ func sync_presentation(delta: float, mode: String) -> void:
 				)
 				if canvas.billboard_mode != wanted_billboard:
 					canvas.billboard_mode = wanted_billboard
-				var body_offset := (
-					xi_tactical_foot_anchor_offset(camera, current_frame, sprite.pixel_size, sprite.scale.y)
-					if tactical_billboard else Vector3.ZERO
+				# Keep the actual tilted boot pixel (not just the unrotated
+				# frame bottom) pinned above the contact decal at every depth.
+				# The sprite driver stays hidden in XI; only this quad is offset.
+				var body_offset := xi_rotated_foot_anchor_offset(
+					camera, current_frame, sprite.pixel_size, sprite.scale.y,
+					sprite.rotation.z, tactical_billboard
 				)
 				var wanted_position := sprite.position + body_offset
 				if xi_quad.position != wanted_position:
