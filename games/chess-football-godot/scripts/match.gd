@@ -932,6 +932,7 @@ func _update_ai(delta: float) -> void:
 
 			var target: Vector2 = player.home_position
 			var intensity: float = 0.66
+			var contesting_cover := false
 			if ball.carrier == null:
 				if player == pending_human_pass_receiver and player.team_id == 0:
 					# A pass aimed at this teammate should be received by *this*
@@ -959,8 +960,13 @@ func _update_ai(delta: float) -> void:
 					target = ball.carrier.global_position
 					intensity = _ai_adaptive_intensity(1.0)
 				elif player == cover:
+					contesting_cover = _ai_cpu_second_press_active(player, ball.carrier.global_position)
 					target = _ai_cover_target(player, ball.carrier.global_position)
-					intensity = _ai_adaptive_intensity(AI_COVER_INTENSITY)
+					# Normal+ must close a nearby 2v1 at actual sprint pace;
+					# positional cover and Easy keep the original lower effort.
+					intensity = _ai_adaptive_intensity(
+						0.98 if contesting_cover else AI_COVER_INTENSITY
+					)
 				else:
 					target = ChessFootballMath.clamp_to_pitch(
 						player.home_position.lerp(
@@ -971,12 +977,12 @@ func _update_ai(delta: float) -> void:
 					)
 					intensity = _ai_adaptive_intensity(AI_TEAM_PRESS_INTENSITY)
 
-			# Keep supporting teammates from targeting the same spot. The
-			# dribbler and lead defender retain direct control of their duels.
+			# Keep supporting teammates apart. A nearby CPU second presser
+			# must NOT be repelled away from the very duel it is contesting.
 			if (
 				ball.carrier != player
 				and player != pending_human_pass_receiver
-				and (team_has_ball or player != presser)
+				and (team_has_ball or (player != presser and not contesting_cover))
 			):
 				target = _ai_spaced_target(player, target)
 			# Only the opposing team changes effort; human teammates remain unchanged.
@@ -1104,6 +1110,16 @@ func _ai_spaced_target(player: Footballer, target: Vector2) -> Vector2:
 	)
 
 
+func _ai_cpu_second_press_active(player: Footballer, threat_position: Vector2) -> bool:
+	return (
+		player.team_id == 1
+		and quick_difficulty != "easy"
+		and ball.carrier != null
+		and ball.carrier.team_id == 0
+		and player.global_position.distance_to(threat_position) <= AI_CPU_SECOND_PRESS_ACTIVATION
+	)
+
+
 func _ai_cover_target(player: Footballer, threat_position: Vector2) -> Vector2:
 	var own_goal: Vector2 = ChessFootballMath.goal_center(1 - player.team_id, match_pitch)
 	var goal_side: Vector2 = own_goal - threat_position
@@ -1111,20 +1127,13 @@ func _ai_cover_target(player: Footballer, threat_position: Vector2) -> Vector2:
 		goal_side = Vector2.RIGHT if player.team_id == 1 else Vector2.LEFT
 	else:
 		goal_side = goal_side.normalized()
-	var cover_distance := AI_COVER_DISTANCE
-	if (
-		player.team_id == 1
-		and quick_difficulty != "easy"
-		and ball.carrier != null
-		and ball.carrier.team_id == 0
-		and player.global_position.distance_to(threat_position) <= AI_CPU_SECOND_PRESS_ACTIVATION
-	):
-		# The old 150-unit cushion left the second presser watching a duel
-		# from beyond legal standing-tackle reach. Close from the goal side
-		# only when already nearby; contact, fouls and stamina are unchanged.
-		cover_distance = AI_CPU_SECOND_PRESS_GOAL_SIDE
+	var contesting := _ai_cpu_second_press_active(player, threat_position)
+	var cover_distance := AI_CPU_SECOND_PRESS_GOAL_SIDE if contesting else AI_COVER_DISTANCE
 	var target: Vector2 = threat_position + goal_side * cover_distance
-	target.y = lerpf(target.y, player.home_position.y, 0.32)
+	# The previous 32% drift toward the home lane left a local cover runner
+	# several body lengths away from the ball even after stepping forward.
+	# Keep almost all lane discipline when NOT contesting, including Easy.
+	target.y = lerpf(target.y, player.home_position.y, 0.08 if contesting else 0.32)
 	return ChessFootballMath.clamp_to_pitch(target, match_pitch)
 
 func _reset_ai_adaptation() -> void:
