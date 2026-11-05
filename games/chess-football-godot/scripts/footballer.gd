@@ -59,6 +59,11 @@ const ACTION_CROSSFADE_SECONDS := 0.08
 var visual_crossfade_seconds: float = 0.0
 var visual_crossfade_total: float = 0.0
 var action_lock_seconds: float = 0.0
+# Visual duration is the original action's requested lock. The 11v11
+# presenter needs it to display every *authored* pass/shot pose even when
+# a quick kick releases before 8 frames at 10 FPS would naturally finish.
+# This never alters the authoritative action lock or ball release timing.
+var action_visual_duration_seconds: float = 0.0
 var tackle_cooldown_seconds: float = 0.0
 var tackle_recovery_seconds: float = 0.0
 var tackle_active_seconds: float = 0.0
@@ -292,6 +297,7 @@ func play_action(animation_name: String, duration: float = 0.78) -> void:
 	else:
 		_cancel_visual_crossfade()
 	action_lock_seconds = maxf(duration, 0.05)
+	action_visual_duration_seconds = action_lock_seconds
 	visual.speed_scale = 1.0
 	visual.play(animation_name)
 
