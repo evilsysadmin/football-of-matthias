@@ -57,6 +57,12 @@ const MAX_PERSPECTIVE_BODY_SCALE := 1.80
 # multiplier made *every* diagonal smaller than front/back and side.
 # Correct the width only. Do not modify any approved PNG.
 const DIAGONAL_WIDTH_COMPENSATION := 0.91
+# The lateral ball carrier is drawn in the approved lean 8-frame carry
+# sheet while diagonal movement uses the 12-pose V3 run sheets. Matching
+# their alpha *heights* did not match torso bulk. Trim ONLY V3 XI outfield
+# diagonals in billboard space, not the original art, 5v5, keepers or
+# fallback V2. This compounds with the older 0.91 compensation to 0.7826.
+const XI_V3_DIAGONAL_WIDTH_TRIM := 0.86
 const PLAYER_RUN_BOB := 0.050
 const PLAYER_SPRINT_BOB := 0.072
 # The approved keeper frames do move, but many poses are only a few pixels
@@ -2253,6 +2259,20 @@ static func view_compensation(animation_name: StringName) -> Vector2:
 	return Vector2.ONE
 
 
+static func xi_v3_diagonal_width_trim(
+	animation_name: StringName, team_size: int, is_keeper: bool, v3_loaded: bool
+) -> float:
+	if team_size != 11 or is_keeper or not v3_loaded:
+		return 1.0
+	var name := String(animation_name)
+	if name in [
+		"run_front_diagonal", "run_back_diagonal",
+		"sprint_front_diagonal", "sprint_back_diagonal",
+	]:
+		return XI_V3_DIAGONAL_WIDTH_TRIM
+	return 1.0
+
+
 static func perspective_body_scale(view_camera: Camera3D, stage_position: Vector3) -> float:
 	if view_camera == null or view_camera.projection != Camera3D.PROJECTION_PERSPECTIVE:
 		return 1.0
@@ -2509,7 +2529,15 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 	# One body-height reference for both teams, all views and all roles.
 	var canonical_scale := _canonical_body_scale(sprite, player.role, player.team_id)
 	var view_adjust := view_compensation(sprite.animation)
-	stretch_x *= canonical_scale * view_adjust.x
+	# The previous parity fix only corrected BODY HEIGHT. At equal pitch
+	# position V3 diagonals still read as much broader than the 8-frame
+	# lateral carrier. Keep height and boot/shadow anchor unchanged while
+	# correcting just the apparent torso width of these verified V3 views.
+	var v3_width_trim := xi_v3_diagonal_width_trim(
+		sprite.animation, match_node.match_team_size, player.role == "keeper",
+		_run_v3_r2_loaded.has(int(player.team_id))
+	)
+	stretch_x *= canonical_scale * view_adjust.x * v3_width_trim
 	stretch_y *= canonical_scale * view_adjust.y
 	# The 3D canvas is centered in the atlas cell. Keep the same clearance
 	# between boot soles and the pitch in broadcast AND tactical zoom, even
