@@ -148,8 +148,42 @@ func _initialize() -> void:
 	game.ball.flight_height = 0.0
 	assert(game._keeper_try_save(right_keeper))
 	assert(game.ball.carrier == right_keeper)
+	# Q is a browser-safe alternative to Tab. Both physical keys map to
+	# the same nearest-to-ball action, with no extra player-selection state.
+	var q_event := InputEventKey.new()
+	q_event.physical_keycode = KEY_Q
+	var tab_event := InputEventKey.new()
+	tab_event.physical_keycode = KEY_TAB
+	assert(InputMap.event_is_action(q_event, "change_player"))
+	assert(InputMap.event_is_action(tab_event, "change_player"))
+	# The keeper standing closest to a loose ball and a dismissed
+	# outfielder must not steal the manual switch from the eligible runner.
+	game.ball.release(Vector2.LEFT, 90.0)
+	game.ball.global_position = centre
+	game.ball.velocity = Vector2.ZERO
+	game.ball.flight_height = 0.0
+	game.teams[0][0].global_position = centre
+	for human in game.teams[0]:
+		if human.role != "keeper":
+			human.global_position = centre + Vector2(-800.0, 430.0)
+	var nearest_human: Footballer = game.teams[0][7]
+	nearest_human.global_position = centre + Vector2(70.0, 0.0)
+	var dismissed_human: Footballer = game.teams[0][8]
+	dismissed_human.global_position = centre + Vector2(15.0, 0.0)
+	dismissed_human.sent_off = true
+	assert(game._best_switch_candidate() == nearest_human)
+	game._select_player(game.teams[0][6])
+	game.pending_human_pass_receiver = game.teams[0][9]
+	Input.action_press("change_player")
+	game._handle_human(1.0 / 60.0)
+	Input.action_release("change_player")
+	assert(game.controlled == nearest_human)
+	assert(game.pending_human_pass_receiver == null)
+	# With actual human possession the switch favors the real ball carrier.
+	game.ball.attach_to(game.teams[0][6])
+	assert(game._best_switch_candidate() == game.teams[0][6])
 	# Legacy default math still points at the original nets.
 	assert(ChessFootballMath.goal_center(0).x == FIVE.end.x)
 	assert(ChessFootballMath.goal_center(1).x == FIVE.position.x)
-	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
+	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
 	quit(0)
