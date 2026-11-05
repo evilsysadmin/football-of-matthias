@@ -632,7 +632,7 @@ func _refresh_hud() -> void:
 		else:
 			help_label.text = "PENALTI RIVAL · W/S mueve al portero antes del disparo"
 	else:
-		help_label.text = "WASD/Flechas · Shift sprint · Mantén Space pase · Mantén Enter tiro · E regate/entrada · Shift+E segada · Tab cambia · V vista · ESC menú"
+		help_label.text = "WASD/Flechas · Shift sprint · Space pase · Enter tiro · E regate/entrada · Shift+E segada · Q/Tab jugador cercano · V vista · ESC menú"
 	var charge_visible := shot_charging or pass_charging
 	if shot_meter != null:
 		shot_meter.visible = charge_visible
@@ -665,7 +665,8 @@ func _handle_human(delta: float) -> void:
 		_cancel_pass_charge()
 
 	if Input.is_action_just_pressed("change_player"):
-		# A manual switch always overrides an automatic pass handoff.
+		# Q (and legacy Tab) immediately chooses the nearest eligible
+		# outfielder while defending, overriding delayed automatic handoffs.
 		pending_human_pass_receiver = null
 		_cancel_shot_charge()
 		_cancel_pass_charge()
@@ -2113,7 +2114,9 @@ func _best_switch_candidate() -> Footballer:
 		and not ball.carrier.sent_off
 	):
 		return ball.carrier
-	return _nearest_player_to_ball(0)
+	# Never pick an empty-handed keeper: the next physics tick would
+	# immediately restore an outfielder and make the manual switch vanish.
+	return _nearest_outfield_player_to_point(0, ball.global_position)
 
 func _nearest_player_to_ball(team_id: int) -> Footballer:
 	var best: Footballer = null
