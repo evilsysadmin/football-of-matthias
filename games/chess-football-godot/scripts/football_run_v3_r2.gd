@@ -32,12 +32,18 @@ static func sheet_meta(team_id: int) -> Dictionary:
 		return {}
 	if contract.get("cdn_base") != TRUSTED_ROOT.trim_suffix("/"):
 		return {}
-	if contract.get("cell") != {"width": WIDTH, "height": HEIGHT}:
+	var cell: Variant = contract.get("cell", {})
+	if not cell is Dictionary or int(cell.get("width", 0)) != WIDTH or int(cell.get("height", 0)) != HEIGHT:
 		return {}
 	if int(contract.get("columns", 0)) != COLUMNS or int(contract.get("rows", 0)) != ROWS:
 		return {}
-	if contract.get("views") != ["front", "back", "side", "front_diagonal", "back_diagonal"]:
+	var views: Variant = contract.get("views", [])
+	if not views is Array or views.size() != ROWS:
 		return {}
+	var expected_views := ["front", "back", "side", "front_diagonal", "back_diagonal"]
+	for row in range(ROWS):
+		if String(views[row]) != expected_views[row]:
+			return {}
 	if float(contract.get("fps", 0.0)) != FPS:
 		return {}
 	var entries: Variant = contract.get("entries", [])
@@ -48,9 +54,9 @@ static func sheet_meta(team_id: int) -> Dictionary:
 		if not entry is Dictionary:
 			return {}
 		var kind: String = String(KINDS[index])
-		if entry.get("kind") != kind or entry.get("file") != kind + "_run_v3_clean.webp":
+		if String(entry.get("kind", "")) != kind or String(entry.get("file", "")) != kind + "_run_v3_clean.webp":
 			return {}
-		if entry.get("sha256") != EXPECTED_SHA[index]:
+		if String(entry.get("sha256", "")) != String(EXPECTED_SHA[index]):
 			return {}
 	var file_name: String = String(KINDS[team_id]) + "_run_v3_clean.webp"
 	var meta := {
