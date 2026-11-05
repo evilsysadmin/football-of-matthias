@@ -62,7 +62,7 @@ try{
   assert.equal(await page.getByRole('button',{name:/^Normal\b/}).getAttribute('aria-pressed'),'true');
   await page.getByRole('button',{name:/^Experto\b/}).click();
   assert.equal(await page.getByRole('button',{name:/^Experto\b/}).getAttribute('aria-pressed'),'true');
-  assert.ok(await page.getByRole('button',{name:/Saltar al campo · Experto/}).isVisible());
+  assert.ok(await page.getByRole('button',{name:/Saltar al campo · 11v11 · Experto/}).isVisible());
   assert.equal(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'Difficulty briefing must fit mobile');
   await page.screenshot({path:resolve(out,viewport.width+'-quick-difficulty.png')});
   await page.getByRole('button',{name:/Volver a Football/}).click();
@@ -90,8 +90,8 @@ try{
   assert.equal(errors.length,0,errors.join('\n'));await page.close();
  }
  // This is a UI contract test, not a bypass or live ShadowOps-ID session.
- // Serve the exact standalone build through a simulated staging origin so
- // hostname-gated XI controls and iframe launch can be exercised end-to-end.
+ // Simulate staging to prove XI is the only public quick-match format,
+ // including refusal of old 5v5 handshakes on desktop and mobile.
  const stagingOrigin='https://staging.football.shadowops.dpdns.org';
  const runtimeIndex='https://assets.chess-studio.shadowops.dpdns.org/football-of-matthias/staging/releases/1234567890abcdef/index.html';
  for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
@@ -117,9 +117,10 @@ try{
   });
   // A tiny fake exported iframe tests the parent/ready contract. The actual
   // Godot WASM and its 22 real actors are separately checked in real-web CI.
+  let legacyHandshake=false;
   await page.route('https://assets.chess-studio.shadowops.dpdns.org/**',route=>route.fulfill({
    status:200,contentType:'text/html',
-   body:'<!doctype html><title>Godot handshake fixture</title><script>parent.postMessage({source:"chess-football-godot",type:"ready",team_size:location.hash.includes("football-team-size=11")?11:5},"*")</script>',
+   body:'<!doctype html><title>Godot handshake fixture</title><script>parent.postMessage({source:"chess-football-godot",type:"ready",team_size:'+(legacyHandshake?5:11)+'},"*")</script>',
   }));
   await page.route('https://id-staging.shadowops.dpdns.org/**',route=>route.fulfill({
    status:401,headers:{'Access-Control-Allow-Origin':stagingOrigin,'Access-Control-Allow-Credentials':'true','Content-Type':'application/json'},body:'{}',
@@ -127,14 +128,12 @@ try{
   await page.goto(stagingOrigin+'/');
   await page.getByRole('button',{name:/Partida rápida/}).click();
   await page.getByRole('heading',{name:'Elige a tu rival'}).waitFor();
-  assert.equal(await page.locator('.chess-football-entry__quick-team-size').count(),2);
-  assert.equal(await page.getByRole('button',{name:'5v5 · Clásico'}).getAttribute('aria-pressed'),'true','5v5 must remain default');
-  await page.getByRole('button',{name:'11v11 · En pruebas'}).click();
+  assert.equal(await page.locator('.chess-football-entry__quick-team-size').count(),0,'no 5v5/11v11 selector');
+  assert.ok(await page.getByText('11 contra 11 · Campo completo · Dos equipos de once futbolistas.').isVisible());
   await page.getByRole('button',{name:/^Difícil\b/}).click();
-  assert.equal(await page.getByRole('button',{name:'11v11 · En pruebas'}).getAttribute('aria-pressed'),'true');
   assert.ok(await page.getByRole('button',{name:'Saltar al campo · 11v11 · Difícil'}).isVisible());
-  assert.ok(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),'XI selector must not overflow viewport');
-  await page.screenshot({path:resolve(out,viewport.width+'-staging-xi-selector.png')});
+  assert.ok(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),'XI-only setup must not overflow viewport');
+  await page.screenshot({path:resolve(out,viewport.width+'-staging-xi-setup.png')});
   await page.getByRole('button',{name:'Saltar al campo · 11v11 · Difícil'}).click();
   const frame=page.locator('iframe.chess-football-godot-host__frame');
   await frame.waitFor();
@@ -144,19 +143,20 @@ try{
   assert.equal(await page.locator('.chess-football-godot-host__fallback').count(),0);
   await page.getByRole('button',{name:'Salir de Chess Football'}).click();
   await page.getByRole('button',{name:/Partida rápida/}).click();
-  await page.getByRole('button',{name:'5v5 · Clásico'}).click();
-  // Reapply the level on the second entry: the parent may remount the
-  // setup screen when the game exits, but the URL must still be exact.
   await page.getByRole('button',{name:/^Difícil\b/}).click();
-  assert.equal(await page.getByRole('button',{name:'5v5 · Clásico'}).getAttribute('aria-pressed'),'true');
-  await page.getByRole('button',{name:'Saltar al campo · Difícil'}).click();
-  const five=page.locator('iframe.chess-football-godot-host__frame');
-  await five.waitFor();
-  assert.equal(await five.getAttribute('src'),runtimeIndex+'#football-difficulty=hard');
+  assert.equal(await page.locator('.chess-football-entry__quick-team-size').count(),0);
+  // Stale Godot runtimes that claim five players per side cannot start.
+  legacyHandshake=true;
+  await page.getByRole('button',{name:'Saltar al campo · 11v11 · Difícil'}).click();
+  await page.getByRole('alert').getByRole('heading',{name:'Chess Football no ha arrancado'}).waitFor();
+  assert.equal(await page.locator('.chess-football-godot-host').getAttribute('data-runtime-ready'),'false');
+  legacyHandshake=false;
+  await page.getByRole('button',{name:'Reintentar'}).click();
   await page.waitForFunction(()=>document.querySelector('.chess-football-godot-host')?.dataset.runtimeReady==='true');
+  assert.equal(await page.locator('iframe.chess-football-godot-host__frame').getAttribute('src'),runtimeIndex+'#football-difficulty=hard&football-team-size=11');
   assert.equal(errors.length,0,errors.join('\n'));
   await page.close();
  }
- console.log('FOOTBALL_STAGING_XI_SELECTOR_BROWSER_OK sizes=5+11 viewports=1280+390');
+ console.log('FOOTBALL_STAGING_XI_ONLY_BROWSER_OK players=22 viewports=1280+390 legacy_5v5_rejected=1');
  console.log('FOOTBALL_STANDALONE_DESKTOP_MOBILE_OK');
 }finally{await browser.close();await new Promise(ok=>server.close(ok));}

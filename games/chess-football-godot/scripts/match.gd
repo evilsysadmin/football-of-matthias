@@ -4,10 +4,11 @@ const Presenter3D = preload("res://scripts/football_3d_presenter.gd")
 const FootballAudio = preload("res://scripts/football_audio.gd")
 const QuickDifficulty = preload("res://scripts/football_quick_difficulty.gd")
 const Formation = preload("res://scripts/football_match_formation.gd")
-# Default playable match stays 5v5. Native tests may set XI before tree entry.
-# XI is only exposed from the authenticated staging parent and its pinned
-# staging CDN runtime, plus the existing loopback-only Playwright probe.
-# No production XI or manager integration is enabled here.
+# Keep 5v5 as a legacy HEADLESS test fixture for old match contracts.
+# The public authenticated staging frontend now always launches 11v11 through
+# the pinned CDN release fragment. Do not expose 5v5 as a user-facing option.
+# A trusted staging referrer (or loopback Playwright probe) is required for XI;
+# no production launch or manager integration is enabled here.
 const TEAM_SIZE := 5
 var match_team_size: int = TEAM_SIZE
 var match_pitch: Rect2 = ChessFootballMath.PITCH_RECT

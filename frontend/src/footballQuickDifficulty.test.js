@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FOOTBALL_QUICK_DIFFICULTIES, normalizeFootballQuickDifficulty, footballQuickMatchUrl, footballStagingElevenEnabled } from './footballQuickDifficulty.js';
+import { FOOTBALL_QUICK_DIFFICULTIES, normalizeFootballQuickDifficulty, footballQuickMatchUrl } from './footballQuickDifficulty.js';
 
 describe('Football quick match levels', () => {
   it('offers exactly four stable levels and normal fallbacks', () => {
@@ -8,27 +8,25 @@ describe('Football quick match levels', () => {
     expect(normalizeFootballQuickDifficulty('invalid')).toBe('normal');
     expect(normalizeFootballQuickDifficulty(null)).toBe('normal');
   });
-  it('keeps the immutable runtime release URL intact and passes a validated fragment', () => {
-    const origin = 'https://assets.chess-studio.shadowops.dpdns.org/football-of-matthias/staging/releases/1234567890abcdef/index.html';
-    for (const {id} of FOOTBALL_QUICK_DIFFICULTIES) {
-      const resolved = new URL(footballQuickMatchUrl(origin,id));
-      expect(resolved.origin+resolved.pathname).toBe(origin);
+  const release = 'https://assets.chess-studio.shadowops.dpdns.org/football-of-matthias/staging/releases/1234567890abcdef/index.html';
+
+  it('always boots the full XI for all difficulties on the immutable staging release', () => {
+    for (const { id } of FOOTBALL_QUICK_DIFFICULTIES) {
+      const resolved = new URL(footballQuickMatchUrl(release, id));
+      expect(resolved.origin + resolved.pathname).toBe(release);
       expect(resolved.search).toBe('');
-      expect(resolved.hash).toBe('#football-difficulty='+id);
+      expect(resolved.hash).toBe('#football-difficulty=' + id + '&football-team-size=11');
     }
-    expect(footballQuickMatchUrl(origin,'expert#foo')).toBe(origin+'#football-difficulty=normal');
+    expect(footballQuickMatchUrl(release)).toBe(release + '#football-difficulty=normal&football-team-size=11');
+    expect(footballQuickMatchUrl(release, 'expert#foo')).toBe(release + '#football-difficulty=normal&football-team-size=11');
     expect(footballQuickMatchUrl('', 'expert')).toBe('');
   });
-  it('restricts the 11v11 launch to staging and keeps the CPU difficulty intact', () => {
-    const release = 'https://assets.chess-studio.shadowops.dpdns.org/football-of-matthias/staging/releases/1234567890abcdef/index.html';
-    expect(footballStagingElevenEnabled('staging.football.shadowops.dpdns.org')).toBe(true);
-    expect(footballStagingElevenEnabled('football.shadowops.dpdns.org')).toBe(false);
-    expect(footballStagingElevenEnabled('staging.football.shadowops.dpdns.org.evil.tld')).toBe(false);
-    expect(footballQuickMatchUrl(release, 'hard', 11)).toBe(release+'#football-difficulty=hard&football-team-size=11');
-    expect(footballQuickMatchUrl(release, 'hard', 5)).toBe(release+'#football-difficulty=hard');
-    expect(footballQuickMatchUrl(release, 'hard', '11')).toBe(release+'#football-difficulty=hard');
+
+  it('has no public 5v5 option and never enables XI on foreign or untrusted runtime URLs', () => {
+    // A stale third argument cannot revive the former 5-a-side picker.
+    expect(footballQuickMatchUrl(release, 'hard', 5)).toBe(release + '#football-difficulty=hard&football-team-size=11');
     const outside = 'https://assets.chess-studio.shadowops.dpdns.org/football-of-matthias/production/releases/1234567890abcdef/index.html';
-    expect(footballQuickMatchUrl(outside,'expert',11)).toBe(outside+'#football-difficulty=expert');
-    expect(footballQuickMatchUrl('https://example.org/foo.html','easy',11)).toBe('https://example.org/foo.html#football-difficulty=easy');
+    expect(footballQuickMatchUrl(outside, 'expert')).toBe(outside + '#football-difficulty=expert');
+    expect(footballQuickMatchUrl('https://example.org/foo.html', 'easy')).toBe('https://example.org/foo.html#football-difficulty=easy');
   });
 });
