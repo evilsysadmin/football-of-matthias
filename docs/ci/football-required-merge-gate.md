@@ -51,3 +51,30 @@ Estas instrucciones complementan
 **No afirmar protección automática del branch** donde no existe. La
 incidencia histórica #5320 motivó el workflow, pero la preferencia actual
 es calidad operacional documentada y no aumentar las condiciones del ruleset.
+
+## Wake-up inmediato del staging (sin saltarse la admisión)
+
+En cada `push` a `main`, **después** de superar `Football · required visual gate`,
+el job `notify_staging` solicita por API una ejecución de
+`evilsysadmin/shadowops-infra/.github/workflows/football-pages-staging.yml`.
+El disparo no publica directamente desde Football: Infra exige además que el
+workflow independiente XI esté verde, comprueba el SHA exacto de `main`,
+el ZIP y sus hashes, los límites R2 y el gate de ShadowOps ID antes de
+publicar. La ejecución se serializa con el resto de releases de Infra.
+
+**Configuración una sola vez:** guardar como secret de Actions del repositorio
+`evilsysadmin/football-of-matthias` un token GitHub de acceso específico
+`FOOTBALL_INFRA_DISPATCH_TOKEN`. Debe ser un fine-grained personal access
+token limitado exclusivamente a `evilsysadmin/shadowops-infra`, con
+`Actions: Read and write` (y el permiso implícito `Metadata: Read`).
+No conceder Contents write, ni introducir tokens de Cloudflare/R2 ni
+permisos cloud en el repositorio Football. Rotar/revocar el token como una
+credencial de automatización.
+
+La notificación es **best effort**: si el secret falta, está revocado o la API
+está temporalmente caída, el job deja un warning y devuelve éxito, de forma
+que el workflow de origen pueda seguir siendo admitido por el reconciliador
+programado de Infra. Este respaldo sigue ejecutándose en los minutos
+`:13` y `:43`. Nunca interpretar `FOOTBALL_STAGING_WAKEUP_REQUESTED` como
+prueba de despliegue: el recibo real sigue siendo
+`FOOTBALL_STAGING_PUBLIC_VERIFIED source_sha=<sha>` desde Infra.
