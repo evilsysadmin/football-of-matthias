@@ -2166,9 +2166,17 @@ static func ball_roll_axis(velocity: Vector2) -> Vector3:
 
 
 func _sync_ball_visual_roll(delta: float) -> void:
-	if ball_node == null or delta <= 0.0 or match_node.ball.carrier != null:
+	if ball_node == null or delta <= 0.0:
 		return
 	var velocity: Vector2 = match_node.ball.velocity
+	if match_node.ball.carrier != null:
+		var owner: Footballer = match_node.ball.carrier
+		# XI carries are rolling ground touches, not a stationary ball
+		# magnetically following the boots. Keep held keeper balls and
+		# historical five-a-side rendering exactly as before.
+		if owner.match_pitch != FootballMatchFormation.ELEVEN_PITCH_RECT or owner.role == "keeper":
+			return
+		velocity = owner.velocity
 	var axis := ball_roll_axis(velocity)
 	if axis == Vector3.ZERO:
 		return

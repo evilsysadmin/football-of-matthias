@@ -90,6 +90,7 @@ const AI_COVER_DISTANCE := 150.0
 # Only the CPU's nearby second defender may step up from positional cover to
 # a legal contest. Easy and the human-side support shape remain untouched.
 const AI_CPU_SECOND_PRESS_ACTIVATION := 240.0
+const AI_XI_SECOND_PRESS_ACTIVATION := 320.0
 const AI_CPU_SECOND_PRESS_GOAL_SIDE := 58.0
 # Forecast only a short, bounded stretch of a *ground* rebound. Keep the
 # presser and second defender in their existing roles; nobody teleports.
@@ -977,7 +978,7 @@ func _update_ai(delta: float) -> void:
 					intensity = _ai_adaptive_intensity(0.83)
 			else:
 				if player == presser:
-					target = ball.carrier.global_position
+					target = _ai_press_target(player, ball.carrier)
 					intensity = _ai_adaptive_intensity(1.0)
 				elif player == cover:
 					contesting_cover = _ai_cpu_second_press_active(player, ball.carrier.global_position)
@@ -1026,6 +1027,26 @@ func _update_ai(delta: float) -> void:
 
 			if ball.carrier == player and team_id == 1 and _ai_decision_ready(player):
 				_ai_attack(player)
+
+# XI's nearest CPU defender runs toward a reachable interception point,
+# not the opponent's previous position. No teleport or artificial tackle.
+func _ai_press_target(presser: Footballer, owner: Footballer) -> Vector2:
+	if (
+		match_team_size != 11
+		or presser.team_id != 1
+		or owner.team_id != 0
+		or owner.velocity.length() < 30.0
+	):
+		return owner.global_position
+	var separation := presser.global_position.distance_to(owner.global_position)
+	var horizon := clampf(
+		separation / maxf(presser.base_speed, 1.0) * 0.20,
+		0.08,
+		0.40,
+	)
+	var lead: Vector2 = (owner.velocity * horizon).limit_length(130.0)
+	return ChessFootballMath.clamp_to_pitch(owner.global_position + lead, match_pitch)
+
 
 func _ai_loose_ball_pursuit_point() -> Vector2:
 	if ball.carrier != null:
@@ -1136,7 +1157,10 @@ func _ai_cpu_second_press_active(player: Footballer, threat_position: Vector2) -
 		and quick_difficulty != "easy"
 		and ball.carrier != null
 		and ball.carrier.team_id == 0
-		and player.global_position.distance_to(threat_position) <= AI_CPU_SECOND_PRESS_ACTIVATION
+		and player.global_position.distance_to(threat_position) <= (
+			AI_XI_SECOND_PRESS_ACTIVATION if match_team_size == 11
+			else AI_CPU_SECOND_PRESS_ACTIVATION
+		)
 	)
 
 

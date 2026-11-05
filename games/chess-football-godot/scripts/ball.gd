@@ -22,6 +22,13 @@ var spin_direction: float = 1.0
 var reclaim_block_player: Footballer = null
 var reclaim_block_seconds: float = 0.0
 const RECLAIM_BLOCK_SECONDS := 0.22
+# XI possession stays authoritative, but the ball rolls between successive
+# touches instead of being teleported to an identical boot offset every frame.
+const XI_TOUCH_STRIDE_DISTANCE := 88.0
+const XI_TOUCH_BASE_LEAD := 11.0
+const XI_TOUCH_PUSH_LEAD := 20.0
+const XI_TOUCH_FOLLOW_PER_SECOND := 22.0
+var xi_carry_distance: float = 0.0
 # On a glancing (non-clean) tackle, the tackler must not magnetically
 # reclaim the deflection in the same frame. Other nearby players stay eligible.
 var contact_reclaim_block_player: Footballer = null
@@ -38,6 +45,7 @@ func attach_to(player: Footballer) -> void:
 		carrier.has_ball = false
 		carrier.queue_redraw()
 	carrier = player
+	xi_carry_distance = 0.0
 	last_touch_team_id = player.team_id
 	velocity = Vector2.ZERO
 	flight_height = 0.0
@@ -78,10 +86,44 @@ func tick_ball(delta: float) -> void:
 	if contact_reclaim_block_seconds <= 0.0:
 		contact_reclaim_block_player = null
 	if carrier != null:
-		global_position = carrier.global_position + carrier.ball_anchor()
+		var destination: Vector2 = carrier.global_position + carrier.ball_anchor()
+		if (
+			carrier.match_pitch == FootballMatchFormation.ELEVEN_PITCH_RECT
+			and carrier.role != "keeper"
+		):
+			var run_speed := carrier.velocity.length()
+			if run_speed > 36.0:
+				xi_carry_distance += run_speed * maxf(delta, 0.0)
+				var stride_phase := fposmod(
+					xi_carry_distance / XI_TOUCH_STRIDE_DISTANCE, 1.0
+				)
+				var forward: Vector2 = (
+					carrier.dribble_direction
+					if carrier.dribble_active()
+					else carrier.velocity.normalized()
+				)
+				var lead := XI_TOUCH_BASE_LEAD + XI_TOUCH_PUSH_LEAD * sin(PI * stride_phase)
+				destination += forward * lead
+			# A short follow-through gives the ball its own pace on turns.
+			# Zero-delta debug/restart positioning must remain deterministic.
+			var follow := clampf(delta * XI_TOUCH_FOLLOW_PER_SECOND, 0.0, 1.0)
+			if delta <= 0.0:
+				follow = 1.0
+			var previous: Vector2 = global_position
+			global_position = global_position.lerp(destination, follow)
+			# The carrier never loses possession to interpolation: cap the
+			# offset so sharp turns cannot strand a protected ball behind.
+			var offset: Vector2 = global_position - carrier.global_position
+			global_position = carrier.global_position + offset.limit_length(84.0)
+			if run_speed > 36.0 and delta > 0.0:
+				var travelled := global_position.distance_to(previous)
+				rotation += travelled * 0.012 * (-1.0 if carrier.velocity.x < 0.0 else 1.0)
+		else:
+			# Goalkeeper and historical five-a-side physics are unchanged.
+			global_position = destination
+			rotation = 0.0
 		flight_height = 0.0
 		vertical_velocity = 0.0
-		rotation = 0.0
 		return
 
 	if flight_height > 0.0 or vertical_velocity > 0.0:
