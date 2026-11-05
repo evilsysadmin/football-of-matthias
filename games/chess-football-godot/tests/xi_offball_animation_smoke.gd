@@ -110,8 +110,6 @@ func _initialize() -> void:
 				for athlete in samples:
 					athlete.global_position += athlete.velocity / 60.0
 				stage.sync_presentation(1.0 / 60.0, "broadcast")
-		assert(samples[0].global_position.distance_to(start_location) > 115.0,
-			"Real visual capture must move the athlete while legs animate")
 			for _settle in range(3):
 				await process_frame
 				await RenderingServer.frame_post_draw
@@ -122,6 +120,8 @@ func _initialize() -> void:
 			print("FOOTBALL_XI_OFFBALL_CAPTURE_%d=%s" % [
 				frame_id, ProjectSettings.globalize_path(path)
 			])
+		assert(samples[0].global_position.distance_to(start_location) > 115.0,
+			"Real visual capture must move the athlete while legs animate")
 	# A distinct-colour 12-pose V3 club swap is validated on the ACTUAL
 	# off-ball AI pathway, not on a runner whose velocity was assigned by a
 	# test while he stood still. Every index must be rendered during normal
