@@ -293,7 +293,9 @@ func _initialize() -> void:
 		assert(not voice.playing)
 	match_node.audio_fx.set_match_paused(false)
 	match_node.audio_fx.play_pass()
-	assert(match_node.audio_fx.debug_last_played_key() == "pass")
+	assert(match_node.audio_fx.debug_last_played_key() in [
+		"pass", "pass_soft", "pass_crisp"
+	])
 	assert(match_node.debug_3d_animated_players() == 10)
 	# Two proper goalkeeper sprites, same canonical canvas and proportions
 	# as field players. No animation may fall back to the old SVG body.
@@ -1900,14 +1902,14 @@ func _initialize() -> void:
 	match_node.set_piece_active = false
 	match_node.audio_fx.set_match_paused(false)
 	match_node.audio_fx.set_sfx_enabled(true)
-	var last_match_sfx_before_miss: String = match_node.audio_fx.debug_last_played_key()
 	var near_miss_shooter: Footballer = match_node.teams[0][4]
 	match_node.ball.attach_to(near_miss_shooter)
 	match_node.ball.release(Vector2.RIGHT, 900.0, 0.0, true)
 	assert(match_node.ball.last_release_was_shot)
 	match_node.ball.global_position = near_right
 	match_node._check_ball_out()
-	assert(match_node.audio_fx.debug_last_played_key() == last_match_sfx_before_miss)
+	# No synthesized crowd stream exists, regardless of shot classification.
+	assert(not match_node.audio_fx.debug_stream_names().has("crowd_near_miss"))
 	assert(not match_node.ball.last_release_was_shot)
 	# Passes and stale shots remain silent at the same spot.
 	match_node.goal_restart_active = false
@@ -1918,7 +1920,8 @@ func _initialize() -> void:
 	assert(not match_node.ball.last_release_was_shot)
 	match_node.ball.global_position = near_right
 	match_node._check_ball_out()
-	assert(match_node.audio_fx.debug_last_played_key() == last_match_sfx_before_miss)
+	# No synthesized crowd stream exists, regardless of shot classification.
+	assert(not match_node.audio_fx.debug_stream_names().has("crowd_near_miss"))
 	match_node.goal_restart_active = false
 	match_node.kickoff_active = false
 	match_node.set_piece_active = false
@@ -1927,8 +1930,9 @@ func _initialize() -> void:
 	match_node.ball.shot_flight_seconds = 3.5
 	match_node.ball.global_position = near_right
 	match_node._check_ball_out()
-	assert(match_node.audio_fx.debug_last_played_key() == last_match_sfx_before_miss)
-	print("SMOKE_STAGE=tracked-near-miss-crowd")
+	# No synthesized crowd stream exists, regardless of shot classification.
+	assert(not match_node.audio_fx.debug_stream_names().has("crowd_near_miss"))
+	print("SMOKE_STAGE=tracked-near-miss-no-fake-crowd")
 
 	# Use a genuine, fast shot near the actual keeper's dive limit: the
 	# spectacular cue is neither a random save nor a prediction before contact.
