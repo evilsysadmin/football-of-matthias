@@ -138,13 +138,21 @@ func _initialize() -> void:
 		stage._sync_camera(10.0, mode)
 		stage._run_v3_r2_loaded.erase(0)
 		stage.sync_presentation(0.0, mode)
-		await process_frame
-		await RenderingServer.frame_post_draw
+		var before_scale_x: float = stage.player_sprites[runner_key].scale.x
+		# Give the software renderer several draw submissions after each
+		# state switch; a single frame_post_draw can return its prior buffer.
+		for _pass in range(3):
+			await process_frame
+			await RenderingServer.frame_post_draw
 		var without_trim: Image = game.get_viewport().get_texture().get_image()
 		stage._run_v3_r2_loaded[0] = true
 		stage.sync_presentation(0.0, mode)
-		await process_frame
-		await RenderingServer.frame_post_draw
+		var after_scale_x: float = stage.player_sprites[runner_key].scale.x
+		assert(after_scale_x < before_scale_x * 0.90,
+			"XI diagonal width trim did not change the real 3D sprite scale")
+		for _pass in range(3):
+			await process_frame
+			await RenderingServer.frame_post_draw
 		var with_trim: Image = game.get_viewport().get_texture().get_image()
 		assert(without_trim != null and with_trim != null)
 		var screen_center: Vector2 = stage.camera.unproject_position(
@@ -167,17 +175,19 @@ func _initialize() -> void:
 				)
 				if difference > 0.24:
 					changed_pixels += 1
-		assert(changed_pixels > 12,
-			"V3 width compensation changed transforms but not real rendered pixels")
 		var comparison := Image.create(CELL.x * 2, CELL.y, false, Image.FORMAT_RGBA8)
 		comparison.blit_rect(before_crop, Rect2i(Vector2i.ZERO, CELL), Vector2i.ZERO)
 		comparison.blit_rect(after_crop, Rect2i(Vector2i.ZERO, CELL), Vector2i(CELL.x, 0))
 		var compare_path: String = "user://xi-v3-width-on-off-" + mode + ".png"
 		assert(comparison.save_png(compare_path) == OK)
-		print("FOOTBALL_XI_V3_WIDTH_RENDER_DELTA camera=%s changed_pixels=%d"
-			% [mode, changed_pixels])
+		print("FOOTBALL_XI_V3_WIDTH_RENDER_DELTA camera=%s before_scale=%.4f after_scale=%.4f changed_pixels=%d"
+			% [mode, before_scale_x, after_scale_x, changed_pixels])
 		print("FOOTBALL_XI_V3_WIDTH_CAPTURE_" + mode.to_upper() + "="
 			+ ProjectSettings.globalize_path(compare_path))
+		if changed_pixels <= 12:
+			printerr("V3 width compensation changed transforms but not actual rendered pixels")
+			quit(1)
+			return
 		game.ball.release(Vector2.RIGHT, 0.0)
 		runner.global_position = Vector2(-9999.0, -9999.0)
 	assert(game.score == scores)
