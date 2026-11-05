@@ -67,8 +67,16 @@ func _initialize() -> void:
 				)
 				assert(quad.position.is_equal_approx(sprite.position + required_offset))
 				if direction != Vector2.ZERO:
-					assert(absf(quad.rotation.z) >= deg_to_rad(2.0),
-						"Running XI pose must test a real tilted billboard")
+					# At the far touchline a deliberately damped lean must remain
+					# nonzero; requiring the old full 2° there rejected the fix.
+					var body_depth: float = stage.perspective_body_scale(
+						stage.camera, stage.player_nodes[key].global_position
+					)
+					var min_lean := deg_to_rad(
+						2.0 * stage.xi_distant_stride_weight(body_depth)
+					)
+					assert(absf(quad.rotation.z) >= min_lean,
+						"Running XI pose must retain a depth-calibrated tilted billboard")
 				else:
 					assert(absf(quad.rotation.z) < 0.001)
 				# The GPU rotates the billboard, so reconstruct its lowest opaque
@@ -117,9 +125,53 @@ func _initialize() -> void:
 	).scale.x
 	assert(far_body_scale > near_body_scale)
 	assert(far_shadow_scale > near_shadow_scale)
-	assert(is_equal_approx(
-		far_shadow_scale / near_shadow_scale, far_body_scale / near_body_scale
-	))
+	# Only additional synthetic motion fades with distance. Both runners
+	# keep their approved atlas, identical locomotion phase and actual pace.
+	assert(is_equal_approx(stage.xi_distant_stride_weight(0.80), 1.0))
+	assert(is_equal_approx(stage.xi_distant_stride_weight(1.00), 1.0))
+	assert(stage.xi_distant_stride_weight(1.25) < 1.0)
+	assert(is_equal_approx(stage.xi_distant_stride_weight(1.80), 0.35))
+	var far_weight: float = stage.xi_distant_stride_weight(far_shadow_scale)
+	var near_weight: float = stage.xi_distant_stride_weight(near_shadow_scale)
+	assert(far_weight < near_weight)
+	# Fix the sub-frame phase and hold the same runner/velocity at both
+	# depth extremes; the projected lean must be milder on the far side.
+	winger.global_position = Vector2(center_x, game.match_pitch.position.y + 110.0)
+	stage.sync_presentation(0.0, "broadcast")
+	stage.outfield_visual_phases[winger_key] = 1.50
+	stage.sync_presentation(0.0, "broadcast")
+	var far_sprite: AnimatedSprite3D = stage.player_sprites[winger_key]
+	var far_lean: float = absf(far_sprite.rotation.z)
+	winger.global_position = Vector2(center_x, game.match_pitch.end.y - 110.0)
+	stage.sync_presentation(0.0, "broadcast")
+	var near_sprite: AnimatedSprite3D = stage.player_sprites[winger_key]
+	var near_lean: float = absf(near_sprite.rotation.z)
+	assert(far_lean < near_lean)
+	# Existing tilted-boot anchoring must remain true at BOTH depth extremes.
+	for point in [
+		Vector2(center_x, game.match_pitch.position.y + 110.0),
+		Vector2(center_x, game.match_pitch.end.y - 110.0),
+	]:
+		winger.global_position = point
+		stage.sync_presentation(0.0, "broadcast")
+		var frame: Texture2D = stage._xi_frame_texture(winger, near_sprite)
+		var contact_y: float = (
+			ChessFootballSpriteBank.frame_bottom(frame) - float(frame.get_height()) * 0.5
+		) * near_sprite.pixel_size * near_sprite.scale.y
+		var quad: MeshInstance3D = stage.xi_raster_meshes[winger_key]
+		var shadow: MeshInstance3D = stage.player_nodes[winger_key].get_node("ContactShadow")
+		var boot_world: Vector3 = (
+			quad.global_position
+			+ (Vector3.RIGHT * sin(quad.rotation.z) - Vector3.UP * cos(quad.rotation.z)) * contact_y
+		)
+		assert(absf(boot_world.y - shadow.global_position.y) < 0.050)
+
+	# The contact decal tracks camera perspective exactly; the raster's
+	# *additional* width squash now eases by depth (a few percent). Do not
+	# demand identical ratios from two deliberately different transforms.
+	var shadow_ratio: float = far_shadow_scale / near_shadow_scale
+	var body_ratio: float = far_body_scale / near_body_scale
+	assert(absf(body_ratio / shadow_ratio - 1.0) < 0.05)
 	# 5v5 stays on the original Sprite3D renderer and has no XI quads.
 	var small = scene.instantiate()
 	small.match_team_size = 5

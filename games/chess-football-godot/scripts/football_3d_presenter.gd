@@ -2161,6 +2161,17 @@ static func perspective_body_scale(view_camera: Camera3D, stage_position: Vector
 	)
 
 
+# Remote XI footballers occupy fewer screen pixels: dramatic synthetic body
+# sway, lean and squash can move the boot silhouette off its contact decal.
+# Smoothly reduce only the EXTRA procedural motion at far broadcast depth.
+# Never change the authored atlas, the perspective body-size correction, or
+# the 2D match movement; 5v5 keeps its existing appearance.
+static func xi_distant_stride_weight(depth_scale: float) -> float:
+	var remote: float = clampf((depth_scale - 1.0) / 0.55, 0.0, 1.0)
+	var eased: float = remote * remote * (3.0 - 2.0 * remote)
+	return lerpf(1.0, 0.35, eased)
+
+
 static func _animation_luminance(frames: SpriteFrames, name: StringName) -> float:
 	if not frames.has_animation(name):
 		return 0.0
@@ -2367,6 +2378,16 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 			or animation_name.begins_with("sprint_"))
 	):
 		bob = 0.0
+		# At the far touchline, procedural lean/sway made tiny bodies look
+		# detached even with an exact boot anchor and a matched shadow size.
+		# Dampen the extra movement BEFORE the approved body/view scales.
+		var stride_weight := xi_distant_stride_weight(
+			perspective_body_scale(camera, proxy.global_position)
+		)
+		lateral_sway *= stride_weight
+		tilt_degrees *= stride_weight
+		stretch_x = lerpf(1.0, stretch_x, stride_weight)
+		stretch_y = lerpf(1.0, stretch_y, stride_weight)
 
 	# One body-height reference for both teams, all views and all roles.
 	var canonical_scale := _canonical_body_scale(sprite, player.role)
