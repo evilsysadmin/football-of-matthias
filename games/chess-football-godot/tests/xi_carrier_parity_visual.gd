@@ -158,14 +158,21 @@ func _initialize() -> void:
 		var changed_pixels := 0
 		for cy in range(CELL.y):
 			for cx in range(CELL.x):
-				if before_crop.get_pixel(cx, cy).distance_to(after_crop.get_pixel(cx, cy)) > 0.08:
+				var old_color: Color = before_crop.get_pixel(cx, cy)
+				var new_color: Color = after_crop.get_pixel(cx, cy)
+				var difference: float = (
+					absf(old_color.r - new_color.r)
+					+ absf(old_color.g - new_color.g)
+					+ absf(old_color.b - new_color.b)
+				)
+				if difference > 0.24:
 					changed_pixels += 1
 		assert(changed_pixels > 12,
 			"V3 width compensation changed transforms but not real rendered pixels")
 		var comparison := Image.create(CELL.x * 2, CELL.y, false, Image.FORMAT_RGBA8)
 		comparison.blit_rect(before_crop, Rect2i(Vector2i.ZERO, CELL), Vector2i.ZERO)
 		comparison.blit_rect(after_crop, Rect2i(Vector2i.ZERO, CELL), Vector2i(CELL.x, 0))
-		var compare_path := "user://xi-v3-width-on-off-" + mode + ".png"
+		var compare_path: String = "user://xi-v3-width-on-off-" + mode + ".png"
 		assert(comparison.save_png(compare_path) == OK)
 		print("FOOTBALL_XI_V3_WIDTH_RENDER_DELTA camera=%s changed_pixels=%d"
 			% [mode, changed_pixels])
