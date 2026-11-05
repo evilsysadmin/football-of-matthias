@@ -72,6 +72,16 @@ const AI_DECISION_INTERVAL := 0.28
 const AI_SHOOT_DISTANCE := 650.0
 const AI_PRESSURE_RADIUS := 180.0
 const AI_FORWARD_PASS_GAIN := 145.0
+# XI possession: real ground balls lose speed to friction. Avoid 700-unit
+# 'passes' that physically stop in midfield, and use existing charge power
+# limits (the same 560..1180 range available to a human).
+const AI_XI_PASS_MIN_DISTANCE := 110.0
+const AI_XI_PASS_MAX_DISTANCE := 445.0
+const AI_XI_PASS_LANE_CLEARANCE := 74.0
+const AI_XI_PASS_RECEIVER_CLEARANCE := 105.0
+const AI_XI_PASS_FORWARD_GAIN := 85.0
+const AI_XI_PASS_PRESSURE_RADIUS := 230.0
+const AI_XI_PASS_RECEIVER_SECONDS := 2.0
 const AI_DRIBBLE_LOOKAHEAD := 290.0
 const AI_SUPPORT_FORWARD := 225.0
 const AI_TEAMMATE_SEPARATION_RADIUS := 130.0
@@ -186,6 +196,8 @@ var camera_hint_seconds: float = 4.5
 var presentation_3d: ChessFootball3DPresenter
 var audio_fx: ChessFootballAudio
 var ai_next_decision: Dictionary = {}
+var ai_intended_pass_receiver: Footballer = null
+var ai_intended_pass_until: float = 0.0
 # Cached only while the ball is loose; possession resets the assignments.
 var ai_primary_presser_cache: Array = [null, null]
 var ai_secondary_presser_cache: Array = [null, null]
@@ -922,6 +934,7 @@ func _update_ai(delta: float) -> void:
 		var loose_target: Vector2 = _ai_loose_ball_pursuit_point()
 		var presser: Footballer = _ai_primary_presser(team_id)
 		var cover: Footballer = _ai_secondary_presser(team_id, presser)
+		var pass_receiver: Footballer = _ai_live_pass_receiver() if team_id == 1 else null
 		for player in teams[team_id]:
 			if player.sent_off:
 				continue
@@ -943,6 +956,11 @@ func _update_ai(delta: float) -> void:
 						match_pitch
 					)
 					intensity = 1.0
+				elif player == pass_receiver:
+					# The chosen receiver meets the physical ground ball, but
+					# still has to reach it and win the normal first-touch duel.
+					target = loose_target
+					intensity = _ai_adaptive_intensity(1.0)
 				elif player == presser:
 					target = loose_target
 					intensity = _ai_adaptive_intensity(1.0)
@@ -1225,10 +1243,51 @@ func _ai_dribble_target(player: Footballer) -> Vector2:
 			target += escape * (pressure_radius - distance) * 0.9
 	return ChessFootballMath.clamp_to_pitch(target, match_pitch)
 
+func _ai_xi_support_rank(player: Footballer) -> int:
+	if (
+		match_team_size != 11
+		or player.team_id != 1
+		or ball.carrier == null
+		or ball.carrier.team_id != 1
+	):
+		return -1
+	var distance: float = player.global_position.distance_squared_to(ball.carrier.global_position)
+	var closer := 0
+	for teammate in teams[1]:
+		if (
+			teammate == player
+			or teammate == ball.carrier
+			or teammate.sent_off
+			or teammate.role == "keeper"
+		):
+			continue
+		var other_distance: float = teammate.global_position.distance_squared_to(ball.carrier.global_position)
+		if (
+			other_distance < distance - 0.01
+			or (absf(other_distance - distance) <= 0.01 and teammate.squad_index < player.squad_index)
+		):
+			closer += 1
+	return closer if closer < 2 else -1
+
+
 func _ai_support_target(player: Footballer) -> Vector2:
 	if ball.carrier == null:
 		return player.home_position
 	var forward: float = 1.0 if player.team_id == 0 else -1.0
+	# Exactly two nearby XI CPU teammates create actual short passing
+	# triangles (one ahead and one recycling behind). Everyone else keeps
+	# the existing 4-3-3 lanes; they must run, never teleport, into support.
+	var rank := _ai_xi_support_rank(player)
+	if rank >= 0:
+		var primary_side := 1.0 if player.home_position.y >= ball.carrier.global_position.y else -1.0
+		var side := primary_side if rank == 0 else -primary_side
+		return ChessFootballMath.clamp_to_pitch(
+			ball.carrier.global_position + Vector2(
+				forward * (175.0 if rank == 0 else -145.0),
+				side * 175.0,
+			),
+			match_pitch,
+		)
 	# Use distinct positional lanes rather than dragging all supporters into
 	# the dribbler's path. A wider field is only useful when the AI exploits it.
 	var lane_offset := 0.0
@@ -1494,6 +1553,42 @@ func _keeper_try_save(keeper: Footballer) -> bool:
 		_select_player(keeper)
 	return true
 
+func _ai_live_pass_receiver() -> Footballer:
+	if (
+		ai_intended_pass_receiver == null
+		or not is_instance_valid(ai_intended_pass_receiver)
+		or ai_intended_pass_receiver.sent_off
+		or match_seconds > ai_intended_pass_until
+		or ball.carrier != null
+	):
+		ai_intended_pass_receiver = null
+		return null
+	return ai_intended_pass_receiver
+
+
+func _ai_xi_pass_lane_clear(passer: Footballer, receiver: Footballer) -> bool:
+	var segment: Vector2 = receiver.global_position - passer.global_position
+	var length_sq: float = segment.length_squared()
+	if length_sq < 1.0:
+		return false
+	for opponent in teams[1 - passer.team_id]:
+		if opponent.sent_off:
+			continue
+		# Never pass straight into a closely marked receiver, even when
+		# the defender stands just beyond the nominal pass endpoint.
+		if opponent.global_position.distance_to(receiver.global_position) < AI_XI_PASS_RECEIVER_CLEARANCE:
+			return false
+		var relative: Vector2 = opponent.global_position - passer.global_position
+		var t: float = clampf(relative.dot(segment) / length_sq, 0.0, 1.0)
+		# A marker *behind* the passer is pressure, not an interception.
+		if t < 0.12:
+			continue
+		var closest: Vector2 = passer.global_position + segment * t
+		if opponent.global_position.distance_to(closest) < AI_XI_PASS_LANE_CLEARANCE:
+			return false
+	return true
+
+
 func _ai_attack(player: Footballer) -> void:
 	if ball.carrier != player:
 		return
@@ -1524,32 +1619,57 @@ func _ai_attack(player: Footballer) -> void:
 		return
 	var forward := 1.0 if player.team_id == 0 else -1.0
 	var forward_gain := (target.global_position.x - player.global_position.x) * forward
-	if (
-		pressure_distance < _ai_adaptive_pressure_radius()
-		or forward_gain > _ai_adaptive_forward_pass_gain()
-	):
+	var pressured := pressure_distance < (
+		AI_XI_PASS_PRESSURE_RADIUS if match_team_size == 11 else _ai_adaptive_pressure_radius()
+	)
+	var useful_gain := forward_gain > (
+		AI_XI_PASS_FORWARD_GAIN if match_team_size == 11 else _ai_adaptive_forward_pass_gain()
+	)
+	if pressured or useful_gain:
 		player.play_action("pass", 0.72)
 		if audio_fx != null:
 			audio_fx.play_pass()
-		ball.release(target.global_position - player.global_position, 540.0 * player.pass_power_multiplier())
+		var pass_power := 540.0
+		if match_team_size == 11:
+			# Apply the same charged-pass power limits available to the
+			# human. Reach depends on physical distance, not magic homing.
+			var distance: float = player.global_position.distance_to(target.global_position)
+			pass_power = clampf(190.0 + distance * 2.25, PASS_MIN_POWER, PASS_MAX_POWER)
+			ai_intended_pass_receiver = target
+			ai_intended_pass_until = match_seconds + AI_XI_PASS_RECEIVER_SECONDS
+		ball.release(target.global_position - player.global_position, pass_power * player.pass_power_multiplier())
 
 func _best_ai_pass_target(player: Footballer) -> Footballer:
 	var forward: float = 1.0 if player.team_id == 0 else -1.0
 	var best: Footballer = null
 	var best_score: float = -INF
 	for teammate in teams[player.team_id]:
-		if teammate == player or teammate.role == "keeper":
+		if teammate == player or teammate.sent_off or teammate.role == "keeper":
 			continue
 		var offset: Vector2 = teammate.global_position - player.global_position
 		var distance: float = offset.length()
-		if distance < 90.0 or distance > (820.0 if match_team_size == 11 else 560.0):
-			continue
+		if match_team_size == 11:
+			# A real ground ball at legal charge power cannot bridge the
+			# entire 4-3-3 in one kick. Prefer reachable triangles.
+			if (
+				distance < AI_XI_PASS_MIN_DISTANCE
+				or distance > AI_XI_PASS_MAX_DISTANCE
+				or not _ai_xi_pass_lane_clear(player, teammate)
+			):
+				continue
+		else:
+			if distance < 90.0 or distance > 560.0:
+				continue
 		var progress: float = offset.x * forward
 		var nearest_opponent: Footballer = _nearest_opponent_to(teammate)
 		var separation: float = 240.0
 		if nearest_opponent != null:
 			separation = teammate.global_position.distance_to(nearest_opponent.global_position)
 		var score_value: float = progress * 1.8 + separation * 0.55 - absf(offset.y) * 0.18 - distance * 0.12
+		if match_team_size == 11:
+			# Preserve width without mistaking a very long, risky pass
+			# for superior collective play.
+			score_value = progress * 1.25 + minf(separation, 260.0) * 0.45 - absf(offset.y) * 0.07 - distance * 0.15
 		if score_value > best_score:
 			best_score = score_value
 			best = teammate
