@@ -45,6 +45,10 @@ func _initialize() -> void:
 					BaseMaterial3D.BILLBOARD_ENABLED if tactical
 					else BaseMaterial3D.BILLBOARD_FIXED_Y
 				))
+				# Otherwise the driver scale updates but the GPU billboard
+				# silently drops that scale, recreating the old fat diagonals.
+				assert(material.billboard_keep_scale,
+					"XI billboard must preserve actual per-orientation raster size")
 				assert(material.texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST)
 				assert(material.alpha_scissor_threshold < 0.05)
 				var actual_frame: Texture2D = stage._xi_frame_texture(player, sprite)
