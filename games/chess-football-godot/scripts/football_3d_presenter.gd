@@ -45,7 +45,7 @@ const BROADCAST_DEPTH := 17.8
 # and preserve legacy five-a-side, sprite geometry and match physics.
 const XI_BROADCAST_HEIGHT_SCALE := 1.73
 const XI_BROADCAST_DEPTH_SCALE := 2.25
-const XI_BROADCAST_FOV := 41.5
+const XI_BROADCAST_FOV := 45.5
 const TACTICAL_HEIGHT := 27.0
 const PLAYER_PIXEL_SIZE := 0.0124
 const TACTICAL_PLAYER_PIXEL_SIZE := 0.0162
