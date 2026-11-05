@@ -40,6 +40,12 @@ const NEAR_CORNER_LOOK_SHIFT := 3.85
 const NEAR_CORNER_CAMERA_RETREAT := 6.2
 const BROADCAST_HEIGHT := 9.8
 const BROADCAST_DEPTH := 17.8
+# XI default broadcast previously cropped the near touchline and players at
+# midfield. Retreat only the 11v11 camera; keep full-pitch aerial as V toggle
+# and preserve legacy five-a-side, sprite geometry and match physics.
+const XI_BROADCAST_HEIGHT_SCALE := 1.73
+const XI_BROADCAST_DEPTH_SCALE := 2.25
+const XI_BROADCAST_FOV := 41.5
 const TACTICAL_HEIGHT := 27.0
 const PLAYER_PIXEL_SIZE := 0.0124
 const TACTICAL_PLAYER_PIXEL_SIZE := 0.0162
@@ -1861,8 +1867,12 @@ func debug_keeper_catch_glove_distance(keeper: Footballer, side: int) -> float:
 func _build_ball() -> void:
 	ball_node = MeshInstance3D.new()
 	var sphere := SphereMesh.new()
-	sphere.radius = 0.16
-	sphere.height = 0.32
+	# Only the XI mesh gets a slightly smaller football relative to the
+	# approved player sprites. 2D ball radius, contacts, saves and shots do
+	# not change; the legacy 5v5 visual proportions stay untouched.
+	var xi_ball := match_node.match_team_size == 11
+	sphere.radius = 0.14 if xi_ball else 0.16
+	sphere.height = 0.28 if xi_ball else 0.32
 	ball_node.mesh = sphere
 	# The same original dark-panel ball stays recognizable in flight and
 	# between the keeper's pale gloves; only its visual material changes.
@@ -1874,8 +1884,8 @@ func _build_ball() -> void:
 
 	ball_shadow = MeshInstance3D.new()
 	var shadow_mesh := CylinderMesh.new()
-	shadow_mesh.top_radius = 0.105
-	shadow_mesh.bottom_radius = 0.105
+	shadow_mesh.top_radius = 0.095 if xi_ball else 0.105
+	shadow_mesh.bottom_radius = 0.095 if xi_ball else 0.105
 	shadow_mesh.height = 0.008
 	ball_shadow.mesh = shadow_mesh
 	ball_shadow.material_override = _material(Color(0.012, 0.020, 0.015), 1.0)
@@ -1905,8 +1915,12 @@ func _build_camera() -> void:
 	smoothed_focus_x = focus.x
 	smoothed_lead_x = 0.0
 	last_camera_mode = "broadcast"
-	var scale_factor := 1.35 if match_node.match_team_size == 11 else 1.0
-	camera.position = Vector3(focus.x, BROADCAST_HEIGHT * scale_factor, BROADCAST_DEPTH * scale_factor)
+	var xi := match_node.match_team_size == 11
+	camera.position = Vector3(
+		focus.x,
+		BROADCAST_HEIGHT * (XI_BROADCAST_HEIGHT_SCALE if xi else 1.0),
+		BROADCAST_DEPTH * (XI_BROADCAST_DEPTH_SCALE if xi else 1.0),
+	)
 	camera.look_at(Vector3(focus.x, 0.0, -0.85), Vector3.UP)
 
 func _add_box(position_3d: Vector3, size_3d: Vector3, color: Color) -> MeshInstance3D:
@@ -2612,12 +2626,15 @@ static func broadcast_corner_camera_depth(
 # Detect the outgoing composition from the real interpolated camera depth,
 # not the new target: set_piece_active is cleared before the first ball frame.
 static func broadcast_corner_release_active(
-	mode: String, restart_active: bool, current_depth: float
+	mode: String, restart_active: bool, current_depth: float, xi: bool = false
 ) -> bool:
+	# XI's normal camera is already farther back. Do not mistake every live
+	# midfield frame for an outgoing corner and force corner-only smoothing.
+	var neutral_depth := BROADCAST_DEPTH * (XI_BROADCAST_DEPTH_SCALE if xi else 1.0)
 	return (
 		mode == "broadcast"
 		and not restart_active
-		and current_depth > BROADCAST_DEPTH + CAMERA_CORNER_RELEASE_DEPTH_EPSILON
+		and current_depth > neutral_depth + CAMERA_CORNER_RELEASE_DEPTH_EPSILON
 	)
 
 
@@ -2648,7 +2665,8 @@ func _sync_camera(delta: float, mode: String) -> void:
 
 	var focus := world_to_stage(match_node.ball.global_position)
 	var easing_corner_release := broadcast_corner_release_active(
-		mode, bool(match_node.set_piece_active), camera.position.z
+		mode, bool(match_node.set_piece_active), camera.position.z,
+		match_node.match_team_size == 11,
 	)
 	var wanted_position: Vector3
 	var wanted_look: Vector3
@@ -2725,9 +2743,8 @@ func _sync_camera(delta: float, mode: String) -> void:
 		)
 		wanted_position.x = clampf(wanted_position.x, -camera_x_limit, camera_x_limit)
 		if match_node.match_team_size == 11:
-			# Wider preview lens framing, without touching the calibrated 5v5 camera.
-			wanted_position.y *= 1.35
-			wanted_position.z *= 1.45
+			wanted_position.y *= XI_BROADCAST_HEIGHT_SCALE
+			wanted_position.z *= XI_BROADCAST_DEPTH_SCALE
 		var restart_look_z := broadcast_restart_look_z(
 			bool(match_node.set_piece_active),
 			int(match_node.set_piece_team_id),
@@ -2749,7 +2766,9 @@ func _sync_camera(delta: float, mode: String) -> void:
 			_camera_smoothing_factor(pitch_speed, delta),
 		)
 		wanted_look = Vector3(wanted_position.x, 0.0, smoothed_restart_look_z)
-		wanted_fov = 37.5
+		wanted_fov = (
+			XI_BROADCAST_FOV if match_node.match_team_size == 11 else 37.5
+		)
 
 	var t := _camera_smoothing_factor(CAMERA_LERP_SPEED, delta)
 	var previous_depth := camera.position.z
