@@ -13,5 +13,6 @@
     "real_enroque",
     "keeper"
   ],
-  "footline": 134
+  "footline": 134,
+  "enabled": false
 }
