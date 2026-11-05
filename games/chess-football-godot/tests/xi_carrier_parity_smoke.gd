@@ -47,6 +47,46 @@ func _initialize() -> void:
 			var adjusted: float = body_h * stage._canonical_body_scale(sprite, player.role, team_id)
 			assert(absf(adjusted - stage.CANONICAL_BODY_HEIGHT_PIXELS) < 3.0,
 				"Animation uses wrong silhouette reference: " + String(animation))
+		# PR #89 normalized silhouette HEIGHT only; it left the authored
+		# V3 oblique torso too bulky next to the slimmer side-facing carrier.
+		# The 0.91 legacy width fix was insufficient on the new atlas.
+		var diag_names := [
+			&"run_front_diagonal", &"run_back_diagonal",
+			&"sprint_front_diagonal", &"sprint_back_diagonal",
+		]
+		for name in diag_names:
+			assert(is_equal_approx(
+				stage.xi_v3_diagonal_width_trim(name, 11, false, true),
+				stage.XI_V3_DIAGONAL_WIDTH_TRIM
+			))
+			assert(is_equal_approx(stage.xi_v3_diagonal_width_trim(name, 5, false, true), 1.0))
+			assert(is_equal_approx(stage.xi_v3_diagonal_width_trim(name, 11, true, true), 1.0))
+			assert(is_equal_approx(stage.xi_v3_diagonal_width_trim(name, 11, false, false), 1.0))
+		assert(is_equal_approx(stage.xi_v3_diagonal_width_trim(&"carry", 11, false, true), 1.0))
+		assert(is_equal_approx(stage.xi_v3_diagonal_width_trim(&"run", 11, false, true), 1.0))
+		# Also verify the actual 3D sprite transform, not merely the helper:
+		# equivalent speed/pose at identical pitch depth must be narrower
+		# diagonally but keep exactly the same vertical body/boot geometry.
+		var key: int = player.get_instance_id()
+		player.velocity = Vector2.RIGHT * player.base_speed
+		stage.outfield_visual_phases[key] = 2.0
+		sprite.play(&"run")
+		sprite.pause()
+		stage._sync_player_secondary_motion(player, sprite, stage.player_nodes[key])
+		var side_norm_x: float = sprite.scale.x / (
+			stage._canonical_body_scale(sprite, player.role, team_id) *
+			stage.view_compensation(sprite.animation).x
+		)
+		for name in [&"run_front_diagonal", &"run_back_diagonal"]:
+			sprite.play(name)
+			sprite.pause()
+			stage._sync_player_secondary_motion(player, sprite, stage.player_nodes[key])
+			var diag_norm_x: float = sprite.scale.x / (
+				stage._canonical_body_scale(sprite, player.role, team_id) *
+				stage.view_compensation(sprite.animation).x
+			)
+			assert(absf(diag_norm_x / side_norm_x - stage.XI_V3_DIAGONAL_WIDTH_TRIM) < 0.015,
+				"XI oblique V3 run still has untrimmed torso bulk")
 		# Independently cache and test the two clubs, not just animation labels.
 		assert(stage.body_scale_cache.has("%s:%d:%s" % [player.role, team_id, "carry"]))
 		for axis in [

@@ -54,6 +54,7 @@ func _initialize() -> void:
 		for team_id in range(2):
 			var actor: Footballer = game.teams[team_id][1]
 			actor.global_position = game.match_pitch.get_center()
+			var side_normalized_width := -1.0
 			for index in range(VIEWS.size()):
 				var axis: Vector2 = axes[index]
 				actor.velocity = axis * actor.base_speed
@@ -79,6 +80,27 @@ func _initialize() -> void:
 				var scaled: float = height * stage._canonical_body_scale(sprite, actor.role, team_id)
 				assert(absf(scaled - stage.CANONICAL_BODY_HEIGHT_PIXELS) < 13.0,
 					"Carrier jumps in size on orientation switch")
+				# The prior test only compared HEIGHT. At exactly the same pitch
+				# location and camera, the width must receive the V3 diagonal
+				# compensation in the actual QuadMesh transform as well.
+				var quad: MeshInstance3D = stage.xi_raster_meshes[key]
+				assert(quad.scale == sprite.scale)
+				var normalized_width: float = sprite.scale.x / (
+					stage._canonical_body_scale(sprite, actor.role, team_id) *
+					stage.view_compensation(sprite.animation).x
+				)
+				if index == 0:
+					side_normalized_width = normalized_width
+				else:
+					var expected_trim: float = stage.xi_v3_diagonal_width_trim(
+						sprite.animation, game.match_team_size, false,
+						stage._run_v3_r2_loaded.has(team_id)
+					)
+					assert(is_equal_approx(expected_trim, stage.XI_V3_DIAGONAL_WIDTH_TRIM))
+					assert(absf(normalized_width / side_normalized_width - expected_trim) < 0.055,
+						"Oblique footballer is still drawn with oversized torso width")
+					print("FOOTBALL_XI_V3_DIAGONAL_WIDTH_PARITY team=%d camera=%s view=%s ratio=%.3f"
+						% [team_id, mode, VIEWS[index], normalized_width / side_normalized_width])
 				await process_frame
 				await RenderingServer.frame_post_draw
 				var screenshot := game.get_viewport().get_texture().get_image()
@@ -96,6 +118,78 @@ func _initialize() -> void:
 		assert(sheet.save_png(path) == OK)
 		print("FOOTBALL_XI_CARRIER_PARITY_CAPTURE_" + mode.to_upper() + "="
 			+ ProjectSettings.globalize_path(path))
+	# Pixel-level proof: capture the SAME diagonal and camera twice with
+	# identical authored V3 WebPs, once with the width trim disabled and
+	# once enabled. A previous CI compared only transforms and uploaded
+	# screenshots that were byte-for-byte unchanged; this catches that.
+	for mode in ["broadcast", "tactical"]:
+		var runner: Footballer = game.teams[0][1]
+		var runner_key: int = runner.get_instance_id()
+		runner.global_position = game.match_pitch.get_center()
+		runner.velocity = axes[1] * runner.base_speed
+		runner.dribble_burst_seconds = 0.0
+		runner.visual.play(&"run")
+		runner.visual.frame = 0
+		game.ball.attach_to(runner)
+		game.ball.tick_ball(0.0)
+		stage.player_run_views[runner_key] = "front_diagonal"
+		stage.outfield_visual_names.erase(runner_key)
+		stage.outfield_visual_phases.erase(runner_key)
+		stage._sync_camera(10.0, mode)
+		stage._run_v3_r2_loaded.erase(0)
+		stage.sync_presentation(0.0, mode)
+		var before_scale_x: float = stage.player_sprites[runner_key].scale.x
+		# Give the software renderer several draw submissions after each
+		# state switch; a single frame_post_draw can return its prior buffer.
+		for _pass in range(3):
+			await process_frame
+			await RenderingServer.frame_post_draw
+		var without_trim: Image = game.get_viewport().get_texture().get_image()
+		stage._run_v3_r2_loaded[0] = true
+		stage.sync_presentation(0.0, mode)
+		var after_scale_x: float = stage.player_sprites[runner_key].scale.x
+		assert(after_scale_x < before_scale_x * 0.90,
+			"XI diagonal width trim did not change the real 3D sprite scale")
+		for _pass in range(3):
+			await process_frame
+			await RenderingServer.frame_post_draw
+		var with_trim: Image = game.get_viewport().get_texture().get_image()
+		assert(without_trim != null and with_trim != null)
+		var screen_center: Vector2 = stage.camera.unproject_position(
+			stage.world_to_stage(runner.global_position, stage.PLAYER_BASE_Y)
+		)
+		var start_x := clampi(int(screen_center.x) - CELL.x / 2, 0, 1280 - CELL.x)
+		var start_y := clampi(int(screen_center.y) - CELL.y / 2, 0, 720 - CELL.y)
+		var region := Rect2i(start_x, start_y, CELL.x, CELL.y)
+		var before_crop := without_trim.get_region(region)
+		var after_crop := with_trim.get_region(region)
+		var changed_pixels := 0
+		for cy in range(CELL.y):
+			for cx in range(CELL.x):
+				var old_color: Color = before_crop.get_pixel(cx, cy)
+				var new_color: Color = after_crop.get_pixel(cx, cy)
+				var difference: float = (
+					absf(old_color.r - new_color.r)
+					+ absf(old_color.g - new_color.g)
+					+ absf(old_color.b - new_color.b)
+				)
+				if difference > 0.24:
+					changed_pixels += 1
+		var comparison := Image.create(CELL.x * 2, CELL.y, false, Image.FORMAT_RGBA8)
+		comparison.blit_rect(before_crop, Rect2i(Vector2i.ZERO, CELL), Vector2i.ZERO)
+		comparison.blit_rect(after_crop, Rect2i(Vector2i.ZERO, CELL), Vector2i(CELL.x, 0))
+		var compare_path: String = "user://xi-v3-width-on-off-" + mode + ".png"
+		assert(comparison.save_png(compare_path) == OK)
+		print("FOOTBALL_XI_V3_WIDTH_RENDER_DELTA camera=%s changed_pixels=%d before_scale=%.4f after_scale=%.4f"
+			% [mode, changed_pixels, before_scale_x, after_scale_x])
+		print("FOOTBALL_XI_V3_WIDTH_CAPTURE_" + mode.to_upper() + "="
+			+ ProjectSettings.globalize_path(compare_path))
+		if changed_pixels <= 12:
+			printerr("V3 width compensation changed transforms but not actual rendered pixels")
+			quit(1)
+			return
+		game.ball.release(Vector2.RIGHT, 0.0)
+		runner.global_position = Vector2(-9999.0, -9999.0)
 	assert(game.score == scores)
 	print("FOOTBALL_XI_CARRIER_PARITY_VISUAL_OK teams=2 views=3 cameras=2 actual_r2=1")
 	quit(0)

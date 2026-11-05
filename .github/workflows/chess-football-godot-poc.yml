@@ -1009,6 +1009,15 @@ jobs:
           timeout 70s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/xi_carrier_parity_visual.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
+          # Preserve before/after pixel evidence even when the assertion
+          # rejects the change; the visual-review artifact runs if:always().
+          for mode in broadcast tactical; do
+            marker="FOOTBALL_XI_V3_WIDTH_CAPTURE_${mode^^}"
+            comparison="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
+            if [[ -n "$comparison" && -s "$comparison" ]]; then
+              cp "$comparison" "$RUNNER_TEMP/chess-football-review/xi-v3-width-on-off-$mode.png"
+            fi
+          done
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
             echo '::error::XI carrier/ball real Godot visual parity regressed'
             exit 1
@@ -1019,6 +1028,11 @@ jobs:
             shot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
             test -n "$shot" && test -s "$shot"
             cp "$shot" "$RUNNER_TEMP/chess-football-review/xi-carrier-ball-parity-$mode.png"
+            grep -q "FOOTBALL_XI_V3_WIDTH_RENDER_DELTA camera=$mode changed_pixels=" "$log"
+            marker="FOOTBALL_XI_V3_WIDTH_CAPTURE_${mode^^}"
+            comparison="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
+            test -n "$comparison" && test -s "$comparison"
+            cp "$comparison" "$RUNNER_TEMP/chess-football-review/xi-v3-width-on-off-$mode.png"
           done
       - name: Visual review R2 v2 before/after in actual 11v11 Godot
         shell: bash
