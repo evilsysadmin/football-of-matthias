@@ -70,7 +70,8 @@ func _initialize() -> void:
 		assert(game.ball.carrier == null)
 		# Keeper's hold keeps its existing chest/glove rig and legacy anchor.
 		var keeper: Footballer = game.teams[team_id][0]
-		assert(keeper.ball_anchor().is_equal_approx(Vector2(18.0, -5.0)))
+		assert(is_equal_approx(absf(keeper.ball_anchor().x), 18.0 * absf(keeper.scale.x)))
+		assert(is_equal_approx(keeper.ball_anchor().y, -5.0))
 	# 5v5 is a historical test fixture: preserve its old physics/ball anchor.
 	var small = scene.instantiate()
 	small.match_team_size = 5
