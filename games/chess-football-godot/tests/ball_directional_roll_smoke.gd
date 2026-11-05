@@ -15,6 +15,14 @@ func _initialize() -> void:
 	var ball: FootballBall = match_node.ball
 	var ball_mesh: MeshInstance3D = presenter.ball_node
 	assert(ball_mesh != null and ball_mesh.mesh is SphereMesh)
+	# The new size calibration applies only to 11v11, not the legacy 5v5
+	# ball, its shadow or any movement/shot/possession rule.
+	assert(match_node.match_team_size == 5)
+	assert(is_equal_approx((ball_mesh.mesh as SphereMesh).radius, 0.16))
+	assert(is_equal_approx((ball_mesh.mesh as SphereMesh).height, 0.32))
+	assert(is_equal_approx(
+		(presenter.ball_shadow.mesh as CylinderMesh).top_radius, 0.105
+	))
 	var original_score: Array = match_node.score.duplicate()
 	var original_time: float = match_node.match_seconds
 
