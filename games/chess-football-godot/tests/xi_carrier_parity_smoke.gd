@@ -100,7 +100,28 @@ func _initialize() -> void:
 			var offset: Vector2 = game.ball.global_position - player.global_position
 			assert(offset.dot(axis) >= 36.5, "Ball is not ahead of travel")
 			assert(absf(offset.cross(axis)) <= 4.0, "Ball has wrong lateral offset")
-			assert(is_equal_approx(offset.length(), player.ball_anchor().length()))
+			assert(offset.length() >= player.ball_anchor().length())
+			assert(offset.length() <= player.ball_anchor().length() + 31.0)
+		# The XI ball advances in small rolling touches and then closes the gap
+		# with the moving carrier. A static boot offset would have zero variance.
+		player.dribble_burst_seconds = 0.0
+		player.global_position = game.match_pitch.get_center()
+		player.velocity = Vector2.RIGHT * player.base_speed
+		game.ball.attach_to(player)
+		var nearest := INF
+		var farthest := 0.0
+		for _touch_step in range(45):
+			player.global_position += player.velocity / 60.0
+			game.ball.tick_ball(1.0 / 60.0)
+			var forward_gap := (game.ball.global_position - player.global_position).dot(Vector2.RIGHT)
+			nearest = minf(nearest, forward_gap)
+			farthest = maxf(farthest, forward_gap)
+			assert(forward_gap > 30.0 and forward_gap < 84.0)
+		assert(farthest - nearest >= 8.0, "Ball is still magnetically fixed to the boots")
+		assert(absf(game.ball.rotation) > 0.05, "Ball must visibly roll while carried")
+		var rolling_release := game.ball.global_position
+		game.ball.release(Vector2.RIGHT, 200.0)
+		assert(game.ball.global_position.is_equal_approx(rolling_release))
 		player.dribble_direction = Vector2.UP
 		player.dribble_burst_seconds = player.DRIBBLE_BURST_SECONDS * 0.50
 		game.ball.tick_ball(0.0)
@@ -108,6 +129,34 @@ func _initialize() -> void:
 		assert(not game.ball.airborne())
 		game.ball.release(Vector2.RIGHT, 200.0)
 		assert(game.ball.carrier == null)
+		# CPU sprint must actually outrun a normal jog, not just spend stamina.
+		var cpu_runner: Footballer = game.teams[1][2]
+		var old_cpu_position := cpu_runner.global_position
+		cpu_runner.global_position = game.match_pitch.get_center() + Vector2(0.0, 300.0)
+		cpu_runner.velocity = Vector2.ZERO
+		cpu_runner.debug_set_stamina(100.0)
+		var chase_point := cpu_runner.global_position + Vector2(1000.0, 0.0)
+		for _chase_step in range(7):
+			cpu_runner.move_ai(0.10, chase_point, 1.0)
+		assert(cpu_runner.velocity.length() > cpu_runner.base_speed * 1.15,
+			"CPU sprint still uses jogging speed")
+		assert(cpu_runner.stamina_ratio() < 0.75)
+		cpu_runner.global_position = old_cpu_position
+		cpu_runner.velocity = Vector2.ZERO
+		cpu_runner.debug_set_stamina(100.0)
+		# A pressing defender should target the carrier's upcoming lane.
+		var human_runner: Footballer = game.teams[0][4]
+		var old_human_position := human_runner.global_position
+		var old_human_velocity := human_runner.velocity
+		human_runner.global_position = game.match_pitch.get_center()
+		human_runner.velocity = Vector2.RIGHT * human_runner.base_speed
+		cpu_runner.global_position = human_runner.global_position + Vector2(250.0, 120.0)
+		var intercept: Vector2 = game._ai_press_target(cpu_runner, human_runner)
+		assert(intercept.x > human_runner.global_position.x + 25.0)
+		assert(intercept.x <= human_runner.global_position.x + 130.0)
+		human_runner.global_position = old_human_position
+		human_runner.velocity = old_human_velocity
+		cpu_runner.global_position = old_cpu_position
 		# Keeper's hold keeps its existing chest/glove rig and legacy anchor.
 		var keeper: Footballer = game.teams[team_id][0]
 		assert(is_equal_approx(absf(keeper.ball_anchor().x), 18.0 * absf(keeper.scale.x)))
@@ -119,5 +168,5 @@ func _initialize() -> void:
 	await process_frame
 	await process_frame
 	assert(small.teams[0][1].ball_anchor().is_equal_approx(Vector2(18.0, -5.0)))
-	print("FOOTBALL_XI_CARRIER_PARITY_OK teams=2 animations=5 directions=6 ball_lead=37 fallback_5v5=unchanged")
+	print("FOOTBALL_XI_CARRIER_PARITY_OK teams=2 directions=6 touch_variance=true cpu_sprint=true intercept=true fallback_5v5=unchanged")
 	quit(0)
