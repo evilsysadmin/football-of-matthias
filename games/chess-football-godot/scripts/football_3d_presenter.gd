@@ -119,6 +119,8 @@ var _keeper_catch_r2_loaded: Dictionary = {}
 var _animated_idle_r2_loaded: Dictionary = {}
 # v2 run replaces only outfield locomotion after every pose verifies.
 var _run_v2_r2_loaded: Dictionary = {}
+# V3 supersedes V2 only after its entire 12x5 sheet verifies for each club.
+var _run_v3_r2_loaded: Dictionary = {}
 # Authored action replacement becomes active per-club only after full verification.
 var _pass_shoot_r2_loaded: Dictionary = {}
 # Verified side-view carrier animations. Never alter the 2D ball or physics.
@@ -269,6 +271,82 @@ func _apply_idle_front_textures(textures: Array[Texture2D]) -> void:
 
 # Staged activation: metadata remains disabled until Infra has publicly
 # accredited both R2 sheets and exact byte/CORS parity.
+# Both user-uploaded 12-pose atlases have fixed URLs, checksums and dimensions.
+# V2 remains active if the v3 HTTP request, SHA/CORS or frame check fails.
+func _request_run_v3_from_r2() -> void:
+	if not OS.has_feature("web") or match_node.match_team_size != 11:
+		return
+	for team_id in range(2):
+		var meta := ChessFootballRunV3R2.sheet_meta(team_id)
+		if meta.is_empty():
+			continue
+		var loader := ChessFootballR2AtlasLoader.new()
+		loader.name = "RunV3R2_%d" % team_id
+		add_child(loader)
+		loader.atlas_ready.connect(_on_run_v3_ready.bind(team_id))
+		loader.start(meta, ChessFootballRunV3R2.TRUSTED_ROOT)
+
+
+func _on_run_v3_ready(image: Image, team_id: int) -> void:
+	_apply_verified_run_v3(ChessFootballRunV3R2.frames_from_image(image), team_id)
+
+
+func _apply_verified_run_v3(textures: Array[Texture2D], team_id: int) -> void:
+	if team_id not in [0, 1] or _run_v3_r2_loaded.has(team_id):
+		return
+	if textures.size() != ChessFootballRunV3R2.ROWS * ChessFootballRunV3R2.COLUMNS:
+		return
+	var targets: Array[AnimatedSprite3D] = []
+	# Validate all actors and both animation families BEFORE mutating any.
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null or sprite.sprite_frames == null:
+			return
+		for row_name in ChessFootballRunV3R2.ANIMATIONS:
+			for base in ["run", "sprint"]:
+				var animation := StringName(row_name.replace("run", base))
+				if not sprite.sprite_frames.has_animation(animation):
+					return
+				if sprite.sprite_frames.get_frame_count(animation) != ChessFootballRunV2R2.COLUMNS:
+					return
+		targets.append(sprite)
+	if targets.size() != match_node.match_team_size - 1:
+		return
+	for sprite in targets:
+		var frames := sprite.sprite_frames
+		for row in range(ChessFootballRunV3R2.ROWS):
+			for base in ["run", "sprint"]:
+				var name := StringName(ChessFootballRunV3R2.ANIMATIONS[row].replace("run", base))
+				var previous_fps := frames.get_animation_speed(name)
+				frames.clear(name)
+				frames.set_animation_speed(name,
+					previous_fps * float(ChessFootballRunV3R2.COLUMNS) / float(ChessFootballRunV2R2.COLUMNS))
+				for i in range(ChessFootballRunV3R2.COLUMNS):
+					frames.add_frame(name, textures[row * ChessFootballRunV3R2.COLUMNS + i])
+		# Preserve the physical gait position when changing the number of
+		# poses mid-run. Never restart from frame zero on an async CDN arrival.
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var key: int = player.get_instance_id()
+		var driver := player_sprites[key] as AnimatedSprite3D
+		if _keeper_locomotion(driver.animation):
+			var old_phase: float = float(outfield_visual_phases.get(key, float(driver.frame)))
+			var new_phase: float = fposmod(old_phase * float(ChessFootballRunV3R2.COLUMNS) /
+				float(ChessFootballRunV2R2.COLUMNS), float(ChessFootballRunV3R2.COLUMNS))
+			outfield_visual_phases[key] = new_phase
+			driver.frame = int(floorf(new_phase))
+		var sculpt := xi_actor_models.get(key) as Node3D
+		var quad := xi_raster_meshes.get(key) as MeshInstance3D
+		if sculpt != null and quad != null:
+			sculpt.hide()
+			quad.show()
+	_run_v3_r2_loaded[team_id] = true
+	tone_gain_cache.clear()
+
+
 func _request_run_v2_from_r2() -> void:
 	if not OS.has_feature("web"):
 		return
@@ -289,6 +367,8 @@ func _on_run_v2_ready(image: Image, team_id: int) -> void:
 
 
 func _apply_verified_run_v2(textures: Array[Texture2D], team_id: int) -> void:
+	if _run_v3_r2_loaded.has(team_id):
+		return
 	if team_id not in [0, 1] or textures.size() != ChessFootballRunV2R2.COLUMNS * ChessFootballRunV2R2.ROWS:
 		return
 	var targets: Array[SpriteFrames] = []
@@ -353,7 +433,7 @@ func _on_lateral_run_atlas_ready(image: Image, team_id: int) -> void:
 func _apply_verified_lateral_run(textures: Array[Texture2D], team_id: int) -> void:
 	# An older v1 request may complete after the v2 atlas. It must not
 	# overwrite the newly validated running frames.
-	if _run_v2_r2_loaded.has(team_id):
+	if _run_v2_r2_loaded.has(team_id) or _run_v3_r2_loaded.has(team_id):
 		return
 	# Keep all original run phases, FPS, action indices and facing animations;
 	# switching only the eight side frames cannot change game simulation.
@@ -608,6 +688,7 @@ func setup(p_match: Node) -> void:
 	_request_animated_idle_from_r2()
 	_request_lateral_run_from_r2()
 	_request_run_v2_from_r2()
+	_request_run_v3_from_r2()
 	_request_pass_shoot_from_r2()
 	_request_carry_dribble_from_r2()
 	_request_tackle_atlases_from_r2()
