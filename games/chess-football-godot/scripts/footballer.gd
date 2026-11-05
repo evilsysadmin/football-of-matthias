@@ -28,10 +28,10 @@ const MOVE_ACCELERATION := 1650.0
 const MOVE_DECELERATION := 2150.0
 const SPRINT_SPEED_MULTIPLIER := 1.34
 const STAMINA_MAX := 100.0
-const STAMINA_DRAIN_PER_SECOND := 28.0
-const STAMINA_RECOVER_MOVING_PER_SECOND := 14.0
-const STAMINA_RECOVER_IDLE_PER_SECOND := 26.0
-const STAMINA_RECOVER_THRESHOLD := 24.0
+const STAMINA_DRAIN_PER_SECOND := 45.0
+const STAMINA_RECOVER_MOVING_PER_SECOND := 11.0
+const STAMINA_RECOVER_IDLE_PER_SECOND := 19.0
+const STAMINA_RECOVER_THRESHOLD := 40.0
 const AI_SPRINT_INTENSITY := 0.94
 const AI_EXHAUSTED_INTENSITY_CAP := 0.82
 # Keepers need a sharp lateral shuffle to react to a shot. Outfield movement,
@@ -230,7 +230,7 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0) -> void:
 	ai_target = target
 	var offset := target - global_position
 	var moving := offset.length() >= 8.0
-	var sprint_requested := intensity >= AI_SPRINT_INTENSITY
+	var sprint_requested := role != "keeper" and intensity >= AI_SPRINT_INTENSITY
 	var actual_sprint := _update_stamina(delta, sprint_requested, moving)
 	last_sprinting = actual_sprint
 	var effective_intensity := clampf(intensity, 0.35, 1.0)
@@ -242,7 +242,10 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0) -> void:
 	var desired := Vector2.ZERO
 	if moving:
 		var keeper_boost := KEEPER_AI_SPEED_MULTIPLIER if role == "keeper" else 1.0
-		desired = offset.normalized() * base_speed * effective_intensity * recovery_scale * keeper_boost
+		# Previously the CPU paid stamina and played sprint frames, but ran at
+		# jogging speed. A human sprint could therefore outrun every defender.
+		var sprint_boost := SPRINT_SPEED_MULTIPLIER if actual_sprint else 1.0
+		desired = offset.normalized() * base_speed * sprint_boost * effective_intensity * recovery_scale * keeper_boost
 		if has_ball and role != "keeper":
 			desired *= technique_control_multiplier
 	var acceleration := MOVE_ACCELERATION if desired.length_squared() > 0.001 else MOVE_DECELERATION
