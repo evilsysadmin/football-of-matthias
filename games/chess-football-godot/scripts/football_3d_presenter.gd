@@ -569,6 +569,9 @@ func _apply_verified_carry_dribble_frames(textures: Array[Texture2D], team_id: i
 			for frame_id in range(ChessFootballCarryDribbleR2.COLUMNS):
 				frames.add_frame(name, textures[row * 8 + frame_id])
 	_carry_dribble_r2_loaded[team_id] = true
+	# Carrier source art has its OWN silhouette envelope, independent of v3
+	# side running. Clear any cached reference from before the async swap.
+	body_scale_cache.clear()
 	tone_gain_cache.clear()
 
 
@@ -2319,7 +2322,7 @@ static func normalized_body_scale(pixel_height: float) -> float:
 	return clampf(CANONICAL_BODY_HEIGHT_PIXELS / maxf(pixel_height, 1.0), 0.80, 1.40)
 
 
-func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "") -> float:
+func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "", team_id: int = -1) -> float:
 	var current_name := String(sprite.animation)
 	# Idle is a deliberately fixed stance. Normalize its actual silhouette,
 	# not a sampled running gait (which can be significantly shorter).
@@ -2334,12 +2337,17 @@ func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "") -> float
 		view = current_name.trim_prefix("run_")
 	elif current_name.begins_with("sprint_"):
 		view = current_name.trim_prefix("sprint_")
-	# Keepers now have a distinct approved body; their height sample must never
-	# borrow a previously cached field-player measurement (or vice versa).
-	var cache_key := ("keeper:" if role == "keeper" else "field:") + view
+	var reference_name := ChessFootballRunDirection.animation_for(&"run", view)
+	# The ball carrier sometimes uses an older, separately painted 8-pose
+	# carry/dribble atlas instead of the 12-pose v3 running row. Measuring
+	# its height from v3 'run' makes the player pop in size on possession.
+	if current_name in ["carry", "dribble"]:
+		reference_name = StringName(current_name)
+	# Different club sheets and action sources must never share a cached
+	# height; measure only once per family, not once per actor or frame.
+	var cache_key := "%s:%d:%s" % [role, team_id, String(reference_name)]
 	if body_scale_cache.has(cache_key):
 		return float(body_scale_cache[cache_key])
-	var reference_name := ChessFootballRunDirection.animation_for(&"run", view)
 	if not sprite.sprite_frames.has_animation(reference_name):
 		push_error("Chess Football: missing approved run reference " + String(reference_name))
 		return 1.0
@@ -2499,7 +2507,7 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 		stretch_y = lerpf(1.0, stretch_y, stride_weight)
 
 	# One body-height reference for both teams, all views and all roles.
-	var canonical_scale := _canonical_body_scale(sprite, player.role)
+	var canonical_scale := _canonical_body_scale(sprite, player.role, player.team_id)
 	var view_adjust := view_compensation(sprite.animation)
 	stretch_x *= canonical_scale * view_adjust.x
 	stretch_y *= canonical_scale * view_adjust.y

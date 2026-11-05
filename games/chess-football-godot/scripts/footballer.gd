@@ -437,10 +437,27 @@ func keeper_save_ratio() -> float:
 
 func ball_anchor() -> Vector2:
 	var facing := -1.0 if visual != null and visual.flip_h else 1.0
-	var anchor := Vector2(18.0 * facing * scale.x, -5.0)
+	# Keep legacy 5v5 and keeper catches untouched.
+	if match_pitch != Formation.ELEVEN_PITCH_RECT or role == "keeper":
+		var legacy := Vector2(18.0 * facing * scale.x, -5.0)
+		if dribble_active():
+			legacy += dribble_direction * DRIBBLE_TOUCH_DISTANCE * dribble_touch_ratio()
+		return legacy
+	# The previous fixed horizontal +18/-5 offset put the ball *between*
+	# the legs or beside a runner travelling vertically/diagonally.
+	# This is the authoritative 2D ball anchor so its shadow, 3D rendering,
+	# possession and release location agree; no visual/physics split.
+	var forward: Vector2 = dribble_direction if dribble_active() else velocity
+	if forward.length_squared() < 0.001:
+		forward = Vector2(facing, 0.0)
+	else:
+		forward = forward.normalized()
+	var touch_distance := 37.0
 	if dribble_active():
-		anchor += dribble_direction * DRIBBLE_TOUCH_DISTANCE * dribble_touch_ratio()
-	return anchor
+		touch_distance += DRIBBLE_TOUCH_DISTANCE * dribble_touch_ratio()
+	# Slightly out of the support-foot axis, but always AHEAD of travel.
+	var side := Vector2(-forward.y, forward.x) * (3.5 * facing)
+	return forward * touch_distance + side
 
 func _sync_facing() -> void:
 	if visual == null or absf(velocity.x) < FACING_SWITCH_SPEED:
