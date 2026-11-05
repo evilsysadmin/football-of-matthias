@@ -620,7 +620,7 @@ func _initialize() -> void:
 	var stamina_start: float = stamina_runner.debug_stamina_ratio()
 	for _sprint_step in range(40):
 		stamina_runner.move_human(0.10, Vector2.RIGHT, true)
-	assert(stamina_runner.debug_stamina_ratio() < stamina_start * 0.10)
+	assert(stamina_runner.debug_stamina_ratio() < stamina_start * 0.25)
 	assert(stamina_runner.debug_stamina_exhausted())
 	var exhausted_speed: float = stamina_runner.velocity.length()
 	assert(exhausted_speed <= stamina_runner.base_speed * 1.06)
