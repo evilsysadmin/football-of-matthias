@@ -68,6 +68,13 @@ func _initialize() -> void:
 				# it using the same camera-up vector as the shader.
 				var boot_world: Vector3 = quad.global_position - up_axis * foot_extent
 				var shadow := stage.player_nodes[key].get_node("ContactShadow") as MeshInstance3D
+				# The far-side shadow must grow with the same compensation as
+				# its visible XI body; otherwise the player appears airborne.
+				var expected_depth: float = stage.perspective_body_scale(
+					stage.camera, stage.player_nodes[key].global_position
+				)
+				assert(is_equal_approx(shadow.scale.x, expected_depth))
+				assert(is_equal_approx(shadow.scale.z, expected_depth))
 				var shadow_world := shadow.global_position
 				assert(absf(boot_world.y - shadow_world.y) < 0.050,
 					"Boots float above the shadow in " + mode + " " + String(expected))
@@ -77,6 +84,31 @@ func _initialize() -> void:
 					"Projected boots visibly detach from grass: " + mode)
 				assert(stage.player_nodes[key].get_node_or_null("XI_KitSculpt") == null
 					or not stage.player_nodes[key].get_node("XI_KitSculpt").visible)
+	# Move a single runner from far to near turf. The body's depth
+	# compensation and the contact mark must track the *same* ratio.
+	var winger: Footballer = game.teams[1][4]
+	var winger_key: int = winger.get_instance_id()
+	winger.action_lock_seconds = 0.0
+	winger.velocity = Vector2.RIGHT * winger.base_speed
+	winger._sync_locomotion(false)
+	var center_x: float = game.match_pitch.get_center().x
+	winger.global_position = Vector2(center_x, game.match_pitch.position.y + 110.0)
+	stage.sync_presentation(0.0, "broadcast")
+	var far_body_scale: float = stage.player_sprites[winger_key].scale.x
+	var far_shadow_scale: float = (
+		stage.player_nodes[winger_key].get_node("ContactShadow") as MeshInstance3D
+	).scale.x
+	winger.global_position = Vector2(center_x, game.match_pitch.end.y - 110.0)
+	stage.sync_presentation(0.0, "broadcast")
+	var near_body_scale: float = stage.player_sprites[winger_key].scale.x
+	var near_shadow_scale: float = (
+		stage.player_nodes[winger_key].get_node("ContactShadow") as MeshInstance3D
+	).scale.x
+	assert(far_body_scale > near_body_scale)
+	assert(far_shadow_scale > near_shadow_scale)
+	assert(is_equal_approx(
+		far_shadow_scale / near_shadow_scale, far_body_scale / near_body_scale
+	))
 	# 5v5 stays on the original Sprite3D renderer and has no XI quads.
 	var small = scene.instantiate()
 	small.match_team_size = 5
@@ -84,5 +116,15 @@ func _initialize() -> void:
 	await process_frame
 	await process_frame
 	assert(small.presentation_3d.xi_raster_meshes.is_empty())
-	print("FOOTBALL_XI_DIRECTION_GROUND_OK clubs=2 views=4 cameras=2 boot_gap_px_lt_4")
+	var small_player: Footballer = small.teams[1][1]
+	small_player.velocity = Vector2.ZERO
+	small_player.action_lock_seconds = 0.0
+	small_player._sync_locomotion(false)
+	small.presentation_3d.sync_presentation(0.0, "broadcast")
+	var small_shadow := small.presentation_3d.player_nodes[
+		small_player.get_instance_id()
+	].get_node("ContactShadow") as MeshInstance3D
+	assert(is_equal_approx(small_shadow.scale.x, 1.0))
+	assert(is_equal_approx(small_shadow.scale.z, 1.0))
+	print("FOOTBALL_XI_DIRECTION_GROUND_OK clubs=2 views=4 cameras=2 boot_gap_px_lt_4 shadow_depth=1 small_unchanged=1")
 	quit(0)
