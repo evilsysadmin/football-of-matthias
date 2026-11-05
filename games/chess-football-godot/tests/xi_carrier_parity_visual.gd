@@ -131,8 +131,10 @@ func _initialize() -> void:
 		var samples := [1, 11, 22]
 		for sample_id in range(samples.size()):
 			game.ball.attach_to(touch_runner)
+			stage.ball_node.rotation = Vector3.ZERO
 			for _tick in range(samples[sample_id]):
 				game.ball.tick_ball(1.0 / 60.0)
+				stage._sync_ball_visual_roll(1.0 / 60.0)
 			touch_leads.append(
 				(game.ball.global_position - touch_runner.global_position).dot(Vector2.RIGHT)
 			)
