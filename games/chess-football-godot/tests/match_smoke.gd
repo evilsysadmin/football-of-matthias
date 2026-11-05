@@ -95,6 +95,21 @@ func _initialize() -> void:
 	# existing 16 striped grass meshes and shader, extending them only
 	# OUTSIDE the near white touchline; gameplay pitch/world bounds do not move.
 	var pitch_presenter: ChessFootball3DPresenter = match_node.presentation_3d
+	pitch_presenter.sync_presentation(0.0, "broadcast")
+	# XI adjusts ball height and restart thresholds, but the original 5v5
+	# framing and .16-radius ball retain their exact visual clearance.
+	assert(is_equal_approx(pitch_presenter.ball_node.position.y, 0.18))
+	var five_pitch := ChessFootballMath.PITCH_RECT
+	var near_5v5: Vector2 = Vector2(
+		five_pitch.get_center().x,
+		five_pitch.get_center().y + five_pitch.size.y * 0.45
+	)
+	assert(ChessFootball3DPresenter.broadcast_restart_look_z(
+		true, 0, "SAQUE DE BANDA", near_5v5
+	) > ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z)
+	assert(ChessFootball3DPresenter.broadcast_corner_camera_depth(
+		true, 0, "CÓRNER", near_5v5
+	) > ChessFootball3DPresenter.BROADCAST_DEPTH)
 	var expected_near_runoff := ChessFootball3DPresenter.NEAR_TURF_RUNOFF_DEPTH
 	assert(is_equal_approx(expected_near_runoff, 4.0))
 	for grass_index in range(16):

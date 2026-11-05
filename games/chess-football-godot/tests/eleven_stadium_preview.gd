@@ -89,6 +89,35 @@ func _initialize() -> void:
 	assert(game.ball.carrier.squad_index == 10)
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null)
+	# The new XI ball radius is 0.14; its centre must now sit at 0.16,
+	# preserving the original 0.02 turf clearance of the 5v5 sphere.
+	stage.sync_presentation(0.0, "broadcast")
+	assert(is_equal_approx(stage.ball_node.position.y, 0.16),
+		"Reduced XI ball must rest on the grass, not float at old height")
+	var mid_near_y: float = game.match_pitch.get_center().y + game.match_pitch.size.y * 0.29
+	var xi_mid_throw := Vector2(game.match_pitch.get_center().x, mid_near_y)
+	# This was wrongly classified as 'near touchline' by the old 5v5
+	# threshold (588 units instead of XI's 910 units).
+	assert(is_equal_approx(ChessFootball3DPresenter.broadcast_restart_look_z(
+		true, 0, "SAQUE DE BANDA", xi_mid_throw, game.match_pitch
+	), ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z))
+	assert(is_equal_approx(ChessFootball3DPresenter.broadcast_corner_camera_depth(
+		true, 0, "CÓRNER", xi_mid_throw, game.match_pitch
+	), ChessFootball3DPresenter.BROADCAST_DEPTH))
+	assert(is_equal_approx(ChessFootball3DPresenter.broadcast_live_corner_pitch_floor(
+		Vector2(game.match_pitch.get_center().x,
+			game.match_pitch.get_center().y + game.match_pitch.size.y * 0.25),
+		game.match_pitch
+	), ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z))
+	var xi_near_corner := Vector2(
+		game.match_pitch.end.x - 70.0, game.match_pitch.end.y - 40.0
+	)
+	assert(ChessFootball3DPresenter.broadcast_restart_look_z(
+		true, 0, "CÓRNER", xi_near_corner, game.match_pitch
+	) > ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z)
+	assert(ChessFootball3DPresenter.broadcast_corner_camera_depth(
+		true, 0, "CÓRNER", xi_near_corner, game.match_pitch
+	) > ChessFootball3DPresenter.BROADCAST_DEPTH)
 	assert(is_equal_approx(stage.field_width, 56.0))
 	assert(is_equal_approx(stage.field_depth, 36.4))
 	assert(stage.player_sprites.size() == 22)
@@ -161,26 +190,41 @@ func _initialize() -> void:
 				"XI tactical camera clips pitch end line")
 			assert(corner_screen.y > 125.0 and corner_screen.y < bounds.y - 30.0,
 				"XI tactical camera clips a touchline")
-	# Broadcast does not show every distant corner, but at midfield its
-	# near touchline and both goalmouth centres must remain inside the canvas.
+	# A broadcast match camera should fill the screen with RECOGNIZABLE
+	# sprites, not squeeze both goals and four touchlines into every shot.
+	# Whole-pitch framing remains available exclusively in tactical mode.
 	game.camera_mode = "broadcast"
 	stage.sync_presentation(2.0, "broadcast")
-	var near_edge := stage.screen_position_for_world(
-		Vector2(center.x, game.match_pitch.end.y), 0.02
-	)
-	var far_edge := stage.screen_position_for_world(
-		Vector2(center.x, game.match_pitch.position.y), 0.02
-	)
-	assert(near_edge.y > bounds.y * 0.65 and near_edge.y < bounds.y - 45.0,
-		"Broadcast clips the nearest XI touchline at kickoff")
-	assert(far_edge.y > 170.0 and far_edge.y < bounds.y * 0.60)
-	for goal_x in [game.match_pitch.position.x, game.match_pitch.end.x]:
-		var goal_screen := stage.screen_position_for_world(Vector2(goal_x, center.y), 0.02)
-		assert(goal_screen.x > 80.0 and goal_screen.x < bounds.x - 80.0,
-			"XI broadcast cuts off a goal at midfield")
+	assert(absf(stage.camera.fov - ChessFootball3DPresenter.XI_BROADCAST_FOV) < 0.08)
+	assert(absf(stage.camera.position.z - (
+		ChessFootball3DPresenter.BROADCAST_DEPTH *
+		ChessFootball3DPresenter.XI_BROADCAST_DEPTH_SCALE
+	)) < 0.08)
+	var baseline_foot := stage.screen_position_for_world(center, 0.02)
+	var baseline_top := stage.screen_position_for_world(center, 1.50)
+	assert(baseline_foot.distance_to(baseline_top) > 30.0,
+		"11v11 broadcast still makes the footballers look tiny")
 	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
 		"broadcast", false, stage.camera.position.z, true
 	), "Normal XI broadcast must not trigger the corner-release camera")
+	# Move the authoritative ball near all four active corners, but do not
+	# insist on viewing remote goals during a midfield attack.
+	var initial_ball: Vector2 = game.ball.global_position
+	for x_fraction in [0.10, 0.90]:
+		for y_fraction in [0.12, 0.88]:
+			var live_spot: Vector2 = game.match_pitch.position + Vector2(
+				game.match_pitch.size.x * x_fraction,
+				game.match_pitch.size.y * y_fraction
+			)
+			game.ball.global_position = live_spot
+			stage.sync_presentation(8.0, "broadcast")
+			var in_frame := stage.screen_position_for_world(live_spot, 0.02)
+			assert(in_frame.x > 70.0 and in_frame.x < bounds.x - 70.0,
+				"Close-follow XI broadcast lost the ball horizontally")
+			assert(in_frame.y > 145.0 and in_frame.y < bounds.y - 35.0,
+				"Close-follow XI broadcast lost the ball near a touchline")
+	game.ball.global_position = initial_ball
+	stage.sync_presentation(8.0, "broadcast")
 	if DisplayServer.get_name() != "headless":
 		game.camera_mode = "tactical"
 		stage.sync_presentation(2.0, "tactical")
@@ -256,6 +300,43 @@ func _initialize() -> void:
 		assert(run_image.save_png(run_path) == OK)
 		print("FOOTBALL_XI_RUN_GROUND_BROADCAST=" + ProjectSettings.globalize_path(run_path))
 		_assert_kit_pixels(run_image, "broadcast", 45)
+	# Actual camera exercise in two human-owned XI restarts, using the full
+	# 4,000 x 2,600 pitch. Keep synthetic set-piece state isolated to this
+	# frozen visual test; gameplay restart and collision code are untouched.
+	game.ball.release(Vector2.RIGHT, 0.0)
+	game.ball.flight_height = 0.0
+	game.set_piece_active = true
+	game.set_piece_team_id = 0
+	game.set_piece_seconds_remaining = 2.0
+	for case_name in ["MID_THROW", "NEAR_CORNER"]:
+		var shot_spot: Vector2 = xi_mid_throw if case_name == "MID_THROW" else xi_near_corner
+		game.set_piece_kind = "SAQUE DE BANDA" if case_name == "MID_THROW" else "CÓRNER"
+		game.set_piece_spot = shot_spot
+		game.ball.global_position = shot_spot
+		stage.sync_presentation(8.0, "broadcast")
+		if case_name == "MID_THROW":
+			assert(is_equal_approx(stage.smoothed_restart_look_z,
+				ChessFootball3DPresenter.xi_broadcast_lane_look_z(
+					shot_spot, game.match_pitch
+				)),
+				"Midfield XI throw-in should follow the lane without a fake corner")
+		var spot_on_screen: Vector2 = stage.screen_position_for_world(shot_spot, 0.02)
+		print("FOOTBALL_XI_RESTART_PROJECTION_%s=%.1f,%.1f" %
+			[case_name, spot_on_screen.x, spot_on_screen.y])
+		assert(spot_on_screen.x > 18.0 and spot_on_screen.x < bounds.x - 18.0,
+			"XI restart camera lost the restart at the horizontal edge")
+		assert(spot_on_screen.y > 142.0 and spot_on_screen.y < bounds.y - 14.0,
+			"XI restart camera lost the restart at the touchline")
+		if DisplayServer.get_name() != "headless":
+			for _render_step in range(3):
+				stage.sync_presentation(0.0, "broadcast")
+				await process_frame
+				await RenderingServer.frame_post_draw
+			var restart_image: Image = viewport.get_texture().get_image()
+			var restart_path: String = "user://chess-football-xi-restart-" + case_name.to_lower() + ".png"
+			assert(restart_image.save_png(restart_path) == OK)
+			print("FOOTBALL_XI_RESTART_CAPTURE_%s=%s" %
+				[case_name, ProjectSettings.globalize_path(restart_path)])
 	print("FOOTBALL_XI_ANIMATION_OK unique_run_frames=%d" % distinct_frames.size())
 	print("FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22")
 	quit(0)
