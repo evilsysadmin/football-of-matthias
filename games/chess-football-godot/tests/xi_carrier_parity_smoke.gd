@@ -168,5 +168,5 @@ func _initialize() -> void:
 	await process_frame
 	await process_frame
 	assert(small.teams[0][1].ball_anchor().is_equal_approx(Vector2(18.0, -5.0)))
-	print("FOOTBALL_XI_CARRIER_PARITY_OK teams=2 directions=6 touch_variance=true cpu_sprint=true intercept=true fallback_5v5=unchanged")
+	print("FOOTBALL_XI_CARRIER_PARITY_OK teams=2 animations=5 directions=6 touch_variance=true cpu_sprint=true intercept=true fallback_5v5=unchanged")
 	quit(0)
