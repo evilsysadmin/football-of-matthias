@@ -94,6 +94,14 @@ func _initialize() -> void:
 	assert(stage.player_sprites.size() == 22)
 	assert(stage.player_nodes.size() == 22)
 	assert(stage.xi_raster_meshes.size() == 22)
+	# The visible XI ball is smaller, without changing the physical 2D ball.
+	var ball_sphere := stage.ball_node.mesh as SphereMesh
+	var ball_shadow_mesh := stage.ball_shadow.mesh as CylinderMesh
+	assert(ball_sphere != null and ball_shadow_mesh != null)
+	assert(is_equal_approx(ball_sphere.radius, 0.14))
+	assert(is_equal_approx(ball_sphere.height, 0.28))
+	assert(is_equal_approx(ball_shadow_mesh.top_radius, 0.095))
+	assert(is_equal_approx(ball_shadow_mesh.bottom_radius, 0.095))
 	# Both local and R2 XI frames render the same exclusive, texel-filtered QuadMesh.
 	var center: Vector2 = game.match_pitch.get_center()
 	var roster_ids: Dictionary = {}
@@ -144,6 +152,35 @@ func _initialize() -> void:
 			var screen: Vector2 = stage.screen_position_for_world(player.global_position)
 			assert(screen.x > 0.0 and screen.x < bounds.x)
 			assert(screen.y > 0.0 and screen.y < bounds.y)
+	# The tactical lens must include the actual four corner flags, not only
+	# the narrower 4-3-3 player formation.
+	for edge_x in [game.match_pitch.position.x, game.match_pitch.end.x]:
+		for edge_y in [game.match_pitch.position.y, game.match_pitch.end.y]:
+			var corner_screen: Vector2 = stage.screen_position_for_world(Vector2(edge_x, edge_y), 0.02)
+			assert(corner_screen.x > 25.0 and corner_screen.x < bounds.x - 25.0,
+				"XI tactical camera clips pitch end line")
+			assert(corner_screen.y > 125.0 and corner_screen.y < bounds.y - 30.0,
+				"XI tactical camera clips a touchline")
+	# Broadcast does not show every distant corner, but at midfield its
+	# near touchline and both goalmouth centres must remain inside the canvas.
+	game.camera_mode = "broadcast"
+	stage.sync_presentation(2.0, "broadcast")
+	var near_edge := stage.screen_position_for_world(
+		Vector2(center.x, game.match_pitch.end.y), 0.02
+	)
+	var far_edge := stage.screen_position_for_world(
+		Vector2(center.x, game.match_pitch.position.y), 0.02
+	)
+	assert(near_edge.y > bounds.y * 0.65 and near_edge.y < bounds.y - 45.0,
+		"Broadcast clips the nearest XI touchline at kickoff")
+	assert(far_edge.y > 170.0 and far_edge.y < bounds.y * 0.60)
+	for goal_x in [game.match_pitch.position.x, game.match_pitch.end.x]:
+		var goal_screen := stage.screen_position_for_world(Vector2(goal_x, center.y), 0.02)
+		assert(goal_screen.x > 80.0 and goal_screen.x < bounds.x - 80.0,
+			"XI broadcast cuts off a goal at midfield")
+	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
+		"broadcast", false, stage.camera.position.z, true
+	), "Normal XI broadcast must not trigger the corner-release camera")
 	if DisplayServer.get_name() != "headless":
 		game.camera_mode = "tactical"
 		stage.sync_presentation(2.0, "tactical")
