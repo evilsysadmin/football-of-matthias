@@ -130,7 +130,7 @@ try{
   await page.getByRole('heading',{name:'Elige a tu rival'}).waitFor();
   assert.equal(await page.locator('.chess-football-entry__quick-team-size').count(),0,'no 5v5/11v11 selector');
   assert.ok(await page.getByText('11 contra 11 · Campo completo · Dos equipos de once futbolistas.').isVisible());
-  await page.getByRole('button',{name:/^Difícil\\b/}).click();
+  await page.getByRole('button',{name:/^Difícil\b/}).click();
   assert.ok(await page.getByRole('button',{name:'Saltar al campo · 11v11 · Difícil'}).isVisible());
   assert.ok(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),'XI-only setup must not overflow viewport');
   await page.screenshot({path:resolve(out,viewport.width+'-staging-xi-setup.png')});
@@ -143,7 +143,7 @@ try{
   assert.equal(await page.locator('.chess-football-godot-host__fallback').count(),0);
   await page.getByRole('button',{name:'Salir de Chess Football'}).click();
   await page.getByRole('button',{name:/Partida rápida/}).click();
-  await page.getByRole('button',{name:/^Difícil\\b/}).click();
+  await page.getByRole('button',{name:/^Difícil\b/}).click();
   assert.equal(await page.locator('.chess-football-entry__quick-team-size').count(),0);
   // Stale Godot runtimes that claim five players per side cannot start.
   legacyHandshake=true;
