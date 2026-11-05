@@ -404,6 +404,16 @@ try {
     if (line.type() === 'error' && /null function|RuntimeError|abort\(/i.test(msg)) failures.push(msg);
   });
   page.on('pageerror', (error) => failures.push('PAGE ERROR: ' + (error.stack || error.message)));
+  page.on('request', (request) => {
+    // The retired Chess Studio CDN is no longer a valid Football runtime
+    // dependency. Fail on the ATTEMPT, even if DNS happens to resolve.
+    // Valid dedicated Football R2 sheets retain their SHA/CORS bridges.
+    if (request.url().startsWith(
+      'https://assets.chess-studio.shadowops.dpdns.org/football/atlases/'
+    )) {
+      failures.push('OBSOLETE SHARED CDN REQUEST: ' + request.url());
+    }
+  });
   page.on('requestfailed', (request) => {
     const reason = request.failure()?.errorText || '';
     // Chromium may cancel the redundant streaming fetch when Godot has already
