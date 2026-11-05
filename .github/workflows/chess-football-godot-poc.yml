@@ -1118,6 +1118,15 @@ jobs:
               cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-preview-$mode.png"
             fi
           done
+          # Both live XI vertical lanes use the same playable close-follow
+          # zoom; archive actual 1280x720 Godot pixels for visual review.
+          for lane in FAR NEAR; do
+            marker="FOOTBALL_XI_LANE_CAPTURE_${lane}"
+            screenshot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
+            if [[ -n "$screenshot" && -s "$screenshot" ]]; then
+              cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-lane-${lane,,}.png"
+            fi
+          done
           # Real XI set-piece framing: keep the mid-band throw-in and near
           # corner screenshots even if an assertion rejects a crop.
           for case in MID_THROW NEAR_CORNER; do
@@ -1138,6 +1147,8 @@ jobs:
             exit 1
           fi
           test -s "$RUNNER_TEMP/chess-football-review/xi-running-ground-broadcast.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-lane-far.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-lane-near.png"
           test -s "$RUNNER_TEMP/chess-football-review/xi-restart-mid_throw.png"
           test -s "$RUNNER_TEMP/chess-football-review/xi-restart-near_corner.png"
           grep -q 'FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22' "$log"
