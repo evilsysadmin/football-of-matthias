@@ -2679,6 +2679,17 @@ static func xi_broadcast_lane_look_z(ball_spot: Vector2, pitch: Rect2) -> float:
 	)
 
 
+# Match play has no authored restart shift, so both positive (near) and
+# negative (far) lanes must control the lens. Preserve stronger special-shot
+# framing ONLY when a human restart actually requested it.
+static func xi_broadcast_target_look_z(lane_z: float, restart_z: float) -> float:
+	if is_equal_approx(restart_z, BROADCAST_BASE_LOOK_Z):
+		return lane_z
+	if restart_z > BROADCAST_BASE_LOOK_Z:
+		return maxf(restart_z, lane_z)
+	return minf(restart_z, lane_z)
+
+
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
 	if delta <= 0.0:
 		return 0.0
@@ -2785,10 +2796,7 @@ func _sync_camera(delta: float, mode: String) -> void:
 			var lane_z: float = xi_broadcast_lane_look_z(
 				match_node.ball.global_position, match_node.match_pitch
 			)
-			if restart_look_z >= BROADCAST_BASE_LOOK_Z:
-				restart_look_z = maxf(restart_look_z, lane_z)
-			else:
-				restart_look_z = minf(restart_look_z, lane_z)
+			restart_look_z = xi_broadcast_target_look_z(lane_z, restart_look_z)
 		if easing_corner_release:
 			restart_look_z = maxf(
 				restart_look_z,
