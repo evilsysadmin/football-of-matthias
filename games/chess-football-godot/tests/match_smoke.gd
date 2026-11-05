@@ -626,7 +626,12 @@ func _initialize() -> void:
 	assert(exhausted_speed <= stamina_runner.base_speed * 1.06)
 	for _recover_step in range(10):
 		stamina_runner.move_human(0.10, Vector2.ZERO, false)
-	assert(stamina_runner.debug_stamina_ratio() >= 0.24)
+	assert(stamina_runner.debug_stamina_ratio() < 0.25)
+	assert(stamina_runner.debug_stamina_exhausted(),
+		"One second of rest must not bypass sprint exhaustion")
+	for _recover_step in range(14):
+		stamina_runner.move_human(0.10, Vector2.ZERO, false)
+	assert(stamina_runner.debug_stamina_ratio() >= 0.40)
 	assert(not stamina_runner.debug_stamina_exhausted())
 	stamina_runner.debug_set_stamina(100.0)
 	print("SMOKE_STAGE=stamina")
