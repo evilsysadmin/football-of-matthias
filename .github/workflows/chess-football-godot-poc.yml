@@ -59,6 +59,8 @@ jobs:
           ref: ${{ env.FOOTBALL_SOURCE_SHA }}
       - name: Verify R2 v2 run and rejected sparse shadows (HTTP CORS SHA)
         run: python3 scripts/check_football_run_v2_r2.py
+      - name: Verify uploaded R2 V3 (HTTP, CORS, SHA, 12x5 layout)
+        run: python3 scripts/check_football_run_v3_r2.py
       - name: Verify R2 animated idle sheets (HTTP, CORS, SHA, layout)
         run: python3 scripts/check_football_idle_r2.py
       - name: Verify R2 pass/shoot objects and staging CORS (fail closed)
@@ -548,6 +550,21 @@ jobs:
             exit 1
           fi
           grep -Eq 'football R2 v2 run: 5 views x 8 frames, (canonical-only )?XI fallback and soft shadow: OK' "$log"
+      - name: R2 v3 12-pose atomic swap, footline, v2 rollback and phase smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-run-v3-r2-smoke.log"
+          set +e
+          timeout 55s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/run_v3_r2_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::R2 v3 atomic 12-frame swap or v2 fallback regressed'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_RUN_V3_R2_SMOKE_OK clubs=2 views=5 frames=12' "$log"
       - name: XI directional frame and grounded boots at both camera pitches
         shell: bash
         run: |
@@ -987,6 +1004,31 @@ jobs:
             test -n "$shot" && test -s "$shot"
             cp "$shot" "$RUNNER_TEMP/chess-football-review/run-v2-${phase,,}.png"
           done
+      - name: Real Godot XI V2 versus V3 before/after (broadcast and tactical)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-run-v3-visual.log"
+          export FOOTBALL_RUN_V2_PREVIEW_DIR="$RUNNER_TEMP/football-run-v2-r2"
+          export FOOTBALL_RUN_V3_PREVIEW_DIR="$RUNNER_TEMP/football-run-v3-r2"
+          set +e
+          timeout 80s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/run_v3_r2_visual.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
+            echo '::error::V3 12-pose real Godot visual assertion failed'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_RUN_V3_REAL_GODOT_REVIEW_OK teams=2 outfield=20 shadows=22 frames=12 cameras=2' "$log"
+          for mode in broadcast tactical; do
+            for phase in BEFORE AFTER; do
+              marker="FOOTBALL_RUN_V3_CAPTURE_${phase}_${mode^^}"
+              shot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
+              test -n "$shot" && test -s "$shot"
+              cp "$shot" "$RUNNER_TEMP/chess-football-review/run-v3-${phase,,}-$mode.png"
+            done
+          done
       - name: Render verified keeper-catch R2 poses in actual Godot 3D
         if: steps.keeper_r2.outputs.enabled == 'true'
         shell: bash
@@ -1099,6 +1141,7 @@ jobs:
           grep -Fq 'assets/players/run_canon/*.b64' games/chess-football-godot/export_presets.cfg
           grep -Fq 'assets/players/run_directions_v1/*.b64' games/chess-football-godot/export_presets.cfg
           grep -Fq 'assets/players/keeper_canon_v1/*.b64' games/chess-football-godot/export_presets.cfg
+          grep -Fq 'optional_run_v3.json' games/chess-football-godot/export_presets.cfg
           grep -q 'variant/thread_support=false' games/chess-football-godot/export_presets.cfg
           grep -q 'renderer/rendering_method="gl_compatibility"' games/chess-football-godot/project.godot
           grep -q '^window/size/mode=3$' games/chess-football-godot/project.godot

@@ -180,6 +180,67 @@ async function bridgeVerifiedRunV2R2(page) {
   if (expected.size) throw new Error('Missing R2 v2 club sheet');
 }
 
+// CI-only localhost bridge for the two user-uploaded v3 run atlases.
+// The staging origin remains the ONLY allowed public R2 browser origin;
+// independently verify HTTP, CORS, exact SHA and lossless 12x5 layout first.
+async function bridgeVerifiedRunV3R2(page) {
+  if (process.env.CI !== 'true') throw new Error('R2 v3 localhost bridge is CI-only');
+  const config = JSON.parse(readFileSync('games/chess-football-godot/optional_run_v3.json', 'utf8'));
+  const base = 'https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v3';
+  const expected = new Map([
+    ['fc_matthias', ['fc_matthias_run_v3_clean.webp', '8208785adbda34a893c8445299c32a04714932feabcb8aa41ae39b8a1f9177af']],
+    ['real_enroque', ['real_enroque_run_v3_clean.webp', 'be73bb8fee9b1fa830ae7f405c533cb4e2fc7538c9fe248c65b0f9e63a655e01']]
+  ]);
+  if (config.enabled !== true || config.version !== 3 || config.bucket !== 'football' ||
+      config.prefix !== 'atlases/v3/' || config.cdn_base !== base ||
+      config.quality_contract !== 'football-run-5views-v3' ||
+      config.columns !== 12 || config.rows !== 5 || config.fps !== 18 ||
+      config.cell?.width !== 128 || config.cell?.height !== 144 ||
+      JSON.stringify(config.views) !== JSON.stringify(['front', 'back', 'side', 'front_diagonal', 'back_diagonal']) ||
+      !Array.isArray(config.entries) || config.entries.length !== 2) {
+    throw new Error('Unexpected R2 v3 root, pose count or contract');
+  }
+  const origin = 'https://staging.football.shadowops.dpdns.org';
+  for (const entry of config.entries) {
+    const known = expected.get(entry.kind);
+    if (!known || entry.file !== known[0] || entry.sha256 !== known[1]) {
+      throw new Error('R2 v3 atlas entry is not pinned');
+    }
+    expected.delete(entry.kind);
+    const url = base + '/' + entry.file;
+    const response = await fetch(url, {
+      headers: { Origin: origin, 'User-Agent': 'Football-run-v3-Web-CI/1.0' },
+      signal: AbortSignal.timeout(15000)
+    });
+    const cors = response.headers.get('access-control-allow-origin');
+    if (response.status !== 200 ||
+        !response.headers.get('content-type')?.toLowerCase().startsWith('image/webp') ||
+        (cors !== '*' && cors !== origin)) {
+      throw new Error('R2 v3 needs HTTP 200, WebP and staging CORS: ' + url);
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length < 25 || bytes.length > 4194304 ||
+        bytes.toString('ascii', 0, 4) !== 'RIFF' ||
+        bytes.toString('ascii', 8, 12) !== 'WEBP' ||
+        bytes.toString('ascii', 12, 16) !== 'VP8L' ||
+        bytes[20] !== 0x2F ||
+        (bytes.readUInt32LE(21) & 0x3FFF) + 1 !== 1536 ||
+        ((bytes.readUInt32LE(21) >>> 14) & 0x3FFF) + 1 !== 720 ||
+        createHash('sha256').update(bytes).digest('hex') !== known[1]) {
+      throw new Error('R2 v3 SHA or 12x5 WebP dimensions mismatch: ' + url);
+    }
+    // Exact verified bytes, served exclusively to local CI; production R2
+    // CORS remains restricted to staging. Godot repeats its SHA check.
+    await page.route(url, route => route.fulfill({
+      status: 200, contentType: 'image/webp',
+      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+      body: bytes
+    }));
+    console.log('FOOTBALL_WEB_RUN_V3_R2_VERIFIED', entry.kind, bytes.length);
+  }
+  if (expected.size) throw new Error('Missing R2 v3 club sheet');
+}
+
 // Playwright's ephemeral http://127.0.0.1 origin is intentionally NOT in
 // Cloudflare's CORS allowlist. The live staging-origin check runs above in
 // Godot CI; here we re-fetch and verify exact public bytes before fulfilling
@@ -316,6 +377,7 @@ try {
     await bridgeVerifiedStagingKeeperR2(page);
     await bridgeVerifiedStagingAnimatedIdleR2(page);
     await bridgeVerifiedRunV2R2(page);
+    await bridgeVerifiedRunV3R2(page);
     await bridgeVerifiedStagingPassShootR2(page);
     await bridgeVerifiedStagingCarryDribbleR2(page);
   }
