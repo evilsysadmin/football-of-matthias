@@ -172,6 +172,41 @@ func _initialize() -> void:
 	var shadow_ratio: float = far_shadow_scale / near_shadow_scale
 	var body_ratio: float = far_body_scale / near_body_scale
 	assert(absf(body_ratio / shadow_ratio - 1.0) < 0.05)
+	# XI-only pose clock follows real travel distance, not a near-fixed
+	# 2D animation speed. Slowing down must slow the feet without altering
+	# physical velocity or the older 5v5 / keeper clocks.
+	assert(is_equal_approx(stage.xi_outfield_stride_advance(0.0, 0.2, 8, 12.0, false), 0.0))
+	assert(is_equal_approx(stage.xi_outfield_stride_advance(250.0, 0.0, 8, 12.0, false), 0.0))
+	var slow_advance := stage.xi_outfield_stride_advance(75.0, 0.10, 8, 12.0, false)
+	var run_advance := stage.xi_outfield_stride_advance(250.0, 0.10, 8, 12.0, false)
+	var sprint_advance := stage.xi_outfield_stride_advance(335.0, 0.10, 8, 15.0, true)
+	assert(run_advance > slow_advance * 3.0)
+	assert(sprint_advance > run_advance)
+	assert(is_equal_approx(
+		stage.xi_outfield_stride_advance(250.0, 0.10, 12, 18.0, false)
+		/ run_advance, 1.5
+	))
+	assert(is_equal_approx(stage.xi_outfield_stride_advance(10000.0, 0.10, 8, 12.0, false), 1.62))
+	var runner: Footballer = game.teams[0][2]
+	var runner_key: int = runner.get_instance_id()
+	var runner_sprite: AnimatedSprite3D = stage.player_sprites[runner_key]
+	runner.action_lock_seconds = 0.0
+	runner.velocity = Vector2.RIGHT * runner.base_speed * 0.30
+	runner._sync_locomotion(false)
+	stage.outfield_visual_names.erase(runner_key)
+	stage.outfield_visual_phases.erase(runner_key)
+	stage._sync_visible_animation(runner_key, runner, runner_sprite, &"run", 0.0)
+	stage.outfield_visual_phases[runner_key] = 0.0
+	stage._sync_visible_animation(runner_key, runner, runner_sprite, &"run", 0.10)
+	var slow_phase: float = stage.outfield_visual_phases[runner_key]
+	runner.velocity = Vector2.RIGHT * runner.base_speed
+	runner._sync_locomotion(false)
+	stage.outfield_visual_phases[runner_key] = 0.0
+	stage._sync_visible_animation(runner_key, runner, runner_sprite, &"run", 0.10)
+	var fast_phase: float = stage.outfield_visual_phases[runner_key]
+	assert(fast_phase > slow_phase * 3.0)
+	# Rendering cadence must not mutate physics or move any actor.
+	assert(is_equal_approx(runner.velocity.length(), runner.base_speed))
 	# 5v5 stays on the original Sprite3D renderer and has no XI quads.
 	var small = scene.instantiate()
 	small.match_team_size = 5

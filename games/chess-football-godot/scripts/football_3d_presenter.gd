@@ -2081,6 +2081,23 @@ static func _keeper_locomotion(animation_name: StringName) -> bool:
 	return name == "run" or name == "sprint" or name.begins_with("run_") or name.begins_with("sprint_")
 
 
+# A full XI gait needs to cover roughly the same amount of turf each cycle.
+# A fixed FPS makes decelerating players keep pedalling at running speed,
+# even though the 2D actor's real velocity is dropping. Advance the VISIBLE
+# outfield pose by actual displacement only. This supports future 12-pose
+# atlases without pretending that the current approved 8 poses are new art.
+# Keep 5v5, keeper clocks, match physics and every authored atlas untouched.
+static func xi_outfield_stride_advance(
+	travel_speed: float, delta: float, frame_count: int,
+	base_fps: float, sprinting: bool
+) -> float:
+	if travel_speed <= 0.0 or delta <= 0.0 or frame_count < 1 or base_fps <= 0.0:
+		return 0.0
+	var cycle_travel_px := 180.0 if sprinting else 168.0
+	var stride_fps := travel_speed * float(frame_count) / cycle_travel_px
+	return delta * minf(stride_fps, base_fps * 1.35)
+
+
 func _sync_visible_animation(
 	key: int, player: Footballer, sprite: AnimatedSprite3D, wanted: StringName, delta: float
 ) -> void:
@@ -2117,7 +2134,14 @@ func _sync_visible_animation(
 		# Movement-phase continuity survives turns and run/sprint switches.
 		# A stationary actor must not run in place.
 		if player.velocity.length() >= 12.0:
-			phase += advance * maxf(player.visual.speed_scale, 0.0)
+			if not is_keeper and match_node.match_team_size == 11:
+				phase += xi_outfield_stride_advance(
+					player.velocity.length(), delta, count,
+					frames.get_animation_speed(wanted),
+					String(wanted).begins_with("sprint")
+				)
+			else:
+				phase += advance * maxf(player.visual.speed_scale, 0.0)
 	elif String(wanted).begins_with("idle"):
 		# Old one-frame fallback holds; new eight-frame R2 idle breathes in place.
 		if count > 1:
