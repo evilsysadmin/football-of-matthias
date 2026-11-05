@@ -77,6 +77,25 @@ func _initialize() -> void:
 				presenter.sync_presentation(0.0, "broadcast")
 				assert(sprite.animation == &"idle_back")
 				assert(sprite.frame == 0)
+			# Movement within a single authored frame must still shift weight
+			# smoothly. The pose remains frame zero while the visual sub-frame
+			# phase advances; only presentation changes, never match velocity.
+			var key: int = player.get_instance_id()
+			var proxy: Node3D = presenter.player_nodes[key]
+			player.velocity = Vector2.DOWN * player.base_speed
+			player.visual.speed_scale = 1.0
+			sprite.play(&"run_front")
+			sprite.pause()
+			sprite.frame = 0
+			presenter.outfield_visual_names[key] = &"run_front"
+			presenter.outfield_visual_phases[key] = 0.0
+			presenter._sync_player_secondary_motion(player, sprite, proxy)
+			var initial_sway: float = sprite.position.x
+			var fps: float = sprite.sprite_frames.get_animation_speed(&"run_front")
+			presenter._sync_visible_animation(key, player, sprite, &"run_front", 0.25 / fps)
+			assert(sprite.frame == 0)
+			presenter._sync_player_secondary_motion(player, sprite, proxy)
+			assert(absf(sprite.position.x - initial_sway) > 0.002)
 			print("OUTFIELD_3D_POSES team=%d slot=%d run=%d sprint=%d" % [
 				team_id, index, poses.size(), sprint_poses.size()
 			])
