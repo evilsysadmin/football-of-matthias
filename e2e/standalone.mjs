@@ -50,6 +50,10 @@ try{
   assert.ok(viewport.width>700 ? quickBox.x+quickBox.width<=managerBox.x : quickBox.y+quickBox.height<=managerBox.y,'Home actions must not overlap in desktop columns or mobile rows');
   const quickLabelOpacity=await page.locator('.chess-football-entry__choice--quick strong').evaluate(el=>getComputedStyle(el).opacity);
   assert.equal(quickLabelOpacity,viewport.width>700?'0':'1','Desktop baked art and mobile readable labels must not duplicate');
+  if(viewport.width<=700){
+    const mobileArtBytes=await page.evaluate(async()=>{const r=await fetch('/matthias-angry-mobile.webp');return r.ok?(await r.arrayBuffer()).byteLength:0;});
+    assert.ok(mobileArtBytes>20000,'Angry Matthias crop must be bundled for the phone hero');
+  }
   const transfer=page.locator('.football-transfer > summary');
   await transfer.click();
   assert.ok(await page.getByRole('button',{name:'Exportar carrera',exact:true}).isVisible(),'Transfer remains accessible under new art');

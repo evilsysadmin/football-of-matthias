@@ -230,9 +230,14 @@
     right: 0;
     height: 265px;
     pointer-events: none;
-    background-image: linear-gradient(180deg, rgba(8, 14, 10, .2), #0b1410 96%), url('/football-home-v1.webp');
-    background-size: 100% 100%, 690px auto;
-    background-position: center, left -18px top -75px;
+    /* Only Matthias is cropped from the approved artwork: no baked-on
+       headings or mode cards can bleed through the real mobile UI. */
+    background-image:
+      linear-gradient(90deg, rgba(11, 20, 16, .06), rgba(11, 20, 16, .75) 78%, #0b1410),
+      linear-gradient(180deg, rgba(11, 20, 16, .05), #0b1410 76%),
+      url('/matthias-angry-mobile.webp');
+    background-size: 100% 100%, 100% 100%, 290px auto;
+    background-position: center, center, left -20px top -37px;
     background-repeat: no-repeat;
     opacity: .9;
   }
