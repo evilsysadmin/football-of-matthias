@@ -27,6 +27,9 @@ func _initialize() -> void:
 	assert(textures.size() == 60)
 	for team_id in range(2):
 		var meta := ChessFootballRunV3R2.sheet_meta(team_id)
+		if meta.is_empty():
+			print("V3_META_DEBUG raw=", FileAccess.get_file_as_string(ChessFootballRunV3R2.META_PATH).substr(0, 250))
+			print("V3_META_DEBUG expected_sha=", ChessFootballRunV3R2.EXPECTED_SHA[team_id])
 		assert(not meta.is_empty())
 		assert(ChessFootballR2AtlasLoader.valid_metadata(meta, ChessFootballRunV3R2.TRUSTED_ROOT))
 		assert(not ChessFootballR2AtlasLoader.valid_metadata(meta))
