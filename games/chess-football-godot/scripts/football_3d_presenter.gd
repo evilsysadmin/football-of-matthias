@@ -1870,7 +1870,7 @@ func _build_ball() -> void:
 	# Only the XI mesh gets a slightly smaller football relative to the
 	# approved player sprites. 2D ball radius, contacts, saves and shots do
 	# not change; the legacy 5v5 visual proportions stay untouched.
-	var xi_ball := match_node.match_team_size == 11
+	var xi_ball: bool = match_node.match_team_size == 11
 	sphere.radius = 0.14 if xi_ball else 0.16
 	sphere.height = 0.28 if xi_ball else 0.32
 	ball_node.mesh = sphere
@@ -1915,7 +1915,7 @@ func _build_camera() -> void:
 	smoothed_focus_x = focus.x
 	smoothed_lead_x = 0.0
 	last_camera_mode = "broadcast"
-	var xi := match_node.match_team_size == 11
+	var xi: bool = match_node.match_team_size == 11
 	camera.position = Vector3(
 		focus.x,
 		BROADCAST_HEIGHT * (XI_BROADCAST_HEIGHT_SCALE if xi else 1.0),
