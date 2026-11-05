@@ -344,6 +344,9 @@ func _apply_verified_run_v3(textures: Array[Texture2D], team_id: int) -> void:
 			sculpt.hide()
 			quad.show()
 	_run_v3_r2_loaded[team_id] = true
+	# Cached view-height normalization was sampled from the old eight poses.
+	# Recompute on the v3 silhouettes or players visibly shrink/grow on swap.
+	body_scale_cache.clear()
 	tone_gain_cache.clear()
 
 
@@ -2344,7 +2347,8 @@ func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "") -> float
 	# player/frame. This avoids size pumping as legs alternate and avoids
 	# repeated GPU readbacks during play.
 	var heights: Array[float] = []
-	for frame_id in [0, 3, 6]:
+	var samples := [0, 3, 6] if sprite.sprite_frames.get_frame_count(reference_name) == 8 else [0, 4, 8]
+	for frame_id in samples:
 		var sample := sprite.sprite_frames.get_frame_texture(reference_name, frame_id) as ImageTexture
 		if sample == null:
 			push_error("Chess Football: non-raster canonical height sample")
