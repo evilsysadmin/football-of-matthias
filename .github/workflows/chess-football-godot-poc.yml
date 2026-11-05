@@ -1144,6 +1144,30 @@ jobs:
           for mode in tactical broadcast; do
             test -s "$RUNNER_TEMP/chess-football-review/xi-preview-$mode.png"
           done
+      - name: XI off-ball running frames in actual 3D Godot (two clubs)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-offball-gait.log"
+          set +e
+          timeout 65s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/xi_offball_animation_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          for phase in 0 1 2; do
+            screenshot="$(sed -n "s/^FOOTBALL_XI_OFFBALL_CAPTURE_${phase}=//p" "$log" | tail -1)"
+            if [[ -n "$screenshot" && -s "$screenshot" ]]; then
+              cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-offball-run-phase-${phase}.png"
+            fi
+          done
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI off-ball run visual poses froze or did not render'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_OFFBALL_GAIT_OK teams=2 noncarriers=4 poses=6' "$log"
+          for phase in 0 1 2; do
+            test -s "$RUNNER_TEMP/chess-football-review/xi-offball-run-phase-${phase}.png"
+          done
       - name: Upload visual review
         if: always()
         uses: actions/upload-artifact@v7
