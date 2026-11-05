@@ -166,9 +166,12 @@ func _initialize() -> void:
 		)
 		assert(absf(boot_world.y - shadow.global_position.y) < 0.050)
 
-	assert(is_equal_approx(
-		far_shadow_scale / near_shadow_scale, far_body_scale / near_body_scale
-	))
+	# The contact decal tracks camera perspective exactly; the raster's
+	# *additional* width squash now eases by depth (a few percent). Do not
+	# demand identical ratios from two deliberately different transforms.
+	var shadow_ratio: float = far_shadow_scale / near_shadow_scale
+	var body_ratio: float = far_body_scale / near_body_scale
+	assert(absf(body_ratio / shadow_ratio - 1.0) < 0.05)
 	# 5v5 stays on the original Sprite3D renderer and has no XI quads.
 	var small = scene.instantiate()
 	small.match_team_size = 5
