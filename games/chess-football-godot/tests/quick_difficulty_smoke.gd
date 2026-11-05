@@ -71,5 +71,32 @@ func _initialize() -> void:
 	var human_goal_side: Vector2 = match_node._ai_cover_target(human_cover, human_carrier.global_position)
 	match_node._set_quick_difficulty("easy")
 	assert(match_node._ai_cover_target(human_cover, human_carrier.global_position).is_equal_approx(human_goal_side))
-	print("FOOTBALL_QUICK_DIFFICULTY_OK levels=4 CPU_real_tactics player_stats_unchanged cover_challenge=1 easy_and_human_unchanged=1")
+	# Regression: the second defender really SPRINTS at a nearby human carrier
+	# on Normal, with no teammate-spacing repulsion. Easy stays a passive jog.
+	var lead_cpu: Footballer = match_node.teams[1][1]
+	lead_cpu.global_position = human_carrier.global_position + Vector2(117.0, 0.0)
+	cpu_cover.global_position = human_carrier.global_position + Vector2(155.0, 40.0)
+	cpu_cover.home_position.y = human_carrier.global_position.y + 260.0
+	for other_cpu in match_node.teams[1]:
+		if other_cpu != lead_cpu and other_cpu != cpu_cover and other_cpu.role != "keeper":
+			other_cpu.global_position = human_carrier.global_position + Vector2(400.0, 250.0)
+	assert(match_node._ai_primary_presser(1) == lead_cpu)
+	assert(match_node._ai_secondary_presser(1, lead_cpu) == cpu_cover)
+	var easy_local_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
+	match_node._update_ai(1.0 / 60.0)
+	assert(match_node.ball.carrier == human_carrier)
+	assert(not cpu_cover.last_sprinting)
+	match_node._set_quick_difficulty("normal")
+	assert(match_node._ai_cpu_second_press_active(cpu_cover, human_carrier.global_position))
+	var normal_local_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
+	assert(absf(normal_local_cover.y - human_carrier.global_position.y) < absf(easy_local_cover.y - human_carrier.global_position.y))
+	match_node._update_ai(1.0 / 60.0)
+	assert(match_node.ball.carrier == human_carrier)
+	assert(cpu_cover.last_sprinting)
+	assert(cpu_cover.ai_target.is_equal_approx(match_node._ai_cover_target(cpu_cover, human_carrier.global_position)))
+	# Local press never becomes a 350-unit cross-pitch chase in Normal.
+	cpu_cover.global_position = human_carrier.global_position + Vector2(350.0, 0.0)
+	assert(not match_node._ai_cpu_second_press_active(cpu_cover, human_carrier.global_position))
+	print("FOOTBALL_QUICK_DIFFICULTY_OK levels=4 CPU_real_tactics player_stats_unchanged cover_challenge=1 sprint_normal=1 easy_and_human_unchanged=1")
+
 	quit(0)
