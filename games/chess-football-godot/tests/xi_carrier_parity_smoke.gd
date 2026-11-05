@@ -118,7 +118,11 @@ func _initialize() -> void:
 			farthest = maxf(farthest, forward_gap)
 			assert(forward_gap > 30.0 and forward_gap < 84.0)
 		assert(farthest - nearest >= 8.0, "Ball is still magnetically fixed to the boots")
-		assert(absf(game.ball.rotation) > 0.05, "Ball must visibly roll while carried")
+		assert(absf(game.ball.rotation) > 0.05, "Ball must roll while carried")
+		stage.ball_node.rotation = Vector3.ZERO
+		stage._sync_ball_visual_roll(0.10)
+		assert(stage.ball_node.rotation.length() > 0.01,
+			"3D ball still freezes its spin while the XI carrier runs")
 		var rolling_release: Vector2 = game.ball.global_position
 		game.ball.release(Vector2.RIGHT, 200.0)
 		assert(game.ball.global_position.is_equal_approx(rolling_release))
@@ -161,6 +165,12 @@ func _initialize() -> void:
 		var keeper: Footballer = game.teams[team_id][0]
 		assert(is_equal_approx(absf(keeper.ball_anchor().x), 18.0 * absf(keeper.scale.x)))
 		assert(is_equal_approx(keeper.ball_anchor().y, -5.0))
+		stage.ball_node.rotation = Vector3.ZERO
+		game.ball.attach_to(keeper)
+		keeper.velocity = Vector2.RIGHT * keeper.base_speed
+		stage._sync_ball_visual_roll(0.10)
+		assert(stage.ball_node.rotation == Vector3.ZERO,
+			"Keeper-held balls must not rotate")
 	# 5v5 is a historical test fixture: preserve its old physics/ball anchor.
 	var small = scene.instantiate()
 	small.match_team_size = 5
