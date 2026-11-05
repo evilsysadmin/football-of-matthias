@@ -222,7 +222,16 @@ func _initialize() -> void:
 	stage.outfield_visual_phases[runner_key] = 0.0
 	stage._sync_visible_animation(runner_key, runner, runner_sprite, &"run", 0.10)
 	var fast_phase: float = stage.outfield_visual_phases[runner_key]
-	assert(fast_phase > slow_phase * 3.0)
+	# A bounded high-speed frame clock saturates at 1.35× authored FPS.
+	# Pace ratings above the neutral 250 px/s should not be forced to
+	# exceed that cap just to satisfy the old >3.0 acceleration heuristic.
+	assert(fast_phase > slow_phase * 2.65)
+	assert(is_equal_approx(
+		fast_phase, stage.xi_offball_stride_advance(
+			runner.base_speed, 0.10, runner_sprite.sprite_frames.get_frame_count(&"run"),
+			runner_sprite.sprite_frames.get_animation_speed(&"run"), false
+		)
+	))
 	# Rendering cadence must not mutate physics or move any actor.
 	assert(is_equal_approx(runner.velocity.length(), runner.base_speed))
 	# 5v5 stays on the original Sprite3D renderer and has no XI quads.
