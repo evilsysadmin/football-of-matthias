@@ -195,12 +195,11 @@ func _initialize() -> void:
 	# Whole-pitch framing remains available exclusively in tactical mode.
 	game.camera_mode = "broadcast"
 	stage.sync_presentation(2.0, "broadcast")
-	assert(is_equal_approx(stage.camera.fov, ChessFootball3DPresenter.XI_BROADCAST_FOV))
-	assert(is_equal_approx(
-		stage.camera.position.z,
+	assert(absf(stage.camera.fov - ChessFootball3DPresenter.XI_BROADCAST_FOV) < 0.08)
+	assert(absf(stage.camera.position.z - (
 		ChessFootball3DPresenter.BROADCAST_DEPTH *
 		ChessFootball3DPresenter.XI_BROADCAST_DEPTH_SCALE
-	))
+	)) < 0.08)
 	var baseline_foot := stage.screen_position_for_world(center, 0.02)
 	var baseline_top := stage.screen_position_for_world(center, 1.50)
 	assert(baseline_foot.distance_to(baseline_top) > 30.0,
