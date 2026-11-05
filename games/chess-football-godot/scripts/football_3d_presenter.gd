@@ -1976,6 +1976,8 @@ func sync_presentation(delta: float, mode: String) -> void:
 				if (
 					match_node.match_team_size == 11
 					and player.role != "keeper"
+					and not player.has_ball
+					and match_node.ball.carrier != player
 					and player.action_lock_seconds <= 0.0
 				):
 					wanted_animation = xi_outfield_motion_animation(
