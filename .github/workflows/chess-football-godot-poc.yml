@@ -1019,6 +1019,11 @@ jobs:
             shot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
             test -n "$shot" && test -s "$shot"
             cp "$shot" "$RUNNER_TEMP/chess-football-review/xi-carrier-ball-parity-$mode.png"
+            grep -q "FOOTBALL_XI_V3_WIDTH_RENDER_DELTA camera=$mode changed_pixels=" "$log"
+            marker="FOOTBALL_XI_V3_WIDTH_CAPTURE_${mode^^}"
+            comparison="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
+            test -n "$comparison" && test -s "$comparison"
+            cp "$comparison" "$RUNNER_TEMP/chess-football-review/xi-v3-width-on-off-$mode.png"
           done
       - name: Visual review R2 v2 before/after in actual 11v11 Godot
         shell: bash
