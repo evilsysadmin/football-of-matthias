@@ -45,6 +45,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
       - run: node tests/identity-gate.test.mjs
+      - run: node tests/instant-staging-dispatch.test.mjs
       - name: Exercise authority exchange and revocation in the real Workers runtime
         run: npx --yes workerd@1.20261102.1 test tests/identity-workerd.capnp
       - run: python3 scripts/check_migration.py
@@ -1204,3 +1205,28 @@ jobs:
           GODOT: ${{ needs.validate.result }}
           WEB: ${{ needs.web_runtime.result }}
         run: test "$MANAGER" = success && test "$GODOT" = success && test "$WEB" = success
+
+  notify_staging:
+    name: Football · wake staging after green main CI
+    needs: [required_gate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'evilsysadmin/football-of-matthias'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Request immediate trusted Infra reconciliation
+        shell: bash
+        env:
+          # Dedicated fine-grained token: only Actions write on shadowops-infra.
+          # No Cloudflare / R2 credentials may be stored in this repository.
+          GH_TOKEN: ${{ secrets.FOOTBALL_INFRA_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::warning::FOOTBALL_INFRA_DISPATCH_TOKEN is absent; scheduled staging reconciliation remains active."
+            exit 0
+          fi
+          if ! gh api -X POST repos/evilsysadmin/shadowops-infra/actions/workflows/football-pages-staging.yml/dispatches -f ref=main >/dev/null; then
+            echo "::warning::Immediate staging wake-up failed; scheduled reconciliation remains active."
+            exit 0
+          fi
+          echo "FOOTBALL_STAGING_WAKEUP_REQUESTED source_sha=$GITHUB_SHA"
