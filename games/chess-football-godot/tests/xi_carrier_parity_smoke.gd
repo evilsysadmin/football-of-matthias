@@ -113,13 +113,13 @@ func _initialize() -> void:
 		for _touch_step in range(45):
 			player.global_position += player.velocity / 60.0
 			game.ball.tick_ball(1.0 / 60.0)
-			var forward_gap := (game.ball.global_position - player.global_position).dot(Vector2.RIGHT)
+			var forward_gap: float = (game.ball.global_position - player.global_position).dot(Vector2.RIGHT)
 			nearest = minf(nearest, forward_gap)
 			farthest = maxf(farthest, forward_gap)
 			assert(forward_gap > 30.0 and forward_gap < 84.0)
 		assert(farthest - nearest >= 8.0, "Ball is still magnetically fixed to the boots")
 		assert(absf(game.ball.rotation) > 0.05, "Ball must visibly roll while carried")
-		var rolling_release := game.ball.global_position
+		var rolling_release: Vector2 = game.ball.global_position
 		game.ball.release(Vector2.RIGHT, 200.0)
 		assert(game.ball.global_position.is_equal_approx(rolling_release))
 		player.dribble_direction = Vector2.UP
