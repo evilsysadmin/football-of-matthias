@@ -126,6 +126,8 @@ func _initialize() -> void:
 		var rolling_release: Vector2 = game.ball.global_position
 		game.ball.release(Vector2.RIGHT, 200.0)
 		assert(game.ball.global_position.is_equal_approx(rolling_release))
+		# Dribble checks require a new legal possession after release.
+		game.ball.attach_to(player)
 		player.dribble_direction = Vector2.UP
 		player.dribble_burst_seconds = player.DRIBBLE_BURST_SECONDS * 0.50
 		game.ball.tick_ball(0.0)
