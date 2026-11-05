@@ -5,10 +5,7 @@ extends SceneTree
 # Actual 3D quad + authoritative possession ball + shadow, two cameras.
 const CELL := Vector2i(280, 300)
 const VIEWS := ["side", "front_diagonal", "back_diagonal"]
-const AXES := [
-	Vector2.RIGHT, Vector2(1.0, 1.0).normalized(),
-	Vector2(1.0, -1.0).normalized()
-]
+# The unit diagonal vectors are normalized at runtime, not const-folded.
 
 func _initialize() -> void:
 	var run_dir := OS.get_environment("FOOTBALL_RUN_V3_PREVIEW_DIR")
@@ -27,6 +24,10 @@ func _initialize() -> void:
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null and stage.xi_raster_meshes.size() == 22)
 	var scores: Array = game.score.duplicate()
+	var axes: Array[Vector2] = [
+		Vector2.RIGHT, Vector2(1.0, 1.0).normalized(),
+		Vector2(1.0, -1.0).normalized()
+	]
 	for team in game.teams:
 		for actor in team:
 			actor.global_position = Vector2(-9999.0, -9999.0)
@@ -54,7 +55,7 @@ func _initialize() -> void:
 			var actor: Footballer = game.teams[team_id][1]
 			actor.global_position = game.match_pitch.get_center()
 			for index in range(VIEWS.size()):
-				var axis: Vector2 = AXES[index]
+				var axis: Vector2 = axes[index]
 				actor.velocity = axis * actor.base_speed
 				actor.dribble_burst_seconds = 0.0
 				actor.visual.play(&"run")
@@ -91,7 +92,7 @@ func _initialize() -> void:
 					Vector2i(index * CELL.x, team_id * CELL.y))
 			game.ball.release(Vector2.RIGHT, 0.0)
 			actor.global_position = Vector2(-9999.0, -9999.0)
-		var path := "user://xi-carrier-ball-parity-" + mode + ".png"
+		var path: String = "user://xi-carrier-ball-parity-" + mode + ".png"
 		assert(sheet.save_png(path) == OK)
 		print("FOOTBALL_XI_CARRIER_PARITY_CAPTURE_" + mode.to_upper() + "="
 			+ ProjectSettings.globalize_path(path))
