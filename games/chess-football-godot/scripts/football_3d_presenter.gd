@@ -2275,6 +2275,21 @@ static func xi_outfield_stride_advance(
 	return delta * minf(stride_fps, base_fps * 1.35)
 
 
+# Draw every original pass/shot pose in its actual lock window. For a
+# 0.58-second pass the old fixed 10-FPS clock only reached ~frame 5/8.
+# The visual phase uses the same lock that already controls gameplay;
+# never prolong the kick or delay the authoritative ball release.
+static func xi_complete_action_phase(
+	frame_count: int, total_seconds: float, remaining_seconds: float
+) -> float:
+	if frame_count < 1 or total_seconds <= 0.0:
+		return 0.0
+	var progress: float = clampf(
+		1.0 - remaining_seconds / total_seconds, 0.0, 1.0
+	)
+	return minf(float(frame_count - 1), floorf(progress * float(frame_count)))
+
+
 func _sync_visible_animation(
 	key: int, player: Footballer, sprite: AnimatedSprite3D, wanted: StringName, delta: float
 ) -> void:
@@ -2335,6 +2350,16 @@ func _sync_visible_animation(
 		# Old one-frame fallback holds; new eight-frame R2 idle breathes in place.
 		if count > 1:
 			phase += advance
+	elif (
+		match_node.match_team_size == 11
+		and not is_keeper
+		and wanted in [&"pass", &"shoot"]
+		and player.action_lock_seconds > 0.0
+		and player.action_visual_duration_seconds > 0.0
+	):
+		phase = xi_complete_action_phase(
+			count, player.action_visual_duration_seconds, player.action_lock_seconds
+		)
 	else:
 		phase += advance * maxf(player.visual.speed_scale, 0.0)
 	if frames.get_animation_loop(wanted):
