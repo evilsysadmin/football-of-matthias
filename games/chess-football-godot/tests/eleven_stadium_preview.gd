@@ -207,6 +207,22 @@ func _initialize() -> void:
 	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
 		"broadcast", false, stage.camera.position.z, true
 	), "Normal XI broadcast must not trigger the corner-release camera")
+	# The old >= base check forced the far lane to remain at midfield
+	# whenever no set piece was active. Guard both signs, and keep the
+	# stronger look shift reserved for an actual near/far human restart.
+	var base_z := ChessFootball3DPresenter.BROADCAST_BASE_LOOK_Z
+	assert(is_equal_approx(ChessFootball3DPresenter.xi_broadcast_target_look_z(
+		base_z - 4.0, base_z
+	), base_z - 4.0), "Far-side live play must be followed")
+	assert(is_equal_approx(ChessFootball3DPresenter.xi_broadcast_target_look_z(
+		base_z + 4.0, base_z
+	), base_z + 4.0), "Near-side live play must be followed")
+	assert(is_equal_approx(ChessFootball3DPresenter.xi_broadcast_target_look_z(
+		base_z + 4.0, base_z + 7.0
+	), base_z + 7.0), "Near corner needs its authored clearance")
+	assert(is_equal_approx(ChessFootball3DPresenter.xi_broadcast_target_look_z(
+		base_z - 4.0, base_z - 6.0
+	), base_z - 6.0), "Far restart needs its authored clearance")
 	# Move the authoritative ball near all four active corners, but do not
 	# insist on viewing remote goals during a midfield attack.
 	var initial_ball: Vector2 = game.ball.global_position
@@ -218,6 +234,11 @@ func _initialize() -> void:
 			)
 			game.ball.global_position = live_spot
 			stage.sync_presentation(8.0, "broadcast")
+			var expected_lane: float = ChessFootball3DPresenter.xi_broadcast_lane_look_z(
+				live_spot, game.match_pitch
+			)
+			assert(absf(stage.smoothed_restart_look_z - expected_lane) < 0.03,
+				"XI broadcast does not follow the active ball in both vertical lanes")
 			var in_frame := stage.screen_position_for_world(live_spot, 0.02)
 			assert(in_frame.x > 70.0 and in_frame.x < bounds.x - 70.0,
 				"Close-follow XI broadcast lost the ball horizontally")
@@ -251,6 +272,35 @@ func _initialize() -> void:
 		assert(broadcast_image.save_png(broadcast_path) == OK)
 		print("FOOTBALL_XI_PREVIEW_BROADCAST=" + ProjectSettings.globalize_path(broadcast_path))
 		_assert_kit_pixels(broadcast_image, "broadcast", 45)
+		# Preserve real pixel evidence for both halves, not just a midfield
+		# kickoff picture. The simulation is frozen while staging each shot.
+		game.set_process(false)
+		game.set_physics_process(false)
+		for lane_name in ["FAR", "NEAR"]:
+			var lane_fraction: float = 0.06 if lane_name == "FAR" else 0.94
+			var lane_spot: Vector2 = Vector2(
+				center.x, game.match_pitch.position.y + game.match_pitch.size.y * lane_fraction
+			)
+			game.ball.global_position = lane_spot
+			stage.sync_presentation(8.0, "broadcast")
+			var expected_lane_z: float = ChessFootball3DPresenter.xi_broadcast_lane_look_z(
+				lane_spot, game.match_pitch
+			)
+			assert(absf(stage.smoothed_restart_look_z - expected_lane_z) < 0.03)
+			var ball_pixel: Vector2 = stage.screen_position_for_world(lane_spot, 0.02)
+			assert(ball_pixel.x > 70.0 and ball_pixel.x < bounds.x - 70.0)
+			assert(ball_pixel.y > 155.0 and ball_pixel.y < bounds.y - 35.0)
+			for _settle in range(3):
+				stage.sync_presentation(0.0, "broadcast")
+				await process_frame
+				await RenderingServer.frame_post_draw
+			var lane_image: Image = viewport.get_texture().get_image()
+			var lane_path: String = "user://chess-football-xi-lane-" + lane_name.to_lower() + ".png"
+			assert(lane_image.save_png(lane_path) == OK)
+			print("FOOTBALL_XI_LANE_CAPTURE_%s=%s" %
+				[lane_name, ProjectSettings.globalize_path(lane_path)])
+		game.ball.global_position = initial_ball
+		stage.sync_presentation(8.0, "broadcast")
 	# Validate actual authored animation on the visible quad, not just
 	# the hidden AnimatedSprite3D frame counter.
 	var winger: Footballer = game.teams[0][8]
