@@ -77,16 +77,59 @@ func _initialize() -> void:
 	var pursuit: Vector2 = game._ai_loose_ball_pursuit_point()
 	assert(XI.has_point(pursuit))
 	assert(pursuit.x < FIVE.position.x and pursuit.y < FIVE.position.y)
-	# The XI pass planner can find a useful 700-unit ground pass, which
-	# was impossible with the arcade-only 560-unit ceiling.
+	# Real 11v11 link-up: a reachable unmarked teammate, not the most
+	# distant attacker, receives a ball using normal friction and first touch.
 	var passer: Footballer = game.teams[1][10]
 	var receiver: Footballer = game.teams[1][8]
-	passer.global_position = Vector2(XI.end.x - 500.0, centre.y)
-	receiver.global_position = passer.global_position + Vector2(-700.0, 0.0)
+	passer.global_position = Vector2(XI.end.x - 850.0, centre.y)
+	receiver.global_position = passer.global_position + Vector2(-330.0, 90.0)
 	for teammate in game.teams[1]:
 		if teammate != passer and teammate != receiver and teammate.role != "keeper":
-			teammate.global_position = Vector2(XI.position.x + 100.0, XI.position.y + 180.0)
+			teammate.global_position = Vector2(XI.end.x - 90.0, XI.end.y - 90.0)
+	for rival in game.teams[0]:
+		rival.global_position = Vector2(XI.end.x - 120.0, XI.end.y - 130.0)
+	game.ball.attach_to(passer)
 	assert(game._best_ai_pass_target(passer) == receiver)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == null)
+	assert(game.ball.velocity.length() > 540.0)
+	assert(game.ai_intended_pass_receiver == receiver)
+	game._update_ai(1.0 / 60.0)
+	assert(receiver.last_sprinting)
+	var completed_link_up := false
+	for frame in range(150):
+		game.ball.tick_ball(1.0 / 60.0)
+		game._try_claim_loose_ball()
+		if game.ball.carrier == receiver:
+			completed_link_up = true
+			break
+	assert(completed_link_up)
+
+	# A defender stationed on the passing lane forces a different choice;
+	# when no other safe teammate exists, the CPU keeps the ball.
+	game.ball.attach_to(passer)
+	var blocker: Footballer = game.teams[0][4]
+	blocker.global_position = passer.global_position.lerp(receiver.global_position, 0.5)
+	assert(game._best_ai_pass_target(passer) == null)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == passer)
+
+	# Under pressure, a safe sideways/backward outlet is worth using.
+	# Without pressure, don't initiate pointless lateral ping-pong.
+	receiver.global_position = passer.global_position + Vector2(55.0, 220.0)
+	blocker.global_position = Vector2(XI.end.x - 120.0, XI.end.y - 130.0)
+	assert(game._best_ai_pass_target(passer) == receiver)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == passer)
+	blocker.global_position = passer.global_position + Vector2(90.0, -120.0)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == null)
+	assert(game.ball.velocity.x > 0.0 and game.ball.velocity.y > 0.0)
+	# A closely marked receiver is no longer a valid outlet.
+	game.ball.attach_to(passer)
+	blocker.global_position = receiver.global_position + Vector2(32.0, 0.0)
+	assert(game._best_ai_pass_target(passer) == null)
+
 	# A CPU striker must shoot LEFT toward the XI goal, never right toward
 	# the old arcade goal now located behind the attacker.
 	passer.global_position = Vector2(XI.position.x + 430.0, centre.y)
@@ -105,5 +148,5 @@ func _initialize() -> void:
 	# Legacy default math still points at the original nets.
 	assert(ChessFootballMath.goal_center(0).x == FIVE.end.x)
 	assert(ChessFootballMath.goal_center(1).x == FIVE.position.x)
-	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 pass=1 shot=1 old_5v5=unchanged")
+	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
 	quit(0)
