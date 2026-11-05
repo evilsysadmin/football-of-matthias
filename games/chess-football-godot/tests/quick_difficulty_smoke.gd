@@ -84,14 +84,14 @@ func _initialize() -> void:
 	assert(match_node._ai_secondary_presser(1, lead_cpu) == cpu_cover)
 	var easy_local_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
 	match_node._update_ai(1.0 / 60.0)
-	assert(ball_is_carried_by(match_node, human_carrier))
+	assert(match_node.ball.carrier == human_carrier)
 	assert(not cpu_cover.last_sprinting)
 	match_node._set_quick_difficulty("normal")
 	assert(match_node._ai_cpu_second_press_active(cpu_cover, human_carrier.global_position))
 	var normal_local_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
 	assert(absf(normal_local_cover.y - human_carrier.global_position.y) < absf(easy_local_cover.y - human_carrier.global_position.y))
 	match_node._update_ai(1.0 / 60.0)
-	assert(ball_is_carried_by(match_node, human_carrier))
+	assert(match_node.ball.carrier == human_carrier)
 	assert(cpu_cover.last_sprinting)
 	assert(cpu_cover.ai_target.is_equal_approx(match_node._ai_cover_target(cpu_cover, human_carrier.global_position)))
 	# Local press never becomes a 350-unit cross-pitch chase in Normal.
@@ -99,6 +99,4 @@ func _initialize() -> void:
 	assert(not match_node._ai_cpu_second_press_active(cpu_cover, human_carrier.global_position))
 	print("FOOTBALL_QUICK_DIFFICULTY_OK levels=4 CPU_real_tactics player_stats_unchanged cover_challenge=1 sprint_normal=1 easy_and_human_unchanged=1")
 
-func ball_is_carried_by(game: Node, player: Footballer) -> bool:
-	return game.ball.carrier == player
 	quit(0)
