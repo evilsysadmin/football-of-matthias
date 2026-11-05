@@ -94,7 +94,7 @@ func _initialize() -> void:
 	stage.sync_presentation(0.0, "broadcast")
 	assert(is_equal_approx(stage.ball_node.position.y, 0.16),
 		"Reduced XI ball must rest on the grass, not float at old height")
-	var mid_near_y := game.match_pitch.get_center().y + game.match_pitch.size.y * 0.29
+	var mid_near_y: float = game.match_pitch.get_center().y + game.match_pitch.size.y * 0.29
 	var xi_mid_throw := Vector2(game.match_pitch.get_center().x, mid_near_y)
 	# This was wrongly classified as 'near touchline' by the old 5v5
 	# threshold (588 units instead of XI's 910 units).
