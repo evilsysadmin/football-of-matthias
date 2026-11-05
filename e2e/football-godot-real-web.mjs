@@ -425,7 +425,10 @@ try {
   // directions/layouts against the actual controlled player's world position.
   // The gameplay script reports these values only for local CI and never
   // alters input or player velocity.
-  await page.locator('canvas').click({ position: { x: 500, y: 370 }, timeout: 10000 });
+  // A real pointer click avoids Playwright actionability's GPU readPixels stall.
+  // The first Web boot requires the same safe focus path as the XI reboot below.
+  await page.mouse.click(500, 370);
+  await page.waitForFunction(() => document.activeElement?.tagName === 'CANVAS', null, { timeout: 10000 });
   await page.waitForFunction(
     () => window.__chessFootballInputSamples.some((sample) =>
       sample.playable && sample.team_size === 5 && sample.team_players === 10 &&
