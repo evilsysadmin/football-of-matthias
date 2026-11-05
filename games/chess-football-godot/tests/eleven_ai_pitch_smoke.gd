@@ -89,6 +89,9 @@ func _initialize() -> void:
 	for rival in game.teams[0]:
 		rival.global_position = Vector2(XI.end.x - 120.0, XI.end.y - 130.0)
 	game.ball.attach_to(passer)
+	assert(game._ai_xi_support_rank(receiver) == 0)
+	assert(game._ai_support_target(receiver).distance_to(passer.global_position) < 300.0)
+	assert(game._ai_xi_support_rank(game.teams[1][5]) == -1)
 	assert(game._best_ai_pass_target(passer) == receiver)
 	game._ai_attack(passer)
 	assert(game.ball.carrier == null)
