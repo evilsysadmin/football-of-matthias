@@ -1894,6 +1894,17 @@ func sync_presentation(delta: float, mode: String) -> void:
 				) - cell_half_height
 			)
 			sprite.position.y += foot_y * sprite.pixel_size * (sprite.scale.y - authored_y)
+			# XI bodies grow toward the far touchline to compensate projection,
+			# but their contact shadows used to keep the unscaled world footprint.
+			# Distant players then looked detached from tiny ground marks. Match
+			# the shadow's planar footprint to the same bounded body correction.
+			# The motion pass resets shadow.scale every tick, so this cannot
+			# accumulate; neither physical collision nor 5v5 is affected.
+			if match_node.match_team_size == 11:
+				var contact_shadow := proxy.get_node_or_null("ContactShadow") as MeshInstance3D
+				if contact_shadow != null:
+					contact_shadow.scale.x *= depth_scale
+					contact_shadow.scale.z *= depth_scale
 			# A visible XI QuadMesh uses the original animation frame, position,
 			# mirroring and footline. No separate animation or physics authority.
 			var xi_quad: MeshInstance3D = xi_raster_meshes.get(key)
