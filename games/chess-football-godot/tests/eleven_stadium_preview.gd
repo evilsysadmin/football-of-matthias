@@ -202,8 +202,11 @@ func _initialize() -> void:
 	winger._sync_locomotion(false)
 	for step in range(10):
 		stage.sync_presentation(1.0 / 60.0, "broadcast")
-		await process_frame
-		await RenderingServer.frame_post_draw
+		# Headless CI has no frame_post_draw signal. Keep the deterministic
+		# transform assertions there; only await pixels in windowed Godot.
+		if DisplayServer.get_name() != "headless":
+			await process_frame
+			await RenderingServer.frame_post_draw
 	var running_driver: AnimatedSprite3D = stage.player_sprites[winger_key]
 	assert(absf(running_driver.rotation.z) > deg_to_rad(2.0))
 	if DisplayServer.get_name() != "headless":
