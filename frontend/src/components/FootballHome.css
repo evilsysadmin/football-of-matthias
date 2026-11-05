@@ -1,0 +1,479 @@
+/* Approved Football of Matthias home art. Only the welcome view uses image
+   hotspots; every action remains a real, keyboard-focusable HTML control.
+   Other views (manager, season and Godot) retain their original layouts. */
+.chess-football-entry[data-football-view="welcome"] {
+  background: #0a130f;
+}
+
+.chess-football-entry[data-football-view="welcome"] > .chess-football-entry__content {
+  max-width: none;
+  width: 100%;
+  min-height: 100%;
+  padding: 0;
+  margin: 0;
+  gap: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.chess-football-entry[data-football-view="welcome"] .chess-football-entry__masthead {
+  /* The artwork carries the visible title on desktop. Keep the real h1 in
+     the accessibility tree and avoid drawing a second overlapping title. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.chess-football-entry__welcome-scene {
+  position: relative;
+  width: min(100%, 177.68dvh);
+  aspect-ratio: 1280 / 720;
+  flex: 0 0 auto;
+  margin: auto;
+  isolation: isolate;
+}
+
+.chess-football-entry__welcome-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  user-select: none;
+  pointer-events: none;
+}
+
+.chess-football-entry__welcome-back {
+  position: absolute;
+  z-index: 3;
+  left: 1.1%;
+  top: 1.7%;
+  width: 12%;
+  height: 6.2%;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: transparent;
+  font-size: 0;
+  cursor: pointer;
+}
+
+.chess-football-entry__welcome-scene .chess-football-entry__choices {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.chess-football-entry__welcome-scene .chess-football-entry__choice {
+  position: absolute;
+  z-index: 2;
+  pointer-events: auto;
+  top: 49%;
+  height: 33.5%;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  border: 2px solid transparent;
+  border-radius: 17px;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transition: box-shadow .15s ease, border-color .15s ease;
+  transform: none;
+}
+
+.chess-football-entry__welcome-scene .chess-football-entry__choice--quick {
+  left: 23.8%;
+  width: 29.8%;
+}
+
+.chess-football-entry__welcome-scene .chess-football-entry__choice--manager {
+  left: 55.2%;
+  width: 33.6%;
+}
+
+.chess-football-entry__welcome-scene .chess-football-entry__choice > * {
+  /* Real accessible names and content; no duplicate text over the baked art. */
+  opacity: 0;
+}
+
+.chess-football-entry__welcome-scene .chess-football-entry__choice:hover,
+.chess-football-entry__welcome-scene .chess-football-entry__choice:focus-visible,
+.chess-football-entry__welcome-back:hover,
+.chess-football-entry__welcome-back:focus-visible {
+  border-color: #f6d990;
+  box-shadow: inset 0 0 26px rgba(250, 210, 112, .25), 0 0 22px rgba(252, 205, 108, .25);
+  transform: none;
+}
+
+.chess-football-entry__welcome-scene .chess-football-entry__choice:focus-visible,
+.chess-football-entry__welcome-back:focus-visible,
+.chess-football-entry__welcome-career summary:focus-visible {
+  outline: 3px solid #ffe39d;
+  outline-offset: 3px;
+}
+
+.chess-football-entry__welcome-career {
+  position: absolute;
+  z-index: 4;
+  left: 23.8%;
+  top: 85.5%;
+  width: 51%;
+}
+
+.chess-football-entry__welcome-career .football-transfer {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: #f4e9d1;
+}
+
+.chess-football-entry__welcome-career .football-transfer summary {
+  min-height: 0;
+  height: clamp(32px, 5.6dvh, 52px);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-size: 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.chess-football-entry__welcome-career .football-transfer summary::-webkit-details-marker {
+  display: none;
+}
+
+.chess-football-entry__welcome-career .football-transfer summary:focus-visible {
+  border-color: #ffe39d;
+}
+
+.chess-football-entry__welcome-career .football-transfer[open] {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-height: min(68dvh, 560px);
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid #ab8747;
+  border-radius: 12px;
+  background: rgba(10, 21, 17, .97);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .7);
+}
+
+.chess-football-entry__welcome-career .football-transfer[open] summary {
+  height: auto;
+  min-height: 44px;
+  padding: .4rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.chess-football-entry__welcome-career .chess-football-entry__career-resume,
+.chess-football-entry__welcome-career .chess-football-entry__career-warning {
+  position: absolute;
+  bottom: calc(100% + .6rem);
+  left: 0;
+  width: 100%;
+  margin: 0;
+  padding: .65rem 1rem;
+  border: 1px solid #b8a16e;
+  border-radius: 12px;
+  background: rgba(10, 22, 17, .97);
+  box-shadow: 0 8px 30px #0008;
+}
+
+.chess-football-entry__welcome-career .chess-football-entry__career-resume p {
+  margin: .3rem 0;
+}
+
+.chess-football-entry__welcome-career .chess-football-entry__manager-return {
+  min-height: 40px;
+  margin-top: .3rem;
+}
+
+@media (min-width: 701px) {
+  body:has(.chess-football-entry[data-football-view="welcome"]) .football-identity-actions {
+    right: max(12px, calc((100vw - 177.68dvh) / 2 + 12px));
+    top: max(12px, calc((100dvh - 56.25vw) / 2 + 12px));
+  }
+
+  body:has(.chess-football-entry[data-football-view="welcome"]) .football-identity-actions button {
+    border: 1px solid #b5975b;
+    border-radius: 999px;
+    background: rgba(14, 15, 12, .97);
+    color: #f4e9d1;
+  }
+}
+
+/* Mobile: do not shrink the painted-on labels into illegibility. Use the
+   approved angry-Matthias art as atmosphere and genuine readable DOM cards. */
+@media (max-width: 700px) {
+  .chess-football-entry[data-football-view="welcome"] {
+    background: radial-gradient(ellipse at 30% 5%, #384532 0, transparent 65%), #0b1410;
+  }
+
+  .chess-football-entry[data-football-view="welcome"]::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 265px;
+    pointer-events: none;
+    /* Only Matthias is cropped from the approved artwork: no baked-on
+       headings or mode cards can bleed through the real mobile UI. */
+    background-image:
+      linear-gradient(90deg, rgba(11, 20, 16, .06), rgba(11, 20, 16, .75) 78%, #0b1410),
+      linear-gradient(180deg, rgba(11, 20, 16, .05), #0b1410 76%),
+      url('/matthias-angry-mobile.webp');
+    background-size: 100% 100%, 100% 100%, 290px auto;
+    background-position: center, center, left -20px top -37px;
+    background-repeat: no-repeat;
+    opacity: .9;
+  }
+
+  .chess-football-entry[data-football-view="welcome"] > .chess-football-entry__content {
+    position: relative;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 1rem;
+    padding: 145px max(1rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  }
+
+  .chess-football-entry[data-football-view="welcome"] .chess-football-entry__masthead {
+    position: relative;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+    z-index: 1;
+    text-shadow: 0 3px 15px #07110c;
+  }
+
+  .chess-football-entry[data-football-view="welcome"] .chess-football-entry__masthead h1 {
+    font-size: clamp(2.4rem, 10vw, 3.7rem);
+    margin: .3rem 0;
+  }
+
+  .chess-football-entry__welcome-scene {
+    width: 100%;
+    aspect-ratio: auto;
+    margin: 0;
+  }
+
+  .chess-football-entry__welcome-art {
+    display: none;
+  }
+
+  .chess-football-entry__welcome-back {
+    position: fixed;
+    top: max(.8rem, env(safe-area-inset-top));
+    left: max(.8rem, env(safe-area-inset-left));
+    z-index: 5;
+    width: auto;
+    height: auto;
+    min-height: 44px;
+    padding: .55rem 1rem;
+    color: #f4e9d1;
+    font: 600 .88rem system-ui, sans-serif;
+    border-color: #b5975b;
+    background: rgba(8, 18, 12, .9);
+  }
+
+  .chess-football-entry__welcome-scene .chess-football-entry__choices {
+    position: static;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    pointer-events: auto;
+  }
+
+  .chess-football-entry__welcome-scene .chess-football-entry__choice {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    height: auto;
+    min-height: 180px;
+    padding: 1.2rem;
+    gap: .4rem;
+    border: 1px solid #7d704d;
+    background: linear-gradient(130deg, rgba(42, 80, 54, .96), rgba(12, 28, 20, .96));
+    box-shadow: 0 14px 35px #0005;
+  }
+
+  .chess-football-entry__welcome-scene .chess-football-entry__choice--manager {
+    background: linear-gradient(130deg, rgba(77, 55, 40, .96), rgba(24, 20, 17, .96));
+  }
+
+  .chess-football-entry__welcome-scene .chess-football-entry__choice > * {
+    opacity: 1;
+  }
+
+  .chess-football-entry__welcome-scene .chess-football-entry__choice strong {
+    font-size: clamp(1.6rem, 6vw, 2rem);
+  }
+
+  .chess-football-entry__welcome-career {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    padding: .75rem .9rem;
+    border: 1px solid #7e7154;
+    border-radius: 12px;
+    background: #14241b;
+  }
+
+  .chess-football-entry__welcome-career .football-transfer summary {
+    height: auto;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: .4rem;
+    font-size: .98rem;
+    list-style: revert;
+  }
+
+  .chess-football-entry__welcome-career .football-transfer[open] {
+    position: relative;
+    bottom: auto;
+    max-height: none;
+    overflow: visible;
+    padding: .1rem;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .chess-football-entry__welcome-career .chess-football-entry__career-resume,
+  .chess-football-entry__welcome-career .chess-football-entry__career-warning {
+    position: static;
+    width: 100%;
+    margin: 0 0 .8rem;
+    padding: .75rem;
+    box-shadow: none;
+  }
+}
+
+/* If the static asset is missing (e.g. a cached old offline shell), retain a
+   fully functional, readable welcome screen rather than invisible hotspots. */
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] > .chess-football-entry__content {
+  max-width: 1050px;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  gap: 1rem;
+  justify-content: center;
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__masthead {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  clip-path: none;
+  overflow: visible;
+  white-space: normal;
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__welcome-scene {
+  width: 100%;
+  aspect-ratio: auto;
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__welcome-art {
+  display: none;
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__welcome-back {
+  position: static;
+  width: auto;
+  height: auto;
+  min-height: 44px;
+  padding: .65rem 1rem;
+  color: #f4e9d1;
+  font: inherit;
+  border-color: #b5975b;
+  background: #15231a;
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__choices {
+  position: static;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__choice {
+  position: static;
+  width: auto;
+  height: auto;
+  min-height: 220px;
+  padding: 1.2rem;
+  gap: .55rem;
+  border: 1px solid #a78b59;
+  background: linear-gradient(140deg, #243e2a, #101b15);
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__choice > * {
+  opacity: 1;
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__welcome-career {
+  position: static;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #15231a;
+  border: 1px solid #7e7154;
+  border-radius: 12px;
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .football-transfer summary {
+  min-height: 44px;
+  height: auto;
+  font-size: 1rem;
+  padding: .5rem;
+  list-style: revert;
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .football-transfer[open] {
+  position: static;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__career-resume,
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__career-warning {
+  position: static;
+  width: 100%;
+  margin: .5rem 0;
+}
+
+@media (max-width: 700px) {
+  .chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__choices {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chess-football-entry__welcome-scene .chess-football-entry__choice {
+    transition: none;
+  }
+}

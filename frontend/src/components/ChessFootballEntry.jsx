@@ -10,6 +10,7 @@ import { getFootballClubRoster, getDefaultFootballLineup, FOOTBALL_FIVE_POSITION
 import { FOOTBALL_SCOUTING_ATTRIBUTES } from '../footballPlayerProfiles.js';
 import { FOOTBALL_QUICK_DIFFICULTIES, DEFAULT_FOOTBALL_QUICK_DIFFICULTY } from '../footballQuickDifficulty.js';
 import './ChessFootballEntry.css';
+import './FootballHome.css';
 import ReleaseUpdateNotice from './ReleaseUpdateNotice.jsx';
 import FootballSaveTransfer from './FootballSaveTransfer.jsx';
 import FootballManagerDesk from './FootballManagerDesk.jsx';
@@ -49,6 +50,7 @@ function FootballSquadDevelopment({ players }) {
 
 export default function ChessFootballEntry({ onExit }) {
   const [view, setView] = useState('welcome');
+  const [welcomeArtAvailable, setWelcomeArtAvailable] = useState(true);
   const [quickDifficulty, setQuickDifficulty] = useState(DEFAULT_FOOTBALL_QUICK_DIFFICULTY);
   const scrollSurface = useRef(null);
   const [selectedClubId, setSelectedClubId] = useState(null);
@@ -178,48 +180,64 @@ export default function ChessFootballEntry({ onExit }) {
   }
 
   return (
-    <main ref={scrollSurface} className="chess-football-entry" data-football-view={view}>
+    <main ref={scrollSurface} className="chess-football-entry" data-football-view={view} data-football-home-art={welcomeArtAvailable ? "available" : "missing"}>
       <div className="chess-football-entry__content">
-        <button type="button" className="chess-football-entry__back" onClick={view === 'welcome' ? onExit : () => setView(view === 'season' ? 'club' : view === 'club' ? 'manager' : 'welcome')}>
-          ← {view === 'welcome' ? 'ShadowOps' : view === 'season' ? 'Volver a la ficha' : view === 'club' ? 'Volver a los clubes' : 'Volver a Football'}
-        </button>
+        {view !== 'welcome' && (
+          <button type="button" className="chess-football-entry__back" onClick={() => setView(view === 'season' ? 'club' : view === 'club' ? 'manager' : 'welcome')}>
+            ← {view === 'season' ? 'Volver a la ficha' : view === 'club' ? 'Volver a los clubes' : 'Volver a Football'}
+          </button>
+        )}
         <header className="chess-football-entry__masthead">
-          <span className="chess-football-entry__eyebrow">El vestuario · {view === "season" ? `Temporada ${seasonNumber}` : "Football"}</span>
-          <h1>Chess <em>Football</em></h1>
+          {view !== 'welcome' && <span className="chess-football-entry__eyebrow">{view === 'season' ? `Temporada ${seasonNumber}` : 'Football'}</span>}
+          <h1>Football <em>of Matthias</em></h1>
           <p>Elige tu forma de vivir el fútbol. Un partido ahora, o la carrera de un club entero.</p>
         </header>
 
         {view === 'welcome' ? (
-          <div className="chess-football-entry__choices" aria-label="Elige un modo de Chess Football">
-            <FootballSaveTransfer onImported={()=>setSavedCareer(readFootballCareer())}/>
-            {savedCareer.status === 'available' ? (
-              <div className="chess-football-entry__career-resume" aria-label="Temporada guardada">
-                <strong>{FOOTBALL_MANAGER_CLUBS.find((club) => club.id === savedCareer.journal.clubId)?.name}</strong>
-                <p>Temporada {(savedCareer.journal.completedSeasons?.length || 0) + 1} · Jornada {savedCareer.season.currentRound} de 10. Clasificación, quinteto y evolución guardados.</p>
-                <button type="button" className="chess-football-entry__manager-return" onClick={continueCareer}>Continuar temporada</button>
-              </div>
-            ) : savedCareer.status === 'future' ? (
-              <p className="chess-football-entry__career-warning" role="status">Este dispositivo tiene una carrera creada con una versión más nueva. Se conserva intacta; actualiza el juego para continuar.</p>
-            ) : savedCareer.status === 'invalid' ? (
-              <p className="chess-football-entry__career-warning" role="status">El último guardado no se puede leer. No se borrará hasta que confirmes una nueva temporada.</p>
-            ) : null}
-            <button type="button" className="chess-football-entry__choice chess-football-entry__choice--quick" onClick={() => setView('quick-setup')}>
-              <span className="chess-football-entry__choice-icon" aria-hidden="true">⚽</span>
-              <small>Salta al campo</small>
-              <strong>Partida rápida</strong>
-              <span>Partido completo de 11 contra 11. Sin calendarios ni despachos: a jugar.</span>
-              <b>Jugar ahora →</b>
-            </button>
-            <button type="button" className="chess-football-entry__choice chess-football-entry__choice--manager" onClick={() => setView('manager')}>
-              <span className="chess-football-entry__choice-icon" aria-hidden="true">♚</span>
-              <small>Dirige el club</small>
-              <strong>Modo mánager</strong>
-              <span>Construye tu equipo, prepara la temporada y decide el futuro del club.</span>
-              <b>Entrar al despacho →</b>
-            </button>
-
-          </div>
-        ) : view === 'quick-setup' ? (
+          <section className="chess-football-entry__welcome-scene" aria-label="Elige un modo de Football of Matthias">
+            <img
+              className="chess-football-entry__welcome-art"
+              src="/football-home-v1.webp"
+              alt=""
+              aria-hidden="true"
+              width="1672"
+              height="941"
+              decoding="async"
+              fetchPriority="high"
+              onError={() => setWelcomeArtAvailable(false)}
+            />
+            <button type="button" className="chess-football-entry__welcome-back" onClick={onExit}>← ShadowOps</button>
+            <div className="chess-football-entry__choices">
+              <button type="button" className="chess-football-entry__choice chess-football-entry__choice--quick" onClick={() => setView('quick-setup')}>
+                <span className="chess-football-entry__choice-icon" aria-hidden="true">⚽</span>
+                <small>Salta al campo</small>
+                <strong>Partida rápida</strong>
+                <span>Partido completo de 11 contra 11. Sin calendarios ni despachos: a jugar.</span>
+                <b>Jugar ahora →</b>
+              </button>
+              <button type="button" className="chess-football-entry__choice chess-football-entry__choice--manager" onClick={() => setView('manager')}>
+                <span className="chess-football-entry__choice-icon" aria-hidden="true">♚</span>
+                <small>Dirige el club</small>
+                <strong>Modo mánager</strong>
+                <span>Construye tu equipo, prepara la temporada y decide el futuro del club.</span>
+                <b>Entrar al despacho →</b>
+              </button>
+            </div>
+            <div className="chess-football-entry__welcome-career">
+              {savedCareer.status === 'available' ? (
+                <div className="chess-football-entry__career-resume" aria-label="Temporada guardada">
+                  <strong>{FOOTBALL_MANAGER_CLUBS.find((club) => club.id === savedCareer.journal.clubId)?.name}</strong>
+                  <p>Temporada {(savedCareer.journal.completedSeasons?.length || 0) + 1} · Jornada {savedCareer.season.currentRound} de 10.</p>
+                  <button type="button" className="chess-football-entry__manager-return" onClick={continueCareer}>Continuar temporada</button>
+                </div>
+              ) : savedCareer.status === 'future' ? (
+                <p className="chess-football-entry__career-warning" role="status">Este dispositivo tiene una carrera creada con una versión más nueva. Se conserva intacta; actualiza el juego para continuar.</p>
+              ) : savedCareer.status === 'invalid' ? (
+                <p className="chess-football-entry__career-warning" role="status">El último guardado no se puede leer. No se borrará hasta que confirmes una nueva temporada.</p>
+              ) : null}
+              <FootballSaveTransfer onImported={() => setSavedCareer(readFootballCareer())} />
+            </div>
+          </section>        ) : view === 'quick-setup' ? (
           <section className="chess-football-entry__quick-setup" aria-labelledby="football-quick-setup-title">
             <span className="chess-football-entry__eyebrow">Partida rápida · FC Matthias vs Real Enroque</span>
             <h2 id="football-quick-setup-title">Elige a tu rival</h2>
