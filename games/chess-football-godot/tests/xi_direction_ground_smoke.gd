@@ -67,8 +67,16 @@ func _initialize() -> void:
 				)
 				assert(quad.position.is_equal_approx(sprite.position + required_offset))
 				if direction != Vector2.ZERO:
-					assert(absf(quad.rotation.z) >= deg_to_rad(2.0),
-						"Running XI pose must test a real tilted billboard")
+					# At the far touchline a deliberately damped lean must remain
+					# nonzero; requiring the old full 2° there rejected the fix.
+					var body_depth: float = stage.perspective_body_scale(
+						stage.camera, stage.player_nodes[key].global_position
+					)
+					var min_lean := deg_to_rad(
+						2.0 * stage.xi_distant_stride_weight(body_depth)
+					)
+					assert(absf(quad.rotation.z) >= min_lean,
+						"Running XI pose must retain a depth-calibrated tilted billboard")
 				else:
 					assert(absf(quad.rotation.z) < 0.001)
 				# The GPU rotates the billboard, so reconstruct its lowest opaque
