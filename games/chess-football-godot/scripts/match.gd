@@ -1243,10 +1243,51 @@ func _ai_dribble_target(player: Footballer) -> Vector2:
 			target += escape * (pressure_radius - distance) * 0.9
 	return ChessFootballMath.clamp_to_pitch(target, match_pitch)
 
+func _ai_xi_support_rank(player: Footballer) -> int:
+	if (
+		match_team_size != 11
+		or player.team_id != 1
+		or ball.carrier == null
+		or ball.carrier.team_id != 1
+	):
+		return -1
+	var distance: float = player.global_position.distance_squared_to(ball.carrier.global_position)
+	var closer := 0
+	for teammate in teams[1]:
+		if (
+			teammate == player
+			or teammate == ball.carrier
+			or teammate.sent_off
+			or teammate.role == "keeper"
+		):
+			continue
+		var other_distance: float = teammate.global_position.distance_squared_to(ball.carrier.global_position)
+		if (
+			other_distance < distance - 0.01
+			or (absf(other_distance - distance) <= 0.01 and teammate.squad_index < player.squad_index)
+		):
+			closer += 1
+	return closer if closer < 2 else -1
+
+
 func _ai_support_target(player: Footballer) -> Vector2:
 	if ball.carrier == null:
 		return player.home_position
 	var forward: float = 1.0 if player.team_id == 0 else -1.0
+	# Exactly two nearby XI CPU teammates create actual short passing
+	# triangles (one ahead and one recycling behind). Everyone else keeps
+	# the existing 4-3-3 lanes; they must run, never teleport, into support.
+	var rank := _ai_xi_support_rank(player)
+	if rank >= 0:
+		var primary_side := 1.0 if player.home_position.y >= ball.carrier.global_position.y else -1.0
+		var side := primary_side if rank == 0 else -primary_side
+		return ChessFootballMath.clamp_to_pitch(
+			ball.carrier.global_position + Vector2(
+				forward * (175.0 if rank == 0 else -145.0),
+				side * 175.0,
+			),
+			match_pitch,
+		)
 	# Use distinct positional lanes rather than dragging all supporters into
 	# the dribbler's path. A wider field is only useful when the AI exploits it.
 	var lane_offset := 0.0
