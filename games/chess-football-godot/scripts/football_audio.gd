@@ -10,6 +10,9 @@ var _cursor: int = 0
 var sfx_enabled: bool = true
 var _variation_cursors: Dictionary = {}
 var _last_played_key: String = ""
+var _match_paused: bool = false
+
+
 func _ready() -> void:
 	for index in range(POOL_SIZE):
 		var player := AudioStreamPlayer.new()
@@ -19,9 +22,6 @@ func _ready() -> void:
 	_build_streams()
 
 # Match-only controls. Never mute the global bus or other application audio.
-var _match_paused: bool = false
-
-
 func set_match_paused(paused: bool) -> void:
 	_match_paused = paused
 	if paused:
@@ -93,7 +93,7 @@ func debug_last_played_key() -> String:
 # Cycle through curated sound takes. No RNG, no extra gameplay events, and
 # muting does not advance the variant so unmuting remains predictable.
 func _play_variant(group: String, keys: Array[String], volume_db: float, pitch_scale: float) -> void:
-	if not sfx_enabled or keys.is_empty():
+	if not sfx_enabled or _match_paused or keys.is_empty():
 		return
 	var index := int(_variation_cursors.get(group, 0))
 	_variation_cursors[group] = index + 1
