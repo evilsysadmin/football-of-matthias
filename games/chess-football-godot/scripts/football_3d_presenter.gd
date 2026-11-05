@@ -244,15 +244,20 @@ func _apply_animated_idle_frames(
 
 
 func _request_idle_front_from_r2() -> void:
-	# The shared loader owns URL validation, single-fetch, timeout and SHA.
-	# Club-specific colour mapping stays in the sprite bank.
+	# Legacy shared-CDN still appears in optional metadata for offline
+	# compatibility tests, but it is not a live dependency: the approved
+	# local idle frame and independently verified animated-idle R2 suffice.
+	# Never issue the old DNS request when disabled, even in Web CI.
 	if not OS.has_feature("web"):
+		return
+	var meta: Dictionary = ChessFootballSpriteBank.optional_idle_meta()
+	if meta.get("enabled") != true:
 		return
 	var loader := ChessFootballR2AtlasLoader.new()
 	loader.name = "OptionalIdleFrontR2"
 	add_child(loader)
 	loader.atlas_ready.connect(_on_idle_front_atlas_ready)
-	loader.start(ChessFootballSpriteBank.optional_idle_meta())
+	loader.start(meta)
 
 
 func _on_idle_front_atlas_ready(image: Image) -> void:

@@ -14,6 +14,10 @@ func _initialize() -> void:
 	var presenter: ChessFootball3DPresenter = game.presentation_3d
 	assert(presenter != null)
 	var meta := ChessFootballSpriteBank.optional_idle_meta()
+	# Legacy shared-CDN fallback must remain opt-in and disabled: the public
+	# host no longer resolves and must not become a Web boot dependency.
+	assert(meta.get("enabled") == false)
+	assert(presenter.get_node_or_null("OptionalIdleFrontR2") == null)
 	assert(meta.get("columns") == 3 and meta.get("rows") == 1)
 	assert(ChessFootballSpriteBank.idle_front_url().begins_with("https://"))
 	assert(ChessFootballSpriteBank.decode_idle_front_webp(PackedByteArray([1, 2, 3])).is_empty())

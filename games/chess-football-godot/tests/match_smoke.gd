@@ -230,10 +230,14 @@ func _initialize() -> void:
 		"goal", "goal_alt", "pass", "pass_soft", "pass_crisp",
 		"post", "crossbar", "save", "save_dive", "shot", "shot_low", "shot_snap",
 		"tackle", "tackle_boot", "tackle_foul", "whistle",
-		"crowd_bed", "crowd_gasp", "crowd_save", "crowd_save_big",
-		"crowd_near_miss",
 	]:
 		assert(audio_names.has(expected_audio))
+	# No fake stadium noise should ever be built, spawned or restarted.
+	for stream_name in audio_names:
+		assert(not stream_name.begins_with("crowd"),
+			"Generated crowd audio has reappeared: " + stream_name)
+	assert(match_node.audio_fx.get_node_or_null("FootballCrowdBed") == null)
+	assert(match_node.audio_fx.get_node_or_null("FootballCrowdReaction") == null)
 	# Same real event, alternate authored timbres. The distinction between
 	# post and crossbar comes from the physics event, not a random roll.
 	match_node.audio_fx.play_shot(0.25)
@@ -256,51 +260,42 @@ func _initialize() -> void:
 	assert(match_node.audio_fx.debug_last_played_key() == "goal")
 	match_node.audio_fx.play_goal()
 	assert(match_node.audio_fx.debug_last_played_key() == "goal_alt")
-	# An understated stadium bed is independent of one-shot ball voices.
-	assert(match_node.audio_fx.debug_crowd_bed_playing())
-	assert(match_node.audio_fx.debug_stream_duration("crowd_bed") >= 2.3)
-	assert(match_node.audio_fx.debug_stream_duration("crowd_gasp") >= 1.0)
-	# Earlier frame-hit and goal tests already consumed the first crowd cue.
-	# Advance only the audio clock to test a fresh genuine save after cooldown.
-	var prior_crowd_reactions: int = match_node.audio_fx.debug_crowd_reaction_count()
-	match_node.audio_fx._process(ChessFootballAudio.CROWD_REACTION_COOLDOWN + 0.1)
+	# Retain physical match impacts, not synthetic gasps or applause.
+	match_node.audio_fx.play_keeper_save(true)
+	assert(match_node.audio_fx.debug_last_played_key() == "save_dive")
 	match_node.audio_fx.play_keeper_save()
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == prior_crowd_reactions + 1)
-	assert(match_node.audio_fx.debug_last_crowd_reaction_key() == "crowd_save")
-	# A second notable event inside the cooldown cannot stack more cheers.
-	match_node.audio_fx.play_goal_frame(720.0, "post")
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == prior_crowd_reactions + 1)
-	match_node.audio_fx.play_goal()
-	assert(not match_node.audio_fx._crowd_reaction.playing)
-	match_node.audio_fx.set_match_paused(true)
-	assert(not match_node.audio_fx.debug_crowd_bed_playing())
-	match_node.audio_fx.play_keeper_save()
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == prior_crowd_reactions + 1)
-	match_node.audio_fx.set_match_paused(false)
-	assert(match_node.audio_fx.debug_crowd_bed_playing())
-	# The seven cues belong to actual match events. The SFX setting must
-	# silence any playing cheer immediately, never the global audio bus.
+	assert(match_node.audio_fx.debug_last_played_key() == "save")
+	var cue_before_miss: String = match_node.audio_fx.debug_last_played_key()
+	match_node.audio_fx.play_close_miss()
+	assert(match_node.audio_fx.debug_last_played_key() == cue_before_miss)
+	assert(match_node.audio_fx.debug_stream_duration("goal") > 0.38)
+	assert(match_node.audio_fx.debug_stream_duration("goal") < 0.5)
+	assert(match_node.audio_fx.debug_stream_duration("shot") < 0.2)
 	assert(match_node.debug_match_sfx_enabled())
 	assert(match_node.debug_match_sfx_button_text() == "SFX: SÍ")
-	assert(match_node.audio_fx.debug_stream_duration("goal") >= 2.2)
-	assert(match_node.audio_fx.debug_stream_duration("shot") < 0.2)
 	match_node.audio_fx.play_goal()
 	match_node.debug_toggle_match_sfx()
 	assert(not match_node.debug_match_sfx_enabled())
-	assert(not match_node.audio_fx.debug_crowd_bed_playing())
-	assert(not match_node.audio_fx._crowd_reaction.playing)
 	assert(match_node.debug_match_sfx_button_text() == "SFX: NO")
 	for voice in match_node.audio_fx._players:
 		assert(not voice.playing)
 	var last_live_key: String = match_node.audio_fx.debug_last_played_key()
 	match_node.audio_fx.play_shot(1.0)
 	assert(match_node.audio_fx.debug_last_played_key() == last_live_key)
-	for voice in match_node.audio_fx._players:
-		assert(not voice.playing)
 	match_node.debug_toggle_match_sfx()
 	assert(match_node.debug_match_sfx_enabled())
-	assert(match_node.audio_fx.debug_crowd_bed_playing())
 	assert(match_node.debug_match_sfx_button_text() == "SFX: SÍ")
+	match_node.audio_fx.set_match_paused(true)
+	var paused_key: String = match_node.audio_fx.debug_last_played_key()
+	match_node.audio_fx.play_pass()
+	assert(match_node.audio_fx.debug_last_played_key() == paused_key)
+	for voice in match_node.audio_fx._players:
+		assert(not voice.playing)
+	match_node.audio_fx.set_match_paused(false)
+	match_node.audio_fx.play_pass()
+	assert(match_node.audio_fx.debug_last_played_key() in [
+		"pass", "pass_soft", "pass_crisp"
+	])
 	assert(match_node.debug_3d_animated_players() == 10)
 	# Two proper goalkeeper sprites, same canonical canvas and proportions
 	# as field players. No animation may fall back to the old SVG body.
@@ -1907,19 +1902,16 @@ func _initialize() -> void:
 	match_node.set_piece_active = false
 	match_node.audio_fx.set_match_paused(false)
 	match_node.audio_fx.set_sfx_enabled(true)
-	match_node.audio_fx._process(3.1)
-	var near_miss_count: int = match_node.audio_fx.debug_crowd_reaction_count()
 	var near_miss_shooter: Footballer = match_node.teams[0][4]
 	match_node.ball.attach_to(near_miss_shooter)
 	match_node.ball.release(Vector2.RIGHT, 900.0, 0.0, true)
 	assert(match_node.ball.last_release_was_shot)
 	match_node.ball.global_position = near_right
 	match_node._check_ball_out()
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == near_miss_count + 1)
-	assert(match_node.audio_fx.debug_last_crowd_reaction_key() == "crowd_near_miss")
+	# No synthesized crowd stream exists, regardless of shot classification.
+	assert(not match_node.audio_fx.debug_stream_names().has("crowd_near_miss"))
 	assert(not match_node.ball.last_release_was_shot)
-	# Passes and stale shots do not get another crowd event, even at the same spot.
-	match_node.audio_fx._process(3.1)
+	# Passes and stale shots remain silent at the same spot.
 	match_node.goal_restart_active = false
 	match_node.kickoff_active = false
 	match_node.set_piece_active = false
@@ -1928,7 +1920,8 @@ func _initialize() -> void:
 	assert(not match_node.ball.last_release_was_shot)
 	match_node.ball.global_position = near_right
 	match_node._check_ball_out()
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == near_miss_count + 1)
+	# No synthesized crowd stream exists, regardless of shot classification.
+	assert(not match_node.audio_fx.debug_stream_names().has("crowd_near_miss"))
 	match_node.goal_restart_active = false
 	match_node.kickoff_active = false
 	match_node.set_piece_active = false
@@ -1937,8 +1930,9 @@ func _initialize() -> void:
 	match_node.ball.shot_flight_seconds = 3.5
 	match_node.ball.global_position = near_right
 	match_node._check_ball_out()
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == near_miss_count + 1)
-	print("SMOKE_STAGE=tracked-near-miss-crowd")
+	# No synthesized crowd stream exists, regardless of shot classification.
+	assert(not match_node.audio_fx.debug_stream_names().has("crowd_near_miss"))
+	print("SMOKE_STAGE=tracked-near-miss-no-fake-crowd")
 
 	# Use a genuine, fast shot near the actual keeper's dive limit: the
 	# spectacular cue is neither a random save nor a prediction before contact.
@@ -1953,15 +1947,12 @@ func _initialize() -> void:
 	match_node.ball.release(Vector2.RIGHT, 1060.0, 0.0, true)
 	match_node.ball.global_position = heroic_keeper.global_position + Vector2(-18.0, 40.0)
 	assert(match_node._is_spectacular_keeper_save(heroic_keeper))
-	match_node.audio_fx._process(ChessFootballAudio.CROWD_REACTION_COOLDOWN + 0.1)
-	var heroic_reactions_before: int = match_node.audio_fx.debug_crowd_reaction_count()
 	assert(match_node._keeper_try_save(heroic_keeper))
 	assert(match_node.audio_fx.debug_last_played_key() == "save_dive")
-	assert(match_node.audio_fx.debug_last_crowd_reaction_key() == "crowd_save_big")
-	assert(match_node.audio_fx.debug_crowd_reaction_count() == heroic_reactions_before + 1)
 	assert(not match_node.ball.last_release_was_shot)
 	assert(match_node.audio_fx.debug_stream_duration("save_dive") > 0.14)
-	assert(match_node.audio_fx.debug_stream_duration("crowd_save_big") >= 1.6)
+	for stream_name in match_node.audio_fx.debug_stream_names():
+		assert(not stream_name.begins_with("crowd"))
 
 	# Hard passes, gentle catches, central saves and old shots are not heroic.
 	match_node.ball.attach_to(heroic_shooter)
