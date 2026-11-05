@@ -158,6 +158,10 @@ func _initialize() -> void:
 		var travelled: float = 0.0
 		var advanced: float = 0.0
 		for tick in range(120):
+			# CharacterBody2D.move_and_slide() must run on a physics tick.
+			# The old synchronous SceneTree test advanced its visual clock
+			# but did not reliably move the actor's collision body.
+			await physics_frame
 			var before: Vector2 = runner.global_position
 			runner.move_ai(1.0 / 60.0, target, 0.70)
 			travelled += before.distance_to(runner.global_position)
@@ -180,6 +184,8 @@ func _initialize() -> void:
 				runner.velocity.length(), 1.0 / 60.0, 12,
 				sprite.sprite_frames.get_animation_speed(sprite.animation), false
 			)
+		print("FOOTBALL_XI_OFFBALL_REAL_TRAVEL team=%d turf=%.2f v=%.2f frames=%d" %
+			[team_id, travelled, runner.velocity.length(), observed.size()])
 		assert(travelled > 200.0 and travelled < 430.0,
 			"AI test must cover real, sustained grass displacement")
 		assert(observed.size() == 12,
