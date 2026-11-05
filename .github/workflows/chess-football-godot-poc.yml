@@ -565,6 +565,21 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_RUN_V3_R2_SMOKE_OK clubs=2 views=5 frames=12' "$log"
+      - name: XI carrier scale and forward ball anchoring (six directions)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-carrier-parity.log"
+          set +e
+          timeout 45s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/xi_carrier_parity_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|ERROR: Failed to load script' "$log"; then
+            echo '::error::XI carrier visual size or true forward possession regressed'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_CARRIER_PARITY_OK teams=2 animations=5 directions=6' "$log"
       - name: XI directional frame and grounded boots at both camera pitches
         shell: bash
         run: |
@@ -981,6 +996,29 @@ jobs:
             for phase in before after; do
               test -s "$RUNNER_TEMP/chess-football-review/carry-dribble-$phase-$mode.png"
             done
+          done
+      - name: Real XI carrier side versus diagonal with authoritative ball ahead
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-carrier-parity-visual.log"
+          export FOOTBALL_RUN_V3_PREVIEW_DIR="$RUNNER_TEMP/football-run-v3-r2"
+          export FOOTBALL_CARRY_DRIBBLE_PREVIEW_DIR="$RUNNER_TEMP/football-carry-dribble-r2"
+          set +e
+          timeout 70s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/xi_carrier_parity_visual.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
+            echo '::error::XI carrier/ball real Godot visual parity regressed'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_CARRIER_PARITY_VISUAL_OK teams=2 views=3 cameras=2 actual_r2=1' "$log"
+          for mode in broadcast tactical; do
+            marker="FOOTBALL_XI_CARRIER_PARITY_CAPTURE_${mode^^}"
+            shot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
+            test -n "$shot" && test -s "$shot"
+            cp "$shot" "$RUNNER_TEMP/chess-football-review/xi-carrier-ball-parity-$mode.png"
           done
       - name: Visual review R2 v2 before/after in actual 11v11 Godot
         shell: bash
