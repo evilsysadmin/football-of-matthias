@@ -40,12 +40,16 @@ const NEAR_CORNER_LOOK_SHIFT := 3.85
 const NEAR_CORNER_CAMERA_RETREAT := 6.2
 const BROADCAST_HEIGHT := 9.8
 const BROADCAST_DEPTH := 17.8
-# XI default broadcast previously cropped the near touchline and players at
-# midfield. Retreat only the 11v11 camera; keep full-pitch aerial as V toggle
-# and preserve legacy five-a-side, sprite geometry and match physics.
-const XI_BROADCAST_HEIGHT_SCALE := 1.73
-const XI_BROADCAST_DEPTH_SCALE := 2.25
-const XI_BROADCAST_FOV := 45.5
+# XI broadcast is a playable close-follow camera, not an entire-field aerial.
+# The previous all-field 1.73/2.25 / 45.5-degree framing made 22 sprites tiny.
+# V remains the full-pitch tactical overview; no atlas/physics scaling changes.
+const XI_BROADCAST_HEIGHT_SCALE := 1.44
+const XI_BROADCAST_DEPTH_SCALE := 1.70
+const XI_BROADCAST_FOV := 41.0
+const XI_BROADCAST_X_LIMIT_RATIO := 0.43
+const XI_BROADCAST_VERTICAL_FOLLOW := 0.31
+const XI_BROADCAST_VERTICAL_FOLLOW_MIN := -5.2
+const XI_BROADCAST_VERTICAL_FOLLOW_MAX := 6.3
 const TACTICAL_HEIGHT := 27.0
 const PLAYER_PIXEL_SIZE := 0.0124
 const TACTICAL_PLAYER_PIXEL_SIZE := 0.0162
@@ -2661,6 +2665,20 @@ static func broadcast_live_corner_pitch_floor(
 	return BROADCAST_BASE_LOOK_Z + NEAR_CORNER_LOOK_SHIFT * side_influence
 
 
+# Live XI camera pans toward the actual ball lane when it approaches either
+# touchline. The tighter lens stays readable without cropping a controlled
+# winger or using the 5v5 pitch proportions.
+static func xi_broadcast_lane_look_z(ball_spot: Vector2, pitch: Rect2) -> float:
+	var distance_z: float = (
+		ball_spot.y - pitch.get_center().y
+	) * WORLD_SCALE
+	return BROADCAST_BASE_LOOK_Z + clampf(
+		distance_z * XI_BROADCAST_VERTICAL_FOLLOW,
+		XI_BROADCAST_VERTICAL_FOLLOW_MIN,
+		XI_BROADCAST_VERTICAL_FOLLOW_MAX,
+	)
+
+
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
 	if delta <= 0.0:
 		return 0.0
@@ -2746,8 +2764,9 @@ func _sync_camera(delta: float, mode: String) -> void:
 				match_node.match_pitch,
 			),
 		)
-		var camera_x_limit := field_width * broadcast_live_corner_x_limit_ratio(
-			easing_corner_release
+		var camera_x_limit: float = field_width * (
+			XI_BROADCAST_X_LIMIT_RATIO if match_node.match_team_size == 11
+			else broadcast_live_corner_x_limit_ratio(easing_corner_release)
 		)
 		wanted_position.x = clampf(wanted_position.x, -camera_x_limit, camera_x_limit)
 		if match_node.match_team_size == 11:
@@ -2760,6 +2779,16 @@ func _sync_camera(delta: float, mode: String) -> void:
 			match_node.set_piece_spot,
 			match_node.match_pitch,
 		)
+		if match_node.match_team_size == 11:
+			# Track the vertical ball lane as well as the horizontal one. Keep
+			# stronger authored set-piece framing at the extreme edges.
+			var lane_z: float = xi_broadcast_lane_look_z(
+				match_node.ball.global_position, match_node.match_pitch
+			)
+			if restart_look_z >= BROADCAST_BASE_LOOK_Z:
+				restart_look_z = maxf(restart_look_z, lane_z)
+			else:
+				restart_look_z = minf(restart_look_z, lane_z)
 		if easing_corner_release:
 			restart_look_z = maxf(
 				restart_look_z,
