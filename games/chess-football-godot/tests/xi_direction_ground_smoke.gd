@@ -186,7 +186,7 @@ func _initialize() -> void:
 		stage.xi_outfield_stride_advance(250.0, 0.10, 12, 18.0, false)
 		/ run_advance, 1.5
 	))
-	assert(stage.xi_outfield_stride_advance(10000.0, 0.10, 8, 12.0, false) <= 1.62)
+	assert(is_equal_approx(stage.xi_outfield_stride_advance(10000.0, 0.10, 8, 12.0, false), 1.62))
 	var runner: Footballer = game.teams[0][2]
 	var runner_key: int = runner.get_instance_id()
 	var runner_sprite: AnimatedSprite3D = stage.player_sprites[runner_key]
