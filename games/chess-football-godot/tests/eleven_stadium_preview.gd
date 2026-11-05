@@ -176,7 +176,7 @@ func _initialize() -> void:
 	assert(far_edge.y > 170.0 and far_edge.y < bounds.y * 0.60)
 	for goal_x in [game.match_pitch.position.x, game.match_pitch.end.x]:
 		var goal_screen := stage.screen_position_for_world(Vector2(goal_x, center.y), 0.02)
-		assert(goal_screen.x > 12.0 and goal_screen.x < bounds.x - 12.0,
+		assert(goal_screen.x > 80.0 and goal_screen.x < bounds.x - 80.0,
 			"XI broadcast cuts off a goal at midfield")
 	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
 		"broadcast", false, stage.camera.position.z, true
