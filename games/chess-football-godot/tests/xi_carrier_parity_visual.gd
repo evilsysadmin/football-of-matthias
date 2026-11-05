@@ -49,7 +49,7 @@ func _initialize() -> void:
 		assert(stage._run_v3_r2_loaded.has(team_id))
 		assert(stage._carry_dribble_r2_loaded.has(team_id))
 	for mode in ["broadcast", "tactical"]:
-		var sheet := Image.create(CELL.x * VIEWS.size(), CELL.y * 2, false, Image.FORMAT_RGBA8)
+		var sheet := Image.create(CELL.x * VIEWS.size(), CELL.y * 3, false, Image.FORMAT_RGBA8)
 		sheet.fill(Color("#23572f"))
 		for team_id in range(2):
 			var actor: Footballer = game.teams[team_id][1]
@@ -114,6 +114,49 @@ func _initialize() -> void:
 					Vector2i(index * CELL.x, team_id * CELL.y))
 			game.ball.release(Vector2.RIGHT, 0.0)
 			actor.global_position = Vector2(-9999.0, -9999.0)
+		# Third row: three actual rendered stride phases, not three crops
+		# of an identical boot-anchored ball. The body stays at one pitch
+		# position so the change is the real rolling touch in 3D.
+		var touch_runner: Footballer = game.teams[0][1]
+		touch_runner.global_position = game.match_pitch.get_center()
+		touch_runner.velocity = Vector2.RIGHT * touch_runner.base_speed
+		touch_runner.dribble_burst_seconds = 0.0
+		touch_runner.visual.play(&"run")
+		touch_runner.visual.frame = 0
+		var touch_key: int = touch_runner.get_instance_id()
+		stage.player_run_views[touch_key] = "side"
+		stage.outfield_visual_names.erase(touch_key)
+		stage.outfield_visual_phases.erase(touch_key)
+		var touch_leads: Array[float] = []
+		var samples := [1, 11, 22]
+		for sample_id in range(samples.size()):
+			game.ball.attach_to(touch_runner)
+			for _tick in range(samples[sample_id]):
+				game.ball.tick_ball(1.0 / 60.0)
+			touch_leads.append(
+				(game.ball.global_position - touch_runner.global_position).dot(Vector2.RIGHT)
+			)
+			stage.sync_presentation(0.0, mode)
+			for _frame in range(3):
+				await process_frame
+				await RenderingServer.frame_post_draw
+			var touch_screen := game.get_viewport().get_texture().get_image()
+			assert(touch_screen != null and touch_screen.get_size() == Vector2i(1280, 720))
+			var touch_center := stage.camera.unproject_position(
+				stage.world_to_stage(touch_runner.global_position, stage.PLAYER_BASE_Y)
+			)
+			var touch_px := clampi(int(touch_center.x) - CELL.x / 2, 0, 1280 - CELL.x)
+			var touch_py := clampi(int(touch_center.y) - CELL.y / 2, 0, 720 - CELL.y)
+			sheet.blit_rect(
+				touch_screen, Rect2i(touch_px, touch_py, CELL.x, CELL.y),
+				Vector2i(sample_id * CELL.x, 2 * CELL.y)
+			)
+		assert(touch_leads.max() - touch_leads.min() > 8.0,
+			"Actual XI possession ball did not advance between boot touches")
+		print("FOOTBALL_XI_CARRY_TOUCH_VISUAL camera=%s gap_min=%.2f gap_max=%.2f"
+			% [mode, touch_leads.min(), touch_leads.max()])
+		game.ball.release(Vector2.RIGHT, 0.0)
+		touch_runner.global_position = Vector2(-9999.0, -9999.0)
 		var path: String = "user://xi-carrier-ball-parity-" + mode + ".png"
 		assert(sheet.save_png(path) == OK)
 		print("FOOTBALL_XI_CARRIER_PARITY_CAPTURE_" + mode.to_upper() + "="
