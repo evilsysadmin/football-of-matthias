@@ -184,9 +184,34 @@ func _initialize() -> void:
 		var frame: Texture2D = stage._xi_frame_texture(winger, driver)
 		assert((body.material_override as StandardMaterial3D).albedo_texture == frame)
 		assert(body.scale == driver.scale)
-		assert(body.position == driver.position)
+		var expected_run_offset := stage.xi_rotated_foot_anchor_offset(
+			stage.camera, frame, driver.pixel_size, driver.scale.y,
+			driver.rotation.z, false
+		)
+		assert(body.position.is_equal_approx(driver.position + expected_run_offset))
 		distinct_frames[frame.get_instance_id()] = true
 	assert(distinct_frames.size() >= 2, "XI visible quad must animate")
+	# Capture an ACTUALLY running far-touchline footballer. The ordinary XI
+	# kickoff preview contains idle poses and cannot reveal tilted boot gaps.
+	winger.global_position = Vector2(
+		game.match_pitch.get_center().x - 330.0,
+		game.match_pitch.position.y + 360.0
+	)
+	winger.action_lock_seconds = 0.0
+	winger.velocity = Vector2.RIGHT * winger.base_speed
+	winger._sync_locomotion(false)
+	for step in range(10):
+		stage.sync_presentation(1.0 / 60.0, "broadcast")
+		await process_frame
+		await RenderingServer.frame_post_draw
+	var running_driver: AnimatedSprite3D = stage.player_sprites[winger_key]
+	assert(absf(running_driver.rotation.z) > deg_to_rad(2.0))
+	if DisplayServer.get_name() != "headless":
+		var run_image: Image = viewport.get_texture().get_image()
+		var run_path := "user://chess-football-xi-running-ground-broadcast.png"
+		assert(run_image.save_png(run_path) == OK)
+		print("FOOTBALL_XI_RUN_GROUND_BROADCAST=" + ProjectSettings.globalize_path(run_path))
+		_assert_kit_pixels(run_image, "broadcast", 45)
 	print("FOOTBALL_XI_ANIMATION_OK unique_run_frames=%d" % distinct_frames.size())
 	print("FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22")
 	quit(0)
