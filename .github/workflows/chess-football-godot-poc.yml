@@ -957,11 +957,19 @@ jobs:
               fi
             done
           done
+          # Record the real chronological 8-frame sequences, not just
+          # selected stills. Failure to reach the last pose blocks merge.
+          timeline="$(sed -n 's/^FOOTBALL_PASS_SHOOT_CAPTURE_TIMELINE_BROADCAST=//p' "$log" | tail -1)"
+          if [[ -n "$timeline" && -s "$timeline" ]]; then
+            cp "$timeline" "$RUNNER_TEMP/chess-football-review/pass-shoot-timeline-broadcast.png"
+          fi
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
             echo '::error::Real Godot pass/shoot visual capture failed.'
             exit 1
           fi
           grep -q 'FOOTBALL_PASS_SHOOT_REAL_GODOT_REVIEW_OK teams=2 actions=2 phases=3 cameras=2' "$log"
+          test "$(grep -c '^FOOTBALL_XI_ACTION_TIMELINE_OK team=' "$log")" -eq 4
+          test -s "$RUNNER_TEMP/chess-football-review/pass-shoot-timeline-broadcast.png"
           for mode in broadcast tactical; do
             for phase in before after; do
               test -s "$RUNNER_TEMP/chess-football-review/pass-shoot-$phase-$mode.png"

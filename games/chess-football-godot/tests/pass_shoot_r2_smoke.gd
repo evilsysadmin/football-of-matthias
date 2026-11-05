@@ -73,5 +73,26 @@ func _initialize() -> void:
 		presenter._apply_verified_lateral_run(legacy, team_id)
 		assert(bank.get_frame_texture(&"pass", 0) == textures[0])
 		assert(bank.get_frame_texture(&"shoot", 7) == textures[15])
+	# A quick 0.58s pass used to exit on pose 5 (8 frames at 10 FPS
+	# take 0.8s). Both existing eight-pose sheets and future 12/16-pose
+	# authored sheets must expose every frame within the REAL action lock.
+	for count in [8, 12, 16]:
+		for duration in [0.58, 0.82]:
+			var seen: Dictionary = {}
+			var last := -1
+			for tick in range(ceili(duration * 60.0)):
+				var elapsed: float = float(tick) / 60.0
+				var remaining: float = maxf(duration - elapsed, 0.0)
+				var frame: int = int(ChessFootball3DPresenter.xi_complete_action_phase(
+					count, duration, remaining
+				))
+				assert(frame >= last and frame <= last + 1,
+					"Action time must never jump backwards or skip an authored pose")
+				seen[frame] = true
+				last = frame
+			assert(seen.size() == count, "Short kicks must play EVERY authored frame")
+			assert(last == count - 1)
+	assert(ChessFootball3DPresenter.xi_complete_action_phase(8, 0.0, 0.0) == 0.0)
+	print("FOOTBALL_XI_ACTION_COMPLETE_POSES_OK actions=2 durations=2 sizes=8,12,16")
 	print("football optional R2 pass/shoot sheets, atomic frames and fallback: OK")
 	quit(0)
