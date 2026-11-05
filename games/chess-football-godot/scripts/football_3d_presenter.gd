@@ -2115,9 +2115,15 @@ func sync_presentation(delta: float, mode: String) -> void:
 
 	if ball_node != null:
 		var grip_progress := 1.0
+		# The XI sphere shrank from radius .16 to .14, but its centre was
+		# still fixed at .18. Keep the original .02 ground clearance so a
+		# smaller carried/rolling ball does not hover above its shadow.
+		var ground_center_y: float = (
+			0.16 if match_node.match_team_size == 11 else 0.18
+		)
 		var ball_at := world_to_stage(
 			match_node.ball.global_position,
-			0.18 + float(match_node.ball.flight_height) * WORLD_SCALE,
+			ground_center_y + float(match_node.ball.flight_height) * WORLD_SCALE,
 		)
 		if holding_keeper != null:
 			var current_keeper_id := int(holding_keeper.get_instance_id())
@@ -2593,9 +2599,9 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 # either edge: far away from the top chyron, near restarts above the bottom crop.
 # Penalties, CPU restarts, tactical view and normal play remain unaffected.
 static func broadcast_restart_look_z(
-	active: bool, team_id: int, kind: String, spot: Vector2
+	active: bool, team_id: int, kind: String, spot: Vector2,
+	pitch: Rect2 = ChessFootballMath.PITCH_RECT
 ) -> float:
-	var pitch := ChessFootballMath.PITCH_RECT
 	if not active or team_id != 0 or kind not in ["CÓRNER", "SAQUE DE BANDA"]:
 		return BROADCAST_BASE_LOOK_Z
 	var distance_from_center := spot.y - pitch.get_center().y
@@ -2611,9 +2617,9 @@ static func broadcast_restart_look_z(
 # Pure framing contract. Only the human near-corner camera retreats;
 # ordinary play, the far corner, CPU corners and all throw-ins keep depth.
 static func broadcast_corner_camera_depth(
-	active: bool, team_id: int, kind: String, spot: Vector2
+	active: bool, team_id: int, kind: String, spot: Vector2,
+	pitch: Rect2 = ChessFootballMath.PITCH_RECT
 ) -> float:
-	var pitch := ChessFootballMath.PITCH_RECT
 	if (
 		active and team_id == 0 and kind == "CÓRNER"
 		and spot.y >= pitch.get_center().y + pitch.size.y * 0.35
@@ -2647,8 +2653,9 @@ static func broadcast_live_corner_x_limit_ratio(easing_corner_release: bool) -> 
 # ball moves infield, retain enough downward pitch to keep that first touch
 # and its selected-player ring visible. This only runs during near-corner
 # release; no change to normal play, far corners or CPU restarts.
-static func broadcast_live_corner_pitch_floor(ball_spot: Vector2) -> float:
-	var pitch := ChessFootballMath.PITCH_RECT
+static func broadcast_live_corner_pitch_floor(
+	ball_spot: Vector2, pitch: Rect2 = ChessFootballMath.PITCH_RECT
+) -> float:
 	var near_fraction := (ball_spot.y - pitch.get_center().y) / pitch.size.y
 	var side_influence := smoothstep(0.30, 0.42, near_fraction)
 	return BROADCAST_BASE_LOOK_Z + NEAR_CORNER_LOOK_SHIFT * side_influence
@@ -2736,6 +2743,7 @@ func _sync_camera(delta: float, mode: String) -> void:
 				int(match_node.set_piece_team_id),
 				String(match_node.set_piece_kind),
 				match_node.set_piece_spot,
+				match_node.match_pitch,
 			),
 		)
 		var camera_x_limit := field_width * broadcast_live_corner_x_limit_ratio(
@@ -2750,11 +2758,14 @@ func _sync_camera(delta: float, mode: String) -> void:
 			int(match_node.set_piece_team_id),
 			String(match_node.set_piece_kind),
 			match_node.set_piece_spot,
+			match_node.match_pitch,
 		)
 		if easing_corner_release:
 			restart_look_z = maxf(
 				restart_look_z,
-				broadcast_live_corner_pitch_floor(match_node.ball.global_position),
+				broadcast_live_corner_pitch_floor(
+					match_node.ball.global_position, match_node.match_pitch
+				),
 			)
 		var pitch_speed := (
 			CAMERA_CORNER_RELEASE_SPEED if easing_corner_release
