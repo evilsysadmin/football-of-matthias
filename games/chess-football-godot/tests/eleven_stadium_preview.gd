@@ -212,7 +212,7 @@ func _initialize() -> void:
 	var initial_ball: Vector2 = game.ball.global_position
 	for x_fraction in [0.10, 0.90]:
 		for y_fraction in [0.12, 0.88]:
-			var live_spot := game.match_pitch.position + Vector2(
+			var live_spot: Vector2 = game.match_pitch.position + Vector2(
 				game.match_pitch.size.x * x_fraction,
 				game.match_pitch.size.y * y_fraction
 			)
@@ -333,7 +333,7 @@ func _initialize() -> void:
 				await process_frame
 				await RenderingServer.frame_post_draw
 			var restart_image: Image = viewport.get_texture().get_image()
-			var restart_path := "user://chess-football-xi-restart-" + case_name.to_lower() + ".png"
+			var restart_path: String = "user://chess-football-xi-restart-" + case_name.to_lower() + ".png"
 			assert(restart_image.save_png(restart_path) == OK)
 			print("FOOTBALL_XI_RESTART_CAPTURE_%s=%s" %
 				[case_name, ProjectSettings.globalize_path(restart_path)])
