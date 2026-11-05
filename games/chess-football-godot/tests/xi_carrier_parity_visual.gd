@@ -118,6 +118,61 @@ func _initialize() -> void:
 		assert(sheet.save_png(path) == OK)
 		print("FOOTBALL_XI_CARRIER_PARITY_CAPTURE_" + mode.to_upper() + "="
 			+ ProjectSettings.globalize_path(path))
+	# Pixel-level proof: capture the SAME diagonal and camera twice with
+	# identical authored V3 WebPs, once with the width trim disabled and
+	# once enabled. A previous CI compared only transforms and uploaded
+	# screenshots that were byte-for-byte unchanged; this catches that.
+	for mode in ["broadcast", "tactical"]:
+		var runner: Footballer = game.teams[0][1]
+		var runner_key: int = runner.get_instance_id()
+		runner.global_position = game.match_pitch.get_center()
+		runner.velocity = axes[1] * runner.base_speed
+		runner.dribble_burst_seconds = 0.0
+		runner.visual.play(&"run")
+		runner.visual.frame = 0
+		game.ball.attach_to(runner)
+		game.ball.tick_ball(0.0)
+		stage.player_run_views[runner_key] = "front_diagonal"
+		stage.outfield_visual_names.erase(runner_key)
+		stage.outfield_visual_phases.erase(runner_key)
+		stage._sync_camera(10.0, mode)
+		stage._run_v3_r2_loaded.erase(0)
+		stage.sync_presentation(0.0, mode)
+		await process_frame
+		await RenderingServer.frame_post_draw
+		var without_trim: Image = game.get_viewport().get_texture().get_image()
+		stage._run_v3_r2_loaded[0] = true
+		stage.sync_presentation(0.0, mode)
+		await process_frame
+		await RenderingServer.frame_post_draw
+		var with_trim: Image = game.get_viewport().get_texture().get_image()
+		assert(without_trim != null and with_trim != null)
+		var screen_center: Vector2 = stage.camera.unproject_position(
+			stage.world_to_stage(runner.global_position, stage.PLAYER_BASE_Y)
+		)
+		var start_x := clampi(int(screen_center.x) - CELL.x / 2, 0, 1280 - CELL.x)
+		var start_y := clampi(int(screen_center.y) - CELL.y / 2, 0, 720 - CELL.y)
+		var region := Rect2i(start_x, start_y, CELL.x, CELL.y)
+		var before_crop := without_trim.get_region(region)
+		var after_crop := with_trim.get_region(region)
+		var changed_pixels := 0
+		for cy in range(CELL.y):
+			for cx in range(CELL.x):
+				if before_crop.get_pixel(cx, cy).distance_to(after_crop.get_pixel(cx, cy)) > 0.08:
+					changed_pixels += 1
+		assert(changed_pixels > 12,
+			"V3 width compensation changed transforms but not real rendered pixels")
+		var comparison := Image.create(CELL.x * 2, CELL.y, false, Image.FORMAT_RGBA8)
+		comparison.blit_rect(before_crop, Rect2i(Vector2i.ZERO, CELL), Vector2i.ZERO)
+		comparison.blit_rect(after_crop, Rect2i(Vector2i.ZERO, CELL), Vector2i(CELL.x, 0))
+		var compare_path := "user://xi-v3-width-on-off-" + mode + ".png"
+		assert(comparison.save_png(compare_path) == OK)
+		print("FOOTBALL_XI_V3_WIDTH_RENDER_DELTA camera=%s changed_pixels=%d"
+			% [mode, changed_pixels])
+		print("FOOTBALL_XI_V3_WIDTH_CAPTURE_" + mode.to_upper() + "="
+			+ ProjectSettings.globalize_path(compare_path))
+		game.ball.release(Vector2.RIGHT, 0.0)
+		runner.global_position = Vector2(-9999.0, -9999.0)
 	assert(game.score == scores)
 	print("FOOTBALL_XI_CARRIER_PARITY_VISUAL_OK teams=2 views=3 cameras=2 actual_r2=1")
 	quit(0)
