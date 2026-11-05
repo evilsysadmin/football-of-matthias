@@ -33,7 +33,10 @@ func _initialize() -> void:
 		presenter._on_run_v2_ready(image, team_id)
 		assert(presenter._run_v2_r2_loaded.has(team_id))
 	for mode in ["broadcast", "tactical"]:
-		presenter.sync_presentation(0.11, mode)
+		# Snap to the FINAL calibrated camera before capturing either version;
+		# lerped broadcast/tactical camera poses make body size comparisons false.
+		presenter._sync_camera(10.0, mode)
+		presenter.sync_presentation(0.0, mode)
 		await _capture(game, "BEFORE", mode)
 	for team_id in range(2):
 		var meta := ChessFootballRunV3R2.sheet_meta(team_id)
@@ -44,7 +47,8 @@ func _initialize() -> void:
 		presenter._on_run_v3_ready(image, team_id)
 		assert(presenter._run_v3_r2_loaded.has(team_id))
 	for mode in ["broadcast", "tactical"]:
-		presenter.sync_presentation(0.11, mode)
+		presenter._sync_camera(10.0, mode)
+		presenter.sync_presentation(0.0, mode)
 		for team in game.teams:
 			for player in team:
 				var key: int = player.get_instance_id()
