@@ -54,6 +54,7 @@ func _initialize() -> void:
 		for team_id in range(2):
 			var actor: Footballer = game.teams[team_id][1]
 			actor.global_position = game.match_pitch.get_center()
+			var side_normalized_width := -1.0
 			for index in range(VIEWS.size()):
 				var axis: Vector2 = axes[index]
 				actor.velocity = axis * actor.base_speed
@@ -79,6 +80,27 @@ func _initialize() -> void:
 				var scaled: float = height * stage._canonical_body_scale(sprite, actor.role, team_id)
 				assert(absf(scaled - stage.CANONICAL_BODY_HEIGHT_PIXELS) < 13.0,
 					"Carrier jumps in size on orientation switch")
+				# The prior test only compared HEIGHT. At exactly the same pitch
+				# location and camera, the width must receive the V3 diagonal
+				# compensation in the actual QuadMesh transform as well.
+				var quad: MeshInstance3D = stage.xi_raster_meshes[key]
+				assert(quad.scale == sprite.scale)
+				var normalized_width: float = sprite.scale.x / (
+					stage._canonical_body_scale(sprite, actor.role, team_id) *
+					stage.view_compensation(sprite.animation).x
+				)
+				if index == 0:
+					side_normalized_width = normalized_width
+				else:
+					var expected_trim: float = stage.xi_v3_diagonal_width_trim(
+						sprite.animation, game.match_team_size, false,
+						stage._run_v3_r2_loaded.has(team_id)
+					)
+					assert(is_equal_approx(expected_trim, stage.XI_V3_DIAGONAL_WIDTH_TRIM))
+					assert(absf(normalized_width / side_normalized_width - expected_trim) < 0.055,
+						"Oblique footballer is still drawn with oversized torso width")
+					print("FOOTBALL_XI_V3_DIAGONAL_WIDTH_PARITY team=%d camera=%s view=%s ratio=%.3f"
+						% [team_id, mode, VIEWS[index], normalized_width / side_normalized_width])
 				await process_frame
 				await RenderingServer.frame_post_draw
 				var screenshot := game.get_viewport().get_texture().get_image()
