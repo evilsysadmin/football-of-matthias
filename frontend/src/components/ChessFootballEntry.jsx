@@ -200,8 +200,8 @@ export default function ChessFootballEntry({ onExit }) {
               src="/football-home-v1.webp"
               alt=""
               aria-hidden="true"
-              width="1280"
-              height="720"
+              width="1672"
+              height="941"
               decoding="async"
               fetchPriority="high"
               onError={() => setWelcomeArtAvailable(false)}

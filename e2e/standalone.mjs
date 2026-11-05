@@ -38,7 +38,7 @@ try{
   await page.getByRole('button',{name:/Modo mánager/}).waitFor();
   await page.waitForFunction(() => {
     const art=document.querySelector('.chess-football-entry__welcome-art');
-    return art?.complete && art.naturalWidth===1280;
+    return art?.complete && art.naturalWidth===1672;
   });
   assert.equal(await page.getByRole('heading',{name:'Football of Matthias'}).count(),1);
   assert.equal(await page.getByText(/El vestuario/i).count(),0,'Retired vestuario label must not return');
