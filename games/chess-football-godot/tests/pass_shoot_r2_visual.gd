@@ -60,6 +60,11 @@ func _initialize() -> void:
 	for mode in ["broadcast", "tactical"]:
 		var after := await _render_matrix(game, stage, targets, mode)
 		await _save(after, "AFTER_" + mode.to_upper(), "football-actions-after-" + mode + ".png")
+	# The static contact sheets show selected poses but cannot prove that
+	# a real 0.58-second kick actually displays them all. This extra sheet
+	# captures eight chronological, IN-GAME viewport frames per action/club.
+	var timeline: Image = await _render_action_timeline(game, stage, targets)
+	await _save(timeline, "TIMELINE_BROADCAST", "football-actions-timeline-broadcast.png")
 	assert(game.score == saved_score)
 	print("FOOTBALL_PASS_SHOOT_REAL_GODOT_REVIEW_OK teams=2 actions=2 phases=3 cameras=2")
 	quit(0)
@@ -91,8 +96,13 @@ func _capture(game: Node, stage: ChessFootball3DPresenter,
 	actor._sync_locomotion(false)
 	actor.play_action(String(action), 0.78)
 	stage.sync_presentation(0.0, mode)
-	stage.outfield_visual_names[key] = action
-	stage.outfield_visual_phases[key] = float(phase)
+	# The visual clock is now tied to the action's real lock duration,
+	# so select the requested authored pose through that same clock.
+	# Do not bypass runtime frame selection with a synthetic phase override.
+	var count: int = stage.player_sprites[key].sprite_frames.get_frame_count(action)
+	actor.action_lock_seconds = actor.action_visual_duration_seconds * (
+		1.0 - (float(phase) + 0.5) / float(count)
+	)
 	stage.sync_presentation(0.0, mode)
 	var driver: AnimatedSprite3D = stage.player_sprites[key]
 	assert(driver.animation == action and driver.frame == phase,
@@ -120,6 +130,77 @@ func _capture(game: Node, stage: ChessFootball3DPresenter,
 	var y := clampi(int(center.y) - CROP.y / 2 - top_bias, 0, screenshot.get_height() - CROP.y)
 	return screenshot.get_region(Rect2i(x, y, CROP.x, CROP.y))
 
+
+
+# Timeline is 8 real viewport crops per action and club (four rows).
+# Test *real* 0.58s passes AND shots so a regression to fixed 10 FPS
+# immediately fails when frames 6/7 disappear before the action lock ends.
+func _render_action_timeline(
+	game: Node, stage: ChessFootball3DPresenter,
+	targets: Array[Footballer]
+) -> Image:
+	var matrix := Image.create(CROP.x * 8, CROP.y * 4, false, Image.FORMAT_RGBA8)
+	matrix.fill(Color("#103a2d"))
+	for team_id in range(2):
+		var actor: Footballer = targets[team_id]
+		actor.set_process(false)
+		actor.global_position = game.match_pitch.get_center()
+		var key: int = actor.get_instance_id()
+		for action_index in range(ACTIONS.size()):
+			var action: StringName = ACTIONS[action_index]
+			actor.action_lock_seconds = 0.0
+			actor.velocity = Vector2.ZERO
+			actor._sync_locomotion(false)
+			actor.play_action(String(action), 0.58)
+			stage.outfield_visual_names.erase(key)
+			stage.outfield_visual_phases.erase(key)
+			var seen: Dictionary = {}
+			var last := -1
+			for tick in range(ceili(0.58 * 60.0)):
+				if tick > 0:
+					actor._process(1.0 / 60.0)
+				stage.sync_presentation(0.0, "broadcast")
+				var driver: AnimatedSprite3D = stage.player_sprites[key]
+				var frame: int = driver.frame
+				assert(driver.animation == action)
+				assert(frame >= last and frame <= last + 1,
+					"Short pass/shoot action skipped or reversed an authored pose")
+				last = frame
+				if seen.has(frame):
+					continue
+				var quad: MeshInstance3D = stage.xi_raster_meshes[key]
+				assert((quad.material_override as StandardMaterial3D).albedo_texture
+					== driver.sprite_frames.get_frame_texture(action, frame))
+				seen[frame] = true
+				var shot: Image = await _capture_timeline_pose(game, stage, actor)
+				matrix.blit_rect(
+					shot, Rect2i(Vector2i.ZERO, CROP),
+					Vector2i(frame * CROP.x, (team_id * ACTIONS.size() + action_index) * CROP.y)
+				)
+			assert(seen.size() == 8 and last == 7,
+				"Fast XI action must display all eight authored pass/shoot poses")
+			print("FOOTBALL_XI_ACTION_TIMELINE_OK team=%d action=%s frames=%d duration=0.58" %
+				[team_id, String(action), seen.size()])
+		actor.action_lock_seconds = 0.0
+		actor.global_position = Vector2(-9999.0, -9999.0)
+	return matrix
+
+
+func _capture_timeline_pose(
+	game: Node, stage: ChessFootball3DPresenter, actor: Footballer
+) -> Image:
+	var driver: AnimatedSprite3D = stage.player_sprites[actor.get_instance_id()]
+	var target: Vector3 = stage.world_to_stage(actor.global_position)
+	stage.camera.position = target + Vector3(0.0, 1.7, 4.8)
+	stage.camera.look_at(target + Vector3(0.0, 0.85, 0.0), Vector3.UP)
+	await process_frame
+	await RenderingServer.frame_post_draw
+	var screenshot: Image = game.get_viewport().get_texture().get_image()
+	assert(screenshot != null and screenshot.get_size() == Vector2i(1280, 720))
+	var center: Vector2 = stage.camera.unproject_position(driver.global_position)
+	var x: int = clampi(int(center.x) - CROP.x / 2, 0, 1280 - CROP.x)
+	var y: int = clampi(int(center.y) - CROP.y / 2, 0, 720 - CROP.y)
+	return screenshot.get_region(Rect2i(x, y, CROP.x, CROP.y))
 
 func _save(image: Image, label: String, name: String) -> void:
 	var path := "user://" + name
