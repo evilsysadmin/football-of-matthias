@@ -1225,11 +1225,11 @@ jobs:
         env:
           # Dedicated fine-grained token: only Actions write on shadowops-infra.
           # No Cloudflare / R2 credentials may be stored in this repository.
-          GH_TOKEN: ${{ secrets.FOOTBALL_INFRA_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.SHADOWOPS_INFRA_ACTIONS_TOKEN }}
         run: |
           set -euo pipefail
           if [[ -z "$GH_TOKEN" ]]; then
-            echo "::warning::FOOTBALL_INFRA_DISPATCH_TOKEN is absent; scheduled staging reconciliation remains active."
+            echo "::warning::SHADOWOPS_INFRA_ACTIONS_TOKEN is absent; scheduled staging reconciliation remains active."
             exit 0
           fi
           if ! gh api -X POST repos/evilsysadmin/shadowops-infra/actions/workflows/football-pages-staging.yml/dispatches -f ref=main >/dev/null; then

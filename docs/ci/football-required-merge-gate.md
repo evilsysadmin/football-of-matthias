@@ -62,11 +62,13 @@ workflow independiente XI esté verde, comprueba el SHA exacto de `main`,
 el ZIP y sus hashes, los límites R2 y el gate de ShadowOps ID antes de
 publicar. La ejecución se serializa con el resto de releases de Infra.
 
-**Configuración una sola vez:** guardar como secret de Actions del repositorio
+**Configuración (la misma que Star Adventures):** guardar como secret de Actions del repositorio
 `evilsysadmin/football-of-matthias` un token GitHub de acceso específico
-`FOOTBALL_INFRA_DISPATCH_TOKEN`. Debe ser un fine-grained personal access
+`SHADOWOPS_INFRA_ACTIONS_TOKEN`. Debe ser un fine-grained personal access
 token limitado exclusivamente a `evilsysadmin/shadowops-infra`, con
 `Actions: Read and write` (y el permiso implícito `Metadata: Read`).
+Reutilizar el nombre de secreto usado por Star Adventures (cada repositorio
+almacena su propio secret; no compartirlo con la aplicación o el navegador).
 No conceder Contents write, ni introducir tokens de Cloudflare/R2 ni
 permisos cloud en el repositorio Football. Rotar/revocar el token como una
 credencial de automatización.
