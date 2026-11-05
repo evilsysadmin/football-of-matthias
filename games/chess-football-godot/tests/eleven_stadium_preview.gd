@@ -193,6 +193,10 @@ func _initialize() -> void:
 	assert(distinct_frames.size() >= 2, "XI visible quad must animate")
 	# Capture an ACTUALLY running far-touchline footballer. The ordinary XI
 	# kickoff preview contains idle poses and cannot reveal tilted boot gaps.
+	# Freeze the match authority *only for this visual diagnostic*; otherwise
+	# live kickoff physics resets winger velocity between frame_post_draw awaits.
+	game.set_physics_process(false)
+	game.set_process(false)
 	winger.global_position = Vector2(
 		game.match_pitch.get_center().x - 330.0,
 		game.match_pitch.position.y + 360.0
