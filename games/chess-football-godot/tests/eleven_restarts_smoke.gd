@@ -107,6 +107,74 @@ func _initialize() -> void:
 	_verify_spread(game)
 	game.debug_force_set_piece_ready()
 	assert(not game.set_piece_active)
+	# A penalty is also a full-XI restart. The historical five-a-side
+	# penalty geometry put the goalkeeper several hundred units from the
+	# actual XI goal and stacked ten outfielders on four recycled slots.
+	for attacking_team in [0, 1]:
+		var defending_team: int = 1 - attacking_team
+		var attacking_direction: float = 1.0 if attacking_team == 0 else -1.0
+		var goal: Vector2 = ChessFootballMath.goal_center(attacking_team, XI)
+		var mark: Vector2 = goal - Vector2(
+			attacking_direction * ChessFootballMath.PENALTY_SPOT_DEPTH, 0.0
+		)
+		assert(game.debug_penalty_area_contains(
+			attacking_team, goal - Vector2(attacking_direction * 120.0, 0.0)
+		), "XI referee missed a foul inside the REAL penalty area")
+		assert(not game.debug_penalty_area_contains(
+			attacking_team, FIVE.get_center()
+		), "XI penalty area must not be measured on the old 5v5 pitch")
+		game.debug_prepare_penalty(attacking_team)
+		assert(game.debug_set_piece_spot().is_equal_approx(mark),
+			"XI penalty mark does not match the painted spot at the full-size goal")
+		assert(game.ball.carrier == game.set_piece_player)
+		assert(game.set_piece_player.team_id == attacking_team)
+		assert(game.set_piece_player.role != "keeper")
+		var defending_keeper: Footballer = game.teams[defending_team][0]
+		assert(defending_keeper.global_position.distance_to(
+			goal - Vector2(attacking_direction * 42.0, 0.0)
+		) < 0.1, "XI penalty keeper is not stationed at its own goal line")
+		var occupied: Array[Vector2] = []
+		var outfielders := 0
+		for team in game.teams:
+			for player in team:
+				if player.sent_off:
+					continue
+				assert(XI.has_point(player.global_position))
+				for previous in occupied:
+					assert(player.global_position.distance_to(previous) > 90.0,
+						"XI penalty players overlap or obstruct the kicker")
+				occupied.append(player.global_position)
+				if player == game.set_piece_player or player.role == "keeper":
+					continue
+				outfielders += 1
+				assert(
+					(goal.x - player.global_position.x) * attacking_direction
+					> ChessFootballMath.PENALTY_AREA_DEPTH + 135.0
+				, "Non-kicking XI outfielder is inside the penalty area")
+				assert(player.global_position.distance_to(mark) > 185.0,
+					"Non-kicking XI outfielder is inside the penalty arc")
+		assert(outfielders == 19, "11v11 needs 19 non-kicking outfield players")
+		if attacking_team == 0:
+			assert(game.debug_penalty_target(0.0).is_equal_approx(goal),
+				"XI penalty shot target must be the full-size goal")
+			game.debug_force_set_piece_ready()
+			assert(game.debug_human_penalty_ready())
+			# The aim marker is a 3D presentation object; sync the frozen
+			# SceneTree before checking visibility, just like visual_capture.gd.
+			game.debug_sync_presentation()
+			assert(game.debug_penalty_aim_visible())
+			game.debug_force_human_penalty_shot(0.65, 0.35)
+			assert(not game.set_piece_active and game.ball.carrier == null)
+			assert(game.ball.velocity.x > 0.0)
+		else:
+			var keeper_before: Vector2 = game.teams[0][0].global_position
+			game.debug_move_penalty_keeper(1.0, 0.1)
+			assert(game.teams[0][0].global_position.x == keeper_before.x,
+				"Human keeper moved off the XI penalty goal line")
+			assert(game.teams[0][0].global_position.y > keeper_before.y)
+			game.debug_force_set_piece_ready()
+			assert(not game.set_piece_active and game.ball.carrier == null)
+			assert(game.ball.velocity.x < 0.0)
 	# Near-miss audio contract uses the new goal plane; old default stays.
 	var old_near := Vector2(FIVE.end.x + 25.0, FIVE.get_center().y + ChessFootballMath.GOAL_HALF_HEIGHT + 22.0)
 	assert(ChessFootballMath.close_shot_miss_at_goal_line(old_near, 0.0, 0))

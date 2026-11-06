@@ -2673,7 +2673,7 @@ func _team_name(team_id: int) -> String:
 	return "FC Matthias" if team_id == 0 else "Real Enroque"
 
 func _in_penalty_area(attacking_team_id: int, point: Vector2) -> bool:
-	var pitch := ChessFootballMath.PITCH_RECT
+	var pitch := match_pitch
 	var center_y := pitch.get_center().y
 	var inside_depth := (
 		point.x >= pitch.end.x - ChessFootballMath.PENALTY_AREA_DEPTH
@@ -2683,7 +2683,7 @@ func _in_penalty_area(attacking_team_id: int, point: Vector2) -> bool:
 	return inside_depth and absf(point.y - center_y) <= ChessFootballMath.PENALTY_AREA_HALF_WIDTH
 
 func _penalty_spot(attacking_team_id: int) -> Vector2:
-	var pitch := ChessFootballMath.PITCH_RECT
+	var pitch := match_pitch
 	var x := (
 		pitch.end.x - ChessFootballMath.PENALTY_SPOT_DEPTH
 		if attacking_team_id == 0
@@ -2812,7 +2812,50 @@ func _arrange_xi_restart_formation(kind: String) -> void:
 		_place_restart_player(opponent, home)
 
 
+# 11v11 penalties cannot reuse the four outfield slots of the old arcade
+# pitch. Place the defending keeper on the ACTUAL XI goal line, and keep all
+# other outfielders outside the area and penalty arc. Two staggered rows give
+# 19 separate, readable positions while preserving who takes the kick.
+func _arrange_xi_penalty_formation() -> void:
+	var goal: Vector2 = ChessFootballMath.goal_center(set_piece_team_id, match_pitch)
+	var direction: float = 1.0 if set_piece_team_id == 0 else -1.0
+	var defending_team_id: int = 1 - set_piece_team_id
+	var keeper: Footballer = teams[defending_team_id][0]
+	_place_restart_player(keeper, Vector2(goal.x - direction * 42.0, goal.y))
+	var outside_depth: float = ChessFootballMath.PENALTY_AREA_DEPTH + 170.0
+	var attacking_lanes: Array[float] = [-660.0, -330.0, 0.0, 330.0, 660.0]
+	var defending_lanes: Array[float] = [-810.0, -480.0, -150.0, 180.0, 510.0]
+	var attack_index := 0
+	for teammate in teams[set_piece_team_id]:
+		if teammate == set_piece_player or teammate.sent_off:
+			continue
+		if teammate.role == "keeper":
+			_place_restart_player(teammate, teammate.home_position)
+			continue
+		var lane: int = attack_index % attacking_lanes.size()
+		var row: int = attack_index / attacking_lanes.size()
+		_place_restart_player(teammate, Vector2(
+			goal.x - direction * (outside_depth + float(row) * 260.0),
+			goal.y + attacking_lanes[lane]
+		))
+		attack_index += 1
+	var defender_index := 0
+	for defender in teams[defending_team_id]:
+		if defender == keeper or defender.sent_off:
+			continue
+		var lane: int = defender_index % defending_lanes.size()
+		var row: int = defender_index / defending_lanes.size()
+		_place_restart_player(defender, Vector2(
+			goal.x - direction * (outside_depth + 130.0 + float(row) * 260.0),
+			goal.y + defending_lanes[lane]
+		))
+		defender_index += 1
+
+
 func _arrange_set_piece_formation(kind: String) -> void:
+	if match_team_size == 11 and kind == "PENALTI":
+		_arrange_xi_penalty_formation()
+		return
 	if match_team_size == 11 and kind in ["SAQUE DE BANDA", "CÓRNER", "SAQUE DE PUERTA"]:
 		_arrange_xi_restart_formation(kind)
 		return
@@ -2822,7 +2865,7 @@ func _arrange_set_piece_formation(kind: String) -> void:
 	var opponent_id := 1 - set_piece_team_id
 
 	if kind == "PENALTI":
-		var target_goal := ChessFootballMath.goal_center(set_piece_team_id)
+		var target_goal := ChessFootballMath.goal_center(set_piece_team_id, match_pitch)
 		var defending_keeper: Footballer = teams[opponent_id][0]
 		_place_restart_player(
 			defending_keeper,
@@ -3098,7 +3141,7 @@ func _release_outfield_set_piece(
 
 
 func _penalty_target(team_id: int, aim_y: float) -> Vector2:
-	var goal := ChessFootballMath.goal_center(team_id)
+	var goal := ChessFootballMath.goal_center(team_id, match_pitch)
 	var safe_half_span := maxf(
 		12.0,
 		ChessFootballMath.GOAL_HALF_HEIGHT
@@ -3154,7 +3197,7 @@ func _release_ai_penalty() -> void:
 	var restarter := set_piece_player
 	if restarter == null:
 		return
-	var penalty_goal := ChessFootballMath.goal_center(set_piece_team_id)
+	var penalty_goal := ChessFootballMath.goal_center(set_piece_team_id, match_pitch)
 	var defending_keeper: Footballer = teams[1 - set_piece_team_id][0]
 	var keeper_side := signf(defending_keeper.global_position.y - penalty_goal.y)
 	if absf(keeper_side) < 0.01:
@@ -3176,7 +3219,7 @@ func _move_human_penalty_keeper(axis: float, delta: float) -> void:
 	var keeper: Footballer = teams[0][0]
 	if keeper == null or keeper.sent_off:
 		return
-	var goal := ChessFootballMath.goal_center(1)
+	var goal := ChessFootballMath.goal_center(1, match_pitch)
 	var y_limit := ChessFootballMath.GOAL_HALF_HEIGHT - 14.0
 	var old_y := keeper.global_position.y
 	keeper.global_position.y = clampf(

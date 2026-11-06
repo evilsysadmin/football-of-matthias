@@ -481,6 +481,58 @@ func _initialize() -> void:
 			assert(restart_image.save_png(restart_path) == OK)
 			print("FOOTBALL_XI_RESTART_CAPTURE_%s=%s" %
 				[case_name, ProjectSettings.globalize_path(restart_path)])
+	# Render both XI penalties on the real goal lines, not the obsolete
+	# arcade goal near midfield. Capture the kicker, keeper, mouth and the
+	# withdrawn formation as seen by the player (both attack directions).
+	for attacking_team in [0, 1]:
+		game.kickoff_active = false
+		game.goal_restart_active = false
+		game.debug_prepare_penalty(attacking_team)
+		if attacking_team == 0:
+			game.debug_force_set_piece_ready()
+			game.debug_set_penalty_aim(0.5)
+		game.debug_refresh_hud()
+		stage.sync_presentation(8.0, "broadcast")
+		# The stadium should occupy most of the match viewport, not leave
+		# an entire black panel past the penalty goal at either end.
+		if attacking_team == 0:
+			assert(stage.camera.position.x > 5.0 and stage.camera.position.x < 18.0,
+				"Human XI penalty view still parks the stadium offscreen")
+		else:
+			assert(stage.camera.position.x < -5.0 and stage.camera.position.x > -18.0,
+				"CPU XI penalty must mirror the stadium-centered framing")
+		var goal: Vector2 = ChessFootballMath.goal_center(
+			attacking_team, game.match_pitch
+		)
+		var kicker_screen: Vector2 = stage.screen_position_for_world(
+			game.set_piece_spot, 0.03
+		)
+		var keeper_screen: Vector2 = stage.screen_position_for_player(
+			game.teams[1 - attacking_team][0]
+		)
+		var mouth_screen: Vector2 = stage.screen_position_for_world(goal, 0.03)
+		assert(kicker_screen.x > 35.0 and kicker_screen.x < bounds.x - 35.0)
+		assert(keeper_screen.x > 35.0 and keeper_screen.x < bounds.x - 35.0,
+			"XI penalty keeper must be visible by the REAL goal")
+		assert(mouth_screen.x > 35.0 and mouth_screen.x < bounds.x - 35.0,
+			"XI penalty camera must keep the REAL goal on screen")
+		assert(kicker_screen.y > 155.0 and kicker_screen.y < bounds.y - 30.0)
+		assert(keeper_screen.y > 155.0 and keeper_screen.y < bounds.y - 30.0)
+		if attacking_team == 0:
+			assert(stage.debug_penalty_aim_visible(),
+				"XI human penalty must display its aim marker on the goal")
+		if DisplayServer.get_name() != "headless":
+			for _penalty_frame in range(5):
+				stage.sync_presentation(0.0, "broadcast")
+				await process_frame
+				await RenderingServer.frame_post_draw
+			var penalty_image: Image = viewport.get_texture().get_image()
+			var label := "human" if attacking_team == 0 else "cpu"
+			var penalty_path := "user://chess-football-xi-penalty-" + label + ".png"
+			assert(penalty_image.save_png(penalty_path) == OK)
+			print("FOOTBALL_XI_PENALTY_%s_CAPTURE=%s" % [
+				label.to_upper(), ProjectSettings.globalize_path(penalty_path)
+			])
 	print("FOOTBALL_XI_ANIMATION_OK unique_run_frames=%d" % distinct_frames.size())
 	print("FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22")
 	quit(0)
