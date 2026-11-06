@@ -137,5 +137,13 @@ func _initialize() -> void:
 	print("KEEPER_REACTION_SPEED=%.2f FIELD_SPEED=%.2f" % [
 		keeper_runner.velocity.length(), field_player.velocity.length()
 	])
+	# Public XI gets the new stance, but legacy 5v5 must keep its original
+	# keeper appearance and ball interactions during an automatic penalty.
+	game.debug_prepare_penalty(1)
+	presenter.sync_presentation(1.0, "broadcast")
+	var legacy_guard: float = float(presenter.penalty_keeper_guard_blends.get(
+		int(game.teams[0][0].get_instance_id()), 0.0
+	))
+	assert(legacy_guard < 0.001, "Legacy 5v5 keeper must not inherit XI bracing")
 	print("chess-football keeper motion smoke: OK")
 	quit(0)
