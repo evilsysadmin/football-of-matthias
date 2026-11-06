@@ -2,6 +2,10 @@ class_name FootballBall
 extends CharacterBody2D
 
 var carrier: Footballer = null
+# Physical possession age in match time (not wall-clock or CPU decision time).
+# It resets on EVERY new first touch, including successive touches by the
+# same footballer. The CPU uses it to avoid instant passing chains in XI.
+var possession_seconds: float = 0.0
 var last_touch_team_id: int = -1
 # Transient provenance for stadium reactions only. Gameplay ignores these.
 # Any possession or non-shot release clears it, so passes and rebounds cannot
@@ -45,6 +49,7 @@ func attach_to(player: Footballer) -> void:
 		carrier.has_ball = false
 		carrier.queue_redraw()
 	carrier = player
+	possession_seconds = 0.0
 	xi_carry_distance = 0.0
 	last_touch_team_id = player.team_id
 	velocity = Vector2.ZERO
@@ -70,6 +75,7 @@ func release(direction: Vector2, power: float, lift_velocity: float = 0.0, is_sh
 	reclaim_block_player = previous_carrier
 	reclaim_block_seconds = RECLAIM_BLOCK_SECONDS if previous_carrier != null else 0.0
 	carrier = null
+	possession_seconds = 0.0
 	var dir := direction.normalized() if direction.length_squared() > 0.001 else Vector2.RIGHT
 	spin_direction = -1.0 if dir.x < 0.0 else 1.0
 	velocity = dir * minf(power, max_speed)
@@ -86,6 +92,7 @@ func tick_ball(delta: float) -> void:
 	if contact_reclaim_block_seconds <= 0.0:
 		contact_reclaim_block_player = null
 	if carrier != null:
+		possession_seconds += maxf(delta, 0.0)
 		var destination: Vector2 = carrier.global_position + carrier.ball_anchor()
 		if (
 			carrier.match_pitch == FootballMatchFormation.ELEVEN_PITCH_RECT
