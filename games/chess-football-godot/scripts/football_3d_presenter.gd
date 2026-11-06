@@ -451,6 +451,10 @@ func _apply_verified_run_v2(textures: Array[Texture2D], team_id: int) -> void:
 				for frame_id in range(ChessFootballRunV2R2.COLUMNS):
 					frames.set_frame(anim, frame_id, textures[row * ChessFootballRunV2R2.COLUMNS + frame_id])
 	_run_v2_r2_loaded[team_id] = true
+	# Running silhouettes have changed: a cached scale from the bundled
+	# atlas would make otherwise identical XI actors visibly different sizes
+	# after the asynchronous WebP replacement. This does not touch physics.
+	body_scale_cache.clear()
 	# On verified success, switch the entire club from its provisional
 	# no-duplicate model to the real 8-frame raster in one visual update.
 	for player in match_node.teams[team_id]:
@@ -522,6 +526,9 @@ func _apply_verified_lateral_run(textures: Array[Texture2D], team_id: int) -> vo
 			for index in range(8):
 				var source := index if animation in [&"run", &"sprint"] else int(poses[index])
 				frames.set_frame(animation, index, textures[source])
+	# Recalculate the side/idle body-height reference on an atomic atlas swap.
+	# Keeping the previous reference would cause scale jumps as players turn.
+	body_scale_cache.clear()
 	tone_gain_cache.clear()
 
 
