@@ -184,6 +184,54 @@ func _initialize() -> void:
 	lane_blocker.global_position = Vector2(XI.end.x - 120.0, XI.end.y - 130.0)
 	game.ball.attach_to(passer)
 
+	# Nearby CPU teammates must not swap primary and recycling roles every
+	# tick as their positions fluctuate by a few units. A genuinely better
+	# third runner can still take over; sent-off players never hold a slot.
+	var role_primary: Footballer = receiver
+	var role_secondary: Footballer = game.teams[1][5]
+	var role_challenger: Footballer = game.teams[1][6]
+	var role_anchor: Vector2 = passer.global_position
+	role_primary.global_position = role_anchor + Vector2(-210.0, 0.0)
+	role_secondary.global_position = role_anchor + Vector2(-260.0, 0.0)
+	role_challenger.global_position = role_anchor + Vector2(-275.0, 0.0)
+	game.ai_xi_support_rank_owner = null
+	game.ai_xi_support_rank_slots = [null, null]
+	assert(game._ai_xi_support_rank(role_primary) == 0)
+	assert(game._ai_xi_support_rank(role_secondary) == 1)
+	role_challenger.global_position = role_anchor + Vector2(-240.0, 0.0)
+	assert(game._ai_xi_support_rank(role_primary) == 0)
+	assert(game._ai_xi_support_rank(role_secondary) == 1)
+	assert(game._ai_xi_support_rank(role_challenger) == -1)
+	# A 86-unit improvement over the second runner eventually earns slot 1,
+	# without stealing the leading slot from its established teammate.
+	role_challenger.global_position = role_anchor + Vector2(-174.0, 0.0)
+	assert(game._ai_xi_support_rank(role_primary) == 0)
+	assert(game._ai_xi_support_rank(role_challenger) == 1)
+	# Only a clearly superior runner replaces the primary support.
+	role_challenger.global_position = role_anchor + Vector2(-90.0, 0.0)
+	assert(game._ai_xi_support_rank(role_challenger) == 0)
+	role_challenger.sent_off = true
+	assert(game._ai_xi_support_rank(role_challenger) == -1)
+	assert(game._ai_xi_support_rank(role_primary) == 0)
+	role_challenger.sent_off = false
+	# Releasing the ball or giving it to a rival resets both assignments.
+	game.ball.release(Vector2.LEFT, 300.0)
+	game._update_ai(0.0)
+	assert(game.ai_xi_support_rank_owner == null)
+	assert(game.ai_xi_support_rank_slots == [null, null])
+	game.ball.attach_to(passer)
+	game.match_team_size = 5
+	assert(game._ai_xi_support_rank(role_primary) == -1)
+	assert(game.ai_xi_support_rank_slots == [null, null])
+	game.match_team_size = 11
+	role_primary.global_position = role_anchor + Vector2(-330.0, 90.0)
+	role_secondary.global_position = Vector2(XI.end.x - 90.0, XI.end.y - 90.0)
+	role_challenger.global_position = role_secondary.global_position
+	game.ai_xi_support_rank_owner = null
+	game.ai_xi_support_rank_slots = [null, null]
+	game.ai_xi_support_lane_memory.clear()
+	game.ball.attach_to(passer)
+
 	# Moving CPU teammates receive a short, physically aimed through-ball.
 	# The destination changes at the kick, not continuously in flight.
 	game.ball.attach_to(passer)
