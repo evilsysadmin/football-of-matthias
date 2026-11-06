@@ -531,6 +531,19 @@ func _initialize() -> void:
 		if attacking_team == 0:
 			assert(stage.debug_penalty_aim_visible(),
 				"XI human penalty must display its aim marker on the goal")
+			assert(absf(stage.penalty_aim_marker.rotation.z - PI * 0.5) < 0.001,
+				"XI penalty marker must face the player vertically")
+			assert(absf(
+				stage.penalty_aim_marker.position.y
+				- ChessFootball3DPresenter.GOAL_POST_HEIGHT * 0.55
+			) < 0.001, "XI target marker must be inside the goal, not on the grass")
+			var old_target: Vector3 = stage.penalty_aim_marker.position
+			game.debug_set_penalty_aim(-0.65)
+			stage.sync_presentation(0.0, "broadcast")
+			assert(stage.penalty_aim_marker.position.distance_to(old_target) > 1.0,
+				"W/S aim changes must update the visible XI goal target")
+			game.debug_set_penalty_aim(0.5)
+			stage.sync_presentation(0.0, "broadcast")
 		if DisplayServer.get_name() != "headless":
 			for _penalty_frame in range(5):
 				stage.sync_presentation(0.0, "broadcast")
