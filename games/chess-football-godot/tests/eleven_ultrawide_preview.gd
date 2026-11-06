@@ -3,6 +3,12 @@ extends SceneTree
 # Native 1766x832 visual evidence, matching the reported ultrawide desktop.
 # Verify the actual expanded Godot viewport and XI camera, then save real pixels.
 func _initialize() -> void:
+	# The CI Xvfb display does not inherit --resolution reliably when Godot
+	# starts from a project configured for fullscreen. Resize the actual root
+	# Window before instantiating the match, not just the render assertion.
+	root.mode = Window.MODE_WINDOWED
+	root.size = Vector2i(1766, 832)
+	await process_frame
 	var packed := load("res://main.tscn") as PackedScene
 	assert(packed != null)
 	var game = packed.instantiate()
@@ -18,8 +24,13 @@ func _initialize() -> void:
 
 	var viewport := root.get_viewport()
 	var size: Vector2 = viewport.get_visible_rect().size
-	assert(size.y > 0.0 and size.x / size.y > 2.08,
-		"Ultrawide viewport was pillarboxed instead of expanded")
+	print("FOOTBALL_XI_ULTRAWIDE_GEOMETRY window=%s viewport=%s" % [
+		str(root.size), str(size)
+	])
+	if size.y <= 0.0 or size.x / size.y <= 2.08:
+		push_error("Ultrawide viewport was pillarboxed instead of expanded")
+		quit(1)
+		return
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null and game.debug_team_counts() == [11, 11])
 	stage.sync_presentation(8.0, "broadcast")
