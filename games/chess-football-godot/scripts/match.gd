@@ -82,6 +82,16 @@ const AI_XI_PASS_RECEIVER_CLEARANCE := 105.0
 const AI_XI_PASS_FORWARD_GAIN := 85.0
 const AI_XI_PASS_PRESSURE_RADIUS := 230.0
 const AI_XI_PASS_RECEIVER_SECONDS := 2.0
+# Thinking stays quick for positioning and defence; the BALL-CARRIER
+# needs a real first-touch/build-up window before most XI passes.
+# A close press permits a quicker escape, while unmarked recycling takes
+# time to control and look up. Physical ball pace is unchanged.
+const AI_XI_PASS_EMERGENCY_RADIUS := 95.0
+const AI_XI_PASS_CLOSE_PRESS_RADIUS := 170.0
+const AI_XI_PASS_DANGER_DELAY := 0.10
+const AI_XI_PASS_CLOSE_DELAY := 0.26
+const AI_XI_PASS_GOOD_FORWARD_DELAY := 0.45
+const AI_XI_PASS_BUILDUP_DELAY := 0.66
 const AI_DRIBBLE_LOOKAHEAD := 290.0
 const AI_SUPPORT_FORWARD := 225.0
 const AI_TEAMMATE_SEPARATION_RADIUS := 130.0
@@ -1712,6 +1722,29 @@ func _ai_xi_pass_lane_clear(passer: Footballer, receiver: Footballer) -> bool:
 	return true
 
 
+# This gate is deliberately separate from the 0.28s CPU decision tick.
+# Defensive thinking can remain agile without every first touch turning
+# into an instant pass. Deterministic, pressure-aware, no RNG or speed buffs.
+func _ai_xi_pass_setup_seconds(
+	player: Footballer, pressure_distance: float, forward_gain: float
+) -> float:
+	if pressure_distance <= AI_XI_PASS_EMERGENCY_RADIUS:
+		return AI_XI_PASS_DANGER_DELAY
+	if pressure_distance <= AI_XI_PASS_CLOSE_PRESS_RADIUS:
+		return AI_XI_PASS_CLOSE_DELAY
+	var settle: float = (
+		AI_XI_PASS_GOOD_FORWARD_DELAY
+		if forward_gain >= 180.0 else AI_XI_PASS_BUILDUP_DELAY
+	)
+	# Central defenders take an extra look before recycling possession;
+	# wide players have a shorter window for a promising forward ball.
+	if player.role == "defender":
+		settle += 0.12
+	elif player.role == "midfielder":
+		settle += 0.05
+	return settle
+
+
 func _ai_attack(player: Footballer) -> void:
 	if ball.carrier != player:
 		return
@@ -1749,6 +1782,14 @@ func _ai_attack(player: Footballer) -> void:
 		AI_XI_PASS_FORWARD_GAIN if match_team_size == 11 else _ai_adaptive_forward_pass_gain()
 	)
 	if pressured or useful_gain:
+		if match_team_size == 11 and player.team_id == 1:
+			var setup_seconds: float = _ai_xi_pass_setup_seconds(
+				player, pressure_distance, forward_gain
+			)
+			if ball.possession_seconds < setup_seconds:
+				# Maintain carrying and support movement while reading play.
+				# No possession changes or pauses to the simulation clock.
+				return
 		player.play_action("pass", 0.72)
 		if audio_fx != null:
 			audio_fx.play_pass()
