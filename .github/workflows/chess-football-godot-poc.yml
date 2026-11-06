@@ -1188,12 +1188,17 @@ jobs:
           if [[ -n "$screenshot" && -s "$screenshot" ]]; then
             cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-ultrawide-1766x832.png"
           fi
+          penalty_screenshot="$(sed -n 's/^FOOTBALL_XI_ULTRAWIDE_PENALTY_CAPTURE=//p' "$log" | tail -1)"
+          if [[ -n "$penalty_screenshot" && -s "$penalty_screenshot" ]]; then
+            cp "$penalty_screenshot" "$RUNNER_TEMP/chess-football-review/xi-penalty-ultrawide-1766x832.png"
+          fi
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
             echo '::error::Ultrawide Godot visual assertions failed.'
             exit 1
           fi
           grep -q 'FOOTBALL_XI_ULTRAWIDE_OK' "$log"
           test -s "$RUNNER_TEMP/chess-football-review/xi-ultrawide-1766x832.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-penalty-ultrawide-1766x832.png"
       - name: XI off-ball running frames in actual 3D Godot (two clubs)
         shell: bash
         run: |
