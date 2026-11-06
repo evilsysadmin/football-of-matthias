@@ -1,5 +1,6 @@
-import { lazy, Suspense, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { requestWarRoomLandscapeFullscreen } from './useWarRoomImmersive.js';
+import {readFootballCloudCareer,writeFootballCloudCareer} from '../footballCareerCloud.js';
 import { FOOTBALL_MANAGER_CLUBS, getFootballManagerClub } from '../footballManagerClubs.js';
 import { footballStandings, FOOTBALL_MANAGER_TACTICS } from '../footballManagerSeason.js';
 import { footballClubObjectiveReport } from '../footballManagerObjectives.js';
@@ -48,7 +49,7 @@ function FootballSquadDevelopment({ players }) {
   );
 }
 
-export default function ChessFootballEntry({ onExit }) {
+export default function ChessFootballEntry({ onExit, careerStorage='local' }) {
   const [view, setView] = useState('welcome');
   const [welcomeArtAvailable, setWelcomeArtAvailable] = useState(true);
   const [quickDifficulty, setQuickDifficulty] = useState(DEFAULT_FOOTBALL_QUICK_DIFFICULTY);
@@ -59,7 +60,9 @@ export default function ChessFootballEntry({ onExit }) {
   const [lineupIds, setLineupIds] = useState(null);
   const [journal, setJournal] = useState(null);
   const [careerHistory, setCareerHistory] = useState([]);
-  const [savedCareer, setSavedCareer] = useState(() => readFootballCareer());
+  const [savedCareer, setSavedCareer] = useState(() => careerStorage==='mongo'?{status:'loading'}:readFootballCareer());
+  const cloudRevision=useRef(null);
+  const saving=useRef(false);
   const [replacePending, setReplacePending] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const selectedClub = getFootballManagerClub(selectedClubId);
@@ -87,6 +90,21 @@ export default function ChessFootballEntry({ onExit }) {
     if (view !== 'match' && scrollSurface.current) scrollSurface.current.scrollTop = 0;
   }, [view]);
 
+  useEffect(()=>{
+    if(careerStorage!=='mongo')return;
+    let live=true;
+    readFootballCloudCareer().then(saved=>{
+      if(!live)return;
+      cloudRevision.current=saved.status==='future'?null:saved.revision;
+      setSavedCareer(saved);
+    }).catch(()=>{
+      if(!live)return;
+      cloudRevision.current=null;
+      setSavedCareer({status:'unavailable'});
+    });
+    return()=>{live=false;cloudRevision.current=null;};
+  },[careerStorage]);
+
   const showCareer = ({ journal: nextJournal, season: nextSeason, history = [] }) => {
     setCareerHistory(history);
     setSelectedClubId(nextJournal.clubId);
@@ -97,36 +115,54 @@ export default function ChessFootballEntry({ onExit }) {
     setView('season');
   };
 
-  const persistCareer = (next) => {
-    const outcome = writeFootballCareer(next.journal);
-    if (outcome.status === 'saved' || outcome.status === 'memory') {
-      setSavedCareer({ status: 'available', ...next });
+  const persistCareer = async (next) => {
+    if(careerStorage!=='mongo'){
+      const outcome=writeFootballCareer(next.journal);
+      if(outcome.status==='saved'||outcome.status==='memory')setSavedCareer({status:'available',...next});
+      setSaveStatus(outcome.status);
+      return outcome;
     }
-    setSaveStatus(outcome.status);
-    return outcome;
+    if(saving.current||cloudRevision.current===null||!['available','empty'].includes(savedCareer.status)){
+      setSaveStatus('unavailable');
+      return {status:'unavailable'};
+    }
+    saving.current=true;
+    try{
+      const outcome=await writeFootballCloudCareer(next.journal,cloudRevision.current);
+      cloudRevision.current=outcome.revision;
+      setSavedCareer({status:'available',...next});
+      setSaveStatus('cloud');
+      return outcome;
+    }catch(error){
+      // A failed write must not mutate the local backup or pretend it is synced.
+      // Re-load explicitly after a conflict/outage rather than guessing a winner.
+      cloudRevision.current=null;
+      setSaveStatus(error.code==='conflict'?'conflict':'unavailable');
+      return {status:error.code==='conflict'?'conflict':'unavailable'};
+    }finally{saving.current=false;}
   };
 
   const continueCareer = () => {
-    const restored = readFootballCareer();
+    const restored=careerStorage==='mongo'?savedCareer:readFootballCareer();
     setSavedCareer(restored);
-    if (restored.status === 'available') {
+    if(restored.status==='available'){
       setSaveStatus(null);
       showCareer(restored);
     }
   };
 
-  const confirmNewSeason = () => {
-    if (!selectedClub || savedCareer.status === 'future') return;
+  const confirmNewSeason = async () => {
+    if (!selectedClub || !['available','empty','invalid'].includes(savedCareer.status)) return;
     const start = createFootballCareer(selectedClub.id);
     const next = replayFootballCareer(start);
-    const result = persistCareer(next);
-    if (result.status === 'future' || result.status === 'unavailable') return;
+    const result = await persistCareer(next);
+    if (!['saved','memory','cloud'].includes(result.status)) return;
     setReplacePending(false);
     showCareer(next);
   };
 
   const openSeasonPreview = () => {
-    if (savedCareer.status === 'future') return;
+    if (!['available','empty','invalid'].includes(savedCareer.status)) return;
     if (savedCareer.status !== 'empty') {
       setReplacePending(true);
       return;
@@ -134,27 +170,27 @@ export default function ChessFootballEntry({ onExit }) {
     confirmNewSeason();
   };
 
-  const changeDraft = (patch) => {
+  const changeDraft = async (patch) => {
     if (!journal) return;
     const next = editFootballCareer(journal, patch);
-    const outcome = persistCareer(next);
-    if (outcome.status === 'future' || outcome.status === 'unavailable') return;
+    const outcome = await persistCareer(next);
+    if (!['saved','memory','cloud'].includes(outcome.status)) return;
     showCareer(next);
   };
 
-  const simulateNextRound = () => {
+  const simulateNextRound = async () => {
     if (!journal) return;
     const next = playFootballCareerRound(journal);
-    const outcome = persistCareer(next);
-    if (outcome.status === 'future' || outcome.status === 'unavailable') return;
+    const outcome = await persistCareer(next);
+    if (!['saved','memory','cloud'].includes(outcome.status)) return;
     showCareer(next);
   };
 
-  const renewSeason = () => {
+  const renewSeason = async () => {
     if (!journal || season?.currentRound !== 10 || seasonNumber >= FOOTBALL_CAREER_MAX_SEASONS) return;
     const next = startNextFootballSeason(journal);
-    const outcome = persistCareer(next);
-    if (outcome.status === 'future' || outcome.status === 'unavailable') return;
+    const outcome = await persistCareer(next);
+    if (!['saved','memory','cloud'].includes(outcome.status)) return;
     showCareer(next);
     if (scrollSurface.current) scrollSurface.current.scrollTop = 0;
   };
@@ -231,11 +267,16 @@ export default function ChessFootballEntry({ onExit }) {
                   <button type="button" className="chess-football-entry__manager-return" onClick={continueCareer}>Continuar temporada</button>
                 </div>
               ) : savedCareer.status === 'future' ? (
-                <p className="chess-football-entry__career-warning" role="status">Este dispositivo tiene una carrera creada con una versión más nueva. Se conserva intacta; actualiza el juego para continuar.</p>
+                <p className="chess-football-entry__career-warning" role="status">Hay una carrera creada con una versión más nueva. Se conserva intacta; actualiza el juego para continuar.</p>
               ) : savedCareer.status === 'invalid' ? (
                 <p className="chess-football-entry__career-warning" role="status">El último guardado no se puede leer. No se borrará hasta que confirmes una nueva temporada.</p>
+              ) : savedCareer.status === 'loading' ? (
+                <p role="status">Consultando tu carrera en Mongo…</p>
+              ) : savedCareer.status === 'unavailable' ? (
+                <p className="chess-football-entry__career-warning" role="alert">Mongo no está disponible. No se modificará tu carrera. Tus copias locales siguen intactas.</p>
               ) : null}
-              <FootballSaveTransfer onImported={() => setSavedCareer(readFootballCareer())} />
+              <FootballSaveTransfer cloud={careerStorage==='mongo'} savedCareer={savedCareer}
+                onImported={async journal=>persistCareer(replayFootballCareer(journal))} />
             </div>
           </section>        ) : view === 'quick-setup' ? (
           <section className="chess-football-entry__quick-setup" aria-labelledby="football-quick-setup-title">
@@ -288,7 +329,7 @@ export default function ChessFootballEntry({ onExit }) {
               <div className="chess-football-entry__club-summary">
                 <p><strong>Estilo:</strong> {selectedClub.style}</p>
                 <p><strong>Objetivo propuesto:</strong> {selectedClub.objective}</p>
-                <p>Liga de seis clubes y diez jornadas, con quinteto y fatiga. La carrera se guarda en este dispositivo; los partidos Godot aún van por separado.</p>
+                <p>Liga de seis clubes y diez jornadas, con quinteto y fatiga. La carrera se guarda {careerStorage==='mongo'?'en Mongo con tu ShadowOps ID':'en este dispositivo'}; los partidos Godot aún van por separado.</p>
               </div>
             ) : null}
             {selectedClub ? <FootballSquadDevelopment players={developedRoster} /> : null}
@@ -299,7 +340,7 @@ export default function ChessFootballEntry({ onExit }) {
                 <button type="button" className="chess-football-entry__manager-return is-secondary" onClick={() => setReplacePending(false)}>Conservar la anterior</button>
               </div>
             ) : (
-              <button type="button" className="chess-football-entry__manager-return" disabled={savedCareer.status === 'future'} onClick={openSeasonPreview}>Empezar temporada de prueba</button>
+              <button type="button" className="chess-football-entry__manager-return" disabled={!['empty','available','invalid'].includes(savedCareer.status)} onClick={openSeasonPreview}>Empezar temporada de prueba</button>
             )}
             <button type="button" className="chess-football-entry__manager-return is-secondary" onClick={() => setView('manager')}>Cambiar de club</button>
           </section>
@@ -318,7 +359,10 @@ export default function ChessFootballEntry({ onExit }) {
                 ))}</ol>
               </details>
             ) : null}
-            {saveStatus === 'saved' ? <p className="chess-football-entry__save-state" role="status">Progreso guardado en este dispositivo y pendiente de sincronización del perfil.</p> : null}
+            {saveStatus === 'saved' ? <p className="chess-football-entry__save-state" role="status">Progreso guardado en este dispositivo.</p> : null}
+            {saveStatus === 'cloud' ? <p className="chess-football-entry__save-state" role="status">Carrera guardada en Mongo con tu ShadowOps ID.</p> : null}
+            {saveStatus === 'conflict' ? <p className="chess-football-entry__career-warning" role="alert">La carrera ha cambiado en otro dispositivo. Recarga antes de continuar; tus datos remotos no se han sobrescrito.</p> : null}
+            {saveStatus === 'unavailable' ? <p className="chess-football-entry__career-warning" role="alert">No se ha podido guardar. Mongo no ha confirmado los cambios. Recarga cuando vuelva el servicio.</p> : null}
             {saveStatus === 'memory' ? <p className="chess-football-entry__career-warning" role="status">El almacenamiento está bloqueado: los cambios sólo están disponibles en esta pestaña.</p> : null}
             {objective ? (
               <section className="chess-football-entry__objective" aria-label="Objetivo del club" data-manager-section="objective" tabIndex={-1}>

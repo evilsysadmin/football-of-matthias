@@ -60,6 +60,36 @@ export async function authorize(token,env,{request=publicRequest,now=Math.floor(
   ||live.checked_at>now+5||now-live.checked_at>5)throw new Denied();
  return claims;
 }
+
+const CAREER_API='https://api-staging.football.shadowops.dpdns.org/api/career';
+function careerEnabled(env){
+ return env.FOOTBALL_CAREER_API_URL===CAREER_API
+   &&typeof env.FOOTBALL_CAREER_SERVICE_CREDENTIAL==='string'
+   &&/^fsc1_[A-Za-z0-9_-]{43}$/.test(env.FOOTBALL_CAREER_SERVICE_CREDENTIAL);
+}
+async function careerProxy(request,env,claims,options={}){
+ const credential=env.FOOTBALL_CAREER_SERVICE_CREDENTIAL;
+ if(env.FOOTBALL_CAREER_API_URL!==CAREER_API
+    ||typeof credential!=='string'||!/^fsc1_[A-Za-z0-9_-]{43}$/.test(credential))throw new Denied(503,'career_configuration');
+ const headers={'Authorization':'Bearer '+credential,'X-Football-Subject':claims.sub,'Accept':'application/json'};
+ let body;
+ if(request.method==='PUT'){
+  if(request.headers.get('Origin')!=='https://'+HOST||request.headers.get('Content-Type')!=='application/json')throw new Denied(403);
+  body=await limitedBody(request.body,20000,413);
+  headers['Content-Type']='application/json';
+ }
+ let response;
+ try{response=await (options.request||publicRequest)(CAREER_API,{
+  method:request.method,headers,body,redirect:'manual',signal:AbortSignal.timeout(5000)
+ });}catch{throw new Denied(503,'career_storage');}
+ if(![200,409,413,422].includes(response.status))throw new Denied(503,'career_storage');
+ let value;
+ try{value=JSON.parse(await limitedBody(response.body,20000,503));}
+ catch{throw new Denied(503,'career_storage');}
+ if(!value||typeof value!=='object'||Array.isArray(value))throw new Denied(503,'career_storage');
+ return json(value,response.status);
+}
+
 function cookie(request){
  const matches=(request.headers.get('Cookie')||'').split(';').map(x=>x.trim()).filter(x=>x.startsWith(COOKIE+'='));
  if(matches.length!==1)throw new Denied();return matches[0].slice(COOKIE.length+1);
@@ -72,8 +102,8 @@ const bootstrap=`const status=document.querySelector('[role=status]');
  const session=await fetch('/api/football/session',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:value.token}),signal:AbortSignal.timeout(8000)});
  if(!session.ok)throw Error();location.replace('/');
 }catch{status.textContent='El acceso con ShadowOps ID aún no está disponible. Vuelve a intentarlo en unos minutos.';}})();`;
-function login(status=401){
- const body=`<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Football · ShadowOps ID</title><style>body{margin:0;background:#08130d;color:#f4e9d1;font:18px system-ui;min-height:100vh;display:grid;place-items:center}main{max-width:34rem;margin:1rem;padding:2rem;border:1px solid #52634c;border-radius:18px}a,button{display:inline-block;padding:14px 18px;background:#d6c18b;color:#132115;border:0;border-radius:9px;font:inherit;text-decoration:none}p{line-height:1.6}small{color:#b8c8ad}a:focus-visible,button:focus-visible{outline:3px solid #9ef4b1;outline-offset:4px}</style><main><small>FOOTBALL OF MATTHIAS</small><h1>Tu cuenta ShadowOps ID</h1><p role="status">Comprobando tu sesión…</p><a href="${ISSUER}/login?app=football">Entrar con ShadowOps ID</a><p><small>Tu carrera permanece guardada en este navegador y vinculada a tu cuenta.</small></p></main><script src="/_shadowops/session.js" defer></script></html>`;
+function login(status=401,cloud=false){
+ const body=`<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Football · ShadowOps ID</title><style>body{margin:0;background:#08130d;color:#f4e9d1;font:18px system-ui;min-height:100vh;display:grid;place-items:center}main{max-width:34rem;margin:1rem;padding:2rem;border:1px solid #52634c;border-radius:18px}a,button{display:inline-block;padding:14px 18px;background:#d6c18b;color:#132115;border:0;border-radius:9px;font:inherit;text-decoration:none}p{line-height:1.6}small{color:#b8c8ad}a:focus-visible,button:focus-visible{outline:3px solid #9ef4b1;outline-offset:4px}</style><main><small>FOOTBALL OF MATTHIAS</small><h1>Tu cuenta ShadowOps ID</h1><p role="status">Comprobando tu sesión…</p><a href="${ISSUER}/login?app=football">Entrar con ShadowOps ID</a><p><small>${cloud?'Tu carrera se guarda con tu cuenta en Mongo.':'Tu carrera permanece guardada en este navegador y vinculada a tu cuenta.'}</small></p></main><script src="/_shadowops/session.js" defer></script></html>`;
  return new Response(body,{status,headers:{...headers,'Content-Type':'text/html; charset=utf-8',
   'Content-Security-Policy':`default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self' ${ISSUER}; base-uri 'none'; frame-ancestors 'none'; form-action ${ISSUER}`}});
 }
@@ -89,21 +119,26 @@ export async function handle(request,env,options={}){
    let body;try{body=JSON.parse(raw);}catch{throw new Denied(400);}
    if(!body||Object.keys(body).length!==1||!Object.hasOwn(body,'token'))throw new Denied(400);
    const claims=await authorize(body.token,env,options);
-   return json({subject:claims.sub,expires_at:claims.exp},200,{'Set-Cookie':`${COOKIE}=${body.token}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${Math.max(0,claims.exp-Math.floor(Date.now()/1000))}`});
+   return json({subject:claims.sub,expires_at:claims.exp,career_storage:careerEnabled(env)?'mongo':'local'},200,{'Set-Cookie':`${COOKIE}=${body.token}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${Math.max(0,claims.exp-Math.floor(Date.now()/1000))}`});
   }
   if(url.pathname==='/api/football/logout'&&request.method==='POST'){
    if(url.search||request.headers.get('Origin')!=='https://'+HOST)throw new Denied(403);
    return json({signed_out:true},200,{'Set-Cookie':`${COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`});
   }
+  if(url.pathname==='/api/football/career'&&(request.method==='GET'||request.method==='PUT')){
+   if(url.search)throw new Denied(400);
+   const claims=await authorize(cookie(request),env,options);
+   return await careerProxy(request,env,claims,options);
+  }
   if(!['GET','HEAD'].includes(request.method))throw new Denied(405);
   const claims=await authorize(cookie(request),env,options);
-  if(url.pathname==='/api/football/session')return json({subject:claims.sub,expires_at:claims.exp});
+  if(url.pathname==='/api/football/session')return json({subject:claims.sub,expires_at:claims.exp,career_storage:careerEnabled(env)?'mongo':'local'});
   if(url.pathname.startsWith('/api/'))return json({error:'not_found'},404);
   const response=await env.ASSETS.fetch(request);const next=new Response(response.body,response);
   next.headers.set('Cache-Control','no-store');return next;
  }catch(error){
   const status=error instanceof Denied?error.status:503;
-  if(url.pathname==='/'||url.pathname==='/index.html')return login(status===401?401:503);
+  if(url.pathname==='/'||url.pathname==='/index.html')return login(status===401?401:503,careerEnabled(env));
   return json({error:status===401?'authentication_required':'access_unavailable'},status,status===503?{'X-Football-Identity-Error':error instanceof Denied?error.stage:'edge_runtime'}:{});
  }
 }
