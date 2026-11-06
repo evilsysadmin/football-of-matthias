@@ -26,7 +26,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
 const browser=await chromium.launch({headless:true});
 try{
- for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
+ for(const viewport of [{width:1280,height:800},{width:1788,height:820},{width:390,height:844}]){
   publishedBuild=currentBuild;
   const page=await browser.newPage({viewport});const errors=[];page.on('pageerror',e=>errors.push(String(e)));
   await page.route('https://id-staging.shadowops.dpdns.org/api/identity/token',route=>route.fulfill({status:401,headers:{'Access-Control-Allow-Origin':'http://127.0.0.1:'+server.address().port,'Access-Control-Allow-Credentials':'true','Content-Type':'application/json'},body:'{}'}));
@@ -43,6 +43,19 @@ try{
   assert.equal(await page.getByRole('heading',{name:'Football of Matthias'}).count(),1);
   assert.equal(await page.getByText(/El vestuario/i).count(),0,'Retired vestuario label must not return');
   assert.equal(await page.locator('.chess-football-entry__welcome-scene').count(),1);
+  if(viewport.width>700){
+    const art=await page.locator('.chess-football-entry__welcome-scene').boundingBox();
+    assert.ok(art && art.width>=viewport.width-1 && art.height>=viewport.height-1,
+      'Desktop welcome art must cover the full viewport without side bars or stretching');
+    assert.ok(art.x<=1 && art.y<=1 && art.x+art.width>=viewport.width-1 && art.y+art.height>=viewport.height-1,
+      'Cover artwork must reach all four viewport edges');
+    const back=await page.locator('.chess-football-entry__welcome-back').boundingBox();
+    assert.ok(back && back.x>=0 && back.y>=0 && back.x+back.width<=viewport.width && back.y+back.height<=viewport.height,
+      'Return to ShadowOps must remain visible after cover crops the art');
+    const transferSummary=await page.locator('.football-transfer > summary').boundingBox();
+    assert.ok(transferSummary && transferSummary.y>=0 && transferSummary.y+transferSummary.height<=viewport.height+1,
+      'Career transfer must stay inside the viewport on panoramic displays');
+  }
   const quick=page.getByRole('button',{name:/Partida rápida/});
   const manager=page.getByRole('button',{name:/Modo mánager/});
   const quickBox=await quick.boundingBox(),managerBox=await manager.boundingBox();
