@@ -2322,8 +2322,12 @@ static func xi_offball_stride_advance(
 		XI_OFFBALL_SPRINT_CYCLE_PX if sprinting else XI_OFFBALL_RUN_CYCLE_PX
 	)
 	var fps: float = travel_speed * float(frame_count) / cycle_px
-	# Preserve each authored frame at normal browser refresh rates.
-	return delta * minf(fps, base_fps * 1.35)
+	# Never skip a painted pose when the Web renderer/physics slows down:
+	# a 12-frame sprint can otherwise jump 2-3 images in a 15-20 FPS tick,
+	# especially for fast non-carriers. Prioritize completing EVERY pose
+	# over catching up the visual gait during a slow frame. This is
+	# presentation-only; movement, stamina and tackles remain untouched.
+	return minf(delta * minf(fps, base_fps * 1.35), 0.99)
 
 
 static func xi_outfield_stride_advance(
