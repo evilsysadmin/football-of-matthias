@@ -115,6 +115,9 @@ const AI_XI_SUPPORT_DIAGONAL_WIDTH := 135.0
 const AI_XI_SUPPORT_UNMARKED_RELEASE_RADIUS := 175.0
 const AI_XI_SUPPORT_HOLD_SAFE_RADIUS := 115.0
 const AI_XI_SUPPORT_SWITCH_ADVANTAGE := 45.0
+# Nearby XI support ranks persist through small distance changes. A runner
+# clearly closer by more than this bound may replace the incumbent.
+const AI_XI_SUPPORT_ROLE_HOLD_DISTANCE := 55.0
 const AI_COVER_DISTANCE := 150.0
 # Only the CPU's nearby second defender may step up from positional cover to
 # a legal contest. Easy and the human-side support shape remain untouched.
@@ -238,6 +241,11 @@ var ai_intended_pass_until: float = 0.0
 # Per-runner {owner: instance_id, side: -1/1} for the CPU's primary XI
 # triangle. Never survives a lost possession or a changed support role.
 var ai_xi_support_lane_memory: Dictionary = {}
+# Both short-triangle roles are retained for the *current* CPU carrier.
+# Recompute from actual player positions; the hold margin only breaks near
+# ties and never grants speed or permanent ownership of a passing lane.
+var ai_xi_support_rank_owner: Footballer = null
+var ai_xi_support_rank_slots: Array = [null, null]
 # Cached only while the ball is loose; possession resets the assignments.
 var ai_primary_presser_cache: Array = [null, null]
 var ai_secondary_presser_cache: Array = [null, null]
@@ -982,6 +990,8 @@ func _release_charged_shot() -> void:
 func _update_ai(delta: float) -> void:
 	if match_team_size != 11 or ball.carrier == null or ball.carrier.team_id != 1:
 		ai_xi_support_lane_memory.clear()
+		ai_xi_support_rank_owner = null
+		ai_xi_support_rank_slots = [null, null]
 	for team_id in range(2):
 		var team_has_ball: bool = ball.carrier != null and ball.carrier.team_id == team_id
 		var loose_target: Vector2 = _ai_loose_ball_pursuit_point()
@@ -1417,24 +1427,51 @@ func _ai_xi_support_rank(player: Footballer) -> int:
 		or ball.carrier == null
 		or ball.carrier.team_id != 1
 	):
+		ai_xi_support_rank_owner = null
+		ai_xi_support_rank_slots = [null, null]
 		return -1
-	var distance: float = player.global_position.distance_squared_to(ball.carrier.global_position)
-	var closer := 0
-	for teammate in teams[1]:
-		if (
-			teammate == player
-			or teammate == ball.carrier
-			or teammate.sent_off
-			or teammate.role == "keeper"
-		):
-			continue
-		var other_distance: float = teammate.global_position.distance_squared_to(ball.carrier.global_position)
-		if (
-			other_distance < distance - 0.01
-			or (absf(other_distance - distance) <= 0.01 and teammate.squad_index < player.squad_index)
-		):
-			closer += 1
-	return closer if closer < 2 else -1
+	# A new ball carrier starts fresh; no historical runner can hold a
+	# privileged role after the ball changes feet or the match restarts.
+	if ai_xi_support_rank_owner != ball.carrier:
+		ai_xi_support_rank_owner = ball.carrier
+		ai_xi_support_rank_slots = [null, null]
+	var chosen: Array = []
+	for slot in range(2):
+		var incumbent: Footballer = ai_xi_support_rank_slots[slot]
+		var best: Footballer = null
+		var best_adjusted: float = INF
+		for teammate in teams[1]:
+			if (
+				teammate == ball.carrier
+				or teammate.sent_off
+				or teammate.role == "keeper"
+				or teammate in chosen
+			):
+				continue
+			var actual_distance: float = teammate.global_position.distance_to(ball.carrier.global_position)
+			# Retain the current role unless a challenger is at least 55
+			# units better placed. This preference changes no physical
+			# distances, movement effort or legal passing range.
+			var adjusted: float = (
+				actual_distance - AI_XI_SUPPORT_ROLE_HOLD_DISTANCE
+				if teammate == incumbent else actual_distance
+			)
+			if (
+				best == null
+				or adjusted < best_adjusted - 0.01
+				or (
+					absf(adjusted - best_adjusted) <= 0.01
+					and teammate.squad_index < best.squad_index
+				)
+			):
+				best = teammate
+				best_adjusted = adjusted
+		chosen.append(best)
+	ai_xi_support_rank_slots = chosen
+	for slot in range(chosen.size()):
+		if chosen[slot] == player and not player.sent_off:
+			return slot
+	return -1
 
 
 
@@ -1541,6 +1578,10 @@ func _ai_support_target(player: Footballer) -> Vector2:
 			),
 			match_pitch,
 		)
+		if rank == 1 and player.team_id == 1:
+			# A former first support cannot resume an old diagonal if
+			# it has been reassigned to the recycling outlet.
+			ai_xi_support_lane_memory.erase(int(player.get_instance_id()))
 		return (
 			_ai_xi_open_lane_support_target(player, triangle_target)
 			if rank == 0 else triangle_target
