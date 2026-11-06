@@ -507,6 +507,78 @@ func _initialize() -> void:
 	# Legacy default math still points at the original nets.
 	assert(ChessFootballMath.goal_center(0).x == FIVE.end.x)
 	assert(ChessFootballMath.goal_center(1).x == FIVE.position.x)
+	# XI Normal+: one carrier owns the first/second defensive pairing.
+	# Small lateral feints must NOT exchange the presser and goal-side
+	# cover every frame; a genuinely better runner still takes over.
+	game._set_quick_difficulty("normal")
+	var role_carrier: Footballer = game.teams[0][10]
+	var role_first: Footballer = game.teams[1][5]
+	var role_second: Footballer = game.teams[1][6]
+	var role_far: Footballer = game.teams[1][7]
+	var role_origin: Vector2 = centre + Vector2(220.0, 0.0)
+	role_carrier.global_position = role_origin
+	for defender: Footballer in game.teams[1]:
+		if defender.role != "keeper":
+			defender.global_position = role_origin + Vector2(-1150.0, 760.0)
+	role_first.global_position = role_origin + Vector2(155.0, -90.0)
+	role_second.global_position = role_origin + Vector2(170.0, 90.0)
+	role_far.global_position = role_origin + Vector2(430.0, 0.0)
+	game.ball.attach_to(role_carrier)
+	assert(game._ai_primary_presser(1) == role_first)
+	assert(game._ai_secondary_presser(1, role_first) == role_second)
+	assert(game.ai_xi_defensive_role_owner == role_carrier)
+	role_carrier.global_position += Vector2(0.0, 30.0)
+	# The nominally closer second defender gets a modest advantage;
+	# both roles remain committed to distinct, physically reachable jobs.
+	assert(game._ai_primary_presser(1) == role_first)
+	assert(game._ai_secondary_presser(1, role_first) == role_second)
+	var first_target: Vector2 = game._ai_press_target(role_first, role_carrier)
+	var second_target: Vector2 = game._ai_cover_target(role_second, role_carrier.global_position)
+	assert(XI.has_point(first_target) and XI.has_point(second_target))
+	assert(second_target.x > role_carrier.global_position.x + 35.0)
+	assert(second_target.distance_to(first_target) > 30.0)
+	# A strong change in lateral lane forces a genuine handover, without
+	# sending the first and second defenders to the SAME place.
+	role_carrier.global_position = role_origin + Vector2(0.0, 150.0)
+	assert(game._ai_primary_presser(1) == role_second)
+	assert(game._ai_secondary_presser(1, role_second) == role_first)
+	role_carrier.global_position.y -= 9.0
+	assert(game._ai_primary_presser(1) == role_second)
+	assert(game._ai_secondary_presser(1, role_second) == role_first)
+	role_second.sent_off = true
+	assert(game._ai_primary_presser(1) == role_first)
+	assert(game._ai_secondary_presser(1, role_first) != role_second)
+	role_second.sent_off = false
+	# A new owner cannot inherit an old presser pair, even during a
+	# quick give-and-go. The loose-ball phase clears both role slots.
+	var other_carrier: Footballer = game.teams[0][8]
+	other_carrier.global_position = role_origin
+	game.ball.attach_to(other_carrier)
+	assert(game._ai_primary_presser(1) == role_first)
+	assert(game.ai_xi_defensive_role_owner == other_carrier)
+	game.ball.release(Vector2.ZERO, 0.0)
+	game._ai_primary_presser(1)
+	assert(game.ai_xi_defensive_role_owner == null)
+	# Easy and 5v5 keep selecting the nearest defender during possession.
+	game.ball.attach_to(role_carrier)
+	role_carrier.global_position = role_origin
+	game._set_quick_difficulty("easy")
+	assert(game._ai_primary_presser(1) == role_first)
+	role_carrier.global_position.y += 30.0
+	assert(game._ai_primary_presser(1) == role_second)
+	game._set_quick_difficulty("normal")
+	game.match_team_size = 5
+	role_carrier.global_position = role_origin
+	assert(game._ai_primary_presser(1) == role_first)
+	role_carrier.global_position.y += 30.0
+	assert(game._ai_primary_presser(1) == role_second)
+	game.match_team_size = 11
+	assert(game._ai_primary_presser(1) == role_second)
+	assert(game._ai_secondary_presser(1, role_second) != role_second)
+	game.ball.release(Vector2.ZERO, 0.0)
+	game._ai_primary_presser(1)
+	assert(game.ai_xi_defensive_role_owner == null)
+
 	# CPU XI Normal+: the first man presses, second protects goal side,
 	# and exactly one REACHABLE third man guards an actual forward pass.
 	# The selector must ignore sent-off players and never teleport the
