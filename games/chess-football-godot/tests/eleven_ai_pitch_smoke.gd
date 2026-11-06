@@ -128,6 +128,25 @@ func _initialize() -> void:
 	game._ai_attack(passer)
 	assert(game.ball.carrier == passer)
 
+	# A moving marker can close an otherwise open ground-pass corridor.
+	# The current position alone must NOT wrongly reject the outlet.
+	var pass_axis: Vector2 = (receiver.global_position - passer.global_position).normalized()
+	var lane_normal := Vector2(-pass_axis.y, pass_axis.x)
+	blocker.global_position = passer.global_position.lerp(receiver.global_position, 0.5) + lane_normal * 110.0
+	blocker.velocity = Vector2.ZERO
+	assert(game._ai_xi_pass_lane_clear(passer, receiver))
+	blocker.velocity = -lane_normal * 320.0
+	assert(not game._ai_xi_pass_lane_clear(passer, receiver))
+	assert(game._best_ai_pass_target(passer) == null)
+	blocker.velocity = lane_normal * 320.0
+	assert(game._ai_xi_pass_lane_clear(passer, receiver))
+	# A dismissed defender's old momentum cannot block the lane.
+	blocker.global_position = passer.global_position.lerp(receiver.global_position, 0.5)
+	blocker.sent_off = true
+	assert(game._ai_xi_pass_lane_clear(passer, receiver))
+	blocker.sent_off = false
+	blocker.velocity = Vector2.ZERO
+
 	# Under pressure, a safe sideways/backward outlet is worth using.
 	# Without pressure, don't initiate pointless lateral ping-pong.
 	receiver.global_position = passer.global_position + Vector2(55.0, 220.0)
