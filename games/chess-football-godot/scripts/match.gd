@@ -110,6 +110,11 @@ const AI_XI_SUPPORT_SAFE_RADIUS := 130.0
 const AI_XI_SUPPORT_CLEARANCE_GAIN := 60.0
 const AI_XI_SUPPORT_DIAGONAL_FORWARD := 55.0
 const AI_XI_SUPPORT_DIAGONAL_WIDTH := 135.0
+# A chosen XI support lane persists through small defensive shifts. Release
+# once the original triangle is clearly open; abandon a truly unsafe lane.
+const AI_XI_SUPPORT_UNMARKED_RELEASE_RADIUS := 175.0
+const AI_XI_SUPPORT_HOLD_SAFE_RADIUS := 115.0
+const AI_XI_SUPPORT_SWITCH_ADVANTAGE := 45.0
 const AI_COVER_DISTANCE := 150.0
 # Only the CPU's nearby second defender may step up from positional cover to
 # a legal contest. Easy and the human-side support shape remain untouched.
@@ -230,6 +235,9 @@ var audio_fx: ChessFootballAudio
 var ai_next_decision: Dictionary = {}
 var ai_intended_pass_receiver: Footballer = null
 var ai_intended_pass_until: float = 0.0
+# Per-runner {owner: instance_id, side: -1/1} for the CPU's primary XI
+# triangle. Never survives a lost possession or a changed support role.
+var ai_xi_support_lane_memory: Dictionary = {}
 # Cached only while the ball is loose; possession resets the assignments.
 var ai_primary_presser_cache: Array = [null, null]
 var ai_secondary_presser_cache: Array = [null, null]
@@ -972,6 +980,8 @@ func _release_charged_shot() -> void:
 	ball.release(target - controlled.global_position, power, lift, true)
 
 func _update_ai(delta: float) -> void:
+	if match_team_size != 11 or ball.carrier == null or ball.carrier.team_id != 1:
+		ai_xi_support_lane_memory.clear()
 	for team_id in range(2):
 		var team_has_ball: bool = ball.carrier != null and ball.carrier.team_id == team_id
 		var loose_target: Vector2 = _ai_loose_ball_pursuit_point()
@@ -1440,6 +1450,7 @@ func _ai_xi_support_clearance(point: Vector2) -> float:
 
 
 func _ai_xi_open_lane_support_target(player: Footballer, base_target: Vector2) -> Vector2:
+	var key: int = int(player.get_instance_id())
 	if (
 		match_team_size != 11
 		or player.team_id != 1
@@ -1447,37 +1458,69 @@ func _ai_xi_open_lane_support_target(player: Footballer, base_target: Vector2) -
 		or ball.carrier.team_id != 1
 		or not (player.role in ["midfielder", "wing", "forward"])
 	):
+		ai_xi_support_lane_memory.erase(key)
 		return base_target
+	var owner_id: int = int(ball.carrier.get_instance_id())
+	var remembered: Dictionary = ai_xi_support_lane_memory.get(key, {})
+	var has_lane: bool = int(remembered.get("owner", -1)) == owner_id
+	var remembered_side: float = float(remembered.get("side", 0.0))
 	var baseline_clearance: float = _ai_xi_support_clearance(base_target)
-	if baseline_clearance >= AI_XI_SUPPORT_MARKED_RADIUS:
+	# The opening threshold is lower than the release threshold so a
+	# marker wobbling at 150 does not reverse the runner every physics tick.
+	if (
+		(not has_lane and baseline_clearance >= AI_XI_SUPPORT_MARKED_RADIUS)
+		or baseline_clearance >= AI_XI_SUPPORT_UNMARKED_RELEASE_RADIUS
+	):
+		ai_xi_support_lane_memory.erase(key)
 		return base_target
 	var best_target: Vector2 = base_target
+	var best_side: float = 0.0
 	var best_score: float = -INF
+	var retained_target: Vector2 = base_target
+	var retained_score: float = -INF
 	for side in [-1.0, 1.0]:
 		var candidate: Vector2 = base_target + Vector2(
 			-AI_XI_SUPPORT_DIAGONAL_FORWARD,
 			side * AI_XI_SUPPORT_DIAGONAL_WIDTH,
 		)
-		# Stay on the actual pitch and within the ordinary ground-pass reach.
+		# Both new and remembered lanes must remain physically reachable.
 		if not match_pitch.has_point(candidate):
 			continue
 		var pass_distance: float = ball.carrier.global_position.distance_to(candidate)
 		if pass_distance < AI_XI_PASS_MIN_DISTANCE or pass_distance > AI_XI_PASS_MAX_DISTANCE:
 			continue
 		var clearance: float = _ai_xi_support_clearance(candidate)
+		var score: float = clearance - absf(
+			candidate.y - player.home_position.y
+		) * 0.04
+		if (
+			has_lane
+			and is_equal_approx(side, remembered_side)
+			and clearance >= AI_XI_SUPPORT_HOLD_SAFE_RADIUS
+		):
+			retained_target = candidate
+			retained_score = score
 		if (
 			clearance < AI_XI_SUPPORT_SAFE_RADIUS
 			or clearance - baseline_clearance < AI_XI_SUPPORT_CLEARANCE_GAIN
 		):
 			continue
-		# For similarly open outlets preserve the player's original flank.
-		var score: float = clearance - absf(
-			candidate.y - player.home_position.y
-		) * 0.04
 		if score > best_score:
 			best_score = score
+			best_side = side
 			best_target = candidate
-	return best_target
+	# Keep the current run through minor score changes, but never protect a
+	# dangerous path: a blocked/invalid remembered lane must be replaced.
+	if (
+		retained_score > -INF
+		and (best_side == 0.0 or best_score <= retained_score + AI_XI_SUPPORT_SWITCH_ADVANTAGE)
+	):
+		return retained_target
+	if best_side != 0.0:
+		ai_xi_support_lane_memory[key] = {"owner": owner_id, "side": best_side}
+		return best_target
+	ai_xi_support_lane_memory.erase(key)
+	return base_target
 
 
 func _ai_support_target(player: Footballer) -> Vector2:
@@ -1502,6 +1545,9 @@ func _ai_support_target(player: Footballer) -> Vector2:
 			_ai_xi_open_lane_support_target(player, triangle_target)
 			if rank == 0 else triangle_target
 		)
+	# The second outlet and other positions must not inherit stale run plans.
+	if player.team_id == 1:
+		ai_xi_support_lane_memory.erase(int(player.get_instance_id()))
 	# Use distinct positional lanes rather than dragging all supporters into
 	# the dribbler's path. A wider field is only useful when the AI exploits it.
 	var lane_offset := 0.0
