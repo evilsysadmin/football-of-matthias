@@ -2601,7 +2601,7 @@ func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "", team_id:
 
 
 func _sync_player_secondary_motion(
-	player: Footballer, sprite: AnimatedSprite3D, proxy: Node3D, delta: float
+	player: Footballer, sprite: AnimatedSprite3D, proxy: Node3D, delta: float = 0.0
 ) -> void:
 	var animation_name := String(sprite.animation)
 	var frame_count := maxi(1, sprite.sprite_frames.get_frame_count(sprite.animation))
