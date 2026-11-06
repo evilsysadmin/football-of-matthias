@@ -1930,11 +1930,12 @@ func _build_ball() -> void:
 	penalty_aim_marker = MeshInstance3D.new()
 	penalty_aim_marker.name = "PenaltyAimMarker"
 	var aim_mesh := TorusMesh.new()
-	aim_mesh.inner_radius = 0.12
-	aim_mesh.outer_radius = 0.20
+	aim_mesh.inner_radius = 0.20
+	aim_mesh.outer_radius = 0.29
 	penalty_aim_marker.mesh = aim_mesh
 	penalty_aim_marker.material_override = _material(Color(1.0, 0.73, 0.16), 0.28)
-	penalty_aim_marker.position.y = 0.040
+	penalty_aim_marker.position.y = GOAL_POST_HEIGHT * 0.55
+	penalty_aim_marker.rotation.z = PI * 0.5
 	penalty_aim_marker.visible = false
 	penalty_aim_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(penalty_aim_marker)
