@@ -467,6 +467,13 @@ func _create_hud() -> void:
 	controls_style.corner_radius_bottom_right = 4
 	controls_panel.add_theme_stylebox_override("panel", controls_style)
 	hud.add_child(controls_panel)
+	# Apply spanning anchors AFTER parenting; otherwise Godot recalculates
+	# the width on _ready and breaks the 1280x720 HUD baseline.
+	controls_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	controls_panel.offset_left = 16.0
+	controls_panel.offset_right = -16.0
+	controls_panel.offset_top = 66.0
+	controls_panel.offset_bottom = 95.0
 
 	help_label = Label.new()
 	help_label.position = Vector2(12, 3)
@@ -476,7 +483,8 @@ func _create_hud() -> void:
 	controls_panel.add_child(help_label)
 
 	view_label = Label.new()
-	view_label.position = Vector2(1030, 100)
+	view_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	view_label.position = Vector2(-250, 100)
 	view_label.size = Vector2(230, 23)
 	view_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	view_label.add_theme_font_size_override("font_size", 13)
@@ -487,7 +495,8 @@ func _create_hud() -> void:
 	# obscured the grandstand whenever a kick-off or penalty was announced.
 	goal_label = Label.new()
 	goal_label.name = "MatchEventChyron"
-	goal_label.position = Vector2(380, 105)
+	goal_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	goal_label.position = Vector2(-260, 105)
 	goal_label.size = Vector2(520, 36)
 	goal_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	goal_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -507,7 +516,8 @@ func _create_hud() -> void:
 	hud.add_child(goal_label)
 
 	shot_meter_label = Label.new()
-	shot_meter_label.position = Vector2(470, 635)
+	shot_meter_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	shot_meter_label.position = Vector2(-170, -85)
 	shot_meter_label.size = Vector2(340, 24)
 	shot_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	shot_meter_label.text = "POTENCIA DE TIRO"
