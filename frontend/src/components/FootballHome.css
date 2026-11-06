@@ -227,6 +227,33 @@
   }
 }
 
+/* At 16:10 / 16:9, cover crops horizontally. The baked top-corner
+   labels would peek out from behind the functional buttons; make the real
+   corner controls fully cover those painted regions, flush to the edges. */
+@media (min-width: 701px) and (max-aspect-ratio: 19/10) {
+  .chess-football-entry__welcome-back {
+    left: max(0px, calc((100% - 100vw) / 2));
+    top: max(0px, calc((100% - 100dvh) / 2));
+    min-width: clamp(175px, 15vw, 270px);
+    min-height: clamp(64px, 7dvh, 80px);
+    padding-left: 1rem;
+    border-radius: 0 999px 999px 0;
+    background: #0e0f0c;
+  }
+
+  body:has(.chess-football-entry[data-football-view="welcome"]) .football-identity-actions {
+    right: 0;
+    top: 0;
+  }
+
+  body:has(.chess-football-entry[data-football-view="welcome"]) .football-identity-actions button {
+    min-width: clamp(200px, 15vw, 270px);
+    min-height: clamp(64px, 7dvh, 80px);
+    border-radius: 999px 0 0 999px;
+    background: #0e0f0c;
+  }
+}
+
 /* Mobile: do not shrink the painted-on labels into illegibility. Use the
    approved angry-Matthias art as atmosphere and genuine readable DOM cards. */
 @media (max-width: 700px) {
