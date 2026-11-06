@@ -3,12 +3,17 @@
    Other views (manager, season and Godot) retain their original layouts. */
 .chess-football-entry[data-football-view="welcome"] {
   background: #0a130f;
+  /* The illustrated room owns the entire viewport, not a centered 16:9 box. */
+  overflow: hidden;
 }
 
 .chess-football-entry[data-football-view="welcome"] > .chess-football-entry__content {
   max-width: none;
   width: 100%;
-  min-height: 100%;
+  height: 100dvh;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
   padding: 0;
   margin: 0;
   gap: 0;
@@ -32,11 +37,16 @@
 }
 
 .chess-football-entry__welcome-scene {
-  position: relative;
-  width: min(100%, 177.68dvh);
-  aspect-ratio: 1280 / 720;
+  /* Cover, without stretching Matthias. Size the illustration AND all its
+     accessible hotspots together, then crop surplus at the viewport edges. */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100vw, 177.68dvh);
+  aspect-ratio: 1672 / 941;
   flex: 0 0 auto;
-  margin: auto;
+  margin: 0;
+  transform: translate(-50%, -50%);
   isolation: isolate;
 }
 
@@ -50,19 +60,21 @@
 }
 
 .chess-football-entry__welcome-back {
+  /* Its painted counterpart can be cropped by cover. Keep the real control
+     pinned inside the visible viewport, including on wide displays. */
   position: absolute;
   z-index: 3;
-  left: 1.1%;
-  top: 1.7%;
-  width: 12%;
-  height: 6.2%;
-  min-height: 36px;
-  padding: 0;
-  border: 1px solid transparent;
+  left: max(12px, calc((100% - 100vw) / 2 + 12px));
+  top: max(12px, calc((100% - 100dvh) / 2 + 12px));
+  width: auto;
+  height: auto;
+  min-height: 44px;
+  padding: .55rem .95rem;
+  border: 1px solid #b5975b;
   border-radius: 999px;
-  background: transparent;
-  color: transparent;
-  font-size: 0;
+  background: rgba(14, 15, 12, .96);
+  color: #f4e9d1;
+  font: 600 .95rem system-ui, sans-serif;
   cursor: pointer;
 }
 
@@ -203,8 +215,8 @@
 
 @media (min-width: 701px) {
   body:has(.chess-football-entry[data-football-view="welcome"]) .football-identity-actions {
-    right: max(12px, calc((100vw - 177.68dvh) / 2 + 12px));
-    top: max(12px, calc((100dvh - 56.25vw) / 2 + 12px));
+    right: max(12px, env(safe-area-inset-right));
+    top: max(12px, env(safe-area-inset-top));
   }
 
   body:has(.chess-football-entry[data-football-view="welcome"]) .football-identity-actions button {
@@ -215,10 +227,39 @@
   }
 }
 
+/* At 16:10 / 16:9, cover crops horizontally. The baked top-corner
+   labels would peek out from behind the functional buttons; make the real
+   corner controls fully cover those painted regions, flush to the edges. */
+@media (min-width: 701px) and (max-aspect-ratio: 19/10) {
+  .chess-football-entry__welcome-back {
+    left: max(0px, calc((100% - 100vw) / 2));
+    top: max(0px, calc((100% - 100dvh) / 2));
+    min-width: clamp(175px, 15vw, 270px);
+    min-height: clamp(64px, 7dvh, 80px);
+    padding-left: 1rem;
+    border-radius: 0 999px 999px 0;
+    background: #0e0f0c;
+  }
+
+  body:has(.chess-football-entry[data-football-view="welcome"]) .football-identity-actions {
+    right: 0;
+    top: 0;
+  }
+
+  body:has(.chess-football-entry[data-football-view="welcome"]) .football-identity-actions button {
+    min-width: clamp(200px, 15vw, 270px);
+    min-height: clamp(64px, 7dvh, 80px);
+    border-radius: 999px 0 0 999px;
+    background: #0e0f0c;
+  }
+}
+
 /* Mobile: do not shrink the painted-on labels into illegibility. Use the
    approved angry-Matthias art as atmosphere and genuine readable DOM cards. */
 @media (max-width: 700px) {
   .chess-football-entry[data-football-view="welcome"] {
+    overflow-x: hidden;
+    overflow-y: auto;
     background: radial-gradient(ellipse at 30% 5%, #384532 0, transparent 65%), #0b1410;
   }
 
@@ -244,6 +285,9 @@
 
   .chess-football-entry[data-football-view="welcome"] > .chess-football-entry__content {
     position: relative;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
     justify-content: flex-start;
     align-items: stretch;
     gap: 1rem;
@@ -269,9 +313,13 @@
   }
 
   .chess-football-entry__welcome-scene {
+    position: relative;
+    top: auto;
+    left: auto;
     width: 100%;
     aspect-ratio: auto;
     margin: 0;
+    transform: none;
   }
 
   .chess-football-entry__welcome-art {
@@ -371,7 +419,14 @@
 
 /* If the static asset is missing (e.g. a cached old offline shell), retain a
    fully functional, readable welcome screen rather than invisible hotspots. */
+.chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] {
+  overflow-y: auto;
+}
 .chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] > .chess-football-entry__content {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+  align-items: stretch;
   max-width: 1050px;
   padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
   gap: 1rem;
@@ -389,8 +444,12 @@
 }
 
 .chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__welcome-scene {
+  position: relative;
+  top: auto;
+  left: auto;
   width: 100%;
   aspect-ratio: auto;
+  transform: none;
 }
 
 .chess-football-entry[data-football-view="welcome"][data-football-home-art="missing"] .chess-football-entry__welcome-art {
