@@ -1177,7 +1177,13 @@ jobs:
           cp "$project" "$RUNNER_TEMP/football-ultrawide-project.godot"
           trap 'cp "$RUNNER_TEMP/football-ultrawide-project.godot" "$project"' EXIT
           sed -i 's/^window\/size\/mode=3$/window\/size\/mode=0/' "$project"
-          grep -q '^window/size/mode=0
+          grep -q "^window/size/mode=0$" "$project"
+          set +e
+          timeout 50s xvfb-run -a -s "-screen 0 2000x1200x24" "$godot" --windowed --resolution 1766x832 --path games/chess-football-godot --script res://tests/eleven_ultrawide_preview.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          cp "$RUNNER_TEMP/football-ultrawide-project.godot" "$project"
+          trap - EXIT
           screenshot="$(sed -n 's/^FOOTBALL_XI_ULTRAWIDE_CAPTURE=//p' "$log" | tail -1)"
           if [[ -n "$screenshot" && -s "$screenshot" ]]; then
             cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-ultrawide-1766x832.png"
