@@ -498,6 +498,16 @@ func _initialize() -> void:
 			game.debug_set_penalty_aim(0.5)
 		game.debug_refresh_hud()
 		stage.sync_presentation(8.0, "broadcast")
+		var defending_keeper: Footballer = game.teams[1 - attacking_team][0]
+		var attacking_keeper: Footballer = game.teams[attacking_team][0]
+		var guard_key: int = int(defending_keeper.get_instance_id())
+		var attacker_key: int = int(attacking_keeper.get_instance_id())
+		assert(float(stage.penalty_keeper_guard_blends.get(guard_key, 0.0)) > 0.999,
+			"XI penalty must visibly brace the REAL defending keeper")
+		assert(float(stage.penalty_keeper_guard_blends.get(attacker_key, 0.0)) < 0.001,
+			"XI penalty must not crouch the attacking team's goalkeeper")
+		var guard_sprite: AnimatedSprite3D = stage.player_sprites[guard_key]
+		assert(guard_sprite != null and guard_sprite.scale.x > 0.0)
 		# 3/4 penalty composition: the camera sits BEHIND the taker,
 		# faces the actual goal, and mirrors cleanly for either attack.
 		var pose: Dictionary = ChessFootball3DPresenter.xi_penalty_camera_pose(
@@ -570,6 +580,8 @@ func _initialize() -> void:
 			stage.sync_presentation(3.0, "broadcast")
 			assert(stage.penalty_camera_mix < 0.001,
 				"XI penalty lens should release fully back to live broadcast")
+			assert(float(stage.penalty_keeper_guard_blends.get(guard_key, 0.0)) < 0.001,
+				"Keeper must stop bracing smoothly once the real penalty is released")
 	print("FOOTBALL_XI_ANIMATION_OK unique_run_frames=%d" % distinct_frames.size())
 	print("FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22")
 	quit(0)
