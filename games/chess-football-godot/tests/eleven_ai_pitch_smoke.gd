@@ -54,6 +54,7 @@ func _initialize() -> void:
 	var xi_cover_player: Footballer = game.teams[1][5]
 	var original_cover_position: Vector2 = xi_cover_player.global_position
 	xi_cover_player.global_position = striker.global_position + Vector2(155.0, 0.0)
+	striker.velocity = Vector2.ZERO
 	game._set_quick_difficulty("easy")
 	var xi_easy_cover: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
 	game._set_quick_difficulty("normal")
@@ -61,6 +62,45 @@ func _initialize() -> void:
 	assert(XI.has_point(xi_normal_cover))
 	assert(xi_normal_cover.x > striker.global_position.x)
 	assert(xi_easy_cover.x - xi_normal_cover.x > 70.0)
+	# The nearby XI second defender shades only toward a REAL goalward
+	# diagonal, retaining its ordinary goal-side position and move_ai pace.
+	striker.velocity = Vector2(210.0, 185.0)
+	var read_upper: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
+	assert(XI.has_point(read_upper))
+	assert(read_upper.x > xi_normal_cover.x + 20.0)
+	assert(read_upper.y > xi_normal_cover.y + 20.0)
+	assert(read_upper.distance_to(xi_normal_cover) < 80.0)
+	assert(read_upper.x > striker.global_position.x)
+	var cover_start: Vector2 = xi_cover_player.global_position
+	xi_cover_player.velocity = Vector2.ZERO
+	xi_cover_player.move_ai(1.0 / 60.0, read_upper, 0.98)
+	assert(xi_cover_player.global_position.distance_to(cover_start) < 15.0)
+	assert(xi_cover_player.velocity.length() <= xi_cover_player.base_speed * 1.34 + 1.0)
+	xi_cover_player.global_position = cover_start
+	xi_cover_player.velocity = Vector2.ZERO
+	striker.velocity = Vector2(210.0, -185.0)
+	var read_lower: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
+	assert(read_lower.y < xi_normal_cover.y - 20.0)
+	assert(read_lower.x > striker.global_position.x)
+	# Neither straight runs nor backwards retreats trigger a fake diagonal.
+	striker.velocity = Vector2(210.0, 0.0)
+	assert(game._ai_xi_diagonal_cover_lead(xi_cover_player, striker.global_position) == Vector2.ZERO)
+	striker.velocity = Vector2(-210.0, 185.0)
+	assert(game._ai_xi_diagonal_cover_lead(xi_cover_player, striker.global_position) == Vector2.ZERO)
+	striker.velocity = Vector2(210.0, 185.0)
+	xi_cover_player.global_position = striker.global_position + Vector2(290.0, 0.0)
+	assert(game._ai_xi_diagonal_cover_lead(xi_cover_player, striker.global_position) == Vector2.ZERO)
+	xi_cover_player.global_position = cover_start
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_diagonal_cover_lead(xi_cover_player, striker.global_position) == Vector2.ZERO)
+	game._set_quick_difficulty("normal")
+	game.match_team_size = 5
+	assert(game._ai_xi_diagonal_cover_lead(xi_cover_player, striker.global_position) == Vector2.ZERO)
+	game.match_team_size = 11
+	game.ball.release(Vector2.ZERO, 0.0)
+	assert(game._ai_xi_diagonal_cover_lead(xi_cover_player, striker.global_position) == Vector2.ZERO)
+	game.ball.attach_to(striker)
+	striker.velocity = Vector2.ZERO
 	xi_cover_player.global_position = original_cover_position
 	var right_keeper: Footballer = game.teams[1][0]
 	var left_keeper: Footballer = game.teams[0][0]

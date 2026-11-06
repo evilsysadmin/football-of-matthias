@@ -138,6 +138,14 @@ const AI_COVER_DISTANCE := 150.0
 # a legal contest. Easy and the human-side support shape remain untouched.
 const AI_CPU_SECOND_PRESS_ACTIVATION := 240.0
 const AI_XI_SECOND_PRESS_ACTIVATION := 320.0
+# XI Normal+ second defender reads an actual goalward diagonal dribble.
+# Maximum lead is well below one running stride; movement still obeys
+# Footballer.move_ai(), without expanding tackle reach or changing pace.
+const AI_XI_DIAGONAL_COVER_READ_DISTANCE := 260.0
+const AI_XI_DIAGONAL_COVER_MIN_FORWARD_SPEED := 90.0
+const AI_XI_DIAGONAL_COVER_MIN_LATERAL_SPEED := 75.0
+const AI_XI_DIAGONAL_COVER_LEAD_SECONDS := 0.24
+const AI_XI_DIAGONAL_COVER_MAX_LEAD := 72.0
 # At most one *reachable* normal+ CPU defender guards a plausible forward
 # passing lane. This is positioning, not a larger tackle hitbox or speed buff.
 const AI_XI_LANE_MIN_FORWARD := 85.0
@@ -1343,6 +1351,31 @@ func _ai_cpu_second_press_active(player: Footballer, threat_position: Vector2) -
 	)
 
 
+# Use only the human carrier's *observed* diagonal velocity when the
+# second XI defender is genuinely close. Straight, sideways or retreating
+# runs do not predict a lane; Easy, 5v5 and off-ball states stay unchanged.
+func _ai_xi_diagonal_cover_lead(player: Footballer, threat_position: Vector2) -> Vector2:
+	if (
+		match_team_size != 11
+		or player.team_id != 1
+		or player.sent_off
+		or not _ai_cpu_second_press_active(player, threat_position)
+		or player.global_position.distance_to(threat_position)
+			> AI_XI_DIAGONAL_COVER_READ_DISTANCE
+		or threat_position.distance_to(ball.carrier.global_position) > 1.0
+	):
+		return Vector2.ZERO
+	var carrier_velocity: Vector2 = ball.carrier.velocity
+	if (
+		carrier_velocity.x < AI_XI_DIAGONAL_COVER_MIN_FORWARD_SPEED
+		or absf(carrier_velocity.y) < AI_XI_DIAGONAL_COVER_MIN_LATERAL_SPEED
+	):
+		return Vector2.ZERO
+	return (carrier_velocity * AI_XI_DIAGONAL_COVER_LEAD_SECONDS).limit_length(
+		AI_XI_DIAGONAL_COVER_MAX_LEAD
+	)
+
+
 func _ai_cover_target(player: Footballer, threat_position: Vector2) -> Vector2:
 	var own_goal: Vector2 = ChessFootballMath.goal_center(1 - player.team_id, match_pitch)
 	var goal_side: Vector2 = own_goal - threat_position
@@ -1353,6 +1386,9 @@ func _ai_cover_target(player: Footballer, threat_position: Vector2) -> Vector2:
 	var contesting := _ai_cpu_second_press_active(player, threat_position)
 	var cover_distance := AI_CPU_SECOND_PRESS_GOAL_SIDE if contesting else AI_COVER_DISTANCE
 	var target: Vector2 = threat_position + goal_side * cover_distance
+	# Shade ONE close second defender into the runner's real diagonal
+	# while retaining the original goal-side cover and tackle rules.
+	target += _ai_xi_diagonal_cover_lead(player, threat_position)
 	# The previous 32% drift toward the home lane left a local cover runner
 	# several body lengths away from the ball even after stepping forward.
 	# Keep almost all lane discipline when NOT contesting, including Easy.
