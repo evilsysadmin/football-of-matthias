@@ -125,6 +125,9 @@ const KEEPER_CATCH_START_REACH := 0.32
 const KEEPER_CATCH_OPEN_HAND_SPAN := 0.29
 const KEEPER_CATCH_CLOSED_HAND_SPAN := 0.188
 const KEEPER_CATCH_BLEND_SECONDS := 0.18
+# R2 goalkeepers should finish the real save/dive before their catch sheet
+# starts. This is only the visual offset of the already-captured ball.
+const XI_KEEPER_SAVE_BALL_REACH := 0.20
 # Keep the established visual spin rate, but roll around the axis
 # perpendicular to the ball's actual 2D travel on the X/Z pitch plane.
 # This changes no movement, velocity, 2D authority, collisions or ball art.
@@ -2000,6 +2003,15 @@ func world_to_stage(world: Vector2, height: float = 0.0) -> Vector3:
 		(world.y - center.y) * WORLD_SCALE
 	)
 
+# A verified R2 catch should not erase the real 0.58s save pose on the
+# very first frame of a successful save. Normal possession catches (without
+# a save), fallback atlases and the old 5v5 path keep their existing timing.
+static func xi_keeper_dive_before_catch(
+	team_size: int, is_holding: bool, has_r2_catch: bool, save_active: bool
+) -> bool:
+	return team_size == 11 and is_holding and has_r2_catch and save_active
+
+
 func sync_presentation(delta: float, mode: String) -> void:
 	# Size compensation must use the camera pose from this same frame, not
 	# yesterday's interpolated pose; otherwise footballers visibly pulse.
@@ -2052,9 +2064,15 @@ func sync_presentation(delta: float, mode: String) -> void:
 				)
 				if sprite.sprite_frames.has_animation(carrier_action):
 					wanted_animation = carrier_action
+				var save_before_catch := xi_keeper_dive_before_catch(
+					match_node.match_team_size, player == holding_keeper,
+					_keeper_catch_r2_loaded.has(int(player.team_id)),
+					player.keeper_save_active()
+				)
 				var authored_catch: bool = (
 					player.role == "keeper" and player == holding_keeper
 					and _keeper_catch_r2_loaded.has(int(player.team_id))
+					and not save_before_catch
 				)
 				if authored_catch:
 					if sprite.animation != &"keeper_catch":
@@ -2218,13 +2236,40 @@ func sync_presentation(delta: float, mode: String) -> void:
 				keeper_catch_origin = target + (
 					ball_node.position - target
 				).limit_length(KEEPER_CATCH_START_REACH)
-			keeper_catch_elapsed += maxf(0.0, delta)
-			var progress := smoothstep(
-				0.0, 1.0,
-				clampf(keeper_catch_elapsed / KEEPER_CATCH_BLEND_SECONDS, 0.0, 1.0),
+			var dive_before_catch := xi_keeper_dive_before_catch(
+				match_node.match_team_size, true,
+				_keeper_catch_r2_loaded.has(int(holding_keeper.team_id)),
+				holding_keeper.keeper_save_active()
 			)
-			ball_at = keeper_catch_origin.lerp(target, progress)
-			grip_progress = progress
+			if dive_before_catch:
+				# The ball has ALREADY been legally saved and attached by the 2D
+				# match. Follow the keeper's existing dive sway; do not invent
+				# a second ball, delay possession or extend the save radius.
+				var save_phase := 1.0 - holding_keeper.keeper_save_ratio()
+				var reach := sin(PI * save_phase) * XI_KEEPER_SAVE_BALL_REACH
+				var hand_target := target + Vector3(
+					holding_keeper.keeper_save_direction * reach, 0.0, 0.0
+				)
+				# Do not snap the ball straight from the save contact point to
+				# chest height on the first rendered dive frame. Track the hands
+				# within the same bounded 0.18-second visual catch interval.
+				keeper_catch_origin = keeper_catch_origin.lerp(
+					hand_target,
+					clampf(maxf(0.0, delta) / KEEPER_CATCH_BLEND_SECONDS, 0.0, 1.0)
+				)
+				ball_at = keeper_catch_origin
+				keeper_catch_elapsed = 0.0
+				grip_progress = 0.0
+			else:
+				# Only once the save has finished does the R2 eight-frame
+				# reception begin, blending from the last saved-ball position.
+				keeper_catch_elapsed += maxf(0.0, delta)
+				var progress := smoothstep(
+					0.0, 1.0,
+					clampf(keeper_catch_elapsed / KEEPER_CATCH_BLEND_SECONDS, 0.0, 1.0),
+				)
+				ball_at = keeper_catch_origin.lerp(target, progress)
+				grip_progress = progress
 		else:
 			keeper_catch_carrier_id = 0
 			keeper_catch_elapsed = 0.0

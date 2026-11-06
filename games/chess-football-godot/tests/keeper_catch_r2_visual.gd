@@ -29,6 +29,7 @@ func _initialize() -> void:
 	var presenter: ChessFootball3DPresenter = match_node.presentation_3d
 	assert(match_node.camera_mode == "broadcast")
 	var original_score: Array = match_node.score.duplicate()
+	var verified_poses: Dictionary = {}
 	for team_id in range(2):
 		var meta := ChessFootballKeeperCatchR2.active_entry(team_id)
 		assert(not meta.is_empty())
@@ -47,6 +48,7 @@ func _initialize() -> void:
 			sheet, ChessFootballKeeperCatchR2.source_entry(team_id)
 		)
 		assert(poses.size() == 8, "R2 keeper sheet must have eight usable poses")
+		verified_poses[team_id] = poses
 		presenter._apply_verified_keeper_catch_frames(poses, team_id)
 		assert(presenter._keeper_catch_r2_loaded.has(team_id))
 		var keeper: Footballer = match_node.teams[team_id][0]
@@ -91,7 +93,62 @@ func _initialize() -> void:
 		assert(presenter.ball_shadow.visible)
 		keeper.global_position = original_keeper_position
 	assert(match_node.score == original_score)
-	print("FOOTBALL_KEEPER_R2_REAL_GODOT_REVIEW_OK teams=2 poses=8")
+	# Bonus XI review: a REAL legal save must play the dive BEFORE switching
+	# to the eight verified R2 catch frames. Capture each club's authentic
+	# action for comparison; normal unchallenged possession above stays the
+	# old eight-frame contract and is not affected by this new XI rule.
+	# Keep only one stadium/camera in the scene so the new screenshots
+	# cannot accidentally include a superimposed 5v5 pitch.
+	match_node.queue_free()
+	await process_frame
+	var xi_match = packed.instantiate()
+	xi_match.match_team_size = 11
+	root.add_child(xi_match)
+	for _startup_frame in range(4):
+		await process_frame
+		xi_match.set_process(false)
+		xi_match.set_physics_process(false)
+	var xi_presenter: ChessFootball3DPresenter = xi_match.presentation_3d
+	assert(xi_match.debug_team_counts() == [11, 11])
+	var xi_score: Array = xi_match.score.duplicate()
+	for attacking_team in [0, 1]:
+		var defending_team: int = 1 - attacking_team
+		var keeper: Footballer = xi_match.teams[defending_team][0]
+		var keeper_sprite: AnimatedSprite3D = xi_presenter.player_sprites[
+			keeper.get_instance_id()
+		]
+		xi_presenter._apply_verified_keeper_catch_frames(
+			verified_poses[defending_team], defending_team
+		)
+		xi_match.kickoff_active = false
+		xi_match.goal_restart_active = false
+		xi_match.debug_prepare_penalty(attacking_team)
+		xi_presenter.sync_presentation(8.0, "broadcast")
+		var toward_field := 1.0 if defending_team == 0 else -1.0
+		xi_match.ball.release(Vector2.RIGHT, 0.0)
+		xi_match.ball.global_position = keeper.global_position + Vector2(
+			toward_field * 12.0, 0.0
+		)
+		xi_match.ball.velocity = Vector2(-toward_field * 850.0, 0.0)
+		xi_match.ball.flight_height = 0.0
+		assert(xi_match._keeper_try_save(keeper), "Real XI save must succeed before capture")
+		xi_match.set_piece_active = false
+		xi_presenter.sync_presentation(0.06, "broadcast")
+		assert(keeper_sprite.animation == &"tackle")
+		assert(is_zero_approx(xi_presenter.keeper_catch_elapsed))
+		await _save_keeper(xi_match, defending_team, "save-dive")
+		keeper.keeper_save_seconds = 0.0
+		xi_presenter.sync_presentation(0.0, "broadcast")
+		assert(keeper_sprite.animation == &"keeper_catch" and keeper_sprite.frame == 0)
+		await _save_keeper(xi_match, defending_team, "save-catch-open")
+		xi_presenter.sync_presentation(0.24, "broadcast")
+		xi_presenter.sync_presentation(0.0, "broadcast")
+		assert(keeper_sprite.frame == 7)
+		await _save_keeper(xi_match, defending_team, "save-catch-held")
+		xi_match.ball.release(Vector2.RIGHT, 0.0)
+		xi_presenter.sync_presentation(0.0, "broadcast")
+	assert(xi_match.score == xi_score, "Save presentation must not change the score")
+	print("FOOTBALL_KEEPER_R2_REAL_GODOT_REVIEW_OK teams=2 poses=8 saves=2")
 	quit(0)
 
 
