@@ -63,8 +63,13 @@ func _initialize() -> void:
 	game.debug_set_penalty_aim(0.45)
 	game.debug_refresh_hud()
 	stage.sync_presentation(8.0, "broadcast")
-	assert(stage.camera.position.x > 5.0 and stage.camera.position.x < 18.0,
-		"Ultrawide penalty keeps an unnecessarily huge black right panel")
+	var cinematic_pose: Dictionary = ChessFootball3DPresenter.xi_penalty_camera_pose(
+		game.set_piece_spot, 0, game.match_pitch
+	)
+	assert(stage.camera.position.distance_to(cinematic_pose["position"]) < 0.08,
+		"Ultrawide penalty must use the new behind-the-kicker perspective")
+	assert(absf(stage.camera.fov - ChessFootball3DPresenter.XI_PENALTY_CAMERA_FOV) < 0.08)
+	assert(stage.penalty_camera_mix > 0.999)
 	var goal: Vector2 = ChessFootballMath.goal_center(0, game.match_pitch)
 	var goalkeeper: Footballer = game.teams[1][0]
 	assert(goalkeeper.global_position.distance_to(goal - Vector2(42.0, 0.0)) < 0.1,
