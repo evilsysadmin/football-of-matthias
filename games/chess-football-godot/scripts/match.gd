@@ -40,6 +40,9 @@ const PENALTY_SHOT_POWER := 930.0
 const PENALTY_SHOT_LIFT := 150.0
 const PENALTY_KEEPER_MOVE_SPEED := 310.0
 const PENALTY_TARGET_MARGIN := 22.0
+# CPU XI penalties commit before the keeper's final movement. Each side has
+# a 40% chance, the middle 20%; slight continuous variation avoids three
+# mechanical identical targets without reading the goalkeeper position.
 const RED_CARD_BEHIND_THRESHOLD := -10.0
 
 const KEEPER_LINE_OFFSET := 96.0
@@ -312,6 +315,7 @@ var set_piece_human_aim: Vector2 = Vector2.ZERO
 var set_piece_touch_target: Footballer = null
 var penalty_human_ready: bool = false
 var penalty_aim_y: float = 0.0
+var penalty_ai_committed_aim_y: float = 0.0
 var card_notice: String = ""
 var shot_charging: bool = false
 var shot_charge_seconds: float = 0.0
@@ -3201,6 +3205,17 @@ func _arrange_set_piece_formation(kind: String) -> void:
 			var away: Vector2 = offset.normalized() if offset.length_squared() > 0.001 else Vector2(0.0, inward_y)
 			_place_restart_player(opponent, set_piece_spot + away * 130.0)
 
+# Pure mapping from one roll to a shot lane. No goalkeeper input.
+# 0-40%: left; 40-60%: centre; 60-100%: right.
+static func ai_penalty_aim_from_roll(roll: float) -> float:
+	var pick: float = clampf(roll, 0.0, 1.0)
+	if pick < 0.4:
+		return lerpf(-0.90, -0.52, pick / 0.4)
+	if pick < 0.6:
+		return lerpf(-0.18, 0.18, (pick - 0.4) / 0.2)
+	return lerpf(0.52, 0.90, (pick - 0.6) / 0.4)
+
+
 func _prepare_set_piece(kind: String, team_id: int, spot: Vector2) -> void:
 	_cancel_shot_charge()
 	_cancel_pass_charge()
@@ -3216,6 +3231,13 @@ func _prepare_set_piece(kind: String, team_id: int, spot: Vector2) -> void:
 	set_piece_team_id = clampi(team_id, 0, 1)
 	set_piece_kind = kind
 	set_piece_spot = ChessFootballMath.clamp_to_pitch(spot, match_pitch)
+	# Decide before the keeper can move; do not recalculate at shot release.
+	# Preserve the legacy 5v5 behaviour until its own gameplay review.
+	penalty_ai_committed_aim_y = (
+		ai_penalty_aim_from_roll(randf())
+		if kind == "PENALTI" and set_piece_team_id == 1 and match_team_size == 11
+		else 0.0
+	)
 
 	for id in range(2):
 		for player in teams[id]:
@@ -3403,12 +3425,16 @@ func _release_ai_penalty() -> void:
 	var restarter := set_piece_player
 	if restarter == null:
 		return
-	var penalty_goal := ChessFootballMath.goal_center(set_piece_team_id, match_pitch)
-	var defending_keeper: Footballer = teams[1 - set_piece_team_id][0]
-	var keeper_side := signf(defending_keeper.global_position.y - penalty_goal.y)
-	if absf(keeper_side) < 0.01:
-		keeper_side = 1.0
-	var penalty_target := _penalty_target(set_piece_team_id, -keeper_side * 0.78)
+	var aim_y: float = penalty_ai_committed_aim_y
+	if match_team_size != 11:
+		# Legacy 5v5 contract is intentionally unchanged.
+		var penalty_goal := ChessFootballMath.goal_center(set_piece_team_id, match_pitch)
+		var defending_keeper: Footballer = teams[1 - set_piece_team_id][0]
+		var keeper_side := signf(defending_keeper.global_position.y - penalty_goal.y)
+		if absf(keeper_side) < 0.01:
+			keeper_side = 1.0
+		aim_y = -keeper_side * 0.78
+	var penalty_target := _penalty_target(set_piece_team_id, aim_y)
 	var penalty_lift := _safe_shot_lift(
 		restarter,
 		penalty_target,

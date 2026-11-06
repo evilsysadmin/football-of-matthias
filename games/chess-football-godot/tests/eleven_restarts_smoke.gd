@@ -107,6 +107,13 @@ func _initialize() -> void:
 	_verify_spread(game)
 	game.debug_force_set_piece_ready()
 	assert(not game.set_piece_active)
+	# Five deterministic roll samples exercise the XI taker's genuinely
+	# precommitted left/centre/right distribution without probabilistic tests.
+	assert(is_equal_approx(game.ai_penalty_aim_from_roll(0.0), -0.90))
+	assert(is_equal_approx(game.ai_penalty_aim_from_roll(0.2), -0.71))
+	assert(is_equal_approx(game.ai_penalty_aim_from_roll(0.5), 0.0))
+	assert(is_equal_approx(game.ai_penalty_aim_from_roll(0.8), 0.71))
+	assert(is_equal_approx(game.ai_penalty_aim_from_roll(1.0), 0.90))
 	# A penalty is also a full-XI restart. The historical five-a-side
 	# penalty geometry put the goalkeeper several hundred units from the
 	# actual XI goal and stacked ten outfielders on four recycled slots.
@@ -124,6 +131,11 @@ func _initialize() -> void:
 			attacking_team, FIVE.get_center()
 		), "XI penalty area must not be measured on the old 5v5 pitch")
 		game.debug_prepare_penalty(attacking_team)
+		var committed_aim: float = game.penalty_ai_committed_aim_y
+		assert(absf(committed_aim) <= 0.91)
+		if attacking_team == 0:
+			assert(is_zero_approx(committed_aim),
+				"The CPU's hidden decision must not leak into a human penalty")
 		assert(game.debug_set_piece_spot().is_equal_approx(mark),
 			"XI penalty mark does not match the painted spot at the full-size goal")
 		assert(game.ball.carrier == game.set_piece_player)
@@ -167,14 +179,24 @@ func _initialize() -> void:
 			assert(not game.set_piece_active and game.ball.carrier == null)
 			assert(game.ball.velocity.x > 0.0)
 		else:
+			var release_from: Vector2 = game.set_piece_player.global_position
+			var chosen_target: Vector2 = game._penalty_target(1, committed_aim)
 			var keeper_before: Vector2 = game.teams[0][0].global_position
 			game.debug_move_penalty_keeper(1.0, 0.1)
 			assert(game.teams[0][0].global_position.x == keeper_before.x,
 				"Human keeper moved off the XI penalty goal line")
 			assert(game.teams[0][0].global_position.y > keeper_before.y)
+			game.debug_move_penalty_keeper(-1.0, 0.2)
+			assert(game.teams[0][0].global_position.y < keeper_before.y,
+				"Human keeper must be free to dive the other way before release")
+			assert(is_equal_approx(game.penalty_ai_committed_aim_y, committed_aim),
+				"The CPU must not switch target after seeing keeper movement")
 			game.debug_force_set_piece_ready()
 			assert(not game.set_piece_active and game.ball.carrier == null)
 			assert(game.ball.velocity.x < 0.0)
+			assert(game.ball.velocity.normalized().distance_to(
+				(chosen_target - release_from).normalized()
+			) < 0.01, "XI CPU penalty trajectory must follow its early choice")
 	# Near-miss audio contract uses the new goal plane; old default stays.
 	var old_near := Vector2(FIVE.end.x + 25.0, FIVE.get_center().y + ChessFootballMath.GOAL_HALF_HEIGHT + 22.0)
 	assert(ChessFootballMath.close_shot_miss_at_goal_line(old_near, 0.0, 0))
