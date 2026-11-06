@@ -104,6 +104,12 @@ const PLAYER_SPRINT_BOB := 0.072
 const KEEPER_STRIDE_EXTRA_SWAY := 0.095
 const KEEPER_STRIDE_EXTRA_BOB := 0.035
 const KEEPER_STRIDE_EXTRA_LEAN_DEGREES := 13.0
+# XI penalty keeper: only a visual ready posture, never a new save radius.
+# Ease it out when the shot leaves the foot, so the 3/4 camera never pops.
+const XI_PENALTY_KEEPER_GUARD_BLEND_SPEED := 4.0
+const XI_PENALTY_KEEPER_GUARD_WIDTH := 1.06
+const XI_PENALTY_KEEPER_GUARD_HEIGHT := 0.94
+const XI_PENALTY_KEEPER_GUARD_LEAN_DEGREES := 5.0
 const STAMINA_BAR_WIDTH := 0.76
 const STAMINA_BAR_DEPTH := 0.10
 const STAMINA_BAR_Z := 0.62
@@ -144,6 +150,7 @@ var player_run_views: Dictionary = {}
 # Hidden authoritative 2D AnimatedSprite2D nodes are not a reliable clock.
 var keeper_visual_phases: Dictionary = {}
 var keeper_visual_names: Dictionary = {}
+var penalty_keeper_guard_blends: Dictionary = {}
 # Outfield actors also need a visible 3D clock. The hidden 2D sprites can
 # remain on a stale frame in the Web runtime while match physics continues.
 var outfield_visual_phases: Dictionary = {}
@@ -2077,7 +2084,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 				else:
 					sprite.flip_h = player.visual.flip_h
 			sprite.pixel_size = TACTICAL_PLAYER_PIXEL_SIZE if mode == "tactical" else PLAYER_PIXEL_SIZE
-			_sync_player_secondary_motion(player, sprite, proxy)
+			_sync_player_secondary_motion(player, sprite, proxy, delta)
 			var tone_gain := _tonal_view_gain(sprite)
 			sprite.modulate = Color(tone_gain, tone_gain, tone_gain, 1.0)
 			var depth_scale := perspective_body_scale(camera, proxy.global_position)
@@ -2593,7 +2600,9 @@ func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "", team_id:
 	return scale
 
 
-func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D, proxy: Node3D) -> void:
+func _sync_player_secondary_motion(
+	player: Footballer, sprite: AnimatedSprite3D, proxy: Node3D, delta: float
+) -> void:
 	var animation_name := String(sprite.animation)
 	var frame_count := maxi(1, sprite.sprite_frames.get_frame_count(sprite.animation))
 	# The visible 3D sprite changes texels on whole frames, but its secondary
@@ -2683,6 +2692,34 @@ func _sync_player_secondary_motion(player: Footballer, sprite: AnimatedSprite3D,
 		bob += absf(foot_phase) * KEEPER_STRIDE_EXTRA_BOB * moving_weight
 		tilt_degrees += foot_phase * KEEPER_STRIDE_EXTRA_LEAN_DEGREES * moving_weight
 		stretch_x *= 1.0 + foot_phase * 0.035 * moving_weight
+	# During an actual XI penalty the defending keeper braces on the line.
+	# This is camera-facing body posture only: no player, collision or save
+	# position is changed. Real lateral velocity determines which way they
+	# lean. The weight fades over several frames after the restart ends.
+	if player.role == "keeper":
+		var keeper_id: int = int(player.get_instance_id())
+		var guard_active: bool = (
+			match_node.match_team_size == 11
+			and match_node.set_piece_active
+			and match_node.set_piece_kind == "PENALTI"
+			and player.team_id != match_node.set_piece_team_id
+			and not player.keeper_save_active()
+			and sprite.animation != &"keeper_catch"
+		)
+		var guard_weight: float = move_toward(
+			float(penalty_keeper_guard_blends.get(keeper_id, 0.0)),
+			1.0 if guard_active else 0.0,
+			maxf(0.0, delta) * XI_PENALTY_KEEPER_GUARD_BLEND_SPEED
+		)
+		penalty_keeper_guard_blends[keeper_id] = guard_weight
+		if guard_weight > 0.0:
+			stretch_x = lerpf(stretch_x, XI_PENALTY_KEEPER_GUARD_WIDTH, guard_weight)
+			stretch_y = lerpf(stretch_y, XI_PENALTY_KEEPER_GUARD_HEIGHT, guard_weight)
+			var lateral_speed: float = clampf(
+				player.velocity.y / maxf(match_node.PENALTY_KEEPER_MOVE_SPEED, 1.0),
+				-1.0, 1.0
+			)
+			tilt_degrees += lateral_speed * XI_PENALTY_KEEPER_GUARD_LEAN_DEGREES * guard_weight
 	if player.keeper_save_active() and sprite.animation != &"keeper_catch":
 		var save_progress := 1.0 - player.keeper_save_ratio()
 		var save_weight := sin(PI * clampf(save_progress, 0.0, 1.0))
