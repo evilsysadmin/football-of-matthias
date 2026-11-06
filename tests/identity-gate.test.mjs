@@ -83,3 +83,51 @@ test('default transport retains the Worker global fetch receiver for keys and fr
   assert.equal(claims.sub,fixture.claims.sub);assert.equal(calls,2);
  }finally{globalThis.fetch=original;}
 });
+
+
+test('Mongo career proxy verifies live Identity, forwards only the verified UUID and rejects CSRF',async()=>{
+ const fixture=await identityFixture(),token=await fixture.sign(),origin='https://'+HOST;
+ const secret='fsc1_'+'a'.repeat(43),url='https://api-staging.football.shadowops.dpdns.org/api/career';
+ const env={SHADOWOPS_FOOTBALL_SERVICE_CREDENTIAL:fixture.proof,
+  FOOTBALL_CAREER_SERVICE_CREDENTIAL:secret,FOOTBALL_CAREER_API_URL:url};
+ const observed=[];
+ const request=async(target,init)=>{
+  if(target===url){
+   observed.push({target,init});
+   assert.equal(init.headers['X-Football-Subject'],fixture.claims.sub);
+   assert.equal(init.headers.Authorization,'Bearer '+secret);
+   return Response.json(init.method==='GET'?{status:'empty',revision:0}:{status:'saved',revision:1});
+  }
+  return fixture.request(target,init);
+ };
+ const opt={request,subtle:fixture.subtle};
+ const cookie='__Host-football_staging='+token;
+ const get=()=>new Request(origin+'/api/football/career',{headers:{Cookie:cookie}});
+ let response=await handle(get(),env,opt);
+ assert.equal(response.status,200);
+ assert.deepEqual(await response.json(),{status:'empty',revision:0});
+ const put=(requestOrigin=origin)=>new Request(origin+'/api/football/career',{method:'PUT',
+  headers:{Cookie:cookie,Origin:requestOrigin,'Content-Type':'application/json'},
+  body:JSON.stringify({revision:0,journal:{version:4}})});
+ assert.equal((await handle(put('https://evil.example'),env,opt)).status,403);
+ assert.equal(observed.length,1);
+ assert.equal((await handle(put(),env,opt)).status,200);
+ assert.equal(observed.length,2);
+ fixture.revoke();
+ assert.equal((await handle(get(),env,opt)).status,401);
+ assert.equal(observed.length,2);
+});
+test('Mongo proxy fails closed on missing bindings or redirect, without exposing service tokens',async()=>{
+ const fixture=await identityFixture(),token=await fixture.sign();
+ const get=()=>new Request('https://'+HOST+'/api/football/career',{
+  headers:{Cookie:'__Host-football_staging='+token}});
+ const base={SHADOWOPS_FOOTBALL_SERVICE_CREDENTIAL:fixture.proof};
+ const options={subtle:fixture.subtle,request:fixture.request};
+ assert.equal((await handle(get(),base,options)).status,503);
+ const env={...base,FOOTBALL_CAREER_SERVICE_CREDENTIAL:'fsc1_'+'a'.repeat(43),
+  FOOTBALL_CAREER_API_URL:'https://api-staging.football.shadowops.dpdns.org/api/career'};
+ const reply=await handle(get(),env,{...options,request:(url,init)=>
+  url===env.FOOTBALL_CAREER_API_URL?new Response('',{status:302,headers:{Location:'https://evil.example'}}):fixture.request(url,init)});
+ assert.equal(reply.status,503);
+ assert.doesNotMatch(await reply.text(),/fsc1_|11111111/);
+});

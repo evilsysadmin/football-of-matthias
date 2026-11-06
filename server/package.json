@@ -1,0 +1,13 @@
+{
+  "name": "football-career-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "node --test career-api.test.mjs"
+  },
+  "dependencies": {
+    "mongodb": "6.20.0"
+  }
+}
