@@ -1124,11 +1124,13 @@ func _update_ai(delta: float) -> void:
 				and ball.carrier.team_id != team_id
 			):
 				if player == presser:
-					_try_tackle(player)
+					if _ai_xi_tackle_commit_ready(player, ball.carrier, false):
+						_try_tackle(player)
 				elif (
 					player == cover
 					and player.global_position.distance_to(ball.carrier.global_position)
 						< TACKLE_ATTEMPT_RANGE * 0.72
+					and _ai_xi_tackle_commit_ready(player, ball.carrier, true)
 				):
 					_try_tackle(player)
 
@@ -2379,6 +2381,35 @@ func _tackle_hitbox(
 func _tackle_attempt_range(tackler: Footballer, aggressive_override: bool = false) -> float:
 	var aggressive := aggressive_override or tackler.tackle_aggressive_active()
 	return TACKLE_ATTEMPT_RANGE + (SLIDE_TACKLE_FORWARD_BONUS if aggressive else 0.0)
+
+
+# CPU XI Normal+ should KEEP CONTAINING until the defender has a real legal
+# frontal contact. The old 94-unit approach radius could launch a tackle
+# animation well before the narrow hitbox could reach the ball, applying
+# 0.38s recovery and 1.1s cooldown without touching the attacker.
+# Only the second cover insists on a clean poke: its job is to stay goal-side.
+# Easy, 5v5 and manual tackles keep their established controls/rules.
+func _ai_xi_tackle_commit_ready(
+	tackler: Footballer, victim: Footballer, is_cover: bool
+) -> bool:
+	if match_team_size != 11 or tackler.team_id != 1 or quick_difficulty == "easy":
+		return true
+	if (
+		ball.carrier != victim
+		or victim.team_id != 0
+		or tackler.sent_off
+		or not tackler.can_tackle()
+		or tackler.global_position.distance_to(victim.global_position)
+			> _tackle_attempt_range(tackler)
+	):
+		return false
+	var hitbox: Dictionary = _tackle_hitbox(tackler, victim.global_position)
+	return (
+		bool(hitbox.get("inside", false))
+		and not bool(hitbox.get("foul", false))
+		and (not is_cover or bool(hitbox.get("clean", false)))
+	)
+
 
 func _auto_dribble_direction(player: Footballer) -> Vector2:
 	var forward := Vector2.RIGHT if player.team_id == 0 else Vector2.LEFT
