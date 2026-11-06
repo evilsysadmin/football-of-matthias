@@ -451,7 +451,6 @@ func _create_hud() -> void:
 
 	var controls_panel := Panel.new()
 	controls_panel.name = "MatchControlsPanel"
-	controls_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	controls_panel.position = Vector2(16, 66)
 	controls_panel.size = Vector2(1248, 29)
 	controls_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -463,6 +462,13 @@ func _create_hud() -> void:
 	controls_style.corner_radius_bottom_right = 4
 	controls_panel.add_theme_stylebox_override("panel", controls_style)
 	hud.add_child(controls_panel)
+	# Apply spanning anchors AFTER parenting; otherwise Godot recalculates
+	# the width on _ready and breaks the 1280x720 HUD baseline.
+	controls_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	controls_panel.offset_left = 16.0
+	controls_panel.offset_right = -16.0
+	controls_panel.offset_top = 66.0
+	controls_panel.offset_bottom = 95.0
 
 	help_label = Label.new()
 	help_label.position = Vector2(12, 3)
