@@ -236,8 +236,8 @@ func _initialize() -> void:
 		), "XI near-touchline zoom must release before cropping the ball")
 		assert(is_equal_approx(
 			ChessFootball3DPresenter.xi_broadcast_live_fov(size, pitch_center, game.match_pitch, true),
-			safe_fov
-		), "XI set piece must preserve safe framing")
+			ChessFootball3DPresenter.xi_broadcast_fov_for_aspect(size, true)
+		), "XI set piece must preserve the wide 41-degree restart lens")
 	assert(is_equal_approx(
 		ChessFootball3DPresenter.xi_broadcast_live_fov(
 			Vector2(1280, 720), pitch_center, Rect2()
