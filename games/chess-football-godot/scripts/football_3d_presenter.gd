@@ -1930,12 +1930,12 @@ func _build_ball() -> void:
 	penalty_aim_marker = MeshInstance3D.new()
 	penalty_aim_marker.name = "PenaltyAimMarker"
 	var aim_mesh := TorusMesh.new()
-	aim_mesh.inner_radius = 0.20
-	aim_mesh.outer_radius = 0.29
+	aim_mesh.inner_radius = 0.20 if xi_ball else 0.12
+	aim_mesh.outer_radius = 0.29 if xi_ball else 0.20
 	penalty_aim_marker.mesh = aim_mesh
 	penalty_aim_marker.material_override = _material(Color(1.0, 0.73, 0.16), 0.28)
-	penalty_aim_marker.position.y = GOAL_POST_HEIGHT * 0.55
-	penalty_aim_marker.rotation.z = PI * 0.5
+	penalty_aim_marker.position.y = GOAL_POST_HEIGHT * 0.55 if xi_ball else 0.040
+	penalty_aim_marker.rotation.z = PI * 0.5 if xi_ball else 0.0
 	penalty_aim_marker.visible = false
 	penalty_aim_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(penalty_aim_marker)
@@ -2219,11 +2219,17 @@ func sync_presentation(delta: float, mode: String) -> void:
 	if penalty_aim_marker != null:
 		penalty_aim_marker.visible = match_node.penalty_preview_visible()
 		if penalty_aim_marker.visible:
-			var aim_direction: float = 1.0 if match_node.set_piece_team_id == 0 else -1.0
-			penalty_aim_marker.position = world_to_stage(
-				match_node.penalty_preview_target(),
-				GOAL_POST_HEIGHT * 0.55,
-			) + Vector3(-aim_direction * 0.08, 0.0, 0.0)
+			if match_node.match_team_size == 11:
+				var aim_direction: float = 1.0 if match_node.set_piece_team_id == 0 else -1.0
+				penalty_aim_marker.position = world_to_stage(
+					match_node.penalty_preview_target(),
+					GOAL_POST_HEIGHT * 0.55,
+				) + Vector3(-aim_direction * 0.08, 0.0, 0.0)
+			else:
+				penalty_aim_marker.position = world_to_stage(
+					match_node.penalty_preview_target(),
+					0.045,
+				)
 
 
 # Given a 2D movement (X along the field, Y across it), the matching 3D
