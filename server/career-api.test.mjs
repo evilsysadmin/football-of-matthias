@@ -59,7 +59,11 @@ test('rejects forged identities, missing proof and invalid or future journals wi
  collection.records.set(A,{_id:A,revision:3,journal:{...first,version:100}});
  assert.deepEqual(await (await handleCareerRequest(req(),env)).json(),{status:'future',revision:3});
  assert.equal((await handleCareerRequest(req(A,'PUT',{revision:3,journal:{...first,nextTactic:'no'}}),env)).status,422);
+ assert.equal((await handleCareerRequest(req(A,'PUT',{revision:3,journal:first}),env)).status,409);
  assert.equal(collection.records.get(A).revision,3);
+ collection.records.set(A,{_id:A,revision:4,journal:{...first,nextTactic:'broken'}});
+ assert.equal((await handleCareerRequest(req(A,'PUT',{revision:4,journal:first}),env)).status,409);
+ assert.equal(collection.records.get(A).revision,4);
 });
 test('fails closed on database error, method abuse and oversized payload',async()=>{
  const bad={findOne(){throw Error('mongodb offline');}};
