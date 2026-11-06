@@ -460,12 +460,23 @@ func _initialize() -> void:
 			"XI restart camera lost the restart at the horizontal edge")
 		assert(spot_on_screen.y > 142.0 and spot_on_screen.y < bounds.y - 14.0,
 			"XI restart camera lost the restart at the touchline")
+		if case_name == "NEAR_CORNER":
+			assert(spot_on_screen.x < bounds.x - 75.0,
+				"XI corner ball has too little right-side clearance")
 		if DisplayServer.get_name() != "headless":
 			for _render_step in range(3):
 				stage.sync_presentation(0.0, "broadcast")
 				await process_frame
 				await RenderingServer.frame_post_draw
 			var restart_image: Image = viewport.get_texture().get_image()
+			if case_name == "NEAR_CORNER":
+				# Real 1280x720 pixels: this was empty black on #110, but
+				# should now be green turf next to the goal stand.
+				var turf: Color = restart_image.get_pixel(
+					int(bounds.x * 0.84), int(bounds.y * 0.78)
+				)
+				assert(turf.g > turf.r * 1.4 and turf.g > turf.b * 1.25,
+					"XI near-corner frame still wastes the right side on black space")
 			var restart_path: String = "user://chess-football-xi-restart-" + case_name.to_lower() + ".png"
 			assert(restart_image.save_png(restart_path) == OK)
 			print("FOOTBALL_XI_RESTART_CAPTURE_%s=%s" %
