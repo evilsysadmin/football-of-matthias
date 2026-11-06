@@ -493,6 +493,14 @@ func _initialize() -> void:
 			game.debug_set_penalty_aim(0.5)
 		game.debug_refresh_hud()
 		stage.sync_presentation(8.0, "broadcast")
+		# The stadium should occupy most of the match viewport, not leave
+		# an entire black panel past the penalty goal at either end.
+		if attacking_team == 0:
+			assert(stage.camera.position.x > 5.0 and stage.camera.position.x < 18.0,
+				"Human XI penalty view still parks the stadium offscreen")
+		else:
+			assert(stage.camera.position.x < -5.0 and stage.camera.position.x > -18.0,
+				"CPU XI penalty must mirror the stadium-centered framing")
 		var goal: Vector2 = ChessFootballMath.goal_center(
 			attacking_team, game.match_pitch
 		)
