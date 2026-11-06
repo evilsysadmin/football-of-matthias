@@ -329,7 +329,7 @@ export default function ChessFootballEntry({ onExit, careerStorage='local' }) {
               <div className="chess-football-entry__club-summary">
                 <p><strong>Estilo:</strong> {selectedClub.style}</p>
                 <p><strong>Objetivo propuesto:</strong> {selectedClub.objective}</p>
-                <p>Liga de seis clubes y diez jornadas, con quinteto y fatiga. La carrera se guarda ${careerStorage==='mongo'?'en Mongo con tu ShadowOps ID':'en este dispositivo'}; los partidos Godot aún van por separado.</p>
+                <p>Liga de seis clubes y diez jornadas, con quinteto y fatiga. La carrera se guarda {careerStorage==='mongo'?'en Mongo con tu ShadowOps ID':'en este dispositivo'}; los partidos Godot aún van por separado.</p>
               </div>
             ) : null}
             {selectedClub ? <FootballSquadDevelopment players={developedRoster} /> : null}

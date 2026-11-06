@@ -42,7 +42,9 @@ test('session exchange sets only a host-only HttpOnly cookie; protected requests
  const post=new Request(origin+'/api/football/session',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({token})});
  const response=await handle(post,env,options);assert.equal(response.status,200);
  const cookie=response.headers.get('Set-Cookie');assert.match(cookie,/Secure; HttpOnly; SameSite=Lax/);assert.doesNotMatch(cookie,/Domain=/);
- assert.equal((await response.json()).subject,fixture.claims.sub);
+ const session=await response.json();
+ assert.equal(session.subject,fixture.claims.sub);
+ assert.equal(session.career_storage,'local');
  const req=()=>new Request(origin+'/',{headers:{Cookie:cookie.split(';')[0]}});
  assert.equal((await handle(req(),env,options)).status,200);assert.equal(reads,1);
  fixture.revoke();assert.equal((await handle(req(),env,options)).status,401);assert.equal(reads,1);
@@ -103,6 +105,8 @@ test('Mongo career proxy verifies live Identity, forwards only the verified UUID
  const opt={request,subtle:fixture.subtle};
  const cookie='__Host-football_staging='+token;
  const get=()=>new Request(origin+'/api/football/career',{headers:{Cookie:cookie}});
+ const session=await handle(new Request(origin+'/api/football/session',{headers:{Cookie:cookie}}),env,opt);
+ assert.equal((await session.json()).career_storage,'mongo');
  let response=await handle(get(),env,opt);
  assert.equal(response.status,200);
  assert.deepEqual(await response.json(),{status:'empty',revision:0});
