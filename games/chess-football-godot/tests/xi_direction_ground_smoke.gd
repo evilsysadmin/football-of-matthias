@@ -16,6 +16,28 @@ func _initialize() -> void:
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null and stage.xi_raster_meshes.size() == 22)
 
+	# The XI ball is visually proportional to the approved sprites, while
+	# its collision/possession authority and the legacy 5v5 remain unchanged.
+	var xi_ball_mesh := stage.ball_node.mesh as SphereMesh
+	assert(xi_ball_mesh != null)
+	assert(is_equal_approx(
+		xi_ball_mesh.radius, ChessFootball3DPresenter.XI_BALL_VISUAL_RADIUS
+	))
+	assert(is_equal_approx(xi_ball_mesh.height, xi_ball_mesh.radius * 2.0))
+	var xi_shadow_mesh := stage.ball_shadow.mesh as CylinderMesh
+	assert(xi_shadow_mesh != null)
+	assert(is_equal_approx(xi_shadow_mesh.top_radius, 0.082))
+	assert(is_equal_approx(xi_shadow_mesh.bottom_radius, 0.082))
+	var authoritative_ball_position: Vector2 = game.ball.global_position
+	var authoritative_ball_velocity: Vector2 = game.ball.velocity
+	stage.sync_presentation(0.0, "broadcast")
+	assert(is_equal_approx(
+		stage.ball_node.position.y,
+		xi_ball_mesh.radius + ChessFootball3DPresenter.BALL_VISUAL_GROUND_CLEARANCE
+	))
+	assert(game.ball.global_position == authoritative_ball_position)
+	assert(game.ball.velocity == authoritative_ball_velocity)
+
 	# Covers both teams, vertical directions, the original lateral run,
 	# stationary idle, and tactical/broadcast camera tilt. No R2 required.
 	for mode in ["broadcast", "tactical"]:

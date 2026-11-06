@@ -89,10 +89,15 @@ func _initialize() -> void:
 	assert(game.ball.carrier.squad_index == 10)
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null)
-	# The new XI ball radius is 0.14; its centre must now sit at 0.16,
-	# preserving the original 0.02 turf clearance of the 5v5 sphere.
+	# Check actual XI sphere radius plus the fixed turf clearance, not an
+	# old literal centre height that goes stale when proportions are tuned.
 	stage.sync_presentation(0.0, "broadcast")
-	assert(is_equal_approx(stage.ball_node.position.y, 0.16),
+	var visual_sphere := stage.ball_node.mesh as SphereMesh
+	assert(visual_sphere != null)
+	assert(is_equal_approx(visual_sphere.radius,
+		ChessFootball3DPresenter.XI_BALL_VISUAL_RADIUS))
+	assert(is_equal_approx(stage.ball_node.position.y,
+		visual_sphere.radius + ChessFootball3DPresenter.BALL_VISUAL_GROUND_CLEARANCE),
 		"Reduced XI ball must rest on the grass, not float at old height")
 	var mid_near_y: float = game.match_pitch.get_center().y + game.match_pitch.size.y * 0.29
 	var xi_mid_throw := Vector2(game.match_pitch.get_center().x, mid_near_y)
@@ -152,10 +157,10 @@ func _initialize() -> void:
 	var ball_sphere := stage.ball_node.mesh as SphereMesh
 	var ball_shadow_mesh := stage.ball_shadow.mesh as CylinderMesh
 	assert(ball_sphere != null and ball_shadow_mesh != null)
-	assert(is_equal_approx(ball_sphere.radius, 0.14))
-	assert(is_equal_approx(ball_sphere.height, 0.28))
-	assert(is_equal_approx(ball_shadow_mesh.top_radius, 0.095))
-	assert(is_equal_approx(ball_shadow_mesh.bottom_radius, 0.095))
+	assert(is_equal_approx(ball_sphere.radius, ChessFootball3DPresenter.XI_BALL_VISUAL_RADIUS))
+	assert(is_equal_approx(ball_sphere.height, ball_sphere.radius * 2.0))
+	assert(is_equal_approx(ball_shadow_mesh.top_radius, 0.082))
+	assert(is_equal_approx(ball_shadow_mesh.bottom_radius, 0.082))
 	# Both local and R2 XI frames render the same exclusive, texel-filtered QuadMesh.
 	var center: Vector2 = game.match_pitch.get_center()
 	var roster_ids: Dictionary = {}

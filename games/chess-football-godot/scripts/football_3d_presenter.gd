@@ -123,6 +123,10 @@ const KEEPER_CATCH_BLEND_SECONDS := 0.18
 # perpendicular to the ball's actual 2D travel on the X/Z pitch plane.
 # This changes no movement, velocity, 2D authority, collisions or ball art.
 const BALL_VISUAL_SPIN_PER_PIXEL := 0.004
+# XI only: presentation-space calibration, never the 2D collision radius.
+const XI_BALL_VISUAL_RADIUS := 0.12
+const LEGACY_BALL_VISUAL_RADIUS := 0.16
+const BALL_VISUAL_GROUND_CLEARANCE := 0.02
 
 var match_node: Node
 var camera: Camera3D
@@ -1906,8 +1910,8 @@ func _build_ball() -> void:
 	# approved player sprites. 2D ball radius, contacts, saves and shots do
 	# not change; the legacy 5v5 visual proportions stay untouched.
 	var xi_ball: bool = match_node.match_team_size == 11
-	sphere.radius = 0.14 if xi_ball else 0.16
-	sphere.height = 0.28 if xi_ball else 0.32
+	sphere.radius = XI_BALL_VISUAL_RADIUS if xi_ball else LEGACY_BALL_VISUAL_RADIUS
+	sphere.height = sphere.radius * 2.0
 	ball_node.mesh = sphere
 	# The same original dark-panel ball stays recognizable in flight and
 	# between the keeper's pale gloves; only its visual material changes.
@@ -1919,8 +1923,9 @@ func _build_ball() -> void:
 
 	ball_shadow = MeshInstance3D.new()
 	var shadow_mesh := CylinderMesh.new()
-	shadow_mesh.top_radius = 0.095 if xi_ball else 0.105
-	shadow_mesh.bottom_radius = 0.095 if xi_ball else 0.105
+	# Match the slightly smaller XI footprint without changing its physics.
+	shadow_mesh.top_radius = 0.082 if xi_ball else 0.105
+	shadow_mesh.bottom_radius = 0.082 if xi_ball else 0.105
 	shadow_mesh.height = 0.008
 	ball_shadow.mesh = shadow_mesh
 	ball_shadow.material_override = _material(Color(0.012, 0.020, 0.015), 1.0)
@@ -2164,12 +2169,13 @@ func sync_presentation(delta: float, mode: String) -> void:
 
 	if ball_node != null:
 		var grip_progress := 1.0
-		# The XI sphere shrank from radius .16 to .14, but its centre was
-		# still fixed at .18. Keep the original .02 ground clearance so a
-		# smaller carried/rolling ball does not hover above its shadow.
-		var ground_center_y: float = (
-			0.16 if match_node.match_team_size == 11 else 0.18
+		# Keep clearance above the grass constant as visual radius changes;
+		# otherwise a smaller rolling ball appears to hover over its shadow.
+		var visual_radius: float = (
+			XI_BALL_VISUAL_RADIUS if match_node.match_team_size == 11
+			else LEGACY_BALL_VISUAL_RADIUS
 		)
+		var ground_center_y: float = visual_radius + BALL_VISUAL_GROUND_CLEARANCE
 		var ball_at := world_to_stage(
 			match_node.ball.global_position,
 			ground_center_y + float(match_node.ball.flight_height) * WORLD_SCALE,
