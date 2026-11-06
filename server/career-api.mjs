@@ -54,6 +54,15 @@ export async function handleCareerRequest(request,{collection,serviceCredential}
     return json({status:'saved',revision:1});
    }catch(error){if(error?.code===11000)return json({error:'revision_conflict'},409);throw error;}
   }
+  // Even a caller that knows the revision cannot replace an unreadable/future
+  // journal. CAS below also fences a concurrent update after this check.
+  const current=await collection.findOne({_id:sub});
+  if(!current||current.revision!==parsed.revision)return json({error:'revision_conflict'},409);
+  if(Number.isSafeInteger(current.journal?.version)&&current.journal.version>FOOTBALL_CAREER_VERSION){
+   return json({error:'protected_career'},409);
+  }
+  try{replayFootballCareer(current.journal);}
+  catch{return json({error:'protected_career'},409);}
   const update=await collection.updateOne({_id:sub,revision:parsed.revision},
     {$set:{journal,updated_at:now},$inc:{revision:1}});
   if(update.matchedCount!==1)return json({error:'revision_conflict'},409);
