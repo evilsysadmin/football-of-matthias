@@ -62,6 +62,13 @@ const XI_BROADCAST_FOCUS_LANE_END := 0.80
 # Keep the actual XI goal visible without pushing most of the stadium off
 # the opposite edge during a penalty. Mirror for both attacking teams.
 const XI_PENALTY_STADIUM_PAN := 11.5
+# Dedicated behind-the-kicker 3/4 composition, restricted to a live XI
+# penalty. Stage-space only: the simulation still owns every ball/keeper.
+const XI_PENALTY_CAMERA_BEHIND := 7.4
+const XI_PENALTY_CAMERA_HEIGHT := 8.4
+const XI_PENALTY_CAMERA_NEAR_Z := 13.4
+const XI_PENALTY_CAMERA_FOV := 38.0
+const XI_PENALTY_CAMERA_BLEND_SPEED := 4.5
 const XI_BROADCAST_X_LIMIT_RATIO := 0.43
 const XI_BROADCAST_VERTICAL_FOLLOW := 0.31
 const XI_BROADCAST_VERTICAL_FOLLOW_MIN := -5.2
@@ -168,6 +175,9 @@ var smoothed_focus_x: float = 0.0
 var smoothed_lead_x: float = 0.0
 var smoothed_restart_look_z: float = BROADCAST_BASE_LOOK_Z
 var last_camera_mode: String = "broadcast"
+var penalty_camera_mix: float = 0.0
+var penalty_camera_position: Vector3 = Vector3.ZERO
+var penalty_camera_target: Vector3 = Vector3.ZERO
 # Keep the static sponsor signs as the source of truth outside a real goal.
 var ad_default_messages: Array[String] = []
 var ad_default_accents: Array[Color] = []
@@ -2769,6 +2779,29 @@ static func xi_penalty_camera_x(
 	return camera_x - (XI_PENALTY_STADIUM_PAN if team_id == 0 else -XI_PENALTY_STADIUM_PAN)
 
 
+# Authoritative penalty spot and goal are converted to stage coordinates
+# using the full current pitch. This composition sits behind the taker,
+# looking diagonally toward the real goal; the sign mirrors for both teams.
+# Do not confuse it with the legacy horizontal stadium pan, which remains
+# the fallback during the transition in and out.
+static func xi_penalty_camera_pose(
+	spot: Vector2, team_id: int, pitch: Rect2
+) -> Dictionary:
+	var direction: float = 1.0 if team_id == 0 else -1.0
+	var center: Vector2 = pitch.get_center()
+	var goal: Vector2 = ChessFootballMath.goal_center(team_id, pitch)
+	var spot_x: float = (spot.x - center.x) * WORLD_SCALE
+	var goal_x: float = (goal.x - center.x) * WORLD_SCALE
+	return {
+		"position": Vector3(
+			spot_x - direction * XI_PENALTY_CAMERA_BEHIND,
+			XI_PENALTY_CAMERA_HEIGHT, XI_PENALTY_CAMERA_NEAR_Z
+		),
+		"look": Vector3(goal_x - direction * 0.85, 0.70, 0.0),
+		"fov": XI_PENALTY_CAMERA_FOV,
+	}
+
+
 # The corner is the only broadcast state that pushes the camera backward.
 # Detect the outgoing composition from the real interpolated camera depth,
 # not the new target: set_piece_active is cleared before the first ball frame.
@@ -2865,6 +2898,28 @@ func _camera_smoothing_factor(speed: float, delta: float) -> float:
 func _sync_camera(delta: float, mode: String) -> void:
 	if camera == null:
 		return
+
+	# Ease into the cinematic composition while preparing, then ease back
+	# to live follow as soon as the shot is released (also on saves/rebounds).
+	# Keeping the last pose while the blend fades avoids a one-frame snap.
+	var cinematic_penalty: bool = (
+		mode == "broadcast" and match_node.match_team_size == 11
+		and bool(match_node.set_piece_active)
+		and String(match_node.set_piece_kind) == "PENALTI"
+	)
+	if cinematic_penalty:
+		var penalty_pose: Dictionary = xi_penalty_camera_pose(
+			match_node.set_piece_spot, int(match_node.set_piece_team_id),
+			match_node.match_pitch
+		)
+		penalty_camera_position = penalty_pose["position"]
+		penalty_camera_target = penalty_pose["look"]
+	penalty_camera_mix = lerpf(
+		penalty_camera_mix, 1.0 if cinematic_penalty else 0.0,
+		_camera_smoothing_factor(XI_PENALTY_CAMERA_BLEND_SPEED, delta),
+	)
+	if mode == "tactical":
+		penalty_camera_mix = 0.0
 
 	var focus := world_to_stage(match_node.ball.global_position)
 	# A tactical-to-broadcast switch starts from the aerial camera depth.
@@ -3003,6 +3058,12 @@ func _sync_camera(delta: float, mode: String) -> void:
 				bool(match_node.set_piece_active) or easing_corner_release,
 			) if match_node.match_team_size == 11 else 37.5
 		)
+		wanted_position = wanted_position.lerp(
+			penalty_camera_position, penalty_camera_mix
+		)
+		wanted_fov = lerpf(
+			wanted_fov, XI_PENALTY_CAMERA_FOV, penalty_camera_mix
+		)
 
 	var t := _camera_smoothing_factor(CAMERA_LERP_SPEED, delta)
 	var previous_depth := camera.position.z
@@ -3017,9 +3078,11 @@ func _sync_camera(delta: float, mode: String) -> void:
 	camera.fov = lerpf(camera.fov, wanted_fov, t)
 	var look_target := wanted_look
 	if mode == "broadcast":
-		# Follow the already-smoothed camera body instead of snapping the yaw
-		# toward the raw destination while position is still catching up.
-		look_target = Vector3(camera.position.x, 0.0, smoothed_restart_look_z)
+		# Follow the smoothed body in normal play; blend yaw and pitch smoothly
+		# for the dedicated penalty angle and its return after ball release.
+		look_target = Vector3(
+			camera.position.x, 0.0, smoothed_restart_look_z
+		).lerp(penalty_camera_target, penalty_camera_mix)
 	camera.look_at(look_target, Vector3.UP)
 
 func screen_position_for_world(world: Vector2, height: float = PLAYER_BASE_Y) -> Vector2:
