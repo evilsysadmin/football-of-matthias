@@ -138,6 +138,24 @@ func _initialize() -> void:
 	assert(open_lane.distance_to(lane_blocker.global_position) >=
 		game.AI_XI_SUPPORT_SAFE_RADIUS)
 	assert(open_lane.distance_to(passer.global_position) <= game.AI_XI_PASS_MAX_DISTANCE)
+	var support_key: int = int(receiver.get_instance_id())
+	assert(game.ai_xi_support_lane_memory.has(support_key))
+	var original_side: float = signf(open_lane.y - triangle_base.y)
+	# A marker shifting 12 units must not flip the runner's chosen side.
+	lane_blocker.global_position = triangle_base + Vector2(0.0, original_side * 12.0)
+	assert(game._ai_support_target(receiver) == open_lane)
+	# Truly blocking that run must make the runner switch to the safe side.
+	lane_blocker.global_position = open_lane
+	var alternate_lane: Vector2 = game._ai_support_target(receiver)
+	assert(alternate_lane != triangle_base and alternate_lane != open_lane)
+	assert(signf(alternate_lane.y - triangle_base.y) == -original_side)
+	# A renewed open triangle releases memory; do not drag the side choice
+	# into a new opportunity when the original pass has become safe again.
+	lane_blocker.global_position = Vector2(XI.end.x - 120.0, XI.end.y - 130.0)
+	assert(game._ai_support_target(receiver) == triangle_base)
+	assert(not game.ai_xi_support_lane_memory.has(support_key))
+	lane_blocker.global_position = triangle_base
+	assert(game._ai_support_target(receiver) != triangle_base)
 	upper_blocker.global_position = triangle_base + Vector2(-55.0, -135.0)
 	lower_blocker.global_position = triangle_base + Vector2(-55.0, 135.0)
 	assert(game._ai_support_target(receiver) == triangle_base)
@@ -149,6 +167,13 @@ func _initialize() -> void:
 	assert(receiver.ai_target.distance_to(run_target) < 1.0)
 	assert(receiver.global_position.distance_to(receiver_start) < 15.0)
 	assert(receiver.velocity.length() <= receiver.base_speed * 1.34 + 1.0)
+	assert(game.ai_xi_support_lane_memory.has(support_key))
+	# Lost CPU possession ends the old plan, even if the same player later
+	# becomes the primary outlet again.
+	game.ball.attach_to(game.teams[0][10])
+	game._update_ai(0.0)
+	assert(game.ai_xi_support_lane_memory.is_empty())
+	game.ball.attach_to(passer)
 	game.match_team_size = 5
 	assert(game._ai_xi_open_lane_support_target(receiver, triangle_base) == triangle_base)
 	game.match_team_size = 11
