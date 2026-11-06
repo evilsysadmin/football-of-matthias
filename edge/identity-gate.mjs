@@ -128,7 +128,7 @@ export async function handle(request,env,options={}){
   if(url.pathname==='/api/football/career'&&(request.method==='GET'||request.method==='PUT')){
    if(url.search)throw new Denied(400);
    const claims=await authorize(cookie(request),env,options);
-   return careerProxy(request,env,claims,options);
+   return await careerProxy(request,env,claims,options);
   }
   if(!['GET','HEAD'].includes(request.method))throw new Denied(405);
   const claims=await authorize(cookie(request),env,options);
