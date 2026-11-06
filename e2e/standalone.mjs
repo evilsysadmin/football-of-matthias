@@ -4,14 +4,33 @@ import {resolve,extname,sep} from 'node:path';
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import {handle,HOST} from '../edge/identity-gate.mjs';
+import {createFootballCareer,replayFootballCareer} from '../frontend/src/footballManagerCareer.js';
 const root=resolve('frontend/dist'),out=resolve('.artifacts/standalone');mkdirSync(out,{recursive:true});
 const currentBuild=process.env.FOOTBALL_SOURCE_SHA || '';
 const testVersionNotice=/^[a-f0-9]{40}$/.test(currentBuild) && !/^0+$/.test(currentBuild);
 let publishedBuild=currentBuild;
+let cloudMode=false,cloudUnavailable=false,cloudJournal=null,cloudRevision=0;
 const server=createServer(async(req,res)=>{
  const pathname=new URL(req.url,'http://localhost').pathname;
  if(pathname==='/__auth_preview'||pathname==='/_shadowops/session.js'){const response=await handle(new Request('https://'+HOST+(pathname==='/__auth_preview'?'/':pathname)),{});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());return;}
- if(pathname==='/api/football/session'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({subject:'11111111-1111-4111-8111-111111111111',expires_at:Math.floor(Date.now()/1000)+120}));return;}
+ if(pathname==='/api/football/session'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({subject:'11111111-1111-4111-8111-111111111111',expires_at:Math.floor(Date.now()/1000)+120,career_storage:cloudMode?'mongo':'local'}));return;}
+ if(pathname==='/api/football/career'){
+  res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');
+  if(!cloudMode||cloudUnavailable){res.writeHead(503);res.end('{"error":"storage_unavailable"}');return;}
+  if(req.method==='GET'){res.end(JSON.stringify(cloudJournal?{status:'available',revision:cloudRevision,journal:cloudJournal}:{status:'empty',revision:0}));return;}
+  if(req.method==='PUT'){
+   try{
+    let raw='',bytes=0;
+    for await(const chunk of req){bytes+=chunk.length;if(bytes>20000)throw Error('too large');raw+=chunk.toString();}
+    const body=JSON.parse(raw);
+    if(body.revision!==cloudRevision){res.writeHead(409);res.end('{"error":"revision_conflict"}');return;}
+    cloudJournal=replayFootballCareer(body.journal).journal;
+    cloudRevision++;
+    res.end(JSON.stringify({status:'saved',revision:cloudRevision}));return;
+   }catch{res.writeHead(422);res.end('{"error":"invalid_career"}');return;}
+  }
+  res.writeHead(405);res.end();return;
+ }
  // Simulate an actual version A -> B deployment on the running local browser.
  if(pathname==='/release.json'&&testVersionNotice){
   res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');
@@ -111,6 +130,39 @@ try{
   await firstPlayer.screenshot({path:resolve(out,viewport.width+'-scouting-detail.png')});
   assert.equal(errors.length,0,errors.join('\n'));await page.close();
  }
+ // Staging cloud activation is explicitly gated by server session state.
+ // Real backend credentials and Mongo are never used in this UI fixture.
+ cloudMode=true;
+ const backup=createFootballCareer('fc-matthias',2468);
+ const backupKey='chess-study-football-manager-career-v1:11111111-1111-4111-8111-111111111111';
+ const cloudPage=await browser.newPage({viewport:{width:390,height:844}});
+ const cloudErrors=[];cloudPage.on('pageerror',error=>cloudErrors.push(String(error)));
+ await cloudPage.addInitScript(({key,journal})=>{
+  localStorage.setItem(key,JSON.stringify(journal));
+ },{key:backupKey,journal:backup});
+ await cloudPage.goto('http://127.0.0.1:'+server.address().port+'/');
+ await cloudPage.getByRole('button',{name:/Modo mánager/}).waitFor();
+ await cloudPage.locator('.football-transfer > summary').click();
+ const migrate=cloudPage.getByRole('button',{name:'Importar copia de este navegador a Mongo'});
+ await migrate.waitFor();
+ assert.equal(cloudJournal,null,'a local backup must not auto-upload to Mongo on login');
+ await migrate.click();
+ await cloudPage.getByRole('button',{name:'Exportar carrera',exact:true}).waitFor();
+ await cloudPage.waitForFunction(()=>document.querySelector('.chess-football-entry__career-resume'));
+ assert.equal(cloudRevision,1,'explicit import must save exactly once');
+ assert.equal(cloudJournal?.seed,2468);
+ assert.equal(await cloudPage.evaluate(key=>localStorage.getItem(key)!==null,backupKey),true,'old local backup must survive a successful import');
+ await cloudPage.reload();
+ await cloudPage.getByRole('button',{name:'Continuar temporada'}).waitFor();
+ await cloudPage.screenshot({path:resolve(out,'390-cloud-career.png')});
+ cloudUnavailable=true;
+ await cloudPage.reload();
+ await cloudPage.getByText(/Mongo no está disponible/).waitFor();
+ assert.equal(cloudRevision,1,'outage must not overwrite the acknowledged server journal');
+ cloudUnavailable=false;cloudMode=false;
+ assert.equal(cloudErrors.length,0,cloudErrors.join('\\n'));
+ await cloudPage.close();
+
  // This is a UI contract test, not a bypass or live ShadowOps-ID session.
  // Simulate staging to prove XI is the only public quick-match format,
  // including refusal of old 5v5 handshakes on desktop and mobile.
