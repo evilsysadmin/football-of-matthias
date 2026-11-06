@@ -218,12 +218,39 @@ func _initialize() -> void:
 	assert(game.shot_meter_label.anchor_left == 0.5)
 	var controls_panel := game.get_node("MatchHud/MatchControlsPanel") as Panel
 	assert(controls_panel.anchor_right == 1.0)
+	# Live central play gets a closer lens, restoring the original safe
+	# field of view near touchlines and during set pieces, at either aspect.
+	var pitch_center: Vector2 = game.match_pitch.get_center()
+	var near_touchline: Vector2 = pitch_center + Vector2(
+		0.0, game.match_pitch.size.y * 0.45
+	)
+	for size in [Vector2(1280, 720), Vector2(1766, 832)]:
+		var safe_fov: float = ChessFootball3DPresenter.xi_broadcast_fov_for_aspect(size)
+		assert(is_equal_approx(
+			ChessFootball3DPresenter.xi_broadcast_live_fov(size, pitch_center, game.match_pitch),
+			safe_fov - ChessFootball3DPresenter.XI_BROADCAST_CENTER_ZOOM_DEGREES
+		), "XI midfield zoom should make players larger")
+		assert(is_equal_approx(
+			ChessFootball3DPresenter.xi_broadcast_live_fov(size, near_touchline, game.match_pitch),
+			safe_fov
+		), "XI near-touchline zoom must release before cropping the ball")
+		assert(is_equal_approx(
+			ChessFootball3DPresenter.xi_broadcast_live_fov(size, pitch_center, game.match_pitch, true),
+			safe_fov
+		), "XI set piece must preserve safe framing")
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.xi_broadcast_live_fov(
+			Vector2(1280, 720), pitch_center, Rect2()
+		), ChessFootball3DPresenter.XI_BROADCAST_FOV
+	), "Invalid pitch cannot force close camera")
 	# A broadcast match camera should fill the screen with RECOGNIZABLE
 	# sprites, not squeeze both goals and four touchlines into every shot.
 	# Whole-pitch framing remains available exclusively in tactical mode.
 	game.camera_mode = "broadcast"
 	stage.sync_presentation(2.0, "broadcast")
-	assert(absf(stage.camera.fov - ChessFootball3DPresenter.XI_BROADCAST_FOV) < 0.08)
+	assert(absf(stage.camera.fov - ChessFootball3DPresenter.xi_broadcast_live_fov(
+		bounds, game.ball.global_position, game.match_pitch
+	)) < 0.08)
 	assert(absf(stage.camera.position.z - (
 		ChessFootball3DPresenter.BROADCAST_DEPTH *
 		ChessFootball3DPresenter.XI_BROADCAST_DEPTH_SCALE
