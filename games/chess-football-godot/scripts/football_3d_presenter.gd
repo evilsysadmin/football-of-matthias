@@ -38,6 +38,10 @@ const NEAR_RESTART_LOOK_SHIFT := 8.3
 # remain readable, with unaltered player scale rules and no cut-off taker.
 const NEAR_CORNER_LOOK_SHIFT := 3.85
 const NEAR_CORNER_CAMERA_RETREAT := 6.2
+# When the near XI corner is framed, keep the end stand in the shot instead
+# of parking the entire stadium to one side of a black canvas.
+# This is a stage-space camera offset only: no effect on player positions.
+const XI_NEAR_CORNER_STADIUM_PAN := 12.0
 const BROADCAST_HEIGHT := 9.8
 const BROADCAST_DEPTH := 17.8
 # XI broadcast is a playable close-follow camera, not an entire-field aerial.
@@ -2729,6 +2733,29 @@ static func broadcast_corner_camera_depth(
 	return BROADCAST_DEPTH
 
 
+# A human near corner is a wide scene with a taker and a goalmouth. The
+# standard ball-follow places the stadium against the outside edge, leaving
+# too much empty black space. Shift the camera toward midfield just for XI,
+# mirroring the bias at either end. Near throw-ins, far corners, 5v5 and CPU
+# restarts are deliberately unchanged.
+static func xi_corner_stadium_camera_x(
+	camera_focus_x: float, xi: bool, active: bool, team_id: int,
+	kind: String, spot: Vector2, pitch: Rect2
+) -> float:
+	if (
+		not xi or not active or team_id != 0 or kind != "CÓRNER"
+		or pitch.size.x <= 0.0 or pitch.size.y <= 0.0
+	):
+		return camera_focus_x
+	var center: Vector2 = pitch.get_center()
+	if (
+		spot.y < center.y + pitch.size.y * 0.35
+		or absf(spot.x - center.x) < pitch.size.x * 0.36
+	):
+		return camera_focus_x
+	return camera_focus_x - signf(spot.x - center.x) * XI_NEAR_CORNER_STADIUM_PAN
+
+
 # The corner is the only broadcast state that pushes the camera backward.
 # Detect the outgoing composition from the real interpolated camera depth,
 # not the new target: set_piece_active is cleared before the first ball frame.
@@ -2909,6 +2936,12 @@ func _sync_camera(delta: float, mode: String) -> void:
 		var camera_x_limit: float = field_width * (
 			XI_BROADCAST_X_LIMIT_RATIO if match_node.match_team_size == 11
 			else broadcast_live_corner_x_limit_ratio(easing_corner_release)
+		)
+		wanted_position.x = xi_corner_stadium_camera_x(
+			wanted_position.x, match_node.match_team_size == 11,
+			bool(match_node.set_piece_active), int(match_node.set_piece_team_id),
+			String(match_node.set_piece_kind), match_node.set_piece_spot,
+			match_node.match_pitch
 		)
 		wanted_position.x = clampf(wanted_position.x, -camera_x_limit, camera_x_limit)
 		if match_node.match_team_size == 11:
