@@ -16,6 +16,28 @@ func _initialize() -> void:
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null and stage.xi_raster_meshes.size() == 22)
 
+	# Compare actual bundled fallback silhouettes at identical render depth.
+	# Any disparity here is an atlas/view scale problem, NOT perspective.
+	for team_id in range(2):
+		var sample: Footballer = game.teams[team_id][2]
+		var driver: AnimatedSprite3D = stage.player_sprites[sample.get_instance_id()]
+		for animation in [
+			&"idle", &"idle_front", &"run", &"run_front", &"run_back",
+			&"run_front_diagonal", &"run_back_diagonal", &"sprint",
+			&"pass", &"shoot",
+		]:
+			if not driver.sprite_frames.has_animation(animation):
+				continue
+			driver.play(animation)
+			driver.pause()
+			var texture := driver.sprite_frames.get_frame_texture(animation, 0)
+			var rect := (texture as ImageTexture).get_image().get_used_rect()
+			var scale := stage._canonical_body_scale(driver, sample.role, team_id)
+			print("FOOTBALL_XI_SIZE_AUDIT team=%d animation=%s opaque=%dx%d scaled_height=%.2f" % [
+				team_id, String(animation), rect.size.x, rect.size.y,
+				float(rect.size.y) * scale,
+			])
+
 	# The XI ball is visually proportional to the approved sprites, while
 	# its collision/possession authority and the legacy 5v5 remain unchanged.
 	var xi_ball_mesh := stage.ball_node.mesh as SphereMesh
