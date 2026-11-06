@@ -6,7 +6,11 @@ afterEach(()=>vi.unstubAllGlobals());
 describe('server-confirmed ShadowOps session',()=>{
  it('requires an actual successful current server session',async()=>{
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(session())));
-  expect((await currentFootballSession()).subject).toBe(subject);
+  expect(await currentFootballSession()).toMatchObject({subject,careerStorage:'local'});
+  fetch.mockResolvedValue(Response.json({...session(),career_storage:'mongo'}));
+  expect((await currentFootballSession()).careerStorage).toBe('mongo');
+  fetch.mockResolvedValue(Response.json({...session(),career_storage:'invalid'}));
+  await expect(currentFootballSession()).rejects.toThrow();
   fetch.mockResolvedValue(new Response('',{status:401}));await expect(currentFootballSession()).rejects.toThrow();
   fetch.mockResolvedValue(Response.json({...session(),expires_at:1}));await expect(currentFootballSession()).rejects.toThrow();
  });

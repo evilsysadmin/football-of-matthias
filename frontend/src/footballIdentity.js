@@ -6,7 +6,8 @@ async function request(url,options={}){
 }
 function session(value){
  if(!value||!UUID.test(value.subject)||!Number.isSafeInteger(value.expires_at)||value.expires_at*1000<=Date.now())throw Error('Invalid server session');
- return {subject:value.subject,expiresAt:value.expires_at};
+ if(value.career_storage!==undefined&&!['mongo','local'].includes(value.career_storage))throw Error('Invalid Football career backend');
+ return {subject:value.subject,expiresAt:value.expires_at,careerStorage:value.career_storage||'local'};
 }
 export async function currentFootballSession(){return session(await (await request('/api/football/session')).json());}
 export async function renewFootballSession(){

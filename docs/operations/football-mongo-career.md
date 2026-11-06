@@ -1,6 +1,6 @@
 # Football · carreras Mongo por ShadowOps ID (staging, pendiente de activación)
 
-Esta iteración aporta el **contrato y el servicio**, no declara almacenamiento remoto desplegado. La carrera actual continúa siendo **local** hasta un segundo cambio de UI y una activación aprobada por Infra. No se eliminan ni reasignan los diarios locales.
+Esta iteración aporta el **contrato y el servicio**, no declara almacenamiento remoto desplegado. La UI utiliza guardado local hasta que **Infra active los dos bindings**; a partir de entonces usa Mongo como autoridad del mánager. Los diarios locales no se borran ni se importan automáticamente.
 
 ## Datos y límites
 
@@ -19,6 +19,6 @@ La sesión y la frescura/revocación siguen verificadas por el **edge Pages** pa
 1. Infra provisiona Mongo `shadowops_football_staging` con rol limitado a `careers`, TLS, índice único `_id` (integrado), backups/restore y credenciales de escritura separadas. No reutilizar el principal ni la DB de Identity.
 2. Infra publica un contenedor inmutable del servicio `server/index.mjs` en la A1 existente, puerto interno 9275, sin exposición directa. Secretos: `FOOTBALL_MONGODB_URI` y `FOOTBALL_CAREER_SERVICE_CREDENTIAL` sólo en el servicio. El backend expone `/readyz`; vigilar índices/espacio/errores y asegurar el acceso al origin por el túnel.
 3. Infra publica el origen HTTPS exclusivo `https://api-staging.football.shadowops.dpdns.org/api/career` y configura en Pages `FOOTBALL_CAREER_API_URL` (literal URL anterior), además del mismo `FOOTBALL_CAREER_SERVICE_CREDENTIAL` como **secret**. No habilitar un wildcard de destinos.
-4. Antes de activar la UI cloud: pruebas de dos UUID reales de staging, aislamiento, revocación, 409 multisesión, F5, pérdida de red, errores de Mongo, versión futura, importación **explícita** desde copias locales, rollback y restauración desde backup. La UI vigente no usa todavía esta API, por lo que ningún guardado actual se publicita como Mongo.
+4. Antes de activar los bindings: pruebas de dos UUID reales de staging, aislamiento, revocación, 409 multisesión, F5, pérdida de red, errores de Mongo, versión futura, importación **explícita** desde copias locales, rollback y restauración desde backup. Solo se muestra «guardado en Mongo» tras un ACK real de la API. Cuando Infra no ha activado Mongo, la sesión anuncia `career_storage=local` y la UI conserva su funcionamiento actual.
 
 En CI: `node --test server/career-api.test.mjs` y `node tests/identity-gate.test.mjs`. La API necesita `mongodb` sólo para arrancar el listener privado, no para las pruebas puras.
