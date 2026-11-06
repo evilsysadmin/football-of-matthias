@@ -91,6 +91,13 @@ const AI_COVER_DISTANCE := 150.0
 # a legal contest. Easy and the human-side support shape remain untouched.
 const AI_CPU_SECOND_PRESS_ACTIVATION := 240.0
 const AI_XI_SECOND_PRESS_ACTIVATION := 320.0
+# At most one *reachable* normal+ CPU defender guards a plausible forward
+# passing lane. This is positioning, not a larger tackle hitbox or speed buff.
+const AI_XI_LANE_MIN_FORWARD := 85.0
+const AI_XI_LANE_MAX_PASS_LENGTH := 620.0
+const AI_XI_LANE_MAX_ARRIVAL := 390.0
+const AI_XI_LANE_MAX_HOME_DRIFT := 650.0
+const AI_XI_LANE_PRESS_SEPARATION := 125.0
 const AI_CPU_SECOND_PRESS_GOAL_SIDE := 58.0
 # Forecast only a short, bounded stretch of a *ground* rebound. Keep the
 # presser and second defender in their existing roles; nobody teleports.
@@ -936,6 +943,11 @@ func _update_ai(delta: float) -> void:
 		var loose_target: Vector2 = _ai_loose_ball_pursuit_point()
 		var presser: Footballer = _ai_primary_presser(team_id)
 		var cover: Footballer = _ai_secondary_presser(team_id, presser)
+		var lane_assignment: Dictionary = (
+			_ai_xi_lane_assignment(presser, cover)
+			if team_id == 1 else {}
+		)
+		var lane_marker: Footballer = lane_assignment.get("marker")
 		var pass_receiver: Footballer = _ai_live_pass_receiver() if team_id == 1 else null
 		for player in teams[team_id]:
 			if player.sent_off:
@@ -988,6 +1000,11 @@ func _update_ai(delta: float) -> void:
 					intensity = _ai_adaptive_intensity(
 						0.98 if contesting_cover else AI_COVER_INTENSITY
 					)
+				elif player == lane_marker:
+					# Intercept a forward pass, not the carrier. No extra sprint,
+					# tackling privilege or extra player leaves the defensive line.
+					target = lane_assignment["target"]
+					intensity = _ai_adaptive_intensity(AI_TEAM_PRESS_INTENSITY)
 				else:
 					target = ChessFootballMath.clamp_to_pitch(
 						player.home_position.lerp(
@@ -1003,6 +1020,7 @@ func _update_ai(delta: float) -> void:
 			if (
 				ball.carrier != player
 				and player != pending_human_pass_receiver
+				and player != lane_marker
 				and (team_has_ball or (player != presser and not contesting_cover))
 			):
 				target = _ai_spaced_target(player, target)
@@ -1027,6 +1045,86 @@ func _update_ai(delta: float) -> void:
 
 			if ball.carrier == player and team_id == 1 and _ai_decision_ready(player):
 				_ai_attack(player)
+
+# One reachable *off-ball* defender guards the most plausible forward
+# pass; the presser and cover retain their existing jobs. Nothing is added
+# on Easy, 5v5, loose balls, CPU possession or an exhausted defence with
+# no credible marker. Assignment uses real positions; movement remains
+# normal CharacterBody2D movement and the ordinary CPU intensity.
+func _ai_xi_lane_assignment(
+	presser: Footballer, cover: Footballer
+) -> Dictionary:
+	if (
+		match_team_size != 11
+		or quick_difficulty == "easy"
+		or ball.carrier == null
+		or ball.carrier.team_id != 0
+	):
+		return {}
+	var owner: Footballer = ball.carrier
+	var best_marker: Footballer = null
+	var best_target := Vector2.ZERO
+	var best_receiver: Footballer = null
+	var best_score := INF
+	for receiver in teams[0]:
+		if (
+			receiver == owner
+			or receiver.sent_off
+			or receiver.role == "keeper"
+		):
+			continue
+		var offset: Vector2 = receiver.global_position - owner.global_position
+		if (
+			offset.x < AI_XI_LANE_MIN_FORWARD
+			or offset.length() > AI_XI_LANE_MAX_PASS_LENGTH
+		):
+			continue
+		# Block the actual ball-to-receiver corridor from its goal side,
+		# rather than marking the ball again or chasing a distant winger.
+		var point: Vector2 = ChessFootballMath.clamp_to_pitch(
+			owner.global_position.lerp(receiver.global_position, 0.64)
+			+ Vector2(18.0, 0.0), match_pitch
+		)
+		if (
+			(presser != null and point.distance_to(presser.global_position)
+				< AI_XI_LANE_PRESS_SEPARATION)
+			or (cover != null and point.distance_to(cover.global_position)
+				< AI_XI_LANE_PRESS_SEPARATION)
+		):
+			continue
+		for defender in teams[1]:
+			if (
+				defender.sent_off
+				or defender.role == "keeper"
+				or defender == presser
+				or defender == cover
+			):
+				continue
+			var arrival: float = defender.global_position.distance_to(point)
+			var home_drift: float = defender.home_position.distance_to(point)
+			if (
+				arrival > AI_XI_LANE_MAX_ARRIVAL
+				or home_drift > AI_XI_LANE_MAX_HOME_DRIFT
+			):
+				continue
+			# Prefer reachable lanes near assigned positions. Dangerous
+			# forward options win ties without sending the whole line chasing.
+			var score_value: float = (
+				arrival + home_drift * 0.18 - offset.x * 0.12
+			)
+			if score_value < best_score:
+				best_score = score_value
+				best_marker = defender
+				best_target = point
+				best_receiver = receiver
+	if best_marker == null:
+		return {}
+	return {
+		"marker": best_marker,
+		"target": best_target,
+		"receiver": best_receiver,
+	}
+
 
 # XI's nearest CPU defender runs toward a reachable interception point,
 # not the opponent's previous position. No teleport or artificial tackle.
