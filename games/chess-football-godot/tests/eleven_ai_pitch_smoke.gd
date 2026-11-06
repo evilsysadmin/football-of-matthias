@@ -93,8 +93,19 @@ func _initialize() -> void:
 	assert(game._ai_support_target(receiver).distance_to(passer.global_position) < 300.0)
 	assert(game._ai_xi_support_rank(game.teams[1][5]) == -1)
 	assert(game._best_ai_pass_target(passer) == receiver)
+	# A clear 330-unit outlet must NOT cause an instantaneous 0.00s pass.
+	# This used to happen as soon as the carrier touched the ball.
+	assert(game.ball.possession_seconds == 0.0)
+	assert(game._ai_xi_pass_setup_seconds(passer, INF, 330.0) >= 0.4)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == passer)
+	game.ball.tick_ball(0.30)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == passer)
+	game.ball.tick_ball(0.20)
 	game._ai_attack(passer)
 	assert(game.ball.carrier == null)
+	assert(game.ball.possession_seconds == 0.0)
 	assert(game.ball.velocity.length() > 540.0)
 	assert(game.ai_intended_pass_receiver == receiver)
 	game._update_ai(1.0 / 60.0)
@@ -125,6 +136,11 @@ func _initialize() -> void:
 	game._ai_attack(passer)
 	assert(game.ball.carrier == passer)
 	blocker.global_position = passer.global_position + Vector2(90.0, -120.0)
+	# A pressured sideways recycle has a shorter but still real first-touch
+	# phase. Do not force a one-touch pinball volley on every reception.
+	game._ai_attack(passer)
+	assert(game.ball.carrier == passer)
+	game.ball.tick_ball(0.29)
 	game._ai_attack(passer)
 	assert(game.ball.carrier == null)
 	assert(game.ball.velocity.x > 0.0 and game.ball.velocity.y > 0.0)
@@ -133,6 +149,21 @@ func _initialize() -> void:
 	blocker.global_position = receiver.global_position + Vector2(32.0, 0.0)
 	assert(game._best_ai_pass_target(passer) == null)
 
+	# Reclaiming resets control time, including reattaching the same player.
+	game.ball.attach_to(passer)
+	assert(game.ball.possession_seconds == 0.0)
+	game.ball.tick_ball(0.38)
+	assert(is_equal_approx(game.ball.possession_seconds, 0.38))
+	game.ball.attach_to(passer)
+	assert(game.ball.possession_seconds == 0.0)
+	game.ball.release(Vector2.LEFT, 320.0)
+	assert(game.ball.possession_seconds == 0.0)
+	# Under immediate pressure an emergency outlet may be quicker, but a
+	# central defender in open space should settle before recycling.
+	assert(game._ai_xi_pass_setup_seconds(passer, 60.0, 200.0) < 0.2)
+	assert(game._ai_xi_pass_setup_seconds(passer, 135.0, 200.0) > 0.2)
+	assert(game._ai_xi_pass_setup_seconds(game.teams[1][2], INF, 90.0) >
+		game._ai_xi_pass_setup_seconds(passer, INF, 90.0))
 	# A CPU striker must shoot LEFT toward the XI goal, never right toward
 	# the old arcade goal now located behind the attacker.
 	passer.global_position = Vector2(XI.position.x + 430.0, centre.y)
