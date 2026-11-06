@@ -82,6 +82,15 @@ func _initialize() -> void:
 	assert(goal_pixel.x > 50.0 and goal_pixel.x < size.x - 50.0)
 	assert(kicker_pixel.y > 145.0 and kicker_pixel.y < size.y - 35.0)
 	assert(stage.debug_penalty_aim_visible())
+	assert(absf(stage.penalty_aim_marker.position.y
+		- ChessFootball3DPresenter.GOAL_POST_HEIGHT * 0.55) < 0.001)
+	var target_pixel: Vector2 = stage.camera.unproject_position(
+		stage.penalty_aim_marker.global_position
+	)
+	assert(target_pixel.x > 55.0 and target_pixel.x < size.x - 55.0,
+		"XI goal target is off the ultrawide frame")
+	assert(target_pixel.y > 145.0 and target_pixel.y < size.y - 45.0,
+		"XI goal target is hidden behind the top/bottom overlay")
 	for _penalty_frame in range(5):
 		stage.sync_presentation(0.0, "broadcast")
 		await process_frame
