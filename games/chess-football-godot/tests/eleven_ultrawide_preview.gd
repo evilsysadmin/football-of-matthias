@@ -63,8 +63,13 @@ func _initialize() -> void:
 	game.debug_set_penalty_aim(0.45)
 	game.debug_refresh_hud()
 	stage.sync_presentation(8.0, "broadcast")
-	assert(stage.camera.position.x > 5.0 and stage.camera.position.x < 18.0,
-		"Ultrawide penalty keeps an unnecessarily huge black right panel")
+	var cinematic_pose: Dictionary = ChessFootball3DPresenter.xi_penalty_camera_pose(
+		game.set_piece_spot, 0, game.match_pitch
+	)
+	assert(stage.camera.position.distance_to(cinematic_pose["position"]) < 0.08,
+		"Ultrawide penalty must use the new behind-the-kicker perspective")
+	assert(absf(stage.camera.fov - ChessFootball3DPresenter.XI_PENALTY_CAMERA_FOV) < 0.08)
+	assert(stage.penalty_camera_mix > 0.999)
 	var goal: Vector2 = ChessFootballMath.goal_center(0, game.match_pitch)
 	var goalkeeper: Footballer = game.teams[1][0]
 	assert(goalkeeper.global_position.distance_to(goal - Vector2(42.0, 0.0)) < 0.1,
@@ -77,6 +82,15 @@ func _initialize() -> void:
 	assert(goal_pixel.x > 50.0 and goal_pixel.x < size.x - 50.0)
 	assert(kicker_pixel.y > 145.0 and kicker_pixel.y < size.y - 35.0)
 	assert(stage.debug_penalty_aim_visible())
+	assert(absf(stage.penalty_aim_marker.position.y
+		- ChessFootball3DPresenter.GOAL_POST_HEIGHT * 0.55) < 0.001)
+	var target_pixel: Vector2 = stage.camera.unproject_position(
+		stage.penalty_aim_marker.global_position
+	)
+	assert(target_pixel.x > 55.0 and target_pixel.x < size.x - 55.0,
+		"XI goal target is off the ultrawide frame")
+	assert(target_pixel.y > 145.0 and target_pixel.y < size.y - 45.0,
+		"XI goal target is hidden behind the top/bottom overlay")
 	for _penalty_frame in range(5):
 		stage.sync_presentation(0.0, "broadcast")
 		await process_frame

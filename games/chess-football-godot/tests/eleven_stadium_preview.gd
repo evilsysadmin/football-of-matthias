@@ -493,14 +493,24 @@ func _initialize() -> void:
 			game.debug_set_penalty_aim(0.5)
 		game.debug_refresh_hud()
 		stage.sync_presentation(8.0, "broadcast")
-		# The stadium should occupy most of the match viewport, not leave
-		# an entire black panel past the penalty goal at either end.
+		# 3/4 penalty composition: the camera sits BEHIND the taker,
+		# faces the actual goal, and mirrors cleanly for either attack.
+		var pose: Dictionary = ChessFootball3DPresenter.xi_penalty_camera_pose(
+			game.set_piece_spot, attacking_team, game.match_pitch
+		)
+		assert(stage.camera.position.distance_to(pose["position"]) < 0.08,
+			"XI penalty camera did not move behind the taker")
+		assert(absf(stage.camera.fov - pose["fov"]) < 0.08)
+		assert(stage.penalty_camera_mix > 0.999,
+			"XI penalty camera did not complete the dedicated blend")
 		if attacking_team == 0:
-			assert(stage.camera.position.x > 5.0 and stage.camera.position.x < 18.0,
-				"Human XI penalty view still parks the stadium offscreen")
+			assert(stage.camera.position.x < (
+				game.set_piece_spot.x - game.match_pitch.get_center().x
+			) * ChessFootball3DPresenter.WORLD_SCALE)
 		else:
-			assert(stage.camera.position.x < -5.0 and stage.camera.position.x > -18.0,
-				"CPU XI penalty must mirror the stadium-centered framing")
+			assert(stage.camera.position.x > (
+				game.set_piece_spot.x - game.match_pitch.get_center().x
+			) * ChessFootball3DPresenter.WORLD_SCALE)
 		var goal: Vector2 = ChessFootballMath.goal_center(
 			attacking_team, game.match_pitch
 		)
@@ -521,6 +531,19 @@ func _initialize() -> void:
 		if attacking_team == 0:
 			assert(stage.debug_penalty_aim_visible(),
 				"XI human penalty must display its aim marker on the goal")
+			assert(absf(stage.penalty_aim_marker.rotation.z - PI * 0.5) < 0.001,
+				"XI penalty marker must face the player vertically")
+			assert(absf(
+				stage.penalty_aim_marker.position.y
+				- ChessFootball3DPresenter.GOAL_POST_HEIGHT * 0.55
+			) < 0.001, "XI target marker must be inside the goal, not on the grass")
+			var old_target: Vector3 = stage.penalty_aim_marker.position
+			game.debug_set_penalty_aim(-0.65)
+			stage.sync_presentation(0.0, "broadcast")
+			assert(stage.penalty_aim_marker.position.distance_to(old_target) > 1.0,
+				"W/S aim changes must update the visible XI goal target")
+			game.debug_set_penalty_aim(0.5)
+			stage.sync_presentation(0.0, "broadcast")
 		if DisplayServer.get_name() != "headless":
 			for _penalty_frame in range(5):
 				stage.sync_presentation(0.0, "broadcast")
@@ -533,6 +556,15 @@ func _initialize() -> void:
 			print("FOOTBALL_XI_PENALTY_%s_CAPTURE=%s" % [
 				label.to_upper(), ProjectSettings.globalize_path(penalty_path)
 			])
+		if attacking_team == 0:
+			game.debug_force_human_penalty_shot(0.65, 0.45)
+			assert(not game.set_piece_active and game.ball.carrier == null)
+			stage.sync_presentation(0.15, "broadcast")
+			assert(stage.penalty_camera_mix < 0.80 and stage.penalty_camera_mix > 0.0,
+				"XI penalty camera must begin returning smoothly after the kick")
+			stage.sync_presentation(3.0, "broadcast")
+			assert(stage.penalty_camera_mix < 0.001,
+				"XI penalty lens should release fully back to live broadcast")
 	print("FOOTBALL_XI_ANIMATION_OK unique_run_frames=%d" % distinct_frames.size())
 	print("FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22")
 	quit(0)
