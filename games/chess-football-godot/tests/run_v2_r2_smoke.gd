@@ -34,6 +34,10 @@ func _initialize() -> void:
 	var first_player: Footballer = game.teams[0][1]
 	var first_sprite: AnimatedSprite3D = presenter.player_sprites[first_player.get_instance_id()]
 	var previous := first_sprite.sprite_frames.get_frame_texture(&"run_front", 0)
+	first_sprite.play(&"run")
+	first_sprite.pause()
+	var old_body_scale := presenter._canonical_body_scale(first_sprite, first_player.role, 0)
+	assert(presenter.body_scale_cache.has("%s:%d:%s" % [first_player.role, 0, "run"]))
 	var keeper0: AnimatedSprite3D = presenter.player_sprites[game.teams[0][0].get_instance_id()]
 	var keeper_run := keeper0.sprite_frames.get_frame_texture(&"run", 0)
 	var legacy_idle := first_sprite.sprite_frames.get_frame_texture(&"idle_front", 0)
@@ -56,6 +60,16 @@ func _initialize() -> void:
 		assert(not ChessFootballR2AtlasLoader.valid_metadata(meta))
 		presenter._apply_verified_run_v2(textures, team_id)
 		assert(presenter._run_v2_r2_loaded.has(team_id))
+		if team_id == 0:
+			# Cache from the bundled 108px side run must not resize the new
+			# 121px R2 runner to ~134px. Atlas size is independent of physics.
+			assert(not presenter.body_scale_cache.has("%s:%d:%s" % [first_player.role, 0, "run"]))
+			var new_body_scale := presenter._canonical_body_scale(first_sprite, first_player.role, 0)
+			var new_height := ChessFootballSpriteBank.frame_height(
+				first_sprite.sprite_frames.get_frame_texture(&"run", 0)
+			) * new_body_scale
+			assert(absf(new_height - presenter.CANONICAL_BODY_HEIGHT_PIXELS) < 2.0)
+			assert(absf(new_body_scale - old_body_scale) > 0.05)
 		for player in game.teams[team_id]:
 			var key: int = player.get_instance_id()
 			var shadow: MeshInstance3D = presenter.player_nodes[key].get_node("ContactShadow")
