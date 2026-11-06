@@ -1145,6 +1145,15 @@ jobs:
               cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-restart-${case,,}.png"
             fi
           done
+          # Both real XI penalty orientations: guard the actual goal, keeper,
+          # aim indicator and 19 non-kicking players against arcade regression.
+          for side in HUMAN CPU; do
+            marker="FOOTBALL_XI_PENALTY_${side}_CAPTURE"
+            screenshot="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
+            if [[ -n "$screenshot" && -s "$screenshot" ]]; then
+              cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-penalty-${side,,}-1280x720.png"
+            fi
+          done
           # In addition to the stationary kickoff screenshots, inspect a
           # distant RUNNING pose (nonzero authored lean) for foot-ground contact.
           run_capture="$(sed -n 's/^FOOTBALL_XI_RUN_GROUND_BROADCAST=//p' "$log" | tail -1)"
@@ -1160,6 +1169,8 @@ jobs:
           test -s "$RUNNER_TEMP/chess-football-review/xi-lane-near.png"
           test -s "$RUNNER_TEMP/chess-football-review/xi-restart-mid_throw.png"
           test -s "$RUNNER_TEMP/chess-football-review/xi-restart-near_corner.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-penalty-human-1280x720.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-penalty-cpu-1280x720.png"
           grep -q 'FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22' "$log"
           for mode in tactical broadcast; do
             test -s "$RUNNER_TEMP/chess-football-review/xi-preview-$mode.png"
