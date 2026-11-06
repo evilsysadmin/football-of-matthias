@@ -569,6 +569,59 @@ func _initialize() -> void:
 	assert(game._ai_xi_lane_assignment(lane_presser, lane_cover).is_empty())
 	game.ball.release(Vector2.ZERO, 0.0)
 	assert(game._ai_xi_lane_assignment(lane_presser, lane_cover).is_empty())
+	# An XI CPU defender near the carrier must contain rather than waste a
+	# tackle at 80 units when its real forward hitbox reaches only ~60.
+	# Position/orientation come from real Footballer bodies and velocity.
+	game.ball.attach_to(lane_owner)
+	lane_owner.velocity = Vector2(220.0, 150.0)
+	lane_presser.velocity = Vector2(-200.0, 0.0)
+	lane_presser.tackle_cooldown_seconds = 0.0
+	lane_presser.tackle_recovery_seconds = 0.0
+	lane_presser.tackle_active_seconds = 0.0
+	lane_presser.action_lock_seconds = 0.0
+	lane_presser.global_position = lane_owner.global_position + Vector2(82.0, 0.0)
+	assert(game._ai_primary_presser(1) == lane_presser)
+	assert(not game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
+	game._update_ai(0.0)
+	assert(not lane_presser.tackle_active())
+	assert(lane_presser.tackle_cooldown_seconds == 0.0)
+	# A lateral poke inside the legal width is still viable for the first
+	# presser; the second defender refuses it and preserves goal-side cover.
+	lane_presser.global_position = lane_owner.global_position + Vector2(38.0, -25.0)
+	lane_presser.velocity = Vector2(-175.0, 0.0)
+	var glancing_tackle: Dictionary = game._tackle_hitbox(lane_presser, lane_owner.global_position)
+	assert(bool(glancing_tackle["inside"]))
+	assert(not bool(glancing_tackle["clean"]))
+	assert(not bool(glancing_tackle["foul"]))
+	assert(game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
+	assert(not game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, true))
+	# A late challenge from behind would risk a foul: keep containing.
+	lane_presser.global_position = lane_owner.global_position + Vector2(-18.0, 0.0)
+	assert(bool(game._tackle_hitbox(lane_presser, lane_owner.global_position)["foul"]))
+	assert(not game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
+	# At last a front-on contact is possible. The existing authoritative
+	# tackle rules execute normally; no enlarged tackle reach is involved.
+	lane_presser.global_position = lane_owner.global_position + Vector2(31.0, -8.0)
+	lane_presser.velocity = Vector2(-160.0, 0.0)
+	assert(bool(game._tackle_hitbox(lane_presser, lane_owner.global_position)["clean"]))
+	assert(game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, true))
+	assert(game._try_tackle(lane_presser))
+	assert(game.ball.carrier == null)
+	# Easy and the legacy five-player fixture are explicitly untouched.
+	lane_presser.tackle_cooldown_seconds = 0.0
+	lane_presser.action_lock_seconds = 0.0
+	lane_presser.tackle_active_seconds = 0.0
+	game.ball.attach_to(lane_owner)
+	lane_presser.global_position = lane_owner.global_position + Vector2(82.0, 0.0)
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
+	game._set_quick_difficulty("normal")
+	game.match_team_size = 5
+	assert(game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
+	game.match_team_size = 11
+	game.ball.release(Vector2.ZERO, 0.0)
+	assert(not game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
+	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 cover_clean=1 easy_five_unchanged=1")
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
 	quit(0)
