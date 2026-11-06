@@ -46,9 +46,19 @@ func _initialize() -> void:
 		var saved_phase := float(presenter.outfield_visual_phases.get(
 			game.teams[team_id][1].get_instance_id(), 0.0
 		))
+		var outfield: Footballer = game.teams[team_id][1]
+		first.play(&"run")
+		first.pause()
+		presenter._canonical_body_scale(first, outfield.role, team_id)
+		var cache_key := "%s:%d:%s" % [outfield.role, team_id, "run"]
+		assert(presenter.body_scale_cache.has(cache_key))
 		presenter._apply_verified_lateral_run([], team_id)
 		assert(first.sprite_frames.get_frame_texture(&"run", 0) == original_side)
+		assert(presenter.body_scale_cache.has(cache_key),
+			"A rejected atlas must not change previous render state")
 		presenter._apply_verified_lateral_run(textures, team_id)
+		assert(not presenter.body_scale_cache.has(cache_key),
+			"Verified atlas must invalidate cached silhouette normalization")
 		for sprite in field_players:
 			var bank := sprite.sprite_frames
 			assert(bank.get_frame_texture(&"run", 0) == textures[0])
