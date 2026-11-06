@@ -97,6 +97,10 @@ func _initialize() -> void:
 	# to the eight verified R2 catch frames. Capture each club's authentic
 	# action for comparison; normal unchallenged possession above stays the
 	# old eight-frame contract and is not affected by this new XI rule.
+	# Keep only one stadium/camera in the scene so the new screenshots
+	# cannot accidentally include a superimposed 5v5 pitch.
+	match_node.queue_free()
+	await process_frame
 	var xi_match = packed.instantiate()
 	xi_match.match_team_size = 11
 	root.add_child(xi_match)
