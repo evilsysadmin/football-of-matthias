@@ -46,6 +46,10 @@ const BROADCAST_DEPTH := 17.8
 const XI_BROADCAST_HEIGHT_SCALE := 1.44
 const XI_BROADCAST_DEPTH_SCALE := 1.70
 const XI_BROADCAST_FOV := 41.0
+# Extra horizontal room on wider screens allows a slightly closer XI lens.
+# Keep 16:9 unchanged and retain the safe wide lens for restarts/corner release.
+const XI_BROADCAST_WIDE_FOV := 37.5
+const XI_BROADCAST_WIDE_ASPECT := 2.10
 const XI_BROADCAST_X_LIMIT_RATIO := 0.43
 const XI_BROADCAST_VERTICAL_FOLLOW := 0.31
 const XI_BROADCAST_VERTICAL_FOLLOW_MIN := -5.2
@@ -2778,6 +2782,17 @@ static func xi_broadcast_target_look_z(lane_z: float, restart_z: float) -> float
 	return minf(restart_z, lane_z)
 
 
+static func xi_broadcast_fov_for_aspect(view_size: Vector2, wide_restart: bool = false) -> float:
+	if wide_restart or view_size.y <= 0.0:
+		return XI_BROADCAST_FOV
+	var aspect: float = view_size.x / view_size.y
+	var mix: float = clampf(
+		(aspect - 16.0 / 9.0) / (XI_BROADCAST_WIDE_ASPECT - 16.0 / 9.0),
+		0.0, 1.0
+	)
+	return lerpf(XI_BROADCAST_FOV, XI_BROADCAST_WIDE_FOV, mix)
+
+
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
 	if delta <= 0.0:
 		return 0.0
@@ -2903,7 +2918,10 @@ func _sync_camera(delta: float, mode: String) -> void:
 		)
 		wanted_look = Vector3(wanted_position.x, 0.0, smoothed_restart_look_z)
 		wanted_fov = (
-			XI_BROADCAST_FOV if match_node.match_team_size == 11 else 37.5
+			xi_broadcast_fov_for_aspect(
+				get_viewport().get_visible_rect().size,
+				bool(match_node.set_piece_active) or easing_corner_release,
+			) if match_node.match_team_size == 11 else 37.5
 		)
 
 	var t := _camera_smoothing_factor(CAMERA_LERP_SPEED, delta)
