@@ -45,6 +45,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
       - run: node tests/identity-gate.test.mjs
+      - run: node --test server/career-api.test.mjs
       - run: node tests/instant-staging-dispatch.test.mjs
       - name: Exercise authority exchange and revocation in the real Workers runtime
         run: npx --yes workerd@1.20261102.1 test tests/identity-workerd.capnp
