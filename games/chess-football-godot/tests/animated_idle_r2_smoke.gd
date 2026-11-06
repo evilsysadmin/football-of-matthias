@@ -18,8 +18,11 @@ func _initialize() -> void:
 	sheet.fill(Color.TRANSPARENT)
 	for row in range(5):
 		for column in range(8):
+			# Valid breathing frames vary their alpha height but share one
+			# planted boot line. Their RENDER scale must not oscillate.
+			var top := 8 + (column % 4) * 3
 			sheet.fill_rect(
-				Rect2i(column * 128 + 36, row * 144 + 8, 56, 124),
+				Rect2i(column * 128 + 36, row * 144 + top, 56, 132 - top),
 				Color("#e2ae28") if row == 2 else Color("#4588d2")
 			)
 	var malformed := sheet.duplicate()
@@ -106,5 +109,69 @@ func _initialize() -> void:
 	var animated_start := first_sprite.sprite_frames.get_frame_texture(&"idle_front", 0)
 	presenter._apply_idle_front_textures(legacy_textures)
 	assert(first_sprite.sprite_frames.get_frame_texture(&"idle_front", 0) == animated_start)
+
+	# XI used to normalize every animated idle frame independently. A single
+	# breathing cycle then inflated/deflated a stationary footballer despite
+	# the sprites sharing the same planted footline.
+	var xi = packed.instantiate()
+	xi.match_team_size = 11
+	root.add_child(xi)
+	await process_frame
+	await process_frame
+	xi.set_process(false)
+	xi.set_physics_process(false)
+	var xi_presenter: ChessFootball3DPresenter = xi.presentation_3d
+	assert(xi_presenter != null)
+	var xi_actor: Footballer = xi.teams[0][1]
+	var xi_sprite: AnimatedSprite3D = xi_presenter.player_sprites[xi_actor.get_instance_id()]
+	var xi_textures := ChessFootballIdleR2.frames_from_image(sheet, "fc_matthias")
+	assert(xi_textures.size() == 40)
+	xi_presenter._apply_animated_idle_frames("fc_matthias", xi_textures, [])
+	xi_sprite.play(&"idle_front")
+	xi_sprite.pause()
+	var stable_scale := -1.0
+	var measured_heights: Array[float] = []
+	for frame_id in range(8):
+		xi_sprite.frame = frame_id
+		measured_heights.append(ChessFootballSpriteBank.frame_height(
+			xi_sprite.sprite_frames.get_frame_texture(&"idle_front", frame_id)
+		))
+		var frame_scale := xi_presenter._canonical_body_scale(
+			xi_sprite, xi_actor.role, xi_actor.team_id
+		)
+		if frame_id == 0:
+			stable_scale = frame_scale
+		else:
+			assert(is_equal_approx(frame_scale, stable_scale),
+				"XI idle breathing cannot rescale the footballer every frame")
+	assert(measured_heights.max() - measured_heights.min() >= 8.0)
+	var idle_key := "idle:%s:%d:%s" % [xi_actor.role, xi_actor.team_id, "idle_front"]
+	assert(xi_presenter.body_scale_cache.has(idle_key))
+	var original_position: Vector2 = xi_actor.global_position
+	var original_velocity: Vector2 = xi_actor.velocity
+	# A later verified atlas replacement changes the source height. Only
+	# the derived size cache is invalidated, not positions or match authority.
+	var revised := Image.create(1024, 720, false, Image.FORMAT_RGBA8)
+	revised.fill(Color.TRANSPARENT)
+	for row in range(5):
+		for column in range(8):
+			var revised_top := 18 + column % 2
+			revised.fill_rect(
+				Rect2i(column * 128 + 36, row * 144 + revised_top, 56, 132 - revised_top),
+				Color("#4588d2")
+			)
+	var revised_textures := ChessFootballIdleR2.frames_from_image(revised, "fc_matthias")
+	assert(revised_textures.size() == 40)
+	xi_presenter._apply_animated_idle_frames("fc_matthias", revised_textures, [])
+	assert(not xi_presenter.body_scale_cache.has(idle_key))
+	xi_sprite.frame = 0
+	var revised_scale := xi_presenter._canonical_body_scale(
+		xi_sprite, xi_actor.role, xi_actor.team_id
+	)
+	assert(revised_scale > stable_scale + 0.02)
+	assert(xi_actor.global_position == original_position)
+	assert(xi_actor.velocity == original_velocity)
+	assert(xi.match_team_size == 11)
+	print("FOOTBALL_XI_ANIMATED_IDLE_STABLE_SCALE_OK frames=8 teams=2 atlas_refresh=1")
 	print("football R2 5-view animated idle, 8-frame phase, 22 actors and fallback: OK")
 	quit(0)

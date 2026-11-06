@@ -270,6 +270,9 @@ func _apply_animated_idle_frames(
 			for frame_id in range(ChessFootballIdleR2.FRAME_COUNT):
 				bank.add_frame(name, chosen[row * ChessFootballIdleR2.FRAME_COUNT + frame_id])
 	_animated_idle_r2_loaded[kind] = true
+	# The 8-frame breathing silhouettes replace the previous idle source.
+	# Discard only derived display-size references, never actor/game state.
+	body_scale_cache.clear()
 	tone_gain_cache.clear()
 
 
@@ -2517,11 +2520,36 @@ static func normalized_body_scale(pixel_height: float) -> float:
 
 func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "", team_id: int = -1) -> float:
 	var current_name := String(sprite.animation)
-	# Idle is a deliberately fixed stance. Normalize its actual silhouette,
-	# not a sampled running gait (which can be significantly shorter).
-	# The height was measured during the CPU crop, never read back from WebGL.
+	# In XI a verified animated R2 idle has eight breathing frames. Measuring
+	# the CURRENT frame changes sprite scale each time the body moves, making
+	# otherwise stationary players visibly swell/shrink. Use one stable
+	# silhouette reference for the whole authored loop (no atlas edits).
+	# One-frame historical idles and the legacy 5v5 retain their old path.
 	if current_name == "idle" or current_name.begins_with("idle_"):
-		var stance := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+		var idle_frames := sprite.sprite_frames
+		var idle_count := idle_frames.get_frame_count(sprite.animation)
+		if match_node.match_team_size == 11 and idle_count > 1:
+			var idle_key := "idle:%s:%d:%s" % [role, team_id, current_name]
+			if body_scale_cache.has(idle_key):
+				return float(body_scale_cache[idle_key])
+			var idle_heights: Array[float] = []
+			for frame_id in range(idle_count):
+				var frame_texture := idle_frames.get_frame_texture(sprite.animation, frame_id)
+				var frame_height := ChessFootballSpriteBank.frame_height(frame_texture)
+				if frame_height < 60.0:
+					push_error("Chess Football: invalid animated idle silhouette")
+					return 1.0
+				idle_heights.append(frame_height)
+			idle_heights.sort()
+			var mid := int(idle_heights.size() / 2)
+			var reference_height := (
+				(idle_heights[mid - 1] + idle_heights[mid]) * 0.5
+				if idle_heights.size() % 2 == 0 else idle_heights[mid]
+			)
+			var fixed_scale := normalized_body_scale(reference_height)
+			body_scale_cache[idle_key] = fixed_scale
+			return fixed_scale
+		var stance := idle_frames.get_frame_texture(sprite.animation, sprite.frame)
 		var height := ChessFootballSpriteBank.frame_height(stance)
 		if height >= 60.0:
 			return normalized_body_scale(height)
