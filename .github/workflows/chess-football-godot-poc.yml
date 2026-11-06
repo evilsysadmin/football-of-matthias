@@ -1149,7 +1149,7 @@ jobs:
           timeout 55s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/keeper_catch_r2_visual.gd 2>&1 | tee "$log"
           grep -q 'FOOTBALL_KEEPER_R2_REAL_GODOT_REVIEW_OK teams=2 poses=8' "$log"
           for team in FC ENROQUE; do
-            for phase in OPEN CLOSING HELD BROADCAST; do
+            for phase in OPEN CLOSING HELD BROADCAST SAVE-DIVE SAVE-CATCH-OPEN SAVE-CATCH-HELD; do
               marker="FOOTBALL_KEEPER_R2_CAPTURE_${team}_${phase}"
               screenshot="$(sed -n "s/^${marker}=//p" "$log" | tail -1)"
               test -n "$screenshot" && test -s "$screenshot"
