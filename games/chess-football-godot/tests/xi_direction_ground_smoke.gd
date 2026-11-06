@@ -33,9 +33,12 @@ func _initialize() -> void:
 			var texture := driver.sprite_frames.get_frame_texture(animation, 0)
 			var rect := (texture as ImageTexture).get_image().get_used_rect()
 			var scale := stage._canonical_body_scale(driver, sample.role, team_id)
+			var normalized_height := float(rect.size.y) * scale
+			assert(absf(normalized_height - stage.CANONICAL_BODY_HEIGHT_PIXELS) < 8.0,
+				"XI pose height drifted between teams, facing views or locomotion")
 			print("FOOTBALL_XI_SIZE_AUDIT team=%d animation=%s opaque=%dx%d scaled_height=%.2f" % [
 				team_id, String(animation), rect.size.x, rect.size.y,
-				float(rect.size.y) * scale,
+				normalized_height,
 			])
 
 	# The XI ball is visually proportional to the approved sprites, while
