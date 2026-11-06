@@ -190,6 +190,34 @@ func _initialize() -> void:
 				"XI tactical camera clips pitch end line")
 			assert(corner_screen.y > 125.0 and corner_screen.y < bounds.y - 30.0,
 				"XI tactical camera clips a touchline")
+	# Wide viewports expand the playable pitch instead of showing black bars.
+	# Preserve the original 16:9 lens, but use spare ultrawide width for
+	# slightly larger XI sprites. Restarts/corner recovery keep the safe FOV.
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.xi_broadcast_fov_for_aspect(Vector2(1280, 720)),
+		ChessFootball3DPresenter.XI_BROADCAST_FOV
+	))
+	assert(ChessFootball3DPresenter.xi_broadcast_fov_for_aspect(
+		Vector2(1766, 832)
+	) < ChessFootball3DPresenter.XI_BROADCAST_FOV - 3.0)
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.xi_broadcast_fov_for_aspect(Vector2(1766, 832), true),
+		ChessFootball3DPresenter.XI_BROADCAST_FOV
+	))
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.xi_broadcast_fov_for_aspect(Vector2(4000, 800)),
+		ChessFootball3DPresenter.XI_BROADCAST_WIDE_FOV
+	))
+	assert(is_equal_approx(
+		ChessFootball3DPresenter.xi_broadcast_fov_for_aspect(Vector2(0, 0)),
+		ChessFootball3DPresenter.XI_BROADCAST_FOV
+	))
+	# HUD is edge-anchored or centered as the viewport expands.
+	assert(game.view_label.anchor_left == 1.0)
+	assert(game.goal_label.anchor_left == 0.5)
+	assert(game.shot_meter_label.anchor_left == 0.5)
+	var controls_panel := game.get_node("MatchHud/MatchControlsPanel") as Panel
+	assert(controls_panel.anchor_right == 1.0)
 	# A broadcast match camera should fill the screen with RECOGNIZABLE
 	# sprites, not squeeze both goals and four touchlines into every shot.
 	# Whole-pitch framing remains available exclusively in tactical mode.
