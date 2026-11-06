@@ -557,8 +557,13 @@ func _initialize() -> void:
 	assert(game._ai_primary_presser(1) == role_first)
 	assert(game.ai_xi_defensive_role_owner == other_carrier)
 	game.ball.release(Vector2.ZERO, 0.0)
-	game._ai_primary_presser(1)
+	game.ball.global_position = role_origin
+	assert(game._ai_primary_presser(1) == role_first)
 	assert(game.ai_xi_defensive_role_owner == null)
+	# Existing loose-ball role hysteresis must survive consecutive frames,
+	# not be cleared on each query by the new possession-scoped pair.
+	game.ball.global_position.y += 30.0
+	assert(game._ai_primary_presser(1) == role_first)
 	# Easy and 5v5 keep selecting the nearest defender during possession.
 	game.ball.attach_to(role_carrier)
 	role_carrier.global_position = role_origin
