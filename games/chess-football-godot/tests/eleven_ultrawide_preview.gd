@@ -61,7 +61,10 @@ func _initialize() -> void:
 	game.debug_prepare_penalty(0)
 	game.debug_force_set_piece_ready()
 	game.debug_set_penalty_aim(0.45)
+	game.debug_refresh_hud()
 	stage.sync_presentation(8.0, "broadcast")
+	assert(stage.camera.position.x > 5.0 and stage.camera.position.x < 18.0,
+		"Ultrawide penalty keeps an unnecessarily huge black right panel")
 	var goal: Vector2 = ChessFootballMath.goal_center(0, game.match_pitch)
 	var goalkeeper: Footballer = game.teams[1][0]
 	assert(goalkeeper.global_position.distance_to(goal - Vector2(42.0, 0.0)) < 0.1,
