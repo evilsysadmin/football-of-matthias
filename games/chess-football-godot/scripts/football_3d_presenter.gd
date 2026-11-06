@@ -59,6 +59,9 @@ const XI_BROADCAST_WIDE_ASPECT := 2.10
 const XI_BROADCAST_CENTER_ZOOM_DEGREES := 3.5
 const XI_BROADCAST_FOCUS_LANE_START := 0.36
 const XI_BROADCAST_FOCUS_LANE_END := 0.80
+# Keep the actual XI goal visible without pushing most of the stadium off
+# the opposite edge during a penalty. Mirror for both attacking teams.
+const XI_PENALTY_STADIUM_PAN := 11.5
 const XI_BROADCAST_X_LIMIT_RATIO := 0.43
 const XI_BROADCAST_VERTICAL_FOLLOW := 0.31
 const XI_BROADCAST_VERTICAL_FOLLOW_MIN := -5.2
@@ -2756,6 +2759,16 @@ static func xi_corner_stadium_camera_x(
 	return camera_focus_x - signf(spot.x - center.x) * XI_NEAR_CORNER_STADIUM_PAN
 
 
+# Only active XI penalties shift the stadium toward midfield horizontally.
+# This changes no keeper, shot, ball or match-authoritative position.
+static func xi_penalty_camera_x(
+	camera_x: float, xi: bool, active: bool, kind: String, team_id: int
+) -> float:
+	if not xi or not active or kind != "PENALTI":
+		return camera_x
+	return camera_x - (XI_PENALTY_STADIUM_PAN if team_id == 0 else -XI_PENALTY_STADIUM_PAN)
+
+
 # The corner is the only broadcast state that pushes the camera backward.
 # Detect the outgoing composition from the real interpolated camera depth,
 # not the new target: set_piece_active is cleared before the first ball frame.
@@ -2944,6 +2957,11 @@ func _sync_camera(delta: float, mode: String) -> void:
 			match_node.match_pitch
 		)
 		wanted_position.x = clampf(wanted_position.x, -camera_x_limit, camera_x_limit)
+		wanted_position.x = xi_penalty_camera_x(
+			wanted_position.x, match_node.match_team_size == 11,
+			bool(match_node.set_piece_active), String(match_node.set_piece_kind),
+			int(match_node.set_piece_team_id)
+		)
 		if match_node.match_team_size == 11:
 			wanted_position.y *= XI_BROADCAST_HEIGHT_SCALE
 			wanted_position.z *= XI_BROADCAST_DEPTH_SCALE
