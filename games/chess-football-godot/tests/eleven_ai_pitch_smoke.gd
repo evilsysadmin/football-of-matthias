@@ -119,6 +119,44 @@ func _initialize() -> void:
 			break
 	assert(completed_link_up)
 
+	# Moving CPU teammates receive a short, physically aimed through-ball.
+	# The destination changes at the kick, not continuously in flight.
+	game.ball.attach_to(passer)
+	receiver.global_position = passer.global_position + Vector2(-330.0, 90.0)
+	receiver.velocity = Vector2(-220.0, 85.0)
+	var stationary_aim: Vector2 = receiver.global_position
+	var running_aim: Vector2 = game._ai_xi_pass_aim_point(passer, receiver)
+	assert(running_aim.x < stationary_aim.x - 30.0)
+	assert(running_aim.y > stationary_aim.y + 10.0)
+	assert(running_aim.distance_to(stationary_aim) <=
+		game.AI_XI_PASS_RUN_LEAD_MAX_DISTANCE + 0.01)
+	assert(game._best_ai_pass_target(passer) == receiver)
+	game.ball.tick_ball(0.75)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == null)
+	assert(game.ai_intended_pass_receiver == receiver)
+	var expected_direction: Vector2 = (
+		running_aim - passer.global_position
+	).normalized()
+	assert(game.ball.velocity.normalized().dot(expected_direction) > 0.999)
+	var launch_direction: Vector2 = game.ball.velocity.normalized()
+	receiver.global_position += Vector2(0.0, 135.0)
+	game.ball.tick_ball(1.0 / 60.0)
+	assert(game.ball.velocity.normalized().dot(launch_direction) > 0.999)
+	# Standing and barely moving runners keep the traditional direct pass.
+	receiver.global_position = stationary_aim
+	receiver.velocity = Vector2(-35.0, 0.0)
+	assert(game._ai_xi_pass_aim_point(passer, receiver) == stationary_aim)
+	receiver.velocity = Vector2.ZERO
+	assert(game._ai_xi_pass_aim_point(passer, receiver) == stationary_aim)
+	# Leads cannot aim outside the playable pitch.
+	receiver.global_position = Vector2(XI.position.x + 80.0, XI.position.y + 4.0)
+	receiver.velocity = Vector2(0.0, -310.0)
+	assert(XI.has_point(game._ai_xi_pass_aim_point(passer, receiver)))
+	receiver.global_position = stationary_aim
+	receiver.velocity = Vector2.ZERO
+	game.ball.attach_to(passer)
+
 	# A defender stationed on the passing lane forces a different choice;
 	# when no other safe teammate exists, the CPU keeps the ball.
 	game.ball.attach_to(passer)

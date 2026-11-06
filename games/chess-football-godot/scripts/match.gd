@@ -81,6 +81,11 @@ const AI_XI_PASS_LANE_CLEARANCE := 74.0
 const AI_XI_PASS_RECEIVER_CLEARANCE := 105.0
 # Only a short forecast of real defender momentum; no speculative AI sprint.
 const AI_XI_PASS_PREDICTION_MAX_SECONDS := 0.40
+# Pass into a runner's actual momentum, capped well below one sprint stride.
+# Aim is decided at kick time; ball and players obey normal physics afterward.
+const AI_XI_PASS_RUN_MIN_SPEED := 90.0
+const AI_XI_PASS_RUN_LEAD_MAX_SECONDS := 0.38
+const AI_XI_PASS_RUN_LEAD_MAX_DISTANCE := 90.0
 const AI_XI_PASS_FORWARD_GAIN := 85.0
 const AI_XI_PASS_PRESSURE_RADIUS := 230.0
 const AI_XI_PASS_RECEIVER_SECONDS := 2.0
@@ -1701,8 +1706,28 @@ func _ai_live_pass_receiver() -> Footballer:
 	return ai_intended_pass_receiver
 
 
+func _ai_xi_pass_aim_point(passer: Footballer, receiver: Footballer) -> Vector2:
+	if receiver.velocity.length() < AI_XI_PASS_RUN_MIN_SPEED:
+		return receiver.global_position
+	var separation: float = passer.global_position.distance_to(receiver.global_position)
+	var launch_power: float = clampf(
+		190.0 + separation * 2.25, PASS_MIN_POWER, PASS_MAX_POWER
+	) * passer.pass_power_multiplier()
+	# A bounded first estimate of ground-ball travel time. Only the
+	# receiver's current velocity is used: no speed buffs or future steering.
+	var horizon: float = minf(
+		separation / maxf(launch_power * 0.85, 1.0),
+		AI_XI_PASS_RUN_LEAD_MAX_SECONDS
+	)
+	var lead: Vector2 = (
+		receiver.velocity * horizon
+	).limit_length(AI_XI_PASS_RUN_LEAD_MAX_DISTANCE)
+	return ChessFootballMath.clamp_to_pitch(receiver.global_position + lead, match_pitch)
+
+
 func _ai_xi_pass_lane_clear(passer: Footballer, receiver: Footballer) -> bool:
-	var segment: Vector2 = receiver.global_position - passer.global_position
+	var destination: Vector2 = _ai_xi_pass_aim_point(passer, receiver)
+	var segment: Vector2 = destination - passer.global_position
 	var length_sq: float = segment.length_squared()
 	if length_sq < 1.0:
 		return false
@@ -1711,7 +1736,10 @@ func _ai_xi_pass_lane_clear(passer: Footballer, receiver: Footballer) -> bool:
 			continue
 		# Never pass straight into a closely marked receiver, even when
 		# the defender stands just beyond the nominal pass endpoint.
-		if opponent.global_position.distance_to(receiver.global_position) < AI_XI_PASS_RECEIVER_CLEARANCE:
+		if (
+			opponent.global_position.distance_to(receiver.global_position) < AI_XI_PASS_RECEIVER_CLEARANCE
+			or opponent.global_position.distance_to(destination) < AI_XI_PASS_RECEIVER_CLEARANCE
+		):
 			return false
 		var relative: Vector2 = opponent.global_position - passer.global_position
 		var t: float = clampf(relative.dot(segment) / length_sq, 0.0, 1.0)
@@ -1796,8 +1824,11 @@ func _ai_attack(player: Footballer) -> void:
 	var target := _best_ai_pass_target(player)
 	if target == null:
 		return
+	var pass_destination: Vector2 = target.global_position
+	if match_team_size == 11:
+		pass_destination = _ai_xi_pass_aim_point(player, target)
 	var forward := 1.0 if player.team_id == 0 else -1.0
-	var forward_gain := (target.global_position.x - player.global_position.x) * forward
+	var forward_gain := (pass_destination.x - player.global_position.x) * forward
 	var pressured := pressure_distance < (
 		AI_XI_PASS_PRESSURE_RADIUS if match_team_size == 11 else _ai_adaptive_pressure_radius()
 	)
@@ -1820,11 +1851,11 @@ func _ai_attack(player: Footballer) -> void:
 		if match_team_size == 11:
 			# Apply the same charged-pass power limits available to the
 			# human. Reach depends on physical distance, not magic homing.
-			var distance: float = player.global_position.distance_to(target.global_position)
+			var distance: float = player.global_position.distance_to(pass_destination)
 			pass_power = clampf(190.0 + distance * 2.25, PASS_MIN_POWER, PASS_MAX_POWER)
 			ai_intended_pass_receiver = target
 			ai_intended_pass_until = match_seconds + AI_XI_PASS_RECEIVER_SECONDS
-		ball.release(target.global_position - player.global_position, pass_power * player.pass_power_multiplier())
+		ball.release(pass_destination - player.global_position, pass_power * player.pass_power_multiplier())
 
 func _best_ai_pass_target(player: Footballer) -> Footballer:
 	var forward: float = 1.0 if player.team_id == 0 else -1.0
@@ -1833,7 +1864,10 @@ func _best_ai_pass_target(player: Footballer) -> Footballer:
 	for teammate in teams[player.team_id]:
 		if teammate == player or teammate.sent_off or teammate.role == "keeper":
 			continue
-		var offset: Vector2 = teammate.global_position - player.global_position
+		var destination: Vector2 = teammate.global_position
+		if match_team_size == 11:
+			destination = _ai_xi_pass_aim_point(player, teammate)
+		var offset: Vector2 = destination - player.global_position
 		var distance: float = offset.length()
 		if match_team_size == 11:
 			# A real ground ball at legal charge power cannot bridge the
