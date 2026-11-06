@@ -52,6 +52,11 @@ try{
     const back=await page.locator('.chess-football-entry__welcome-back').boundingBox();
     assert.ok(back && back.x>=0 && back.y>=0 && back.x+back.width<=viewport.width && back.y+back.height<=viewport.height,
       'Return to ShadowOps must remain visible after cover crops the art');
+    if(viewport.width/viewport.height<=1.9){
+      const exit=await page.getByRole('button',{name:'Salir de ShadowOps ID',exact:true}).boundingBox();
+      assert.ok(back.x<=1 && exit && exit.x+exit.width>=viewport.width-1,
+        'Functional top corner controls must cover the baked labels after horizontal crop');
+    }
     const transferSummary=await page.locator('.football-transfer > summary').boundingBox();
     assert.ok(transferSummary && transferSummary.y>=0 && transferSummary.y+transferSummary.height<=viewport.height+1,
       'Career transfer must stay inside the viewport on panoramic displays');
