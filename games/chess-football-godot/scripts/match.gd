@@ -79,6 +79,8 @@ const AI_XI_PASS_MIN_DISTANCE := 110.0
 const AI_XI_PASS_MAX_DISTANCE := 445.0
 const AI_XI_PASS_LANE_CLEARANCE := 74.0
 const AI_XI_PASS_RECEIVER_CLEARANCE := 105.0
+# Only a short forecast of real defender momentum; no speculative AI sprint.
+const AI_XI_PASS_PREDICTION_MAX_SECONDS := 0.40
 const AI_XI_PASS_FORWARD_GAIN := 85.0
 const AI_XI_PASS_PRESSURE_RADIUS := 230.0
 const AI_XI_PASS_RECEIVER_SECONDS := 2.0
@@ -1718,6 +1720,27 @@ func _ai_xi_pass_lane_clear(passer: Footballer, receiver: Footballer) -> bool:
 			continue
 		var closest: Vector2 = passer.global_position + segment * t
 		if opponent.global_position.distance_to(closest) < AI_XI_PASS_LANE_CLEARANCE:
+			return false
+		if opponent.velocity.length_squared() < 1.0:
+			continue
+		# A defender crossing the corridor may reach it before this ground
+		# pass does. Predict only from the real movement already underway,
+		# over a short horizon; this never alters anyone's physical reach.
+		var pass_speed: float = clampf(
+			190.0 + sqrt(length_sq) * 2.25, PASS_MIN_POWER, PASS_MAX_POWER
+		) * passer.pass_power_multiplier()
+		var flight_seconds: float = minf(
+			sqrt(length_sq) * t / maxf(pass_speed * 0.85, 1.0),
+			AI_XI_PASS_PREDICTION_MAX_SECONDS
+		)
+		var predicted: Vector2 = opponent.global_position + opponent.velocity * flight_seconds
+		var predicted_t: float = clampf(
+			(predicted - passer.global_position).dot(segment) / length_sq, 0.0, 1.0
+		)
+		if predicted_t < 0.12:
+			continue
+		var crossing: Vector2 = passer.global_position + segment * predicted_t
+		if predicted.distance_to(crossing) < AI_XI_PASS_LANE_CLEARANCE:
 			return false
 	return true
 
