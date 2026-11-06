@@ -3663,3 +3663,21 @@ func debug_pass_power_for_ratio(ratio: float) -> float:
 
 func debug_begin_directional_pass_charge(direction: Vector2) -> bool:
 	return _begin_directional_pass_charge(direction)
+
+func debug_release_charged_pass() -> bool:
+	return _release_charged_pass()
+
+func debug_pass_target() -> Footballer:
+	return pass_target
+
+func debug_pause_menu_open() -> bool:
+	return pause_menu_open
+
+func debug_toggle_pause_menu() -> void:
+	_toggle_pause_menu()
+
+func debug_pause_first_option() -> String:
+	return pause_exit_button.text if pause_exit_button != null else ""
+
+func debug_pause_button_text() -> String:
+	return pause_menu_button.text if pause_menu_button != null else ""
