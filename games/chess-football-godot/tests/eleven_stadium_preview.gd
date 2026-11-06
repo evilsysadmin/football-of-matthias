@@ -157,10 +157,10 @@ func _initialize() -> void:
 	var ball_sphere := stage.ball_node.mesh as SphereMesh
 	var ball_shadow_mesh := stage.ball_shadow.mesh as CylinderMesh
 	assert(ball_sphere != null and ball_shadow_mesh != null)
-	assert(is_equal_approx(ball_sphere.radius, 0.14))
-	assert(is_equal_approx(ball_sphere.height, 0.28))
-	assert(is_equal_approx(ball_shadow_mesh.top_radius, 0.095))
-	assert(is_equal_approx(ball_shadow_mesh.bottom_radius, 0.095))
+	assert(is_equal_approx(ball_sphere.radius, ChessFootball3DPresenter.XI_BALL_VISUAL_RADIUS))
+	assert(is_equal_approx(ball_sphere.height, ball_sphere.radius * 2.0))
+	assert(is_equal_approx(ball_shadow_mesh.top_radius, 0.082))
+	assert(is_equal_approx(ball_shadow_mesh.bottom_radius, 0.082))
 	# Both local and R2 XI frames render the same exclusive, texel-filtered QuadMesh.
 	var center: Vector2 = game.match_pitch.get_center()
 	var roster_ids: Dictionary = {}
