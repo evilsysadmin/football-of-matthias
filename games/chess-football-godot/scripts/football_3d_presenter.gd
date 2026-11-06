@@ -50,6 +50,11 @@ const XI_BROADCAST_FOV := 41.0
 # Keep 16:9 unchanged and retain the safe wide lens for restarts/corner release.
 const XI_BROADCAST_WIDE_FOV := 37.5
 const XI_BROADCAST_WIDE_ASPECT := 2.10
+# During central open play, trade a little empty foreground for larger actors.
+# Move back to the proven safe lens before reaching either touchline.
+const XI_BROADCAST_CENTER_ZOOM_DEGREES := 3.5
+const XI_BROADCAST_FOCUS_LANE_START := 0.36
+const XI_BROADCAST_FOCUS_LANE_END := 0.80
 const XI_BROADCAST_X_LIMIT_RATIO := 0.43
 const XI_BROADCAST_VERTICAL_FOLLOW := 0.31
 const XI_BROADCAST_VERTICAL_FOLLOW_MIN := -5.2
@@ -2793,6 +2798,25 @@ static func xi_broadcast_fov_for_aspect(view_size: Vector2, wide_restart: bool =
 	return lerpf(XI_BROADCAST_FOV, XI_BROADCAST_WIDE_FOV, mix)
 
 
+# Pure framing contract: central open play may zoom, but near-touchline
+# positions and ALL restarts retain the safe viewport-aspect baseline.
+static func xi_broadcast_live_fov(
+	view_size: Vector2, ball_spot: Vector2, pitch: Rect2,
+	wide_restart: bool = false
+) -> float:
+	var safe_fov: float = xi_broadcast_fov_for_aspect(view_size, wide_restart)
+	if wide_restart or pitch.size.y <= 0.0:
+		return safe_fov
+	var half_depth: float = pitch.size.y * 0.5
+	var lane_ratio: float = absf(ball_spot.y - pitch.get_center().y) / half_depth
+	var focus_factor: float = 1.0 - smoothstep(
+		XI_BROADCAST_FOCUS_LANE_START,
+		XI_BROADCAST_FOCUS_LANE_END,
+		lane_ratio
+	)
+	return safe_fov - XI_BROADCAST_CENTER_ZOOM_DEGREES * focus_factor
+
+
 func _camera_smoothing_factor(speed: float, delta: float) -> float:
 	if delta <= 0.0:
 		return 0.0
@@ -2803,9 +2827,13 @@ func _sync_camera(delta: float, mode: String) -> void:
 		return
 
 	var focus := world_to_stage(match_node.ball.global_position)
-	var easing_corner_release := broadcast_corner_release_active(
-		mode, bool(match_node.set_piece_active), camera.position.z,
-		match_node.match_team_size == 11,
+	# A tactical-to-broadcast switch starts from the aerial camera depth.
+	# It must not masquerade as a live corner release and suppress close-follow.
+	var easing_corner_release := (
+		mode == last_camera_mode and broadcast_corner_release_active(
+			mode, bool(match_node.set_piece_active), camera.position.z,
+			match_node.match_team_size == 11,
+		)
 	)
 	var wanted_position: Vector3
 	var wanted_look: Vector3
@@ -2918,8 +2946,9 @@ func _sync_camera(delta: float, mode: String) -> void:
 		)
 		wanted_look = Vector3(wanted_position.x, 0.0, smoothed_restart_look_z)
 		wanted_fov = (
-			xi_broadcast_fov_for_aspect(
+			xi_broadcast_live_fov(
 				get_viewport().get_visible_rect().size,
+				match_node.ball.global_position, match_node.match_pitch,
 				bool(match_node.set_piece_active) or easing_corner_release,
 			) if match_node.match_team_size == 11 else 37.5
 		)
