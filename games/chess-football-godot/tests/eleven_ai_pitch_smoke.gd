@@ -318,6 +318,48 @@ func _initialize() -> void:
 	game._ai_attack(passer)
 	assert(game.ball.carrier == passer)
 
+	# When the CPU has NO safe passing outlet, a frontal blocker should
+	# make the carrier run into a REAL diagonal gap, not circle backward.
+	assert(game.ai_xi_no_safe_pass_owner == passer)
+	blocker.global_position = passer.global_position + Vector2(-140.0, 0.0)
+	var escape_target: Vector2 = game._ai_dribble_target(passer)
+	assert(XI.has_point(escape_target))
+	assert(escape_target.x < passer.global_position.x - 140.0)
+	assert(absf(escape_target.y - passer.global_position.y) >= 160.0)
+	var escape_side: float = signf(escape_target.y - passer.global_position.y)
+	assert(game.ai_xi_no_pass_escape_side == escape_side)
+	# A small shift of the marker is NOT a reason to change direction.
+	blocker.global_position += Vector2(0.0, 9.0)
+	var stable_escape: Vector2 = game._ai_dribble_target(passer)
+	assert(signf(stable_escape.y - passer.global_position.y) == escape_side)
+	# Movement respects normal physical acceleration, never teleporting.
+	var escape_start: Vector2 = passer.global_position
+	passer.move_ai(1.0 / 60.0, stable_escape, 0.83)
+	assert(passer.global_position.distance_to(escape_start) < 15.0)
+	assert(passer.velocity.length() <= passer.base_speed * 1.34 + 1.0)
+	passer.global_position = escape_start
+	passer.velocity = Vector2.ZERO
+	# When the corridor clears, prefer ordinary forward play.
+	blocker.global_position = Vector2(XI.end.x - 120.0, XI.end.y - 130.0)
+	var restored_forward: Vector2 = game._ai_dribble_target(passer)
+	assert(absf(restored_forward.y - passer.global_position.y) < 40.0)
+	assert(game.ai_xi_no_pass_escape_side == 0.0)
+	# A real outlet becomes available again: cease the no-pass plan.
+	receiver.global_position = passer.global_position + Vector2(-330.0, 90.0)
+	receiver.velocity = Vector2.ZERO
+	assert(game._best_ai_pass_target(passer) == receiver)
+	game._ai_attack(passer)
+	assert(game.ai_xi_no_safe_pass_owner == null)
+	# Lost possession clears any stale plan without affecting human or 5v5.
+	game.ai_xi_no_safe_pass_owner = passer
+	game.ai_xi_no_pass_escape_side = -1.0
+	game.ball.attach_to(game.teams[0][10])
+	game._update_ai(0.0)
+	assert(game.ai_xi_no_safe_pass_owner == null)
+	assert(game.ai_xi_no_pass_escape_side == 0.0)
+	game.ball.attach_to(passer)
+	receiver.global_position = stationary_aim
+
 	# A moving marker can close an otherwise open ground-pass corridor.
 	# The current position alone must NOT wrongly reject the outlet.
 	var pass_axis: Vector2 = (receiver.global_position - passer.global_position).normalized()

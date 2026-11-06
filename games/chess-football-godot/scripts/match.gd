@@ -105,6 +105,16 @@ const AI_XI_PASS_CLOSE_DELAY := 0.26
 const AI_XI_PASS_GOOD_FORWARD_DELAY := 0.45
 const AI_XI_PASS_BUILDUP_DELAY := 0.66
 const AI_DRIBBLE_LOOKAHEAD := 290.0
+# When every real ground pass is blocked, the XI CPU carrier may steer
+# around one forward defender via a short, physically reachable diagonal.
+# Keep its chosen side through small marker movements, without speed buffs.
+const AI_XI_NO_PASS_ESCAPE_FORWARD := 195.0
+const AI_XI_NO_PASS_ESCAPE_LATERAL := 170.0
+const AI_XI_NO_PASS_FORWARD_CLEARANCE := 145.0
+const AI_XI_NO_PASS_MIN_LANE_CLEARANCE := 78.0
+const AI_XI_NO_PASS_ESCAPE_IMPROVEMENT := 48.0
+const AI_XI_NO_PASS_HOLD_CLEARANCE := 68.0
+const AI_XI_NO_PASS_SWITCH_GAIN := 55.0
 const AI_SUPPORT_FORWARD := 225.0
 const AI_TEAMMATE_SEPARATION_RADIUS := 130.0
 const AI_TEAMMATE_SEPARATION_MAX_CORRECTION := 110.0
@@ -243,6 +253,10 @@ var audio_fx: ChessFootballAudio
 var ai_next_decision: Dictionary = {}
 var ai_intended_pass_receiver: Footballer = null
 var ai_intended_pass_until: float = 0.0
+# Set only by the existing XI CPU pass decision tick. The movement tick
+# then follows a short escape corridor until a safe pass becomes available.
+var ai_xi_no_safe_pass_owner: Footballer = null
+var ai_xi_no_pass_escape_side: float = 0.0
 # Per-runner {owner: instance_id, side: -1/1} for the CPU's primary XI
 # triangle. Never survives a lost possession or a changed support role.
 var ai_xi_support_lane_memory: Dictionary = {}
@@ -993,6 +1007,14 @@ func _release_charged_shot() -> void:
 	ball.release(target - controlled.global_position, power, lift, true)
 
 func _update_ai(delta: float) -> void:
+	if (
+		match_team_size != 11
+		or ball.carrier == null
+		or ball.carrier.team_id != 1
+		or ai_xi_no_safe_pass_owner != ball.carrier
+	):
+		ai_xi_no_safe_pass_owner = null
+		ai_xi_no_pass_escape_side = 0.0
 	if match_team_size != 11 or ball.carrier == null or ball.carrier.team_id != 1:
 		ai_xi_support_lane_memory.clear()
 		ai_xi_support_rank_owner = null
@@ -1423,7 +1445,87 @@ func _ai_dribble_target(player: Footballer) -> Vector2:
 		if distance < pressure_radius:
 			var escape := (player.global_position - threat.global_position).normalized()
 			target += escape * (pressure_radius - distance) * 0.9
-	return ChessFootballMath.clamp_to_pitch(target, match_pitch)
+	var ordinary_target: Vector2 = ChessFootballMath.clamp_to_pitch(target, match_pitch)
+	if (
+		match_team_size == 11
+		and player.team_id == 1
+		and ball.carrier == player
+		and ai_xi_no_safe_pass_owner == player
+	):
+		return _ai_xi_no_pass_escape_target(player, ordinary_target)
+	return ordinary_target
+
+
+# Clearance is measured over the FUTURE run corridor, not from a rival
+# standing behind the dribbler. Every candidate remains a normal AI target
+# moved toward with Footballer.move_ai(), acceleration and stamina intact.
+func _ai_xi_no_pass_lane_clearance(player: Footballer, target: Vector2) -> float:
+	var segment: Vector2 = target - player.global_position
+	var squared: float = segment.length_squared()
+	if squared < 1.0:
+		return 0.0
+	var nearest: float = INF
+	for rival in teams[0]:
+		if rival.sent_off:
+			continue
+		var offset: Vector2 = rival.global_position - player.global_position
+		var projection: float = offset.dot(segment) / squared
+		if projection < 0.1:
+			continue
+		var closest: Vector2 = player.global_position + segment * clampf(projection, 0.25, 1.0)
+		nearest = minf(nearest, rival.global_position.distance_to(closest))
+	return nearest
+
+
+func _ai_xi_no_pass_escape_target(player: Footballer, ordinary_target: Vector2) -> Vector2:
+	var origin: Vector2 = player.global_position
+	var forward_target: Vector2 = ChessFootballMath.clamp_to_pitch(
+		origin + Vector2(-AI_XI_NO_PASS_ESCAPE_FORWARD, 0.0), match_pitch
+	)
+	var forward_clearance: float = _ai_xi_no_pass_lane_clearance(player, forward_target)
+	if forward_clearance >= AI_XI_NO_PASS_FORWARD_CLEARANCE:
+		ai_xi_no_pass_escape_side = 0.0
+		return ordinary_target
+	var best: Vector2 = ordinary_target
+	var best_side: float = 0.0
+	var best_clearance: float = -INF
+	var retained: Vector2 = ordinary_target
+	var retained_clearance: float = -INF
+	for side in [-1.0, 1.0]:
+		var candidate: Vector2 = origin + Vector2(
+			-AI_XI_NO_PASS_ESCAPE_FORWARD, side * AI_XI_NO_PASS_ESCAPE_LATERAL
+		)
+		# Reject a diagonal across the touchline instead of clamping it
+		# into a stall on the boundary. Both options still advance upfield.
+		if not match_pitch.has_point(candidate):
+			continue
+		var clearance: float = _ai_xi_no_pass_lane_clearance(player, candidate)
+		if (
+			side == ai_xi_no_pass_escape_side
+			and clearance >= AI_XI_NO_PASS_HOLD_CLEARANCE
+		):
+			retained = candidate
+			retained_clearance = clearance
+		if (
+			clearance >= AI_XI_NO_PASS_MIN_LANE_CLEARANCE
+			and clearance - forward_clearance >= AI_XI_NO_PASS_ESCAPE_IMPROVEMENT
+			and clearance > best_clearance
+		):
+			best = candidate
+			best_side = side
+			best_clearance = clearance
+	# Hysteresis prevents zigzags when defenders drift a few pixels.
+	# A truly blocked remembered corridor does not earn a free escape.
+	if (
+		retained_clearance > -INF
+		and (best_side == 0.0 or best_clearance <= retained_clearance + AI_XI_NO_PASS_SWITCH_GAIN)
+	):
+		return retained
+	if best_side != 0.0:
+		ai_xi_no_pass_escape_side = best_side
+		return best
+	ai_xi_no_pass_escape_side = 0.0
+	return ordinary_target
 
 func _ai_xi_support_rank(player: Footballer) -> int:
 	if (
@@ -2014,7 +2116,12 @@ func _ai_attack(player: Footballer) -> void:
 
 	var target := _best_ai_pass_target(player)
 	if target == null:
+		if match_team_size == 11 and player.team_id == 1:
+			ai_xi_no_safe_pass_owner = player
 		return
+	if match_team_size == 11 and player.team_id == 1:
+		ai_xi_no_safe_pass_owner = null
+		ai_xi_no_pass_escape_side = 0.0
 	var pass_destination: Vector2 = target.global_position
 	if match_team_size == 11:
 		pass_destination = _ai_xi_pass_aim_point(player, target)
