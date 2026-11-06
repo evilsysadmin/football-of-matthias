@@ -159,6 +159,9 @@ func _initialize() -> void:
 				"XI penalty shot target must be the full-size goal")
 			game.debug_force_set_piece_ready()
 			assert(game.debug_human_penalty_ready())
+			# The aim marker is a 3D presentation object; sync the frozen
+			# SceneTree before checking visibility, just like visual_capture.gd.
+			game.debug_sync_presentation()
 			assert(game.debug_penalty_aim_visible())
 			game.debug_force_human_penalty_shot(0.65, 0.35)
 			assert(not game.set_piece_active and game.ball.carrier == null)
