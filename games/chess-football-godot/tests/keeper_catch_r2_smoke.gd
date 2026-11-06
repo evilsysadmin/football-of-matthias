@@ -208,6 +208,11 @@ func _initialize() -> void:
 			"The R2 catch cannot instantly replace the real goalkeeper dive")
 		assert(is_zero_approx(xi_presenter.keeper_catch_elapsed),
 			"Do not advance the R2 grip frames while the dive is playing")
+		var first_save_ball: Vector3 = xi_presenter.ball_node.position
+		xi_presenter.sync_presentation(1.0 / 60.0, "broadcast")
+		assert(xi_presenter.ball_node.position.distance_to(first_save_ball) < 0.12,
+			"During a real save the carried ball must approach the gloves smoothly")
+		assert(sprite.animation == &"tackle")
 		var diving_ball: Vector3 = xi_presenter.ball_node.position
 		assert(not xi_presenter.ball_shadow.visible)
 		assert(not xi_presenter.debug_keeper_catch_hands_visible(keeper))
