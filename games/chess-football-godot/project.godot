@@ -13,8 +13,8 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/size/mode=3
 window/stretch/mode="canvas_items"
-; Reveal extra pitch on ultrawide screens instead of pillarboxing the 16:9 game.
-window/stretch/aspect="expand"
+; Keep the vertical gameplay framing fixed while expanding the visible pitch sideways.
+window/stretch/aspect="keep_height"
 
 [rendering]
 renderer/rendering_method="gl_compatibility"
