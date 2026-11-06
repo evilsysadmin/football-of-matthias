@@ -237,7 +237,10 @@ try{
   await page.getByRole('button',{name:/Partida rápida/}).click();
   await page.getByRole('heading',{name:'Elige a tu rival'}).waitFor();
   assert.equal(await page.locator('.chess-football-entry__quick-team-size').count(),0,'no 5v5/11v11 selector');
-  assert.ok(await page.getByText('11 contra 11 · Campo completo · Dos equipos de once futbolistas.').isVisible());
+  const matchFormat=page.locator('.chess-football-entry__quick-details');
+  assert.ok(await matchFormat.getByText('11 contra 11',{exact:true}).isVisible());
+  assert.ok(await matchFormat.getByText('Campo completo',{exact:true}).isVisible());
+  assert.ok(await page.locator('.chess-football-entry__quick-fixture[aria-label="FC Matthias contra Real Enroque"]').isVisible());
   await page.getByRole('button',{name:/^Difícil\b/}).click();
   assert.ok(await page.getByRole('button',{name:'Saltar al campo · 11v11 · Difícil'}).isVisible());
   assert.ok(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),'XI-only setup must not overflow viewport');
