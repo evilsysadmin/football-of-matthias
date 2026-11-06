@@ -270,6 +270,45 @@ func _initialize() -> void:
 	receiver.velocity = Vector2.ZERO
 	game.ball.attach_to(passer)
 
+	# CPU XI decision: carry briefly while a clear primary runner closes
+	# on his support lane, then pass by the usual physical ground-ball path.
+	game.ball.attach_to(passer)
+	receiver.global_position = passer.global_position + Vector2(-330.0, 90.0)
+	receiver.velocity = Vector2(220.0, -160.0)
+	var support_destination: Vector2 = game._ai_support_target(receiver)
+	assert(receiver.global_position.distance_to(support_destination) >
+		game.AI_XI_SUPPORT_RUN_WAIT_DISTANCE)
+	assert(game._ai_xi_should_wait_for_support(passer, receiver, INF))
+	assert(not game._ai_xi_should_wait_for_support(passer, receiver, 155.0))
+	game.ball.tick_ball(0.50)
+	assert(game._best_ai_pass_target(passer) == receiver)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == passer)
+	game.ball.tick_ball(0.40)
+	assert(not game._ai_xi_should_wait_for_support(passer, receiver, INF))
+	game._ai_attack(passer)
+	assert(game.ball.carrier == null)
+	assert(game.ai_intended_pass_receiver == receiver)
+	# Under moderate pressure, carrying beats an unproductive backward
+	# recycle. A truly close defender still triggers the safety pass.
+	game.ball.attach_to(passer)
+	receiver.velocity = Vector2.ZERO
+	receiver.global_position = passer.global_position + Vector2(55.0, 220.0)
+	var mild_marker: Footballer = game.teams[0][4]
+	mild_marker.global_position = passer.global_position + Vector2(0.0, -205.0)
+	game.ball.tick_ball(0.75)
+	assert(game._best_ai_pass_target(passer) == receiver)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == passer)
+	mild_marker.global_position = passer.global_position + Vector2(0.0, -145.0)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == null)
+	assert(game.ai_intended_pass_receiver == receiver)
+	mild_marker.global_position = Vector2(XI.end.x - 120.0, XI.end.y - 130.0)
+	receiver.global_position = stationary_aim
+	receiver.velocity = Vector2.ZERO
+	game.ball.attach_to(passer)
+
 	# A defender stationed on the passing lane forces a different choice;
 	# when no other safe teammate exists, the CPU keeps the ball.
 	game.ball.attach_to(passer)

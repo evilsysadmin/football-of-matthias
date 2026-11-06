@@ -89,6 +89,11 @@ const AI_XI_PASS_RUN_LEAD_MAX_DISTANCE := 90.0
 const AI_XI_PASS_FORWARD_GAIN := 85.0
 const AI_XI_PASS_PRESSURE_RADIUS := 230.0
 const AI_XI_PASS_RECEIVER_SECONDS := 2.0
+# The carrier may give an unmarked lead runner a moment to reach the
+# intended lane, but never waits indefinitely or ignores urgent pressure.
+const AI_XI_SUPPORT_RUN_WAIT_MAX_SECONDS := 0.88
+const AI_XI_SUPPORT_RUN_WAIT_DISTANCE := 115.0
+const AI_XI_SUPPORT_RUN_ALIGN_MIN := 0.35
 # Thinking stays quick for positioning and defence; the BALL-CARRIER
 # needs a real first-touch/build-up window before most XI passes.
 # A close press permits a quicker escape, while unmarked recycling takes
@@ -1957,6 +1962,31 @@ func _ai_xi_pass_setup_seconds(
 	return settle
 
 
+# Only a genuine runner closing on a reachable triangle lane earns a
+# brief extra read. Existing possession time is the timeout; no new timers
+# or stopped dribbles. Defensive pressure always cancels the hesitation.
+func _ai_xi_should_wait_for_support(
+	player: Footballer, receiver: Footballer, pressure_distance: float
+) -> bool:
+	if (
+		match_team_size != 11
+		or player.team_id != 1
+		or ball.carrier != player
+		or pressure_distance < AI_XI_PASS_PRESSURE_RADIUS
+		or ball.possession_seconds >= AI_XI_SUPPORT_RUN_WAIT_MAX_SECONDS
+		or _ai_xi_support_rank(receiver) != 0
+	):
+		return false
+	var target: Vector2 = _ai_support_target(receiver)
+	var remaining: Vector2 = target - receiver.global_position
+	if (
+		remaining.length() < AI_XI_SUPPORT_RUN_WAIT_DISTANCE
+		or receiver.velocity.length() < AI_XI_PASS_RUN_MIN_SPEED
+	):
+		return false
+	return receiver.velocity.normalized().dot(remaining.normalized()) > AI_XI_SUPPORT_RUN_ALIGN_MIN
+
+
 func _ai_attack(player: Footballer) -> void:
 	if ball.carrier != player:
 		return
@@ -1990,8 +2020,16 @@ func _ai_attack(player: Footballer) -> void:
 		pass_destination = _ai_xi_pass_aim_point(player, target)
 	var forward := 1.0 if player.team_id == 0 else -1.0
 	var forward_gain := (pass_destination.x - player.global_position.x) * forward
+	# A defender 200 units away is a reason to carry and read the play,
+	# not to dump the ball backwards. Only a close XI challenge forces
+	# an otherwise unproductive sideways/recycling pass.
 	var pressured := pressure_distance < (
-		AI_XI_PASS_PRESSURE_RADIUS if match_team_size == 11 else _ai_adaptive_pressure_radius()
+		AI_XI_PASS_CLOSE_PRESS_RADIUS
+		if match_team_size == 11 and player.team_id == 1
+		else (
+			AI_XI_PASS_PRESSURE_RADIUS
+			if match_team_size == 11 else _ai_adaptive_pressure_radius()
+		)
 	)
 	var useful_gain := forward_gain > (
 		AI_XI_PASS_FORWARD_GAIN if match_team_size == 11 else _ai_adaptive_forward_pass_gain()
@@ -2001,9 +2039,12 @@ func _ai_attack(player: Footballer) -> void:
 			var setup_seconds: float = _ai_xi_pass_setup_seconds(
 				player, pressure_distance, forward_gain
 			)
-			if ball.possession_seconds < setup_seconds:
-				# Maintain carrying and support movement while reading play.
-				# No possession changes or pauses to the simulation clock.
+			if (
+				ball.possession_seconds < setup_seconds
+				or _ai_xi_should_wait_for_support(player, target, pressure_distance)
+			):
+				# Carry at normal physical speed while the support run
+				# develops. Pressure or elapsed time always releases it.
 				return
 		player.play_action("pass", 0.72)
 		if audio_fx != null:
