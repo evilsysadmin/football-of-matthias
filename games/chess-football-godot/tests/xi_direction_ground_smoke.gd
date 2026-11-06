@@ -238,19 +238,24 @@ func _initialize() -> void:
 		/ run_advance, 1.5
 	))
 	assert(is_equal_approx(stage.xi_outfield_stride_advance(10000.0, 0.10, 8, 12.0, false), 1.62))
-	# The short off-ball cycle must advance each leg pose sooner at the
-	# cruising support speed used by real midfielders (70% effort).
-	var old_support: float = stage.xi_outfield_stride_advance(175.0, 0.1, 12, 18.0, false)
-	var new_support: float = stage.xi_offball_stride_advance(175.0, 0.1, 12, 18.0, false)
+	# At ordinary 60 Hz the short XI off-ball cycle still follows real
+	# support speed exactly. At a slower Web tick it must NEVER jump over
+	# any painted frame, even if a sprint consumes several stride pixels.
+	var visual_delta := 1.0 / 60.0
+	var old_support: float = stage.xi_outfield_stride_advance(175.0, visual_delta, 12, 18.0, false)
+	var new_support: float = stage.xi_offball_stride_advance(175.0, visual_delta, 12, 18.0, false)
 	assert(new_support > old_support * 1.4)
 	assert(is_equal_approx(
-		new_support, 175.0 * 12.0 / stage.XI_OFFBALL_RUN_CYCLE_PX * 0.1
+		new_support, 175.0 * 12.0 / stage.XI_OFFBALL_RUN_CYCLE_PX * visual_delta
 	))
 	assert(stage.xi_offball_stride_advance(0.0, 0.1, 12, 18.0, false) == 0.0)
 	assert(stage.xi_offball_stride_advance(175.0, 0.0, 12, 18.0, false) == 0.0)
-	assert(stage.xi_offball_stride_advance(330.0, 0.1, 12, 22.5, true) >
-		stage.xi_outfield_stride_advance(330.0, 0.1, 12, 22.5, true))
-	assert(stage.xi_offball_stride_advance(10000.0, 0.1, 12, 18.0, false) <= 2.43)
+	assert(stage.xi_offball_stride_advance(330.0, visual_delta, 12, 22.5, true) >
+		stage.xi_outfield_stride_advance(330.0, visual_delta, 12, 22.5, true))
+	assert(is_equal_approx(
+		stage.xi_offball_stride_advance(10000.0, 0.1, 12, 18.0, false), 0.99
+	))
+	assert(stage.xi_offball_stride_advance(330.0, 1.0 / 15.0, 12, 22.5, true) <= 0.99)
 
 	var runner: Footballer = game.teams[0][2]
 	var runner_key: int = runner.get_instance_id()
@@ -262,12 +267,12 @@ func _initialize() -> void:
 	stage.outfield_visual_phases.erase(runner_key)
 	stage._sync_visible_animation(runner_key, runner, runner_sprite, &"run", 0.0)
 	stage.outfield_visual_phases[runner_key] = 0.0
-	stage._sync_visible_animation(runner_key, runner, runner_sprite, &"run", 0.10)
+	stage._sync_visible_animation(runner_key, runner, runner_sprite, &"run", visual_delta)
 	var slow_phase: float = stage.outfield_visual_phases[runner_key]
 	runner.velocity = Vector2.RIGHT * runner.base_speed
 	runner._sync_locomotion(false)
 	stage.outfield_visual_phases[runner_key] = 0.0
-	stage._sync_visible_animation(runner_key, runner, runner_sprite, &"run", 0.10)
+	stage._sync_visible_animation(runner_key, runner, runner_sprite, &"run", visual_delta)
 	var fast_phase: float = stage.outfield_visual_phases[runner_key]
 	# A bounded high-speed frame clock saturates at 1.35× authored FPS.
 	# Pace ratings above the neutral 250 px/s should not be forced to
@@ -275,7 +280,7 @@ func _initialize() -> void:
 	assert(fast_phase > slow_phase * 2.65)
 	assert(is_equal_approx(
 		fast_phase, stage.xi_offball_stride_advance(
-			runner.base_speed, 0.10, runner_sprite.sprite_frames.get_frame_count(&"run"),
+			runner.base_speed, visual_delta, runner_sprite.sprite_frames.get_frame_count(&"run"),
 			runner_sprite.sprite_frames.get_animation_speed(&"run"), false
 		)
 	))
