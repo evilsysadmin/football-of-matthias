@@ -1283,13 +1283,11 @@ func _ai_stable_press_role(
 	# Before looking up either role, expire BOTH slots if the carrier
 	# changes or the XI defensive phase ends. Never inherit a pairing
 	# from a prior possession, sent-off player or legacy 5v5 mode.
-	if team_id == 1 and (
-		not keep_xi_defensive_roles
-		or ai_xi_defensive_role_owner != ball.carrier
-	):
+	var owner_for_roles: Footballer = ball.carrier if keep_xi_defensive_roles else null
+	if team_id == 1 and ai_xi_defensive_role_owner != owner_for_roles:
 		ai_primary_presser_cache[1] = null
 		ai_secondary_presser_cache[1] = null
-		ai_xi_defensive_role_owner = ball.carrier if keep_xi_defensive_roles else null
+		ai_xi_defensive_role_owner = owner_for_roles
 	var closest: Footballer = null
 	var closest_distance := INF
 	for player in teams[team_id]:
