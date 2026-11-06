@@ -2247,10 +2247,17 @@ func sync_presentation(delta: float, mode: String) -> void:
 				# a second ball, delay possession or extend the save radius.
 				var save_phase := 1.0 - holding_keeper.keeper_save_ratio()
 				var reach := sin(PI * save_phase) * XI_KEEPER_SAVE_BALL_REACH
-				ball_at = target + Vector3(
+				var hand_target := target + Vector3(
 					holding_keeper.keeper_save_direction * reach, 0.0, 0.0
 				)
-				keeper_catch_origin = ball_at
+				# Do not snap the ball straight from the save contact point to
+				# chest height on the first rendered dive frame. Track the hands
+				# within the same bounded 0.18-second visual catch interval.
+				keeper_catch_origin = keeper_catch_origin.lerp(
+					hand_target,
+					clampf(maxf(0.0, delta) / KEEPER_CATCH_BLEND_SECONDS, 0.0, 1.0)
+				)
+				ball_at = keeper_catch_origin
 				keeper_catch_elapsed = 0.0
 				grip_progress = 0.0
 			else:
