@@ -118,6 +118,31 @@ func _initialize() -> void:
 	assert(ChessFootball3DPresenter.broadcast_corner_camera_depth(
 		true, 0, "CÓRNER", xi_near_corner, game.match_pitch
 	) > ChessFootball3DPresenter.BROADCAST_DEPTH)
+	# The XI human near-corner framing should keep more of the end stand
+	# visible, mirrored for the opposite end, and never leak into normal play.
+	var corner_focus := 22.0
+	var new_focus: float = ChessFootball3DPresenter.xi_corner_stadium_camera_x(
+		corner_focus, true, true, 0, "CÓRNER", xi_near_corner, game.match_pitch
+	)
+	assert(is_equal_approx(new_focus,
+		corner_focus - ChessFootball3DPresenter.XI_NEAR_CORNER_STADIUM_PAN))
+	var xi_near_left := Vector2(game.match_pitch.position.x + 70.0, xi_near_corner.y)
+	assert(is_equal_approx(ChessFootball3DPresenter.xi_corner_stadium_camera_x(
+		-corner_focus, true, true, 0, "CÓRNER", xi_near_left, game.match_pitch
+	), -new_focus), "XI corner bias must mirror at the opposite goal")
+	for alternate in [
+		[false, true, 0, "CÓRNER", xi_near_corner],
+		[true, false, 0, "CÓRNER", xi_near_corner],
+		[true, true, 1, "CÓRNER", xi_near_corner],
+		[true, true, 0, "SAQUE DE BANDA", xi_near_corner],
+		[true, true, 0, "CÓRNER", xi_mid_throw],
+		[true, true, 0, "CÓRNER",
+			Vector2(xi_near_corner.x, game.match_pitch.position.y + 40.0)],
+	]:
+		assert(is_equal_approx(ChessFootball3DPresenter.xi_corner_stadium_camera_x(
+			corner_focus, alternate[0], alternate[1], alternate[2],
+			alternate[3], alternate[4], game.match_pitch
+		), corner_focus), "XI corner stadium framing leaked into another state")
 	assert(is_equal_approx(stage.field_width, 56.0))
 	assert(is_equal_approx(stage.field_depth, 36.4))
 	assert(stage.player_sprites.size() == 22)
@@ -419,6 +444,9 @@ func _initialize() -> void:
 		game.set_piece_spot = shot_spot
 		game.ball.global_position = shot_spot
 		stage.sync_presentation(8.0, "broadcast")
+		if case_name == "NEAR_CORNER":
+			assert(stage.camera.position.x > 0.0 and stage.camera.position.x < 20.0,
+				"XI near-corner camera still follows the sideline into black space")
 		if case_name == "MID_THROW":
 			assert(is_equal_approx(stage.smoothed_restart_look_z,
 				ChessFootball3DPresenter.xi_broadcast_lane_look_z(
