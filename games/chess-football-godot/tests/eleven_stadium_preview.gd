@@ -508,6 +508,16 @@ func _initialize() -> void:
 			"XI penalty must not crouch the attacking team's goalkeeper")
 		var guard_sprite: AnimatedSprite3D = stage.player_sprites[guard_key]
 		assert(guard_sprite != null and guard_sprite.scale.x > 0.0)
+		var braced_aspect: float = guard_sprite.scale.x / guard_sprite.scale.y
+		# Compare within the SAME keeper and authored atlas. No change of role,
+		# distance, animation asset or game authority; depth scaling is uniform.
+		game.set_piece_active = false
+		stage.sync_presentation(1.0, "broadcast")
+		var relaxed_aspect: float = guard_sprite.scale.x / guard_sprite.scale.y
+		assert(braced_aspect > relaxed_aspect + 0.07,
+			"XI penalty keeper did not visibly lower and widen his ready stance")
+		game.set_piece_active = true
+		stage.sync_presentation(8.0, "broadcast")
 		# 3/4 penalty composition: the camera sits BEHIND the taker,
 		# faces the actual goal, and mirrors cleanly for either attack.
 		var pose: Dictionary = ChessFootball3DPresenter.xi_penalty_camera_pose(
