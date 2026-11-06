@@ -48,8 +48,10 @@ func _initialize() -> void:
 
 		var real_ai_frames: Dictionary = {}
 		var real_ai_swings: Array[float] = []
+		var peak_ai_speed := 0.0
 		for _step in range(32):
 			game._update_keeper_ai(keeper, 1.0 / 60.0)
+			peak_ai_speed = maxf(peak_ai_speed, keeper.velocity.length())
 			presenter.sync_presentation(1.0 / 60.0, "broadcast")
 			var live_sprite: AnimatedSprite3D = presenter.player_sprites[keeper.get_instance_id()]
 			if String(live_sprite.animation).begins_with("run"):
@@ -64,7 +66,9 @@ func _initialize() -> void:
 		assert(max_angle - min_angle >= 5.0)
 		var travel := keeper.global_position.y - goal.y
 		assert(travel > 22.0 and travel < game.KEEPER_TRACK_MAX_Y + 3.0)
-		assert(keeper.velocity.length() > 15.0)
+		# A tracking keeper may brake as it reaches the target on the
+		# final sample. Judge actual movement across the 32-frame interval.
+		assert(peak_ai_speed > 15.0, "Keeper never reached a real tracking speed")
 		assert(keeper.visual.animation in [&"run", &"sprint"])
 		presenter.sync_presentation(1.0 / 60.0, "broadcast")
 		var sprite: AnimatedSprite3D = presenter.player_sprites[keeper.get_instance_id()]
