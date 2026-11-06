@@ -2219,10 +2219,11 @@ func sync_presentation(delta: float, mode: String) -> void:
 	if penalty_aim_marker != null:
 		penalty_aim_marker.visible = match_node.penalty_preview_visible()
 		if penalty_aim_marker.visible:
+			var aim_direction: float = 1.0 if match_node.set_piece_team_id == 0 else -1.0
 			penalty_aim_marker.position = world_to_stage(
 				match_node.penalty_preview_target(),
-				0.045,
-			)
+				GOAL_POST_HEIGHT * 0.55,
+			) + Vector3(-aim_direction * 0.08, 0.0, 0.0)
 
 
 # Given a 2D movement (X along the field, Y across it), the matching 3D
