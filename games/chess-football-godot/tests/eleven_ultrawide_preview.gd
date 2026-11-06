@@ -54,5 +54,34 @@ func _initialize() -> void:
 	var path := "user://chess-football-xi-ultrawide.png"
 	assert(capture.save_png(path) == OK)
 	print("FOOTBALL_XI_ULTRAWIDE_CAPTURE=" + ProjectSettings.globalize_path(path))
+
+	# The actual wide-screen penalty must keep its correct XI goal/keeper
+	# composition. Preserve the initial kickoff PNG as its own regression.
+	game.kickoff_active = false
+	game.debug_prepare_penalty(0)
+	game.debug_force_set_piece_ready()
+	game.debug_set_penalty_aim(0.45)
+	stage.sync_presentation(8.0, "broadcast")
+	var goal: Vector2 = ChessFootballMath.goal_center(0, game.match_pitch)
+	var goalkeeper: Footballer = game.teams[1][0]
+	assert(goalkeeper.global_position.distance_to(goal - Vector2(42.0, 0.0)) < 0.1,
+		"Ultrawide goalkeeper is not at the right-hand XI goal")
+	var kicker_pixel: Vector2 = stage.screen_position_for_world(game.set_piece_spot, 0.03)
+	var keeper_pixel: Vector2 = stage.screen_position_for_player(goalkeeper)
+	var goal_pixel: Vector2 = stage.screen_position_for_world(goal, 0.03)
+	assert(kicker_pixel.x > 50.0 and kicker_pixel.x < size.x - 50.0)
+	assert(keeper_pixel.x > 50.0 and keeper_pixel.x < size.x - 50.0)
+	assert(goal_pixel.x > 50.0 and goal_pixel.x < size.x - 50.0)
+	assert(kicker_pixel.y > 145.0 and kicker_pixel.y < size.y - 35.0)
+	assert(stage.debug_penalty_aim_visible())
+	for _penalty_frame in range(5):
+		stage.sync_presentation(0.0, "broadcast")
+		await process_frame
+		await RenderingServer.frame_post_draw
+	var penalty_capture: Image = viewport.get_texture().get_image()
+	var penalty_path := "user://chess-football-xi-penalty-ultrawide.png"
+	assert(penalty_capture.save_png(penalty_path) == OK)
+	print("FOOTBALL_XI_ULTRAWIDE_PENALTY_CAPTURE=" +
+		ProjectSettings.globalize_path(penalty_path))
 	print("FOOTBALL_XI_ULTRAWIDE_OK viewport=%s fov=%.2f" % [str(size), stage.camera.fov])
 	quit(0)
