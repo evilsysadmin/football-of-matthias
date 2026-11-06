@@ -12,6 +12,7 @@ import { FOOTBALL_SCOUTING_ATTRIBUTES } from '../footballPlayerProfiles.js';
 import { FOOTBALL_QUICK_DIFFICULTIES, DEFAULT_FOOTBALL_QUICK_DIFFICULTY } from '../footballQuickDifficulty.js';
 import './ChessFootballEntry.css';
 import './FootballHome.css';
+import './FootballQuickSetup.css';
 import ReleaseUpdateNotice from './ReleaseUpdateNotice.jsx';
 import FootballSaveTransfer from './FootballSaveTransfer.jsx';
 import FootballManagerDesk from './FootballManagerDesk.jsx';
@@ -280,23 +281,57 @@ export default function ChessFootballEntry({ onExit, careerStorage='local' }) {
             </div>
           </section>        ) : view === 'quick-setup' ? (
           <section className="chess-football-entry__quick-setup" aria-labelledby="football-quick-setup-title">
-            <span className="chess-football-entry__eyebrow">Partida rápida · FC Matthias vs Real Enroque</span>
-            <h2 id="football-quick-setup-title">Elige a tu rival</h2>
-            <p>Decide cuánto aprieta la CPU. Tu equipo, las estadísticas y las reglas del partido no cambian.</p>
-            <p>11 contra 11 · Campo completo · Dos equipos de once futbolistas.</p>
+            <div className="chess-football-entry__quick-brief">
+              <div className="chess-football-entry__quick-intro">
+                <span className="chess-football-entry__eyebrow">La previa · Partido rápido</span>
+                <h2 id="football-quick-setup-title">Elige a tu rival</h2>
+                <p>La dificultad cambia cómo juega la CPU. Tu once, las estadísticas y las reglas no cambian.</p>
+                <div className="chess-football-entry__quick-fixture" aria-label="FC Matthias contra Real Enroque">
+                  <strong>FC Matthias</strong><span aria-hidden="true">VS</span><strong>Real Enroque</strong>
+                </div>
+                <div className="chess-football-entry__quick-details">
+                  <span>11 contra 11</span><span>Campo completo</span>
+                </div>
+              </div>
+              <div className="chess-football-entry__quick-pitch" aria-hidden="true">
+                <div className="chess-football-entry__quick-pitch-lines">
+                  <span className="chess-football-entry__quick-pitch-midline" />
+                  <span className="chess-football-entry__quick-pitch-circle" />
+                  <span className="chess-football-entry__quick-pitch-box chess-football-entry__quick-pitch-box--left" />
+                  <span className="chess-football-entry__quick-pitch-box chess-football-entry__quick-pitch-box--right" />
+                  <i className="chess-football-entry__quick-pitch-dot chess-football-entry__quick-pitch-dot--one" />
+                  <i className="chess-football-entry__quick-pitch-dot chess-football-entry__quick-pitch-dot--two" />
+                  <i className="chess-football-entry__quick-pitch-dot chess-football-entry__quick-pitch-dot--three" />
+                  <i className="chess-football-entry__quick-pitch-dot chess-football-entry__quick-pitch-dot--four" />
+                </div>
+                <small>La pizarra del míster · 11v11</small>
+              </div>
+            </div>
+            <div className="chess-football-entry__quick-section-heading">
+              <strong>Intensidad del rival</strong>
+              <span>Selecciona una dificultad</span>
+            </div>
             <div className="chess-football-entry__quick-levels" role="group" aria-label="Dificultad del rival">
-              {FOOTBALL_QUICK_DIFFICULTIES.map(({ id, label, description }) => (
+              {FOOTBALL_QUICK_DIFFICULTIES.map(({ id, label, description }, index) => (
                 <button key={id} type="button" aria-pressed={quickDifficulty === id}
                   className={`chess-football-entry__quick-level${quickDifficulty === id ? ' is-selected' : ''}`}
                   onClick={() => setQuickDifficulty(id)}>
-                  <strong>{label}</strong><span>{description}</span>
+                  <span className="chess-football-entry__quick-level-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                  <strong>{label}</strong>
+                  <span>{description}</span>
+                  <span className="chess-football-entry__quick-level-check" aria-hidden="true">✓</span>
                 </button>
               ))}
             </div>
-            <button type="button" className="chess-football-entry__quick-kickoff" onClick={startQuickMatch}>
-              Saltar al campo · 11v11 · {FOOTBALL_QUICK_DIFFICULTIES.find(({ id }) => id === quickDifficulty)?.label}
-            </button>
-            <p className="chess-football-entry__quick-hint">Puedes regresar al vestuario desde el menú del partido.</p>
+            <div className="chess-football-entry__quick-action-row">
+              <p className="chess-football-entry__quick-selection" role="status" aria-live="polite">
+                Rival seleccionado <strong>{FOOTBALL_QUICK_DIFFICULTIES.find(({ id }) => id === quickDifficulty)?.label}</strong>
+              </p>
+              <button type="button" className="chess-football-entry__quick-kickoff" onClick={startQuickMatch}>
+                Saltar al campo · 11v11 · {FOOTBALL_QUICK_DIFFICULTIES.find(({ id }) => id === quickDifficulty)?.label}
+              </button>
+            </div>
+            <p className="chess-football-entry__quick-hint">Puedes volver a Football desde el menú del partido.</p>
           </section>
         ) : view === 'manager' ? (
           <section className="chess-football-entry__manager chess-football-entry__manager--selection" aria-labelledby="football-manager-title">
