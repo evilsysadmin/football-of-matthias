@@ -2827,9 +2827,13 @@ func _sync_camera(delta: float, mode: String) -> void:
 		return
 
 	var focus := world_to_stage(match_node.ball.global_position)
-	var easing_corner_release := broadcast_corner_release_active(
-		mode, bool(match_node.set_piece_active), camera.position.z,
-		match_node.match_team_size == 11,
+	# A tactical-to-broadcast switch starts from the aerial camera depth.
+	# It must not masquerade as a live corner release and suppress close-follow.
+	var easing_corner_release := (
+		mode == last_camera_mode and broadcast_corner_release_active(
+			mode, bool(match_node.set_piece_active), camera.position.z,
+			match_node.match_team_size == 11,
+		)
 	)
 	var wanted_position: Vector3
 	var wanted_look: Vector3
