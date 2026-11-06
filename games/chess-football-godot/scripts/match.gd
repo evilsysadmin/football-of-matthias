@@ -103,6 +103,13 @@ const AI_DRIBBLE_LOOKAHEAD := 290.0
 const AI_SUPPORT_FORWARD := 225.0
 const AI_TEAMMATE_SEPARATION_RADIUS := 130.0
 const AI_TEAMMATE_SEPARATION_MAX_CORRECTION := 110.0
+# Primary XI CPU triangle support may sidestep a marked reception point.
+# It changes positioning only, never acceleration, stamina or ball flight.
+const AI_XI_SUPPORT_MARKED_RADIUS := 150.0
+const AI_XI_SUPPORT_SAFE_RADIUS := 130.0
+const AI_XI_SUPPORT_CLEARANCE_GAIN := 60.0
+const AI_XI_SUPPORT_DIAGONAL_FORWARD := 55.0
+const AI_XI_SUPPORT_DIAGONAL_WIDTH := 135.0
 const AI_COVER_DISTANCE := 150.0
 # Only the CPU's nearby second defender may step up from positional cover to
 # a legal contest. Easy and the human-side support shape remain untouched.
@@ -1420,6 +1427,59 @@ func _ai_xi_support_rank(player: Footballer) -> int:
 	return closer if closer < 2 else -1
 
 
+
+# Exactly the leading short-triangle CPU runner may choose a genuinely
+# open diagonal receiving lane. Do not drag the rest of the 4-3-3 out of shape.
+func _ai_xi_support_clearance(point: Vector2) -> float:
+	var nearest := INF
+	for defender in teams[0]:
+		if defender.sent_off:
+			continue
+		nearest = minf(nearest, defender.global_position.distance_to(point))
+	return nearest
+
+
+func _ai_xi_open_lane_support_target(player: Footballer, base_target: Vector2) -> Vector2:
+	if (
+		match_team_size != 11
+		or player.team_id != 1
+		or ball.carrier == null
+		or ball.carrier.team_id != 1
+		or not (player.role in ["midfielder", "wing", "forward"])
+	):
+		return base_target
+	var baseline_clearance: float = _ai_xi_support_clearance(base_target)
+	if baseline_clearance >= AI_XI_SUPPORT_MARKED_RADIUS:
+		return base_target
+	var best_target: Vector2 = base_target
+	var best_score: float = -INF
+	for side in [-1.0, 1.0]:
+		var candidate: Vector2 = base_target + Vector2(
+			-AI_XI_SUPPORT_DIAGONAL_FORWARD,
+			side * AI_XI_SUPPORT_DIAGONAL_WIDTH,
+		)
+		# Stay on the actual pitch and within the ordinary ground-pass reach.
+		if not match_pitch.has_point(candidate):
+			continue
+		var pass_distance: float = ball.carrier.global_position.distance_to(candidate)
+		if pass_distance < AI_XI_PASS_MIN_DISTANCE or pass_distance > AI_XI_PASS_MAX_DISTANCE:
+			continue
+		var clearance: float = _ai_xi_support_clearance(candidate)
+		if (
+			clearance < AI_XI_SUPPORT_SAFE_RADIUS
+			or clearance - baseline_clearance < AI_XI_SUPPORT_CLEARANCE_GAIN
+		):
+			continue
+		# For similarly open outlets preserve the player's original flank.
+		var score: float = clearance - absf(
+			candidate.y - player.home_position.y
+		) * 0.04
+		if score > best_score:
+			best_score = score
+			best_target = candidate
+	return best_target
+
+
 func _ai_support_target(player: Footballer) -> Vector2:
 	if ball.carrier == null:
 		return player.home_position
@@ -1431,12 +1491,16 @@ func _ai_support_target(player: Footballer) -> Vector2:
 	if rank >= 0:
 		var primary_side := 1.0 if player.home_position.y >= ball.carrier.global_position.y else -1.0
 		var side := primary_side if rank == 0 else -primary_side
-		return ChessFootballMath.clamp_to_pitch(
+		var triangle_target: Vector2 = ChessFootballMath.clamp_to_pitch(
 			ball.carrier.global_position + Vector2(
 				forward * (175.0 if rank == 0 else -145.0),
 				side * 175.0,
 			),
 			match_pitch,
+		)
+		return (
+			_ai_xi_open_lane_support_target(player, triangle_target)
+			if rank == 0 else triangle_target
 		)
 	# Use distinct positional lanes rather than dragging all supporters into
 	# the dribbler's path. A wider field is only useful when the AI exploits it.
@@ -3599,21 +3663,3 @@ func debug_pass_power_for_ratio(ratio: float) -> float:
 
 func debug_begin_directional_pass_charge(direction: Vector2) -> bool:
 	return _begin_directional_pass_charge(direction)
-
-func debug_release_charged_pass() -> bool:
-	return _release_charged_pass()
-
-func debug_pass_target() -> Footballer:
-	return pass_target
-
-func debug_pause_menu_open() -> bool:
-	return pause_menu_open
-
-func debug_toggle_pause_menu() -> void:
-	_toggle_pause_menu()
-
-func debug_pause_first_option() -> String:
-	return pause_exit_button.text if pause_exit_button != null else ""
-
-func debug_pause_button_text() -> String:
-	return pause_menu_button.text if pause_menu_button != null else ""

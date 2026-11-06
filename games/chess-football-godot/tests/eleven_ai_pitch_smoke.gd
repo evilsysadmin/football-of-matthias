@@ -119,6 +119,46 @@ func _initialize() -> void:
 			break
 	assert(completed_link_up)
 
+	# The primary XI CPU triangle makes an open lane BEFORE a pass.
+	# One marked outlet sidesteps; both alternatives covered stay unchanged.
+	game.ball.attach_to(passer)
+	receiver.global_position = passer.global_position + Vector2(-330.0, 90.0)
+	receiver.velocity = Vector2.ZERO
+	assert(game._ai_xi_support_rank(receiver) == 0)
+	var triangle_base: Vector2 = game._ai_support_target(receiver)
+	var lane_blocker: Footballer = game.teams[0][4]
+	var upper_blocker: Footballer = game.teams[0][3]
+	var lower_blocker: Footballer = game.teams[0][2]
+	lane_blocker.global_position = triangle_base
+	var open_lane: Vector2 = game._ai_support_target(receiver)
+	assert(open_lane != triangle_base)
+	assert(XI.has_point(open_lane))
+	assert(open_lane.x < triangle_base.x - 50.0)
+	assert(absf(open_lane.y - triangle_base.y) >= 130.0)
+	assert(open_lane.distance_to(lane_blocker.global_position) >=
+		game.AI_XI_SUPPORT_SAFE_RADIUS)
+	assert(open_lane.distance_to(passer.global_position) <= game.AI_XI_PASS_MAX_DISTANCE)
+	upper_blocker.global_position = triangle_base + Vector2(-55.0, -135.0)
+	lower_blocker.global_position = triangle_base + Vector2(-55.0, 135.0)
+	assert(game._ai_support_target(receiver) == triangle_base)
+	upper_blocker.global_position = Vector2(XI.end.x - 120.0, XI.end.y - 130.0)
+	lower_blocker.global_position = upper_blocker.global_position
+	var receiver_start: Vector2 = receiver.global_position
+	var run_target: Vector2 = game._ai_support_target(receiver)
+	game._update_ai(1.0 / 60.0)
+	assert(receiver.ai_target.distance_to(run_target) < 1.0)
+	assert(receiver.global_position.distance_to(receiver_start) < 15.0)
+	assert(receiver.velocity.length() <= receiver.base_speed * 1.34 + 1.0)
+	game.match_team_size = 5
+	assert(game._ai_xi_open_lane_support_target(receiver, triangle_base) == triangle_base)
+	game.match_team_size = 11
+	# An edge-of-pitch option is rejected rather than clipped into a fake run.
+	var edge_target := Vector2(XI.position.x + 30.0, centre.y)
+	lane_blocker.global_position = edge_target
+	assert(game._ai_xi_open_lane_support_target(receiver, edge_target) == edge_target)
+	lane_blocker.global_position = Vector2(XI.end.x - 120.0, XI.end.y - 130.0)
+	game.ball.attach_to(passer)
+
 	# Moving CPU teammates receive a short, physically aimed through-ball.
 	# The destination changes at the kick, not continuously in flight.
 	game.ball.attach_to(passer)
