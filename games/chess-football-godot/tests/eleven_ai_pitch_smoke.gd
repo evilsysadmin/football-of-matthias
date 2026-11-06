@@ -185,5 +185,68 @@ func _initialize() -> void:
 	# Legacy default math still points at the original nets.
 	assert(ChessFootballMath.goal_center(0).x == FIVE.end.x)
 	assert(ChessFootballMath.goal_center(1).x == FIVE.position.x)
+	# CPU XI Normal+: the first man presses, second protects goal side,
+	# and exactly one REACHABLE third man guards an actual forward pass.
+	# The selector must ignore sent-off players and never teleport the
+	# back line or accelerate a marker beyond ordinary CPU movement.
+	game._set_quick_difficulty("normal")
+	var lane_owner: Footballer = game.teams[0][10]
+	var lane_receiver: Footballer = game.teams[0][9]
+	lane_owner.global_position = centre + Vector2(600.0, 0.0)
+	for attacker: Footballer in game.teams[0]:
+		if attacker != lane_owner:
+			attacker.global_position = lane_owner.global_position + Vector2(-720.0, 640.0)
+	lane_receiver.global_position = lane_owner.global_position + Vector2(350.0, -165.0)
+	var lane_presser: Footballer = game.teams[1][10]
+	var lane_cover: Footballer = game.teams[1][8]
+	var expected_marker: Footballer = game.teams[1][6]
+	for rival: Footballer in game.teams[1]:
+		if rival.role != "keeper":
+			rival.global_position = centre + Vector2(1300.0, 800.0)
+	lane_presser.global_position = lane_owner.global_position + Vector2(70.0, 0.0)
+	lane_cover.global_position = lane_owner.global_position + Vector2(100.0, 220.0)
+	expected_marker.global_position = lane_owner.global_position + Vector2(245.0, -260.0)
+	expected_marker.velocity = Vector2.ZERO
+	expected_marker.stamina = 100.0
+	game.ball.attach_to(lane_owner)
+	var lane_plan: Dictionary = game._ai_xi_lane_assignment(lane_presser, lane_cover)
+	assert(lane_plan.get("marker") == expected_marker)
+	assert(lane_plan.get("receiver") == lane_receiver)
+	var lane_target: Vector2 = lane_plan["target"]
+	var lane_segment: Vector2 = lane_receiver.global_position - lane_owner.global_position
+	assert(XI.has_point(lane_target))
+	assert(lane_target.x > lane_owner.global_position.x + 150.0)
+	assert(lane_target.x < lane_receiver.global_position.x)
+	assert(absf(
+		(lane_target - lane_owner.global_position).cross(lane_segment)
+	) / lane_segment.length() < 25.0)
+	assert(lane_target.distance_to(lane_presser.global_position) > 125.0)
+	assert(lane_target.distance_to(lane_cover.global_position) > 125.0)
+	# Normal decision scheduling owns the AI target. There is no position
+	# assignment/teleport and no boosted runner speed.
+	var marker_start: Vector2 = expected_marker.global_position
+	await physics_frame
+	game._update_ai(1.0 / 60.0)
+	assert(expected_marker.ai_target.distance_to(lane_target) < 15.0)
+	assert(expected_marker.global_position.distance_to(marker_start) < 15.0)
+	assert(expected_marker.velocity.length() <= expected_marker.base_speed * 1.34 + 1.0)
+	# No artificial defensive crowd: the other idle backs retain their
+	# usual weak shift rather than following the same passing corridor.
+	assert(game.teams[1][4].ai_target.distance_to(lane_target) > 300.0)
+	# Easy, 5v5 and possession/loose-ball states keep the old behaviour.
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_lane_assignment(lane_presser, lane_cover).is_empty())
+	game._set_quick_difficulty("normal")
+	game.match_team_size = 5
+	assert(game._ai_xi_lane_assignment(lane_presser, lane_cover).is_empty())
+	game.match_team_size = 11
+	lane_receiver.sent_off = true
+	assert(game._ai_xi_lane_assignment(lane_presser, lane_cover).is_empty())
+	lane_receiver.sent_off = false
+	expected_marker.global_position = centre + Vector2(1300.0, 800.0)
+	assert(game._ai_xi_lane_assignment(lane_presser, lane_cover).is_empty())
+	game.ball.release(Vector2.ZERO, 0.0)
+	assert(game._ai_xi_lane_assignment(lane_presser, lane_cover).is_empty())
+	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
 	quit(0)
