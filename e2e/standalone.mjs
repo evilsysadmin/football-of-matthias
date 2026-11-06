@@ -45,7 +45,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
 const browser=await chromium.launch({headless:true});
 try{
- for(const viewport of [{width:1280,height:800},{width:1788,height:820},{width:390,height:844}]){
+ for(const viewport of [{width:1280,height:800},{width:1788,height:820},{width:390,height:844},{width:360,height:780}]){
   publishedBuild=currentBuild;
   const page=await browser.newPage({viewport});const errors=[];page.on('pageerror',e=>errors.push(String(e)));
   await page.route('https://id-staging.shadowops.dpdns.org/api/identity/token',route=>route.fulfill({status:401,headers:{'Access-Control-Allow-Origin':'http://127.0.0.1:'+server.address().port,'Access-Control-Allow-Credentials':'true','Content-Type':'application/json'},body:'{}'}));
@@ -121,8 +121,24 @@ try{
   assert.equal(await page.getByRole('button',{name:/^Normal\b/}).getAttribute('aria-pressed'),'true');
   await page.getByRole('button',{name:/^Experto\b/}).click();
   assert.equal(await page.getByRole('button',{name:/^Experto\b/}).getAttribute('aria-pressed'),'true');
-  assert.ok(await page.getByRole('button',{name:/Saltar al campo · 11v11 · Experto/}).isVisible());
+  const kickoff=page.getByRole('button',{name:/Saltar al campo · 11v11 · Experto/});
+  assert.ok(await kickoff.isVisible());
   assert.equal(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'Difficulty briefing must fit mobile');
+  const quickTitle=await page.getByRole('heading',{name:'Elige a tu rival'}).boundingBox();
+  const kickoffBox=await kickoff.boundingBox();
+  const briefing=await page.locator('.chess-football-entry__quick-setup').boundingBox();
+  assert.ok(briefing && briefing.x>=0 && briefing.x+briefing.width<=viewport.width+1,'Briefing must fit screen horizontally');
+  assert.ok(quickTitle && quickTitle.y>=0 && quickTitle.y+quickTitle.height<viewport.height,'Match title must start on screen');
+  assert.ok(kickoffBox && kickoffBox.width>=180 && kickoffBox.x>=0 && kickoffBox.x+kickoffBox.width<=viewport.width,'Kickoff must remain usable');
+  if(viewport.width>=741 || viewport.height>=800){
+    assert.ok(kickoffBox.y>=0 && kickoffBox.y+kickoffBox.height<=viewport.height,
+      'Kickoff must be visible without scrolling on standard desktop and 390px mobile');
+  }
+  const masthead=await page.locator('.chess-football-entry__masthead').boundingBox();
+  assert.ok(masthead && masthead.width<=2,'Prematch must not waste the first half-screen on the Home masthead');
+  const quickLevels=await page.locator('.chess-football-entry__quick-level').all();
+  assert.equal(quickLevels.length,4);
+  assert.equal(await page.getByRole('button',{name:/^Experto\b/}).getAttribute('aria-pressed'),'true','Difficulty selection must remain stateful');
   await page.screenshot({path:resolve(out,viewport.width+'-quick-difficulty.png')});
   await page.getByRole('button',{name:/Volver a Football/}).click();
   await page.getByRole('button',{name:/Modo mánager/}).click();
