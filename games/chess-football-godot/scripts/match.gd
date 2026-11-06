@@ -451,6 +451,7 @@ func _create_hud() -> void:
 
 	var controls_panel := Panel.new()
 	controls_panel.name = "MatchControlsPanel"
+	controls_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	controls_panel.position = Vector2(16, 66)
 	controls_panel.size = Vector2(1248, 29)
 	controls_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -471,7 +472,8 @@ func _create_hud() -> void:
 	controls_panel.add_child(help_label)
 
 	view_label = Label.new()
-	view_label.position = Vector2(1030, 100)
+	view_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	view_label.position = Vector2(-250, 100)
 	view_label.size = Vector2(230, 23)
 	view_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	view_label.add_theme_font_size_override("font_size", 13)
@@ -482,7 +484,8 @@ func _create_hud() -> void:
 	# obscured the grandstand whenever a kick-off or penalty was announced.
 	goal_label = Label.new()
 	goal_label.name = "MatchEventChyron"
-	goal_label.position = Vector2(380, 105)
+	goal_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	goal_label.position = Vector2(-260, 105)
 	goal_label.size = Vector2(520, 36)
 	goal_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	goal_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -502,7 +505,8 @@ func _create_hud() -> void:
 	hud.add_child(goal_label)
 
 	shot_meter_label = Label.new()
-	shot_meter_label.position = Vector2(470, 635)
+	shot_meter_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	shot_meter_label.position = Vector2(-170, -85)
 	shot_meter_label.size = Vector2(340, 24)
 	shot_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	shot_meter_label.text = "POTENCIA DE TIRO"
