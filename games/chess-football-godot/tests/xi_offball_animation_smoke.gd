@@ -194,5 +194,69 @@ func _initialize() -> void:
 			"Visible off-ball gait does not follow actual physical travel distance")
 		print("FOOTBALL_XI_OFFBALL_12_FRAME_SEQUENCE team=%d frames=%d travel=%.1f" %
 			[team_id, observed.size(), travelled])
-	print("FOOTBALL_XI_OFFBALL_GAIT_OK teams=2 noncarriers=4 poses=6 visual_source=velocity legacy_5v5=unchanged")
+	# The earlier physical-run test leaves the kick-off owner in possession.
+	# Detach it BEFORE measuring all 20 runners without the ball.
+	game.ball.release(Vector2.ZERO, 0.0)
+	# At slow Web refresh, physical sprint speed could advance the visual
+	# clock by >2 poses/tick. Verify every one of the 20 NON-CARRIERS,
+	# across all five authored directions and both clubs, at 15 FPS.
+	# The already-verified V3 test atlases stay installed for both teams.
+	var views: Array[Vector2] = [
+		Vector2.DOWN, Vector2.UP, Vector2.RIGHT,
+		Vector2(1.0, 1.0).normalized(),
+		Vector2(1.0, -1.0).normalized(),
+	]
+	var visual_indices: Dictionary = {}
+	var visual_last: Dictionary = {}
+	var outfield_count := 0
+	for team in game.teams:
+		for player: Footballer in team:
+			if player.role == "keeper":
+				continue
+			var key: int = player.get_instance_id()
+			player.action_lock_seconds = 0.0
+			player.velocity = views[(player.squad_index - 1) % views.size()] * (
+				player.base_speed * player.SPRINT_SPEED_MULTIPLIER
+			)
+			player.last_sprinting = true
+			player.visual.play(&"idle")
+			player.visual.pause()
+			stage.outfield_visual_phases.erase(key)
+			stage.outfield_visual_names.erase(key)
+			visual_indices[key] = {}
+			visual_last[key] = -1
+			outfield_count += 1
+	assert(outfield_count == 20 and game.ball.carrier == null)
+	for tick in range(52):
+		stage.sync_presentation(1.0 / 15.0, "broadcast")
+		for team in game.teams:
+			for player: Footballer in team:
+				if player.role == "keeper":
+					continue
+				var key: int = player.get_instance_id()
+				var visible: AnimatedSprite3D = stage.player_sprites[key]
+				var quad: MeshInstance3D = stage.xi_raster_meshes[key]
+				var material: StandardMaterial3D = quad.material_override
+				var count: int = visible.sprite_frames.get_frame_count(visible.animation)
+				assert(count == 12 and String(visible.animation).begins_with("sprint"),
+					"Every XI non-carrier must have its complete V3 run bank")
+				var current: int = visible.frame
+				var previous: int = int(visual_last[key])
+				if previous >= 0:
+					assert((current - previous + count) % count <= 1,
+						"Slow-refresh non-carrier skipped an authored sprint pose")
+				visual_last[key] = current
+				var observed: Dictionary = visual_indices[key]
+				observed[current] = true
+				visual_indices[key] = observed
+				assert(material.albedo_texture ==
+					visible.sprite_frames.get_frame_texture(visible.animation, current),
+					"Rendered XI quad is not showing the current complete gait frame")
+	for team in game.teams:
+		for player: Footballer in team:
+			if player.role != "keeper":
+				assert((visual_indices[player.get_instance_id()] as Dictionary).size() == 12,
+					"At 15 FPS every one of the 20 XI runners must show all 12 poses")
+	print("FOOTBALL_XI_OFFBALL_SLOW_FPS_OK players=20 teams=2 views=5 fps=15 frames=12 no_skipped_poses=1")
+	print("FOOTBALL_XI_OFFBALL_GAIT_OK teams=2 noncarriers=20 poses=12 visual_source=velocity legacy_5v5=unchanged")
 	quit(0)

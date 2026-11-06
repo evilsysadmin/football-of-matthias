@@ -1278,7 +1278,7 @@ jobs:
             echo '::error::XI off-ball run visual poses froze or did not render'
             exit 1
           fi
-          grep -q 'FOOTBALL_XI_OFFBALL_GAIT_OK teams=2 noncarriers=4 poses=6' "$log"
+          grep -q 'FOOTBALL_XI_OFFBALL_SLOW_FPS_OK players=20 teams=2 views=5 fps=15 frames=12 no_skipped_poses=1' "$log"
           for phase in 0 1 2; do
             test -s "$RUNNER_TEMP/chess-football-review/xi-offball-run-phase-${phase}.png"
           done
