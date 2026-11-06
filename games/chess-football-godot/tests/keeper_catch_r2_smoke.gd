@@ -53,6 +53,7 @@ func _initialize() -> void:
 	assert(ChessFootballKeeperCatchR2.trusted_public_root(proposed).is_empty())
 	var original_score: Array = match_node.score.duplicate()
 	var original_time: float = match_node.match_seconds
+	var verified_candidate_frames: Dictionary = {}
 	for team_id in range(2):
 		var source := ChessFootballKeeperCatchR2.source_entry(team_id)
 		assert(String(source.get("file", "")).ends_with("_keeper_catch_v1.webp"))
@@ -122,6 +123,7 @@ func _initialize() -> void:
 			assert(not ChessFootballR2AtlasLoader.valid_metadata(altered, approved_root))
 		var textures := ChessFootballKeeperCatchR2.frames_from_image(candidate, source)
 		assert(textures.size() == 8)
+		verified_candidate_frames[team_id] = textures
 		for i in range(8):
 			assert(textures[i].get_size() == Vector2(128, 144))
 		assert(not presenter._keeper_catch_r2_loaded.has(team_id))
@@ -155,5 +157,81 @@ func _initialize() -> void:
 		assert(presenter.ball_shadow.visible)
 	assert(match_node.score == original_score)
 	assert(is_equal_approx(match_node.match_seconds, original_time))
+
+	# A TRUE successful XI save must show the existing tackle/dive action
+	# BEFORE starting the eight-frame R2 reception. Exercise the 2D match's
+	# legal save function, not a fabricated "saved" UI flag; wrong-side or
+	# out-of-range ball contacts still cannot be saved.
+	assert(ChessFootball3DPresenter.xi_keeper_dive_before_catch(11, true, true, true))
+	for invalid in [
+		[5, true, true, true],
+		[11, false, true, true],
+		[11, true, false, true],
+		[11, true, true, false],
+	]:
+		assert(not ChessFootball3DPresenter.xi_keeper_dive_before_catch(
+			invalid[0], invalid[1], invalid[2], invalid[3]
+		))
+	var xi_game = packed.instantiate()
+	xi_game.match_team_size = 11
+	root.add_child(xi_game)
+	await process_frame
+	await process_frame
+	xi_game.set_process(false)
+	xi_game.set_physics_process(false)
+	var xi_presenter: ChessFootball3DPresenter = xi_game.presentation_3d
+	assert(xi_game.debug_team_counts() == [11, 11])
+	var xi_score: Array = xi_game.score.duplicate()
+	for team_id in range(2):
+		xi_presenter._apply_verified_keeper_catch_frames(
+			verified_candidate_frames[team_id], team_id
+		)
+		var keeper: Footballer = xi_game.teams[team_id][0]
+		var sprite: AnimatedSprite3D = xi_presenter.player_sprites[keeper.get_instance_id()]
+		var toward_field := 1.0 if team_id == 0 else -1.0
+		var goal: Vector2 = ChessFootballMath.goal_center(1 - team_id, xi_game.match_pitch)
+		keeper.global_position = goal + Vector2(toward_field * xi_game.KEEPER_LINE_OFFSET, 0.0)
+		keeper.velocity = Vector2.ZERO
+		keeper.action_lock_seconds = 0.0
+		xi_game.ball.release(Vector2.RIGHT, 0.0)
+		xi_game.ball.global_position = keeper.global_position + Vector2(toward_field * 110.0, 0)
+		xi_game.ball.velocity = Vector2(-toward_field * 880.0, 0.0)
+		xi_game.ball.flight_height = 0.0
+		assert(not xi_game._keeper_try_save(keeper),
+			"Keep the existing REAL save radius: no fake out-of-reach dives")
+		xi_game.ball.global_position = keeper.global_position + Vector2(toward_field * 12.0, 0)
+		assert(xi_game._keeper_try_save(keeper),
+			"Close, goalward shot should activate the existing legal save")
+		assert(xi_game.ball.carrier == keeper and keeper.keeper_save_active())
+		xi_presenter.sync_presentation(0.06, "broadcast")
+		assert(sprite.animation == &"tackle",
+			"The R2 catch cannot instantly replace the real goalkeeper dive")
+		assert(is_zero_approx(xi_presenter.keeper_catch_elapsed),
+			"Do not advance the R2 grip frames while the dive is playing")
+		var diving_ball: Vector3 = xi_presenter.ball_node.position
+		assert(not xi_presenter.ball_shadow.visible)
+		assert(not xi_presenter.debug_keeper_catch_hands_visible(keeper))
+		keeper.keeper_save_seconds = 0.0
+		xi_presenter.sync_presentation(0.0, "broadcast")
+		assert(sprite.animation == &"keeper_catch" and sprite.frame == 0,
+			"R2 reception must start at its first pose after the actual save")
+		assert(xi_presenter.ball_node.position.distance_to(diving_ball) < 0.01,
+			"Saved ball must not teleport when the dive becomes the catch")
+		xi_presenter.sync_presentation(0.10, "broadcast")
+		xi_presenter.sync_presentation(0.0, "broadcast")
+		assert(sprite.frame > 0 and sprite.frame < 7)
+		xi_presenter.sync_presentation(0.20, "broadcast")
+		xi_presenter.sync_presentation(0.0, "broadcast")
+		assert(sprite.frame == 7)
+		assert(xi_game.ball.carrier == keeper)
+		assert(xi_presenter.ball_node.position.distance_to(
+			xi_presenter.world_to_stage(keeper.global_position, xi_presenter.KEEPER_CATCH_HEIGHT)
+			+ Vector3(0, 0, xi_presenter.KEEPER_CATCH_FRONT)
+		) < 0.03)
+		xi_game.ball.release(Vector2.RIGHT, 200.0)
+		xi_presenter.sync_presentation(0.0, "broadcast")
+		assert(sprite.animation != &"keeper_catch")
+		assert(xi_presenter.ball_shadow.visible)
+	assert(xi_game.score == xi_score)
 	print("football keeper catch R2 two-sheet staging, 8 poses and fallback: OK")
 	quit(0)
