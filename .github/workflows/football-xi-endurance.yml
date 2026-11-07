@@ -71,3 +71,46 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_XI_ENDURANCE_60S_OK' "$log"
+
+      - name: Measure seeded XI passing and possession pace by difficulty
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-pass-pace.log"
+          set +e
+          timeout 110s "$godot" --headless --quit-after 12000 --path games/chess-football-godot --script res://tests/eleven_pass_pace_metrics.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI passing metrics simulation failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_PASS_PACE_METRICS_OK' "$log"
+          python3 - "$log" "$RUNNER_TEMP/football-xi-pass-pace.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          lines = Path(sys.argv[1]).read_text().splitlines()
+          prefix = 'FOOTBALL_XI_PASS_PACE_METRICS '
+          reports = [json.loads(line.removeprefix(prefix)) for line in lines
+                     if line.startswith(prefix)]
+          assert len(reports) == 1, 'Expected one real XI metrics report'
+          report = reports[0]
+          assert [x['difficulty'] for x in report['levels']] == [
+              'easy', 'normal', 'hard', 'expert'
+          ]
+          assert report['kind'] == 'seeded_godot_xi_20s_per_level_not_live_match_telemetry'
+          assert sum(x['attempts'] for x in report['levels']) == report['observed_attempts']
+          Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
+          print('FOOTBALL_XI_PASS_PACE_ARTIFACT_OK trials=4')
+          PY
+      - name: Upload seeded XI pass pace baseline
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-xi-pass-pace
+          path: ${{ runner.temp }}/football-xi-pass-pace.json
+          retention-days: 7
+          if-no-files-found: warn
