@@ -792,8 +792,14 @@ func _initialize() -> void:
 func _verify_reference_near_touchline(game, stage: ChessFootball3DPresenter) -> void:
 	var viewport := root.get_viewport()
 	var size: Vector2 = viewport.get_visible_rect().size
-	assert(size == Vector2(1500, 788),
-		"XI reference CI must use the actual reported 1500x788 viewport")
+	var physical_window: Vector2i = DisplayServer.window_get_size()
+	print("FOOTBALL_XI_REFERENCE_WINDOW logical=%s physical=%s" %
+		[str(size), str(physical_window)])
+	# The game intentionally uses Godot keep_height/canvas_items. Its
+	# virtual viewport height may be 720 even when the ACTUAL window and
+	# framebuffer are 1500x788. Never confuse logical and physical pixels.
+	assert(physical_window == Vector2i(1500, 788),
+		"XI reference CI must open the actual 1500x788 window")
 	game.set_process(false)
 	game.set_physics_process(false)
 	game.kickoff_active = false
@@ -823,7 +829,7 @@ func _verify_reference_near_touchline(game, stage: ChessFootball3DPresenter) -> 
 		stage.sync_presentation(1.0 / 60.0, "broadcast")
 		var line_pixel: Vector2 = stage.screen_position_for_world(line_at_human, 0.02)
 		var foot_pixel: Vector2 = stage.screen_position_for_world(human_spot, 0.02)
-		var margin_px: float = size.y - line_pixel.y
+		var margin_px: float = (size.y - line_pixel.y) * 788.0 / size.y
 		smallest_margin = minf(smallest_margin, margin_px)
 		assert(line_pixel.x > 25.0 and line_pixel.x < size.x - 25.0,
 			"XI reference touchline escaped horizontally on frame %d" % frame)
