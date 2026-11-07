@@ -121,6 +121,101 @@ func _initialize() -> void:
 	# distant attacker, receives a ball using normal friction and first touch.
 	var passer: Footballer = game.teams[1][10]
 	var receiver: Footballer = game.teams[1][8]
+	# Real XI CPU pass errors are imperfect but bounded. A defender in
+	# the passer's face makes a slightly misplaced ball more likely;
+	# the same player's calm passing remains much more reliable.
+	var pass_error_chances: Array[float] = []
+	var pass_error_extents: Array[float] = []
+	for difficulty in ["easy", "normal", "hard", "expert"]:
+		game._set_quick_difficulty(difficulty)
+		var chance: float = float(game.quick_difficulty_profile["pass_error"])
+		var extent: float = float(game.quick_difficulty_profile["pass_error_degrees"])
+		assert(chance > 0.0 and chance < 1.0)
+		assert(extent > 0.0 and extent <= 13.0)
+		pass_error_chances.append(chance)
+		pass_error_extents.append(extent)
+		var rushed_miss: float = game._ai_xi_pass_aim_error_degrees(
+			passer, 90.0, 0.0, 1.0
+		)
+		var rushed_other_side: float = game._ai_xi_pass_aim_error_degrees(
+			passer, 90.0, 0.0, -1.0
+		)
+		var calm_miss: float = game._ai_xi_pass_aim_error_degrees(
+			passer, INF, 0.0, 1.0
+		)
+		assert(is_equal_approx(rushed_miss, extent))
+		assert(is_equal_approx(rushed_other_side, -extent))
+		assert(calm_miss > 0.0 and calm_miss < rushed_miss * 0.25)
+		assert(game._ai_xi_pass_aim_error_degrees(passer, 90.0, 0.99, 1.0) == 0.0)
+		# Expert has rare mistakes, never perfect tactical ball placement.
+		assert(rushed_miss > 0.0 and chance > 0.0)
+	for index in range(3):
+		assert(pass_error_chances[index] > pass_error_chances[index + 1])
+		assert(pass_error_extents[index] > pass_error_extents[index + 1])
+	game._set_quick_difficulty("normal")
+	assert(game._ai_xi_pass_aim_error_degrees(passer, 90.0, 0.30, 1.0) == 0.0)
+	assert(game._ai_xi_pass_aim_error_degrees(passer, 90.0, 0.0, 1.0) > 8.0)
+	# Same XI geometry for both goals, but only the CPU makes this
+	# decision mistake. Human-side assistance and legacy 5v5 stay intact.
+	var human_test_passer: Footballer = game.teams[0][10]
+	assert(game._ai_xi_pass_aim_error_degrees(human_test_passer, 50.0, 0.0, 1.0) == 0.0)
+	game.match_team_size = 5
+	assert(game._ai_xi_pass_aim_error_degrees(passer, 50.0, 0.0, 1.0) == 0.0)
+	game.match_team_size = 11
+	# Distinguish directional errors from kick power: an otherwise correct
+	# pass can arrive short or long. Pressure makes both more likely, and
+	# difficulty changes the chance and size without ever making Expert perfect.
+	var power_chances: Array[float] = []
+	var power_extents: Array[float] = []
+	for difficulty in ["easy", "normal", "hard", "expert"]:
+		game._set_quick_difficulty(difficulty)
+		var chance: float = float(game.quick_difficulty_profile["pass_power_error"])
+		var extent: float = float(game.quick_difficulty_profile["pass_power_error_ratio"])
+		assert(chance > 0.0 and chance < 1.0)
+		assert(extent > 0.0 and extent <= 0.24)
+		power_chances.append(chance)
+		power_extents.append(extent)
+		var rushed_short: float = game._ai_xi_pass_power_error_ratio(
+			passer, 90.0, 0.0, -1.0
+		)
+		var rushed_long: float = game._ai_xi_pass_power_error_ratio(
+			passer, 90.0, 0.0, 1.0
+		)
+		var calm_long: float = game._ai_xi_pass_power_error_ratio(
+			passer, INF, 0.0, 1.0
+		)
+		assert(is_equal_approx(rushed_short, -extent))
+		assert(is_equal_approx(rushed_long, extent))
+		assert(calm_long > 0.0 and calm_long < rushed_long * 0.25)
+		assert(game._ai_xi_pass_power_error_ratio(passer, 90.0, 0.99, 1.0) == 0.0)
+	for index in range(3):
+		assert(power_chances[index] > power_chances[index + 1])
+		assert(power_extents[index] > power_extents[index + 1])
+	game._set_quick_difficulty("normal")
+	assert(game._ai_xi_pass_power_error_ratio(passer, 90.0, 0.25, 1.0) == 0.0)
+	assert(game._ai_xi_pass_power_error_ratio(passer, 90.0, 0.0, -1.0) < -0.15)
+	assert(game._ai_xi_pass_power_error_ratio(passer, 90.0, 0.0, 1.0) > 0.15)
+	assert(game._ai_xi_pass_power_error_ratio(human_test_passer, 50.0, 0.0, 1.0) == 0.0)
+	game.match_team_size = 5
+	assert(game._ai_xi_pass_power_error_ratio(passer, 50.0, 0.0, 1.0) == 0.0)
+	game.match_team_size = 11
+	# Both kick directions preserve genuine power: a missed launch stays
+	# too weak/strong. The ball itself does not correct an inaccurate pass.
+	var short_power: float = 750.0 * (
+		1.0 + game._ai_xi_pass_power_error_ratio(passer, 90.0, 0.0, -1.0)
+	)
+	var long_power: float = 750.0 * (
+		1.0 + game._ai_xi_pass_power_error_ratio(passer, 90.0, 0.0, 1.0)
+	)
+	assert(short_power < 750.0 and long_power > 750.0)
+	game.ball.attach_to(passer)
+	game.ball.release(Vector2.LEFT, short_power)
+	assert(is_equal_approx(game.ball.velocity.length(), short_power))
+	game.ball.attach_to(passer)
+	game.ball.release(Vector2.RIGHT, long_power)
+	assert(is_equal_approx(game.ball.velocity.length(), long_power))
+	assert(game.ball.velocity.x > 0.0)
+	print("FOOTBALL_XI_PASS_HUMAN_ERROR_OK levels=4 angle_and_power=1")
 	passer.global_position = Vector2(XI.end.x - 850.0, centre.y)
 	receiver.global_position = passer.global_position + Vector2(-330.0, 90.0)
 	for teammate in game.teams[1]:
