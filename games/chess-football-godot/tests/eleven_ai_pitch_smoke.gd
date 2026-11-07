@@ -49,8 +49,8 @@ func _initialize() -> void:
 	# Cover and interception can protect the ACTUAL far-end goal.
 	var cover: Vector2 = game._ai_cover_target(game.teams[1][5], Vector2(XI.end.x - 420.0, centre.y))
 	assert(XI.has_point(cover) and cover.x > FIVE.end.x + 100.0)
-	# The 11v11 CPU second defender joins a real contest only when nearby.
-	# Preserve goal-side positioning without expanding physical tackle reach.
+	# Normal XI gives the carrier one challenger and goal-side cover.
+	# Hard/Expert still allow the second defender to contest nearby.
 	var xi_cover_player: Footballer = game.teams[1][5]
 	var original_cover_position: Vector2 = xi_cover_player.global_position
 	xi_cover_player.global_position = striker.global_position + Vector2(155.0, 0.0)
@@ -63,10 +63,14 @@ func _initialize() -> void:
 	assert(xi_normal_cover.is_equal_approx(xi_easy_cover))
 	assert(not game._ai_cpu_second_press_active(xi_cover_player, striker.global_position))
 	game._set_quick_difficulty("hard")
+	assert(game._ai_cpu_second_press_active(xi_cover_player, striker.global_position))
 	var xi_hard_cover: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
 	assert(XI.has_point(xi_hard_cover))
 	assert(xi_hard_cover.x > striker.global_position.x)
 	assert(xi_normal_cover.x - xi_hard_cover.x > 70.0)
+	game._set_quick_difficulty("expert")
+	assert(game._ai_cpu_second_press_active(xi_cover_player, striker.global_position))
+	game._set_quick_difficulty("hard")
 	# The nearby XI second defender shades only toward a REAL goalward
 	# diagonal, retaining its ordinary goal-side position and move_ai pace.
 	striker.velocity = Vector2(210.0, 185.0)
