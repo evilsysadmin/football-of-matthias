@@ -1977,6 +1977,43 @@ func _initialize() -> void:
 	assert(not match_node._is_spectacular_keeper_save(heroic_keeper))
 	print("SMOKE_STAGE=heroic-keeper-save-audio")
 
+	# Manual switching must not silently reselect the outfielder already
+	# controlled. Preserve nearest-other ordering, dismissal safety and
+	# the old rule that human possession selects the actual ball carrier.
+	var switch_spot := ChessFootballMath.PITCH_RECT.get_center()
+	var switch_near: Footballer = match_node.teams[0][1]
+	var switch_second: Footballer = match_node.teams[0][2]
+	var switch_third: Footballer = match_node.teams[0][3]
+	var switch_far: Footballer = match_node.teams[0][4]
+	for athlete in match_node.teams[0]:
+		if athlete.role != "keeper":
+			athlete.sent_off = false
+			athlete.global_position = switch_spot + Vector2(-420.0, -160.0)
+	switch_near.global_position = switch_spot + Vector2(12.0, 0.0)
+	switch_second.global_position = switch_spot + Vector2(55.0, 0.0)
+	switch_third.global_position = switch_spot + Vector2(115.0, 0.0)
+	switch_far.global_position = switch_spot + Vector2(-420.0, -160.0)
+	var switch_opponent: Footballer = match_node.teams[1][1]
+	switch_opponent.sent_off = false
+	match_node.ball.attach_to(switch_opponent)
+	match_node.ball.global_position = switch_spot
+	match_node._select_player(switch_near)
+	assert(match_node._best_switch_candidate() == switch_second)
+	match_node._select_player(switch_far)
+	assert(match_node._best_switch_candidate() == switch_near)
+	switch_near.sent_off = true
+	match_node._select_player(switch_second)
+	assert(match_node._best_switch_candidate() == switch_third)
+	switch_near.sent_off = false
+	match_node.ball.attach_to(switch_near)
+	assert(match_node._best_switch_candidate() == switch_near)
+	match_node.ball.attach_to(switch_opponent)
+	match_node.ball.global_position = switch_spot
+	for other in [switch_near, switch_third, switch_far]:
+		other.sent_off = true
+	assert(match_node._best_switch_candidate() == switch_second)
+	print("SMOKE_STAGE=manual-player-switch")
+
 	print("chess-football godot smoke: OK")
 	quit(0)
 
