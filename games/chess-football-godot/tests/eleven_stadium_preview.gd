@@ -806,6 +806,11 @@ func _verify_reference_near_touchline(game, stage: ChessFootball3DPresenter) -> 
 	game.set_piece_active = false
 	game.goal_restart_active = false
 	game.camera_mode = "broadcast"
+	# The test starts from an authored kickoff, but captures OPEN play.
+	# Clear its stale restart caption so the review screenshot does not
+	# suggest the camera is using a set-piece composition.
+	game.last_goal_text = ""
+	game._refresh_hud()
 	var pitch: Rect2 = game.match_pitch
 	var center: Vector2 = pitch.get_center()
 	var human: Footballer = game.controlled
