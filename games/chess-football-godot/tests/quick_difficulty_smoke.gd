@@ -62,8 +62,11 @@ func _initialize() -> void:
 	var easy_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
 	match_node._set_quick_difficulty("normal")
 	var normal_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
-	assert(easy_cover.x - normal_cover.x > 70.0)
+	assert(normal_cover.is_equal_approx(easy_cover))
+	match_node._set_quick_difficulty("hard")
+	var hard_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
 	assert(normal_cover.x > human_carrier.global_position.x)
+	assert(normal_cover.x - hard_cover.x > 70.0)
 	# No cross-pitch chase, and never change the human-side cover plan.
 	cpu_cover.global_position = human_carrier.global_position + Vector2(350.0, 0.0)
 	assert(match_node._ai_cover_target(cpu_cover, human_carrier.global_position).is_equal_approx(easy_cover))
@@ -71,8 +74,8 @@ func _initialize() -> void:
 	var human_goal_side: Vector2 = match_node._ai_cover_target(human_cover, human_carrier.global_position)
 	match_node._set_quick_difficulty("easy")
 	assert(match_node._ai_cover_target(human_cover, human_carrier.global_position).is_equal_approx(human_goal_side))
-	# Regression: the second defender really SPRINTS at a nearby human carrier
-	# on Normal, with no teammate-spacing repulsion. Easy stays a passive jog.
+	# Normal no longer sends TWO sprinting tacklers at the same new human
+	# touch. Hard still activates the real close-range second challenge.
 	var lead_cpu: Footballer = match_node.teams[1][1]
 	lead_cpu.global_position = human_carrier.global_position + Vector2(117.0, 0.0)
 	cpu_cover.global_position = human_carrier.global_position + Vector2(155.0, 40.0)
@@ -87,16 +90,41 @@ func _initialize() -> void:
 	assert(match_node.ball.carrier == human_carrier)
 	assert(not cpu_cover.last_sprinting)
 	match_node._set_quick_difficulty("normal")
-	assert(match_node._ai_cpu_second_press_active(cpu_cover, human_carrier.global_position))
+	assert(not match_node._ai_cpu_second_press_active(cpu_cover, human_carrier.global_position))
 	var normal_local_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
-	assert(absf(normal_local_cover.y - human_carrier.global_position.y) < absf(easy_local_cover.y - human_carrier.global_position.y))
+	assert(normal_local_cover.is_equal_approx(easy_local_cover))
+	match_node._update_ai(1.0 / 60.0)
+	assert(match_node.ball.carrier == human_carrier)
+	assert(not cpu_cover.last_sprinting)
+	match_node._set_quick_difficulty("hard")
+	assert(match_node._ai_cpu_second_press_active(cpu_cover, human_carrier.global_position))
+	var hard_local_cover: Vector2 = match_node._ai_cover_target(cpu_cover, human_carrier.global_position)
+	assert(absf(hard_local_cover.y - human_carrier.global_position.y) < absf(normal_local_cover.y - human_carrier.global_position.y))
 	match_node._update_ai(1.0 / 60.0)
 	assert(match_node.ball.carrier == human_carrier)
 	assert(cpu_cover.last_sprinting)
 	assert(cpu_cover.ai_target.is_equal_approx(match_node._ai_cover_target(cpu_cover, human_carrier.global_position)))
-	# Local press never becomes a 350-unit cross-pitch chase in Normal.
+	# Hard still limits the second chase to a genuine nearby contest.
 	cpu_cover.global_position = human_carrier.global_position + Vector2(350.0, 0.0)
 	assert(not match_node._ai_cpu_second_press_active(cpu_cover, human_carrier.global_position))
-	print("FOOTBALL_QUICK_DIFFICULTY_OK levels=4 CPU_real_tactics player_stats_unchanged cover_challenge=1 sprint_normal=1 easy_and_human_unchanged=1")
+	# Normal allows a tiny, REAL first-touch read before a new tackle;
+	# physical tackle and hitbox mechanics are unchanged afterward.
+	lead_cpu.global_position = human_carrier.global_position + Vector2(31.0, -8.0)
+	lead_cpu.velocity = Vector2(-175.0, 0.0)
+	lead_cpu.tackle_cooldown_seconds = 0.0
+	lead_cpu.tackle_recovery_seconds = 0.0
+	lead_cpu.tackle_active_seconds = 0.0
+	lead_cpu.action_lock_seconds = 0.0
+	match_node.ball.attach_to(human_carrier)
+	match_node._set_quick_difficulty("normal")
+	assert(not match_node._ai_xi_tackle_commit_ready(lead_cpu, human_carrier, false))
+	assert(not match_node._ai_xi_tackle_commit_ready(lead_cpu, human_carrier, true))
+	match_node.ball.tick_ball(match_node.AI_XI_NORMAL_FIRST_TOUCH_REACTION + 0.02)
+	assert(match_node._ai_xi_tackle_commit_ready(lead_cpu, human_carrier, false))
+	assert(not match_node._ai_xi_tackle_commit_ready(lead_cpu, human_carrier, true))
+	match_node._set_quick_difficulty("hard")
+	match_node.ball.attach_to(human_carrier)
+	assert(match_node._ai_xi_tackle_commit_ready(lead_cpu, human_carrier, false))
+	print("FOOTBALL_QUICK_DIFFICULTY_OK levels=4 CPU_real_tactics player_stats_unchanged normal_one_presser=1 hard_second_press=1 first_touch_read=1 easy_and_human_unchanged=1")
 
 	quit(0)
