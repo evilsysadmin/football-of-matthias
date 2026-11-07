@@ -2187,11 +2187,22 @@ func sync_presentation(delta: float, mode: String) -> void:
 			# The existing secondary motion includes deliberate running bob,
 			# which stays independent from depth and untouched here.
 			var is_controlled: bool = player == match_node.controlled
+			# The XI body and its contact shadow already compensate for
+			# camera depth, but the controlled-player/receiver rings were
+			# still fixed-world-size. Match their ground footprint to that
+			# same visible body so a winger's yellow ring does not shrink
+			# relative to his boots at the far touchline. 5v5 is unchanged.
+			var marker_depth: float = depth_scale if match_node.match_team_size == 11 else 1.0
+			var marker_footprint := Vector3(marker_depth, 1.0, marker_depth)
 			var active_disc := proxy.get_node_or_null("ActiveDisc") as MeshInstance3D
 			if active_disc != null:
 				active_disc.visible = is_controlled
+				if active_disc.scale != marker_footprint:
+					active_disc.scale = marker_footprint
 			var receiver_disc := proxy.get_node_or_null("SetPieceReceiverDisc") as MeshInstance3D
 			if receiver_disc != null:
+				if receiver_disc.scale != marker_footprint:
+					receiver_disc.scale = marker_footprint
 				receiver_disc.visible = (
 					match_node.human_set_piece_available()
 					and not match_node.pause_menu_open
