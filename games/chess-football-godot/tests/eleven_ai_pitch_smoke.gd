@@ -201,10 +201,10 @@ func _initialize() -> void:
 	game.match_team_size = 11
 	# Both kick directions preserve genuine power: a missed launch stays
 	# too weak/strong. The ball itself does not correct an inaccurate pass.
-	var short_power := 750.0 * (
+	var short_power: float = 750.0 * (
 		1.0 + game._ai_xi_pass_power_error_ratio(passer, 90.0, 0.0, -1.0)
 	)
-	var long_power := 750.0 * (
+	var long_power: float = 750.0 * (
 		1.0 + game._ai_xi_pass_power_error_ratio(passer, 90.0, 0.0, 1.0)
 	)
 	assert(short_power < 750.0 and long_power > 750.0)
