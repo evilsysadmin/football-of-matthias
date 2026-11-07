@@ -420,6 +420,7 @@ func _initialize() -> void:
 		assert(near_human_image.save_png(near_human_path) == OK)
 		print("FOOTBALL_XI_NEAR_HUMAN_CAPTURE=" + ProjectSettings.globalize_path(near_human_path))
 	print("FOOTBALL_XI_NEAR_TRANSIENT_OK frames=36 margin=46")
+	line_pixel = stage.screen_position_for_world(near_line, 0.02)
 	var actual_stage_line_z: float = (
 		game.match_pitch.end.y - game.match_pitch.get_center().y
 	) * stage.WORLD_SCALE
