@@ -511,7 +511,16 @@ func _initialize() -> void:
 			var expected_lane_z: float = ChessFootball3DPresenter.xi_broadcast_lane_look_z(
 				lane_spot, game.match_pitch
 			)
-			assert(absf(stage.smoothed_restart_look_z - expected_lane_z) < 0.03)
+			if lane_name == "FAR":
+				assert(absf(stage.smoothed_restart_look_z - expected_lane_z) < 0.03,
+					"Far XI lane must retain unmodified ball-only pitch follow")
+			else:
+				assert(stage.smoothed_restart_look_z >= expected_lane_z - 0.03)
+				var near_white_line := stage.screen_position_for_world(
+					Vector2(lane_spot.x, game.match_pitch.end.y), 0.02
+				)
+				assert(near_white_line.y < bounds.y - 45.0,
+					"Near XI lane screenshot must include the lower white touchline")
 			var ball_pixel: Vector2 = stage.screen_position_for_world(lane_spot, 0.02)
 			assert(ball_pixel.x > 70.0 and ball_pixel.x < bounds.x - 70.0)
 			assert(ball_pixel.y > 155.0 and ball_pixel.y < bounds.y - 35.0)
