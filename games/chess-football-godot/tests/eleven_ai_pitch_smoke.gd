@@ -60,16 +60,21 @@ func _initialize() -> void:
 	game._set_quick_difficulty("normal")
 	var xi_normal_cover: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
 	assert(XI.has_point(xi_normal_cover))
-	assert(xi_normal_cover.x > striker.global_position.x)
-	assert(xi_easy_cover.x - xi_normal_cover.x > 70.0)
+	assert(xi_normal_cover.is_equal_approx(xi_easy_cover))
+	assert(not game._ai_cpu_second_press_active(xi_cover_player, striker.global_position))
+	game._set_quick_difficulty("hard")
+	var xi_hard_cover: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
+	assert(XI.has_point(xi_hard_cover))
+	assert(xi_hard_cover.x > striker.global_position.x)
+	assert(xi_normal_cover.x - xi_hard_cover.x > 70.0)
 	# The nearby XI second defender shades only toward a REAL goalward
 	# diagonal, retaining its ordinary goal-side position and move_ai pace.
 	striker.velocity = Vector2(210.0, 185.0)
 	var read_upper: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
 	assert(XI.has_point(read_upper))
-	assert(read_upper.x > xi_normal_cover.x + 20.0)
-	assert(read_upper.y > xi_normal_cover.y + 20.0)
-	assert(read_upper.distance_to(xi_normal_cover) < 80.0)
+	assert(read_upper.x > xi_hard_cover.x + 20.0)
+	assert(read_upper.y > xi_hard_cover.y + 20.0)
+	assert(read_upper.distance_to(xi_hard_cover) < 80.0)
 	assert(read_upper.x > striker.global_position.x)
 	var cover_start: Vector2 = xi_cover_player.global_position
 	xi_cover_player.velocity = Vector2.ZERO
@@ -80,7 +85,7 @@ func _initialize() -> void:
 	xi_cover_player.velocity = Vector2.ZERO
 	striker.velocity = Vector2(210.0, -185.0)
 	var read_lower: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
-	assert(read_lower.y < xi_normal_cover.y - 20.0)
+	assert(read_lower.y < xi_hard_cover.y - 20.0)
 	assert(read_lower.x > striker.global_position.x)
 	# Neither straight runs nor backwards retreats trigger a fake diagonal.
 	striker.velocity = Vector2(210.0, 0.0)
@@ -890,6 +895,10 @@ func _initialize() -> void:
 	assert(bool(glancing_tackle["inside"]))
 	assert(not bool(glancing_tackle["clean"]))
 	assert(not bool(glancing_tackle["foul"]))
+	# In Normal, a just-received human ball gets a finite read time.
+	# The CPU can still close, and then the exact existing hitbox applies.
+	assert(not game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
+	game.ball.tick_ball(game.AI_XI_NORMAL_FIRST_TOUCH_REACTION + 0.02)
 	assert(game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
 	assert(not game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, true))
 	# A late challenge from behind would risk a foul: keep containing.
@@ -901,7 +910,9 @@ func _initialize() -> void:
 	lane_presser.global_position = lane_owner.global_position + Vector2(31.0, -8.0)
 	lane_presser.velocity = Vector2(-160.0, 0.0)
 	assert(bool(game._tackle_hitbox(lane_presser, lane_owner.global_position)["clean"]))
-	assert(game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, true))
+	# Normal's cover contains even at a clean contact opportunity.
+	assert(not game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, true))
+	assert(game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
 	assert(game._try_tackle(lane_presser))
 	assert(game.ball.carrier == null)
 	# Easy and the legacy five-player fixture are explicitly untouched.
@@ -918,7 +929,7 @@ func _initialize() -> void:
 	game.match_team_size = 11
 	game.ball.release(Vector2.ZERO, 0.0)
 	assert(not game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
-	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 cover_clean=1 easy_five_unchanged=1")
+	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 normal_cover_contains=1 easy_five_unchanged=1")
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
 	quit(0)
