@@ -1274,7 +1274,10 @@ jobs:
           godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
           log="$RUNNER_TEMP/football-xi-user-1500x788.log"
           set +e
-          FOOTBALL_XI_REFERENCE_VIEWPORT=1 timeout 50s xvfb-run -a "$godot" --windowed --resolution 1500x788 --path games/chess-football-godot --script res://tests/eleven_stadium_preview.gd 2>&1 | tee "$log"
+          # Godot's project defaults to fullscreen; xvfb-run's default
+          # 1280x1024 virtual screen overrides --resolution. Explicitly
+          # size the DISPLAY itself to the user's physical screenshot.
+          FOOTBALL_XI_REFERENCE_VIEWPORT=1 timeout 50s xvfb-run -a -s "-screen 0 1500x788x24" "$godot" --windowed --resolution 1500x788 --path games/chess-football-godot --script res://tests/eleven_stadium_preview.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           # Archive the screenshot even on assertion failure, then block
