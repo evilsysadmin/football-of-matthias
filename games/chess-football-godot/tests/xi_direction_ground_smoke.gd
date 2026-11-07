@@ -140,8 +140,10 @@ func _initialize() -> void:
 				var shadow := stage.player_nodes[key].get_node("ContactShadow") as MeshInstance3D
 				# The far-side shadow must grow with the same compensation as
 				# its visible XI body; otherwise the player appears airborne.
-				var expected_depth: float = stage.perspective_body_scale(
-					stage.camera, stage.player_nodes[key].global_position
+				var expected_depth: float = (
+					stage.xi_projected_body_scale(stage.camera, stage.player_nodes[key].global_position)
+					if mode == "broadcast"
+					else stage.perspective_body_scale(stage.camera, stage.player_nodes[key].global_position)
 				)
 				assert(is_equal_approx(shadow.scale.x, expected_depth))
 				assert(is_equal_approx(shadow.scale.z, expected_depth))
