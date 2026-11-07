@@ -476,6 +476,58 @@ func _initialize() -> void:
 	assert(game._ai_xi_has_shot_angle(striker, right_goal))
 	passer.global_position = Vector2(XI.position.x + 430.0, centre.y)
 	assert(game._ai_xi_has_shot_angle(passer, left_goal))
+	# Shot-lane recognition uses ACTUAL defenders in front of the ball,
+	# not the keeper, players behind it or impossible future predictions.
+	var xi_shot_keeper: Footballer = game.teams[0][0]
+	var xi_shot_target := Vector2(
+		left_goal.x,
+		left_goal.y + (-70.0 if xi_shot_keeper.global_position.y > left_goal.y else 70.0)
+	)
+	var xi_shot_blocker: Footballer = game.teams[0][5]
+	var xi_shot_blocker_original := xi_shot_blocker.global_position
+	assert(not game._ai_xi_shot_lane_blocked(passer, xi_shot_target))
+	xi_shot_blocker.global_position = passer.global_position.lerp(xi_shot_target, 0.48)
+	assert(game._ai_xi_shot_lane_blocked(passer, xi_shot_target))
+	xi_shot_blocker.global_position += Vector2(0.0, 100.0)
+	assert(not game._ai_xi_shot_lane_blocked(passer, xi_shot_target))
+	xi_shot_blocker.global_position = passer.global_position.lerp(xi_shot_target, 0.48)
+	xi_shot_blocker.sent_off = true
+	assert(not game._ai_xi_shot_lane_blocked(passer, xi_shot_target))
+	xi_shot_blocker.sent_off = false
+	xi_shot_blocker.global_position = passer.global_position + Vector2(150.0, 0.0)
+	assert(not game._ai_xi_shot_lane_blocked(passer, xi_shot_target))
+	xi_shot_blocker.global_position = xi_shot_blocker_original
+	# The SAME obstruction may be spotted or overlooked. Easier settings
+	# misread it more often. Even Expert MUST NOT be perfect: no FCB cyborg.
+	var shot_read_chances: Array[float] = []
+	for difficulty in ["easy", "normal", "hard", "expert"]:
+		game._set_quick_difficulty(difficulty)
+		var chance: float = float(game.quick_difficulty_profile["shot_read"])
+		assert(chance > 0.0 and chance < 1.0)
+		shot_read_chances.append(chance)
+		assert(game._ai_xi_reads_shot_blocker(0.0))
+		assert(not game._ai_xi_reads_shot_blocker(0.99))
+	for step in range(3):
+		assert(shot_read_chances[step] < shot_read_chances[step + 1])
+	game._set_quick_difficulty("easy")
+	assert(not game._ai_xi_reads_shot_blocker(0.40)) # rash shot
+	game._set_quick_difficulty("normal")
+	assert(game._ai_xi_reads_shot_blocker(0.40)) # sees a defender
+	game._set_quick_difficulty("hard")
+	assert(not game._ai_xi_reads_shot_blocker(0.80)) # still human
+	game._set_quick_difficulty("expert")
+	assert(game._ai_xi_reads_shot_blocker(0.80))
+	# Mirrored geometry is equally fallible; never privilege one goal.
+	striker.global_position = Vector2(XI.end.x - 430.0, centre.y)
+	var mirror_target := Vector2(
+		right_goal.x, right_goal.y + (-70.0 if right_keeper.global_position.y > right_goal.y else 70.0)
+	)
+	var mirror_blocker: Footballer = game.teams[1][5]
+	var mirror_original := mirror_blocker.global_position
+	mirror_blocker.global_position = striker.global_position.lerp(mirror_target, 0.50)
+	assert(game._ai_xi_shot_lane_blocked(striker, mirror_target))
+	mirror_blocker.global_position = mirror_original
+	game._set_quick_difficulty("normal")
 	game.ball.attach_to(passer)
 	game._ai_attack(passer)
 	assert(game.ball.carrier == null and game.ball.velocity.x < -350.0)

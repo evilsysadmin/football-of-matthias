@@ -76,6 +76,9 @@ const AI_SHOOT_DISTANCE := 650.0
 # CPU XI avoids speculative byline shots when the real mouth is too narrow.
 # Angle depends on actual player/post positions; no aim or physics buffs.
 const AI_XI_SHOT_MIN_MOUTH_ANGLE_DEGREES := 18.0
+# Approximate a defender standing in a *current* shot corridor. This is
+# deliberately imperfect perception, NOT a prediction of future movement.
+const AI_XI_SHOT_LANE_BLOCK_RADIUS := 62.0
 const AI_PRESSURE_RADIUS := 180.0
 const AI_FORWARD_PASS_GAIN := 145.0
 # XI possession: real ground balls lose speed to friction. Avoid 700-unit
@@ -292,7 +295,7 @@ var ai_secondary_presser_cache: Array = [null, null]
 var ai_xi_defensive_role_owner: Footballer = null
 var keeper_distribution_started_at: Dictionary = {}
 var quick_difficulty: String = "normal"
-var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0}
+var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0,"shot_read":0.50}
 var ai_adaptive_level: int = 0
 var ai_adapt_human_pressure: float = 0.0
 var ai_adapt_cpu_pressure: float = 0.0
@@ -2182,18 +2185,58 @@ func _ai_xi_has_shot_angle(player: Footballer, goal: Vector2) -> bool:
 	return absf(rad_to_deg(upper.angle_to(lower))) >= AI_XI_SHOT_MIN_MOUTH_ANGLE_DEGREES
 
 
+# An outfielder directly in today's shot corridor is a risk, not a
+# guaranteed save: loft and movement are left to normal ball physics.
+# Never read a defender's future input, nor count the keeper as a blocker.
+func _ai_xi_shot_lane_blocked(player: Footballer, shot_target: Vector2) -> bool:
+	var segment: Vector2 = shot_target - player.global_position
+	var squared_length: float = segment.length_squared()
+	if squared_length < 1.0:
+		return false
+	for defender in teams[1 - player.team_id]:
+		if defender.sent_off or defender.role == "keeper":
+			continue
+		var offset: Vector2 = defender.global_position - player.global_position
+		var fraction: float = offset.dot(segment) / squared_length
+		# Do not count opponents behind the ball or beyond the goal.
+		if fraction <= 0.12 or fraction >= 0.92:
+			continue
+		var nearest: Vector2 = player.global_position + segment * fraction
+		if defender.global_position.distance_squared_to(nearest) <= (
+			AI_XI_SHOT_LANE_BLOCK_RADIUS * AI_XI_SHOT_LANE_BLOCK_RADIUS
+		):
+			return true
+	return false
+
+
+# Explicit roll keeps the perception contract testable without flaky RNG
+# tests. Gameplay supplies a fresh random value ONLY for a blocked lane.
+# Even Expert can misjudge; no difficulty receives perfect pitch vision.
+func _ai_xi_reads_shot_blocker(roll: float) -> bool:
+	return roll < float(quick_difficulty_profile["shot_read"])
+
+
 func _ai_attack(player: Footballer) -> void:
 	if ball.carrier != player:
 		return
 	var goal := ChessFootballMath.goal_center(player.team_id, match_pitch)
 	var goal_distance := player.global_position.distance_to(goal)
-	if (
+	var shot_available: bool = (
 		goal_distance < AI_SHOOT_DISTANCE * float(quick_difficulty_profile["shoot"])
 		and (match_team_size != 11 or _ai_xi_has_shot_angle(player, goal))
+	)
+	var defending_keeper: Footballer = teams[1 - player.team_id][0]
+	var aim_y := goal.y + (-70.0 if defending_keeper.global_position.y > goal.y else 70.0)
+	var shot_target := Vector2(goal.x, aim_y)
+	if (
+		shot_available
+		and match_team_size == 11
+		and _ai_xi_shot_lane_blocked(player, shot_target)
 	):
-		var defending_keeper: Footballer = teams[1 - player.team_id][0]
-		var aim_y := goal.y + (-70.0 if defending_keeper.global_position.y > goal.y else 70.0)
-		var shot_target := Vector2(goal.x, aim_y)
+		# A footballer can overlook an obvious defender. Difficulty changes
+		# the chance of SEEING the obstacle, not accuracy or ball physics.
+		shot_available = not _ai_xi_reads_shot_blocker(randf())
+	if shot_available:
 		player.play_action("shoot", 0.78)
 		var distance_ratio := clampf(goal_distance / AI_SHOOT_DISTANCE, 0.0, 1.0)
 		var shot_power := lerpf(AI_SHOT_MIN_POWER, AI_SHOT_MAX_POWER, distance_ratio) * player.shot_power_multiplier()
