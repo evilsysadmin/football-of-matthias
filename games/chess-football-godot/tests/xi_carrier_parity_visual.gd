@@ -97,8 +97,14 @@ func _initialize() -> void:
 						stage._run_v3_r2_loaded.has(team_id)
 					)
 					assert(is_equal_approx(expected_trim, stage.XI_V3_DIAGONAL_WIDTH_TRIM))
-					assert(absf(normalized_width / side_normalized_width - expected_trim) < 0.055,
-						"Oblique footballer is still drawn with oversized torso width")
+					var width_ratio: float = normalized_width / side_normalized_width
+					assert(absf(width_ratio - expected_trim) < 0.055,
+						"XI diagonal size correction is not reflected in the real sprite")
+					# Same actor and pitch depth in both cameras: the diagonal
+					# must not look dwarfed by its lateral carrier counterpart
+					# or become broader than that approved side silhouette.
+					assert(width_ratio >= 0.90 and width_ratio <= 1.04,
+						"XI diagonal body scale is visibly inconsistent across views")
 					print("FOOTBALL_XI_V3_DIAGONAL_WIDTH_PARITY team=%d camera=%s view=%s ratio=%.3f"
 						% [team_id, mode, VIEWS[index], normalized_width / side_normalized_width])
 				await process_frame
@@ -193,8 +199,11 @@ func _initialize() -> void:
 		stage._run_v3_r2_loaded[0] = true
 		stage.sync_presentation(0.0, mode)
 		var after_scale_x: float = stage.player_sprites[runner_key].scale.x
-		assert(after_scale_x < before_scale_x * 0.90,
-			"XI diagonal width trim did not change the real 3D sprite scale")
+		assert(
+			after_scale_x < before_scale_x * 0.95
+			and after_scale_x > before_scale_x * 0.90,
+			"XI V3 trim must be visible but must not over-shrink the body"
+		)
 		for _pass in range(3):
 			await process_frame
 			await RenderingServer.frame_post_draw

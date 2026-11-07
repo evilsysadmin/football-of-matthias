@@ -90,12 +90,14 @@ const MAX_PERSPECTIVE_BODY_SCALE := 1.80
 # multiplier made *every* diagonal smaller than front/back and side.
 # Correct the width only. Do not modify any approved PNG.
 const DIAGONAL_WIDTH_COMPENSATION := 0.91
-# The lateral ball carrier is drawn in the approved lean 8-frame carry
-# sheet while diagonal movement uses the 12-pose V3 run sheets. Matching
-# their alpha *heights* did not match torso bulk. Trim ONLY V3 XI outfield
-# diagonals in billboard space, not the original art, 5v5, keepers or
-# fallback V2. This compounds with the older 0.91 compensation to 0.7826.
-const XI_V3_DIAGONAL_WIDTH_TRIM := 0.86
+# The lateral ball carrier uses an 8-frame carry atlas, while diagonal
+# running uses V3's 12-pose atlas. The older view correction (0.91) and
+# V3 trim stack: the former 0.86 left XI diagonals only 78% of their
+# authored width, making them look undersized beside the same-depth side
+# carrier. Ease ONLY the extra V3 trim to 0.92 (net 0.8372), preserving
+# slight torso perspective without changing height, foot anchor, atlas,
+# keepers, fallback V2, legacy 5v5 or match physics.
+const XI_V3_DIAGONAL_WIDTH_TRIM := 0.92
 const PLAYER_RUN_BOB := 0.050
 const PLAYER_SPRINT_BOB := 0.072
 # The approved keeper frames do move, but many poses are only a few pixels
