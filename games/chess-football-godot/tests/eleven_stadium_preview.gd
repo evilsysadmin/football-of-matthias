@@ -89,6 +89,13 @@ func _initialize() -> void:
 	assert(game.ball.carrier.squad_index == 10)
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null)
+	# This opt-in visual CI mode runs a focused screenshot at the exact
+	# 1500x788 user-reported viewport. Normal 1280x720 regression keeps
+	# its original full stadium/animation sweep unchanged.
+	if OS.get_environment("FOOTBALL_XI_REFERENCE_VIEWPORT") == "1":
+		await _verify_reference_near_touchline(game, stage)
+		quit(0)
+		return
 	# Check actual XI sphere radius plus the fixed turf clearance, not an
 	# old literal centre height that goes stale when proportions are tuned.
 	stage.sync_presentation(0.0, "broadcast")
@@ -776,3 +783,77 @@ func _initialize() -> void:
 	print("FOOTBALL_XI_ANIMATION_OK unique_run_frames=%d" % distinct_frames.size())
 	print("FOOTBALL_XI_PREVIEW_OK teams=11+11 stage=full_pitch unique=22")
 	quit(0)
+
+
+# This is an actual camera/renderer test on 1500x788 Godot pixels, not
+# a resized 1280x720 PNG or a mathematical projection-only unit test.
+# Reproduce a ball near the LEFT goal with the selected human in the
+# LOWER touchline while the broadcast camera is following the ball.
+func _verify_reference_near_touchline(game, stage: ChessFootball3DPresenter) -> void:
+	var viewport := root.get_viewport()
+	var size: Vector2 = viewport.get_visible_rect().size
+	var physical_window: Vector2i = DisplayServer.window_get_size()
+	print("FOOTBALL_XI_REFERENCE_WINDOW logical=%s physical=%s" %
+		[str(size), str(physical_window)])
+	# The game intentionally uses Godot keep_height/canvas_items. Its
+	# virtual viewport height may be 720 even when the ACTUAL window and
+	# framebuffer are 1500x788. Never confuse logical and physical pixels.
+	assert(physical_window == Vector2i(1500, 788),
+		"XI reference CI must open the actual 1500x788 window")
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.set_piece_active = false
+	game.goal_restart_active = false
+	game.camera_mode = "broadcast"
+	# The test starts from an authored kickoff, but captures OPEN play.
+	# Clear its stale restart caption so the review screenshot does not
+	# suggest the camera is using a set-piece composition.
+	game.last_goal_text = ""
+	game._refresh_hud()
+	var pitch: Rect2 = game.match_pitch
+	var center: Vector2 = pitch.get_center()
+	var human: Footballer = game.controlled
+	assert(human != null and human.team_id == 0)
+	var near_human_x: float = pitch.position.x + pitch.size.x * 0.24
+	var line_at_human := Vector2(near_human_x, pitch.end.y)
+	var human_spot := Vector2(
+		near_human_x, pitch.end.y - pitch.size.y * 0.035
+	)
+	var near_goal_ball := Vector2(
+		pitch.position.x + pitch.size.x * 0.10, center.y
+	)
+	# Start the lens on a regular midfield play, then move only the
+	# visually selected player. All 36 intermediate frames are checked.
+	human.global_position = center
+	game.ball.global_position = near_goal_ball
+	stage.sync_presentation(8.0, "broadcast")
+	human.global_position = human_spot
+	var smallest_margin: float = INF
+	for frame in range(36):
+		stage.sync_presentation(1.0 / 60.0, "broadcast")
+		var line_pixel: Vector2 = stage.screen_position_for_world(line_at_human, 0.02)
+		var foot_pixel: Vector2 = stage.screen_position_for_world(human_spot, 0.02)
+		var margin_px: float = (size.y - line_pixel.y) * 788.0 / size.y
+		smallest_margin = minf(smallest_margin, margin_px)
+		assert(line_pixel.x > 25.0 and line_pixel.x < size.x - 25.0,
+			"XI reference touchline escaped horizontally on frame %d" % frame)
+		assert(margin_px >= 44.0,
+			"XI reference touchline cropped during frame %d" % frame)
+		assert(foot_pixel.y > 90.0 and foot_pixel.y < line_pixel.y,
+			"XI reference selected winger disappeared beyond the line")
+	# The actual selected-player marker must remain visible, not only
+	# its foot point in the projection calculation.
+	stage.sync_presentation(0.0, "broadcast")
+	var ring := stage.player_nodes[human.get_instance_id()].get_node("ActiveDisc") as MeshInstance3D
+	assert(ring.visible)
+	for _frame in range(3):
+		await process_frame
+		await RenderingServer.frame_post_draw
+	var picture: Image = viewport.get_texture().get_image()
+	assert(picture.get_width() == 1500 and picture.get_height() == 788,
+		"XI reference screenshot must contain actual 1500x788 pixels")
+	var path := "user://chess-football-xi-near-user-1500x788.png"
+	assert(picture.save_png(path) == OK)
+	print("FOOTBALL_XI_USER_VIEWPORT_CAPTURE=" + ProjectSettings.globalize_path(path))
+	print("FOOTBALL_XI_USER_VIEWPORT_OK viewport=1500x788 frames=36 min_margin_px=%.1f" % smallest_margin)
