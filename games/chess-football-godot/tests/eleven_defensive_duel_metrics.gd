@@ -2,7 +2,7 @@ extends SceneTree
 
 # CI-only, deterministic duel matrix. Same initial real Godot actors are
 # exercised twice: the previous unguarded tackle decision and the current
-# XI Normal+ commit/contain decision. This is NOT live match telemetry or
+# XI Hard guarded commit/contain decision. This is NOT live match telemetry or
 # evidence of aggregate win rates; it prevents specific regressions.
 const Formation = preload("res://scripts/football_match_formation.gd")
 const XI := Formation.ELEVEN_PITCH_RECT
@@ -23,6 +23,23 @@ func _initialize() -> void:
 
 	var owner: Footballer = game.teams[0][10]
 	var defender: Footballer = game.teams[1][5]
+	# Normal must let the human settle a real first touch and must not
+	# dispatch a second automated tackle. After the read, the first
+	# defender still uses the same physically valid clean hitbox.
+	owner.global_position = XI.get_center()
+	defender.global_position = owner.global_position + Vector2(31.0, -8.0)
+	defender.velocity = Vector2(-175.0, 0.0)
+	game.ball.attach_to(owner)
+	assert(not game._ai_xi_tackle_commit_ready(defender, owner, false))
+	assert(not game._ai_xi_tackle_commit_ready(defender, owner, true))
+	assert(not game._ai_cpu_second_press_active(defender, owner.global_position))
+	game.ball.tick_ball(game.AI_XI_NORMAL_FIRST_TOUCH_REACTION + 0.02)
+	assert(game._ai_xi_tackle_commit_ready(defender, owner, false))
+	assert(not game._ai_xi_tackle_commit_ready(defender, owner, true))
+	# Preserve the original guarded/unguarded tackle matrix on Hard;
+	# that level explicitly retains coordinated second-man challenges.
+	game._set_quick_difficulty("hard")
+	assert(game._ai_xi_tackle_commit_ready(defender, owner, true))
 	# Explicitly exclude every other actor from the local duel.
 	for team in game.teams:
 		for player: Footballer in team:
