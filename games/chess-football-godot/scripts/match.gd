@@ -2746,8 +2746,23 @@ func _best_switch_candidate() -> Footballer:
 		and not ball.carrier.sent_off
 	):
 		return ball.carrier
-	# Never pick an empty-handed keeper: the next physics tick would
-	# immediately restore an outfielder and make the manual switch vanish.
+	# Q must offer a DIFFERENT defender even if the current outfielder is
+	# already nearest to the ball. Otherwise the key looks unresponsive.
+	# Keep the established nearest-to-ball ordering and exclude keepers,
+	# red-carded players and the currently controlled outfielder.
+	var next_best: Footballer = null
+	var best_distance := INF
+	for player in teams[0]:
+		if player.sent_off or player.role == "keeper" or player == controlled:
+			continue
+		var distance: float = player.global_position.distance_squared_to(ball.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			next_best = player
+	if next_best != null:
+		return next_best
+	# All other outfielders may be sent off. Do not switch to an
+	# empty-handed keeper, and keep the only eligible outfielder selected.
 	return _nearest_outfield_player_to_point(0, ball.global_position)
 
 func _nearest_player_to_ball(team_id: int) -> Footballer:
