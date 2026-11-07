@@ -289,6 +289,36 @@ func _initialize() -> void:
 	var baseline_top := stage.screen_position_for_world(center, 1.50)
 	assert(baseline_foot.distance_to(baseline_top) > 30.0,
 		"11v11 broadcast still makes the footballers look tiny")
+	# A single identical XI footballer should retain its on-screen height
+	# when moved from FAR to NEAR touchline under this same broadcast lens.
+	# Camera-forward depth correction alone left near-side actors visibly
+	# ~20% smaller despite their unchanged 120px canonical source artwork.
+	var scale_probe: Footballer = game.teams[0][3]
+	var probe_home: Vector2 = scale_probe.global_position
+	var probe_heights: Array[float] = []
+	for lane_fraction in [-0.47, 0.0, 0.47]:
+		scale_probe.global_position = center + Vector2(
+			0.0, game.match_pitch.size.y * lane_fraction
+		)
+		scale_probe.velocity = Vector2.ZERO
+		stage.sync_presentation(0.0, "broadcast")
+		var point: Vector3 = stage.world_to_stage(scale_probe.global_position)
+		var bottom: Vector2 = stage.camera.unproject_position(point + Vector3.UP * 0.02)
+		var head: Vector2 = stage.camera.unproject_position(point + Vector3.UP * 1.50)
+		var probe_sprite: AnimatedSprite3D = stage.player_sprites[
+			scale_probe.get_instance_id()
+		]
+		var projected_height: float = bottom.distance_to(head) * probe_sprite.scale.y
+		assert(projected_height > 10.0)
+		probe_heights.append(projected_height)
+	assert(probe_heights.size() == 3)
+	for screen_height in probe_heights:
+		assert(
+			absf(screen_height / probe_heights[1] - 1.0) < 0.08,
+			"XI broadcast body height changes at the touchline"
+		)
+	scale_probe.global_position = probe_home
+	stage.sync_presentation(0.0, "broadcast")
 	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
 		"broadcast", false, stage.camera.position.z, true
 	), "Normal XI broadcast must not trigger the corner-release camera")

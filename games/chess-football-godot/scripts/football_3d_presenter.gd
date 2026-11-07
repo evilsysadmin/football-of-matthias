@@ -2107,7 +2107,15 @@ func sync_presentation(delta: float, mode: String) -> void:
 			_sync_player_secondary_motion(player, sprite, proxy, delta)
 			var tone_gain := _tonal_view_gain(sprite)
 			sprite.modulate = Color(tone_gain, tone_gain, tone_gain, 1.0)
-			var depth_scale := perspective_body_scale(camera, proxy.global_position)
+			# Broadcast's steeply pitched camera projects vertical bodies
+			# differently across near/far touchlines even after correcting
+			# camera-forward distance. Match the actual on-screen projected
+			# height, not an approximate depth ratio; keep legacy 5v5/tactical.
+			var depth_scale := (
+				xi_projected_body_scale(camera, proxy.global_position)
+				if match_node.match_team_size == 11 and mode == "broadcast"
+				else perspective_body_scale(camera, proxy.global_position)
+			)
 			# Apply to both axes AFTER each authored-view/role correction. Boot
 			# baseline must also be scaled, or feet sink as players cross depth.
 			var authored_y := sprite.scale.y
@@ -2505,6 +2513,37 @@ static func xi_v3_diagonal_width_trim(
 	]:
 		return XI_V3_DIAGONAL_WIDTH_TRIM
 	return 1.0
+
+
+# The broadcast camera is pitched toward the grass. Depth-ratio scaling
+# alone does not equalize projected body height: the visible vertical span
+# also changes with a footballer's lane (especially the NEAR touchline).
+# Measure a ground-to-head reference segment through the actual camera.
+# Keeping a single projected height across lanes avoids shrinking wingers;
+# fixed-world gameplay coordinates, physical contact and PNGs are untouched.
+static func xi_projected_body_scale(view_camera: Camera3D, stage_position: Vector3) -> float:
+	if view_camera == null or view_camera.projection != Camera3D.PROJECTION_PERSPECTIVE:
+		return 1.0
+	var ground := Vector3(stage_position.x, 0.02, stage_position.z)
+	var head := ground + Vector3.UP * 1.48
+	var reference := Vector3(view_camera.global_position.x, 0.02, 0.0)
+	var reference_head := reference + Vector3.UP * 1.48
+	if view_camera.is_position_behind(ground) or view_camera.is_position_behind(head):
+		return 1.0
+	if view_camera.is_position_behind(reference) or view_camera.is_position_behind(reference_head):
+		return 1.0
+	var projected: float = view_camera.unproject_position(ground).distance_to(
+		view_camera.unproject_position(head)
+	)
+	var reference_pixels: float = view_camera.unproject_position(reference).distance_to(
+		view_camera.unproject_position(reference_head)
+	)
+	if projected < 0.01 or reference_pixels < 0.01:
+		return 1.0
+	return clampf(
+		reference_pixels / projected,
+		MIN_PERSPECTIVE_BODY_SCALE, MAX_PERSPECTIVE_BODY_SCALE
+	)
 
 
 static func perspective_body_scale(view_camera: Camera3D, stage_position: Vector3) -> float:
