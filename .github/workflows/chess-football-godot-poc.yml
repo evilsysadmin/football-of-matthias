@@ -1267,6 +1267,29 @@ jobs:
           grep -q 'FOOTBALL_XI_ULTRAWIDE_OK' "$log"
           test -s "$RUNNER_TEMP/chess-football-review/xi-ultrawide-1766x832.png"
           test -s "$RUNNER_TEMP/chess-football-review/xi-penalty-ultrawide-1766x832.png"
+      - name: XI reference viewport · user 1500x788 near touchline (real Godot)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-user-1500x788.log"
+          set +e
+          FOOTBALL_XI_REFERENCE_VIEWPORT=1 timeout 50s xvfb-run -a "$godot" --windowed --resolution 1500x788 --path games/chess-football-godot --script res://tests/eleven_stadium_preview.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          # Archive the screenshot even on assertion failure, then block
+          # Ready/merge. Never fake an oversized image by resizing 1280p.
+          marker="FOOTBALL_XI_USER_VIEWPORT_CAPTURE"
+          shot="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
+          if [[ -n "$shot" && -s "$shot" ]]; then
+            cp "$shot" "$RUNNER_TEMP/chess-football-review/xi-user-1500x788-near-line.png"
+          fi
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::1500x788 XI near touchline user-reference regression.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_USER_VIEWPORT_OK viewport=1500x788 frames=36' "$log"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-user-1500x788-near-line.png"
       - name: XI off-ball running frames in actual 3D Godot (two clubs)
         shell: bash
         run: |
