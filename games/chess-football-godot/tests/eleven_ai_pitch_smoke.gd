@@ -455,12 +455,32 @@ func _initialize() -> void:
 	assert(game._ai_xi_pass_setup_seconds(passer, 135.0, 200.0) > 0.2)
 	assert(game._ai_xi_pass_setup_seconds(game.teams[1][2], INF, 90.0) >
 		game._ai_xi_pass_setup_seconds(passer, INF, 90.0))
-	# A CPU striker must shoot LEFT toward the XI goal, never right toward
-	# the old arcade goal now located behind the attacker.
+	# An attacker near the XI byline may be inside the nominal shooting
+	# radius but see only a sliver of goal. Do NOT blast from there; keep
+	# possession for the existing dribble/pass decision instead.
+	passer.global_position = Vector2(XI.position.x + 70.0, centre.y + 600.0)
+	assert(passer.global_position.distance_to(left_goal) < game.AI_SHOOT_DISTANCE)
+	assert(not game._ai_xi_has_shot_angle(passer, left_goal))
+	assert(game._best_ai_pass_target(passer) == null)
+	game._set_quick_difficulty("normal")
+	game.ball.attach_to(passer)
+	game._ai_attack(passer)
+	assert(game.ball.carrier == passer)
+	assert(game.ai_xi_no_safe_pass_owner == passer)
+	assert(game._ai_dribble_target(passer).y < passer.global_position.y)
+	# Both directions share the same measured goal mouth. A legal central
+	# opportunity retains the historic shot and physical ball speed.
+	striker.global_position = Vector2(XI.end.x - 70.0, centre.y - 600.0)
+	assert(not game._ai_xi_has_shot_angle(striker, right_goal))
+	striker.global_position = Vector2(XI.end.x - 430.0, centre.y)
+	assert(game._ai_xi_has_shot_angle(striker, right_goal))
 	passer.global_position = Vector2(XI.position.x + 430.0, centre.y)
+	assert(game._ai_xi_has_shot_angle(passer, left_goal))
 	game.ball.attach_to(passer)
 	game._ai_attack(passer)
 	assert(game.ball.carrier == null and game.ball.velocity.x < -350.0)
+	assert(game.ball.last_release_was_shot)
+	print("FOOTBALL_XI_SHOT_ANGLE_OK")
 	# Real goalkeeping near the distant right goal. Previously saves were
 	# rejected outright because the ball lay outside the old 5v5 rect.
 	right_keeper.global_position = Vector2(XI.end.x - game.KEEPER_LINE_OFFSET, centre.y)
