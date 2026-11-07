@@ -228,6 +228,59 @@ func _initialize() -> void:
 	assert(game._ai_support_target(receiver).distance_to(passer.global_position) < 300.0)
 	assert(game._ai_xi_support_rank(game.teams[1][5]) == -1)
 	assert(game._best_ai_pass_target(passer) == receiver)
+	# Humans do not always pick the absolute highest-scored pass. Give
+	# this CPU carrier TWO comparable, physically safe forward options;
+	# no keeper, sent-off player, blocked corridor or long pass can qualify.
+	var second_outlet: Footballer = game.teams[1][9]
+	var second_outlet_home: Vector2 = second_outlet.global_position
+	var second_outlet_velocity: Vector2 = second_outlet.velocity
+	second_outlet.global_position = passer.global_position + Vector2(-315.0, -94.0)
+	second_outlet.velocity = Vector2.ZERO
+	receiver.velocity = Vector2.ZERO
+	assert(game._ai_xi_pass_lane_clear(passer, second_outlet))
+	assert(game._ai_xi_pass_lane_clear(passer, receiver))
+	assert(game._best_ai_pass_target(passer) == receiver)
+	var option_odds: Array[float] = []
+	for difficulty in ["easy", "normal", "hard", "expert"]:
+		game._set_quick_difficulty(difficulty)
+		var option_chance: float = float(
+			game.quick_difficulty_profile["pass_second_choice"]
+		)
+		assert(option_chance > 0.0 and option_chance < 1.0)
+		option_odds.append(option_chance)
+		assert(game._best_ai_pass_target(passer, 0.0) == second_outlet)
+		assert(game._best_ai_pass_target(passer, 0.99) == receiver)
+	for index in range(3):
+		assert(option_odds[index] > option_odds[index + 1])
+	game._set_quick_difficulty("normal")
+	assert(game._best_ai_pass_target(passer, 0.20) == second_outlet)
+	game._set_quick_difficulty("hard")
+	assert(game._best_ai_pass_target(passer, 0.20) == receiver)
+	# Similar-quality alternatives only. No speculative poor forward
+	# choices, hopeless backwards balls or fake human/5v5 randomness.
+	assert(not game._ai_xi_prefers_second_pass(passer, 180.0, 330.0, 315.0, 0.0))
+	assert(not game._ai_xi_prefers_second_pass(passer, 30.0, 330.0, 80.0, 0.0))
+	assert(not game._ai_xi_prefers_second_pass(passer, 30.0, 40.0, 15.0, 0.0))
+	assert(not game._ai_xi_prefers_second_pass(passer, 30.0, 330.0, 315.0, -1.0))
+	game.match_team_size = 5
+	assert(not game._ai_xi_prefers_second_pass(passer, 30.0, 330.0, 315.0, 0.0))
+	game.match_team_size = 11
+	assert(not game._ai_xi_prefers_second_pass(game.teams[0][10], 30.0, 330.0, 315.0, 0.0))
+	# A defender physically marking the alternative immediately removes it.
+	var alternative_marker: Footballer = game.teams[0][4]
+	var marker_original: Vector2 = alternative_marker.global_position
+	alternative_marker.global_position = second_outlet.global_position
+	assert(not game._ai_xi_pass_lane_clear(passer, second_outlet))
+	assert(game._best_ai_pass_target(passer, 0.0) == receiver)
+	alternative_marker.global_position = marker_original
+	second_outlet.sent_off = true
+	assert(game._best_ai_pass_target(passer, 0.0) == receiver)
+	second_outlet.sent_off = false
+	second_outlet.global_position = second_outlet_home
+	second_outlet.velocity = second_outlet_velocity
+	game._set_quick_difficulty("normal")
+	assert(game._best_ai_pass_target(passer) == receiver)
+	print("FOOTBALL_XI_PASS_SECOND_CHOICE_OK levels=4 safe_only=1")
 	# A clear 330-unit outlet must NOT cause an instantaneous 0.00s pass.
 	# This used to happen as soon as the carrier touched the ball.
 	assert(game.ball.possession_seconds == 0.0)
