@@ -1184,6 +1184,15 @@ jobs:
               cp "$screenshot" "$RUNNER_TEMP/chess-football-review/xi-lane-${lane,,}.png"
             fi
           done
+          # Capture the actual near-human/left-goalmouth composition
+          # that exposed the cropped white touchline in live play.
+          human_marker="FOOTBALL_XI_NEAR_HUMAN_CAPTURE"
+          human_shot="$(sed -n "s/^$human_marker=//p" "$log" | tail -1)"
+          if [[ -n "$human_shot" && -s "$human_shot" ]]; then
+            cp "$human_shot" "$RUNNER_TEMP/chess-football-review/xi-near-human-live.png"
+          fi
+          test -s "$RUNNER_TEMP/chess-football-review/xi-near-human-live.png"
+          grep -q 'FOOTBALL_XI_NEAR_TRANSIENT_OK frames=36 margin=46' "$log"
           # Real XI set-piece framing: keep the mid-band throw-in and near
           # corner screenshots even if an assertion rejects a crop.
           for case in MID_THROW NEAR_CORNER; do
