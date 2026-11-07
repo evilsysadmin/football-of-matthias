@@ -3190,6 +3190,10 @@ func _sync_camera(delta: float, mode: String) -> void:
 	var wanted_position: Vector3
 	var wanted_look: Vector3
 	var wanted_fov: float
+	# The existing guard solves the FINAL camera target. Keep its activity
+	# for one last projected-pixel check AFTER the real camera interpolates;
+	# otherwise a fast arrival can crop the line for several live frames.
+	var near_line_guard_weight: float = 0.0
 
 	if mode != last_camera_mode:
 		if mode == "broadcast":
@@ -3328,11 +3332,11 @@ func _sync_camera(delta: float, mode: String) -> void:
 					(near_interest_y - match_node.match_pitch.position.y)
 					/ match_node.match_pitch.size.y
 				)
-				var guard_weight: float = smoothstep(
+				near_line_guard_weight = smoothstep(
 					XI_BROADCAST_NEAR_GUARD_START, XI_BROADCAST_NEAR_GUARD_FULL,
 					near_fraction
 				)
-				if guard_weight > 0.0:
+				if near_line_guard_weight > 0.0:
 					var line_z: float = (
 						match_node.match_pitch.end.y - match_node.match_pitch.get_center().y
 					) * WORLD_SCALE
@@ -3341,7 +3345,8 @@ func _sync_camera(delta: float, mode: String) -> void:
 						line_z, restart_look_z, XI_BROADCAST_NEAR_LINE_MARGIN_PX
 					)
 					restart_look_z = lerpf(
-						restart_look_z, maxf(restart_look_z, minimum_look_z), guard_weight
+						restart_look_z, maxf(restart_look_z, minimum_look_z),
+						near_line_guard_weight
 					)
 		if easing_corner_release:
 			restart_look_z = maxf(
@@ -3386,6 +3391,23 @@ func _sync_camera(delta: float, mode: String) -> void:
 			_camera_smoothing_factor(CAMERA_CORNER_RELEASE_SPEED, delta),
 		)
 	camera.fov = lerpf(camera.fov, wanted_fov, t)
+	if (
+		mode == "broadcast" and match_node.match_team_size == 11
+		and near_line_guard_weight >= 0.98
+	):
+		# The target can be perfect while the ACTUAL camera still lags.
+		# Enforce the same white-line margin with the interpolated position
+		# and FOV before drawing this frame. The camera moves normally in
+		# X/depth and only the necessary downward pitch is corrected.
+		# No snap on camera changes, restarts, far/midfield or the 5v5.
+		var near_white_z: float = (
+			match_node.match_pitch.end.y - match_node.match_pitch.get_center().y
+		) * WORLD_SCALE
+		var safe_live_look_z: float = xi_broadcast_near_line_safe_look_z(
+			camera.position, camera.fov, get_viewport().get_visible_rect().size.y,
+			near_white_z, smoothed_restart_look_z, XI_BROADCAST_NEAR_LINE_MARGIN_PX
+		)
+		smoothed_restart_look_z = maxf(smoothed_restart_look_z, safe_live_look_z)
 	var look_target := wanted_look
 	if mode == "broadcast":
 		# Follow the smoothed body in normal play; blend yaw and pitch smoothly
