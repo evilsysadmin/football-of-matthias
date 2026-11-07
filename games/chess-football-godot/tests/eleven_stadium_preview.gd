@@ -319,6 +319,48 @@ func _initialize() -> void:
 		)
 	scale_probe.global_position = probe_home
 	stage.sync_presentation(0.0, "broadcast")
+	# Round-trip the real XI camera, not just a pure smoothing helper.
+	# Tactical's depth is past the CORNER release threshold. Without
+	# remembering tactical mode across frames, returning to broadcast
+	# incorrectly enters the slow corner easing for dozens of frames.
+	var original_ball: Vector2 = game.ball.global_position
+	game.camera_mode = "tactical"
+	stage.sync_presentation(8.0, "tactical")
+	assert(stage.last_camera_mode == "tactical")
+	var normal_depth: float = (
+		stage.BROADCAST_DEPTH * stage.XI_BROADCAST_DEPTH_SCALE
+	)
+	assert(
+		stage.camera.position.z > normal_depth
+		+ stage.CAMERA_CORNER_RELEASE_DEPTH_EPSILON
+	)
+	var return_ball: Vector2 = center + Vector2(620.0, 0.0)
+	game.ball.global_position = return_ball
+	game.camera_mode = "broadcast"
+	var return_dt: float = 1.0 / 60.0
+	var return_smoothing: float = stage._camera_smoothing_factor(
+		stage.CAMERA_LERP_SPEED, return_dt
+	)
+	for frame_index in range(90):
+		var previous_z: float = stage.camera.position.z
+		stage.sync_presentation(return_dt, "broadcast")
+		assert(stage.last_camera_mode == "broadcast")
+		assert(
+			absf(stage.camera.position.z - lerpf(
+				previous_z, normal_depth, return_smoothing
+			)) < 0.005,
+			"XI aerial return falsely uses the slow corner-release camera"
+		)
+		if frame_index == 0:
+			assert(
+				absf(stage.smoothed_focus_x - stage.world_to_stage(return_ball).x)
+				< 0.01,
+				"XI broadcast did not re-acquire the live ball from tactical"
+			)
+	assert(not stage.xi_returning_from_tactical)
+	game.ball.global_position = original_ball
+	stage.sync_presentation(8.0, "broadcast")
+	print("FOOTBALL_XI_CAMERA_ROUNDTRIP_OK no_false_corner_easing=1 real_ball_focus=1 frames=90")
 	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
 		"broadcast", false, stage.camera.position.z, true
 	), "Normal XI broadcast must not trigger the corner-release camera")

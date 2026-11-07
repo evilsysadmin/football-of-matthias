@@ -191,6 +191,9 @@ var smoothed_focus_x: float = 0.0
 var smoothed_lead_x: float = 0.0
 var smoothed_restart_look_z: float = BROADCAST_BASE_LOOK_Z
 var last_camera_mode: String = "broadcast"
+# Keep the aerial-to-broadcast transition distinct from a genuine corner
+# recovery until the interpolating camera has cleared its aerial depth.
+var xi_returning_from_tactical: bool = false
 var penalty_camera_mix: float = 0.0
 var penalty_camera_position: Vector3 = Vector3.ZERO
 var penalty_camera_target: Vector3 = Vector3.ZERO
@@ -3109,10 +3112,19 @@ func _sync_camera(delta: float, mode: String) -> void:
 		penalty_camera_mix = 0.0
 
 	var focus := world_to_stage(match_node.ball.global_position)
-	# A tactical-to-broadcast switch starts from the aerial camera depth.
-	# It must not masquerade as a live corner release and suppress close-follow.
+	# XI's tactical camera is slightly farther back than live broadcast.
+	# A single-frame switch check is insufficient: for several rendered
+	# frames the interpolated camera remains beyond the corner threshold.
+	# Retain this transition state until ordinary broadcast depth returns.
+	if match_node.match_team_size == 11:
+		if mode == "tactical":
+			xi_returning_from_tactical = false
+		elif mode == "broadcast" and last_camera_mode == "tactical":
+			xi_returning_from_tactical = true
 	var easing_corner_release := (
-		mode == last_camera_mode and broadcast_corner_release_active(
+		mode == last_camera_mode
+		and not xi_returning_from_tactical
+		and broadcast_corner_release_active(
 			mode, bool(match_node.set_piece_active), camera.position.z,
 			match_node.match_team_size == 11,
 		)
@@ -3123,9 +3135,15 @@ func _sync_camera(delta: float, mode: String) -> void:
 
 	if mode != last_camera_mode:
 		if mode == "broadcast":
+			# A genuine switch from the XI aerial view must immediately
+			# re-acquire the live ball, not keep an old broadcast focus.
 			smoothed_focus_x = focus.x
 			smoothed_lead_x = clampf(match_node.ball.velocity.x * WORLD_SCALE * 0.26, -2.2, 2.2)
-		last_camera_mode = mode
+		# Remember tactical mode too in XI. Otherwise the returning aerial
+		# depth masquerades as a near-corner release and uses the slower
+		# corner camera recovery. Legacy 5v5 state handling is unchanged.
+		if match_node.match_team_size == 11 or mode == "broadcast":
+			last_camera_mode = mode
 
 	if mode == "tactical":
 		smoothed_restart_look_z = BROADCAST_BASE_LOOK_Z
@@ -3255,6 +3273,14 @@ func _sync_camera(delta: float, mode: String) -> void:
 	var t := _camera_smoothing_factor(CAMERA_LERP_SPEED, delta)
 	var previous_depth := camera.position.z
 	camera.position = camera.position.lerp(wanted_position, t)
+	if (
+		xi_returning_from_tactical and mode == "broadcast"
+		and camera.position.z <= (
+			BROADCAST_DEPTH * XI_BROADCAST_DEPTH_SCALE
+			+ CAMERA_CORNER_RELEASE_DEPTH_EPSILON
+		)
+	):
+		xi_returning_from_tactical = false
 	if easing_corner_release:
 		# Preserve the existing fast follow in X/Y. A slower, matched
 		# depth/pitch recovery avoids whipping the shot at ball release.
