@@ -151,9 +151,13 @@ const AI_XI_SUPPORT_SWITCH_ADVANTAGE := 45.0
 # clearly closer by more than this bound may replace the incumbent.
 const AI_XI_SUPPORT_ROLE_HOLD_DISTANCE := 55.0
 const AI_COVER_DISTANCE := 150.0
-# Only the CPU's nearby second defender may step up from positional cover to
-# a legal contest. Easy and the human-side support shape remain untouched.
+# The CPU's second defender contests only on Hard/Expert XI; in Normal
+# it holds goal-side cover. Legacy 5v5 and human teammates stay unchanged.
 const AI_CPU_SECOND_PRESS_ACTIVATION := 240.0
+# XI Normal is a contest, not a continuous two-man ambush: the primary
+# defender needs a short observed first-touch reaction before NEW tackles.
+# This never protects against an already active real tackle/contact.
+const AI_XI_NORMAL_FIRST_TOUCH_REACTION := 0.38
 const AI_XI_SECOND_PRESS_ACTIVATION := 320.0
 # XI Normal+ second defender reads an actual goalward diagonal dribble.
 # Maximum lead is well below one running stride; movement still obeys
@@ -1110,8 +1114,8 @@ func _update_ai(delta: float) -> void:
 				elif player == cover:
 					contesting_cover = _ai_cpu_second_press_active(player, ball.carrier.global_position)
 					target = _ai_cover_target(player, ball.carrier.global_position)
-					# Normal+ must close a nearby 2v1 at actual sprint pace;
-					# positional cover and Easy keep the original lower effort.
+					# Hard/Expert may close a nearby 2v1 at real sprint pace;
+					# Normal and Easy maintain goal-side cover instead.
 					intensity = _ai_adaptive_intensity(
 						0.98 if contesting_cover else AI_COVER_INTENSITY
 					)
@@ -1154,6 +1158,7 @@ func _update_ai(delta: float) -> void:
 						_try_tackle(player)
 				elif (
 					player == cover
+					and contesting_cover
 					and player.global_position.distance_to(ball.carrier.global_position)
 						< TACKLE_ATTEMPT_RANGE * 0.72
 					and _ai_xi_tackle_commit_ready(player, ball.carrier, true)
@@ -1394,6 +1399,11 @@ func _ai_cpu_second_press_active(player: Footballer, threat_position: Vector2) -
 	return (
 		player.team_id == 1
 		and quick_difficulty != "easy"
+		and (
+			match_team_size != 11
+			or quick_difficulty == "hard"
+			or quick_difficulty == "expert"
+		)
 		and ball.carrier != null
 		and ball.carrier.team_id == 0
 		and player.global_position.distance_to(threat_position) <= (
@@ -2613,6 +2623,20 @@ func _tackle_attempt_range(tackler: Footballer, aggressive_override: bool = fals
 func _ai_xi_tackle_commit_ready(
 	tackler: Footballer, victim: Footballer, is_cover: bool
 ) -> bool:
+	if (
+		match_team_size == 11
+		and tackler.team_id == 1
+		and victim.team_id == 0
+		and quick_difficulty == "normal"
+	):
+		# The second defender covers instead of repeatedly attacking the
+		# same fresh human touch. The first can still commit after a short,
+		# possession-scoped reaction using the ordinary real hitbox.
+		if is_cover or (
+			ball.carrier == victim
+			and ball.possession_seconds < AI_XI_NORMAL_FIRST_TOUCH_REACTION
+		):
+			return false
 	if match_team_size != 11 or tackler.team_id != 1 or quick_difficulty == "easy":
 		return true
 	if (
