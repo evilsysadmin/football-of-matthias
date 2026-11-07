@@ -85,6 +85,11 @@ const AI_FORWARD_PASS_GAIN := 145.0
 # 'passes' that physically stop in midfield, and use existing charge power
 # limits (the same 560..1180 range available to a human).
 const AI_XI_PASS_MIN_DISTANCE := 110.0
+# A real XI player occasionally prefers a nearly equal *safe* second lane.
+# Bad, backwards, unreachable and marked alternatives remain excluded.
+const AI_XI_PASS_SECOND_SCORE_MARGIN := 95.0
+const AI_XI_PASS_SECOND_PROGRESS_MARGIN := 110.0
+const AI_XI_PASS_SECOND_MIN_FORWARD := 35.0
 const AI_XI_PASS_MAX_DISTANCE := 445.0
 const AI_XI_PASS_LANE_CLEARANCE := 74.0
 const AI_XI_PASS_RECEIVER_CLEARANCE := 105.0
@@ -298,7 +303,7 @@ var ai_secondary_presser_cache: Array = [null, null]
 var ai_xi_defensive_role_owner: Footballer = null
 var keeper_distribution_started_at: Dictionary = {}
 var quick_difficulty: String = "normal"
-var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0,"shot_read":0.50,"pass_error":0.24,"pass_error_degrees":9.0,"pass_power_error":0.18,"pass_power_error_ratio":0.16}
+var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0,"shot_read":0.50,"pass_error":0.24,"pass_error_degrees":9.0,"pass_power_error":0.18,"pass_power_error_ratio":0.16,"pass_second_choice":0.22}
 var ai_adaptive_level: int = 0
 var ai_adapt_human_pressure: float = 0.0
 var ai_adapt_cpu_pressure: float = 0.0
@@ -2345,6 +2350,14 @@ func _ai_attack(player: Footballer) -> void:
 				# Carry at normal physical speed while the support run
 				# develops. Pressure or elapsed time always releases it.
 				return
+		# Decide between two similarly good *legal* lanes only at kick
+		# time. The earlier setup/support decision remains stable, not a
+		# fresh lottery on every movement frame. One real ball, one target.
+		if match_team_size == 11 and player.team_id == 1:
+			var chosen: Footballer = _best_ai_pass_target(player, randf())
+			if chosen != null:
+				target = chosen
+				pass_destination = _ai_xi_pass_aim_point(player, chosen)
 		player.play_action("pass", 0.72)
 		if audio_fx != null:
 			audio_fx.play_pass()
@@ -2372,10 +2385,37 @@ func _ai_attack(player: Footballer) -> void:
 			pass_power *= 1.0 + power_error_ratio
 		ball.release(kick_direction, pass_power * player.pass_power_multiplier())
 
-func _best_ai_pass_target(player: Footballer) -> Footballer:
+# Passing is imperfect in DECISION as well as direction and power.
+# A lower-ranked receiver is eligible only when the physical pass lane is
+# clear and its current quality/progress are close to the first choice.
+# A provided roll is explicit for deterministic tests; -1 means keep the
+# historical best receiver for callers merely inspecting the formation.
+func _ai_xi_prefers_second_pass(
+	player: Footballer, score_gap: float, best_progress: float,
+	second_progress: float, roll: float
+) -> bool:
+	return (
+		match_team_size == 11
+		and player.team_id == 1
+		and roll >= 0.0
+		and score_gap >= 0.0
+		and score_gap <= AI_XI_PASS_SECOND_SCORE_MARGIN
+		and second_progress >= AI_XI_PASS_SECOND_MIN_FORWARD
+		and best_progress - second_progress <= AI_XI_PASS_SECOND_PROGRESS_MARGIN
+		and roll < float(quick_difficulty_profile["pass_second_choice"])
+	)
+
+
+func _best_ai_pass_target(
+	player: Footballer, choice_roll: float = -1.0
+) -> Footballer:
 	var forward: float = 1.0 if player.team_id == 0 else -1.0
 	var best: Footballer = null
 	var best_score: float = -INF
+	var best_progress: float = 0.0
+	var second: Footballer = null
+	var second_score: float = -INF
+	var second_progress: float = 0.0
 	for teammate in teams[player.team_id]:
 		if teammate == player or teammate.sent_off or teammate.role == "keeper":
 			continue
@@ -2407,8 +2447,21 @@ func _best_ai_pass_target(player: Footballer) -> Footballer:
 			# for superior collective play.
 			score_value = progress * 1.25 + minf(separation, 260.0) * 0.45 - absf(offset.y) * 0.07 - distance * 0.15
 		if score_value > best_score:
+			second = best
+			second_score = best_score
+			second_progress = best_progress
 			best_score = score_value
+			best_progress = progress
 			best = teammate
+		elif score_value > second_score:
+			second = teammate
+			second_score = score_value
+			second_progress = progress
+	if second != null and _ai_xi_prefers_second_pass(
+		player, best_score - second_score, best_progress,
+		second_progress, choice_roll
+	):
+		return second
 	return best
 
 func _pass_from(player: Footballer, input_direction: Vector2) -> void:
