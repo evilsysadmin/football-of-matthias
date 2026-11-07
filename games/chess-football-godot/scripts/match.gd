@@ -109,6 +109,9 @@ const AI_XI_SUPPORT_RUN_ALIGN_MIN := 0.35
 # time to control and look up. Physical ball pace is unchanged.
 const AI_XI_PASS_EMERGENCY_RADIUS := 95.0
 const AI_XI_PASS_CLOSE_PRESS_RADIUS := 170.0
+# Imperfect perception is not enough if every pressured kick leaves the
+# boot with mathematically perfect aim. Calm passes have only tiny variance.
+const AI_XI_PASS_CALM_ERROR_MULTIPLIER := 0.22
 const AI_XI_PASS_DANGER_DELAY := 0.10
 const AI_XI_PASS_CLOSE_DELAY := 0.26
 const AI_XI_PASS_GOOD_FORWARD_DELAY := 0.45
@@ -295,7 +298,7 @@ var ai_secondary_presser_cache: Array = [null, null]
 var ai_xi_defensive_role_owner: Footballer = null
 var keeper_distribution_started_at: Dictionary = {}
 var quick_difficulty: String = "normal"
-var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0,"shot_read":0.50}
+var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0,"shot_read":0.50,"pass_error":0.24,"pass_error_degrees":9.0}
 var ai_adaptive_level: int = 0
 var ai_adapt_human_pressure: float = 0.0
 var ai_adapt_cpu_pressure: float = 0.0
@@ -2172,6 +2175,32 @@ func _ai_xi_should_wait_for_support(
 # Check the real aperture between BOTH goalposts from the ball carrier.
 # A narrow byline angle should favor the existing pass/carry path, while a
 # central chance keeps the same shot power, direction, and keeper mechanics.
+# A CPU pass can miss its intended foot by a few degrees, especially
+# when rushed by a real defender. This influences release direction only:
+# no teleport, ball magnetism, hidden speed boost or AI foresight.
+# Rolls are explicit so realistic error bounds can be smoke-tested.
+func _ai_xi_pass_aim_error_degrees(
+	player: Footballer, pressure_distance: float,
+	chance_roll: float, direction_roll: float
+) -> float:
+	if match_team_size != 11 or player.team_id != 1:
+		return 0.0
+	var stress: float = (
+		1.0 if pressure_distance <= AI_XI_PASS_CLOSE_PRESS_RADIUS
+		else AI_XI_PASS_CALM_ERROR_MULTIPLIER
+	)
+	# Individual passing ability matters a little, but never makes a
+	# footballer infallible, even in Expert or with top scouting stats.
+	var skill_factor: float = clampf(
+		1.0 - float(player.scouting_passing - 75) * 0.003, 0.90, 1.12
+	)
+	if chance_roll >= float(quick_difficulty_profile["pass_error"]) * stress * skill_factor:
+		return 0.0
+	return float(quick_difficulty_profile["pass_error_degrees"]) * stress * clampf(
+		direction_roll, -1.0, 1.0
+	)
+
+
 func _ai_xi_has_shot_angle(player: Footballer, goal: Vector2) -> bool:
 	var goalward: float = 1.0 if player.team_id == 0 else -1.0
 	if (goal.x - player.global_position.x) * goalward <= 0.0:
@@ -2303,7 +2332,15 @@ func _ai_attack(player: Footballer) -> void:
 			pass_power = clampf(190.0 + distance * 2.25, PASS_MIN_POWER, PASS_MAX_POWER)
 			ai_intended_pass_receiver = target
 			ai_intended_pass_until = match_seconds + AI_XI_PASS_RECEIVER_SECONDS
-		ball.release(pass_destination - player.global_position, pass_power * player.pass_power_multiplier())
+		var kick_direction: Vector2 = pass_destination - player.global_position
+		if match_team_size == 11 and player.team_id == 1:
+			# One release-time error: once kicked, the physical ball keeps
+			# its real trajectory. Do not modify target selection or teammates.
+			var error_degrees: float = _ai_xi_pass_aim_error_degrees(
+				player, pressure_distance, randf(), randf_range(-1.0, 1.0)
+			)
+			kick_direction = kick_direction.rotated(deg_to_rad(error_degrees))
+		ball.release(kick_direction, pass_power * player.pass_power_multiplier())
 
 func _best_ai_pass_target(player: Footballer) -> Footballer:
 	var forward: float = 1.0 if player.team_id == 0 else -1.0
