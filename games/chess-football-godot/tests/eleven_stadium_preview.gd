@@ -451,8 +451,19 @@ func _initialize() -> void:
 			var expected_lane: float = ChessFootball3DPresenter.xi_broadcast_lane_look_z(
 				live_spot, game.match_pitch
 			)
-			assert(absf(stage.smoothed_restart_look_z - expected_lane) < 0.03,
-				"XI broadcast does not follow the active ball in both vertical lanes")
+			if y_fraction < stage.XI_BROADCAST_NEAR_GUARD_START:
+				assert(absf(stage.smoothed_restart_look_z - expected_lane) < 0.03,
+					"XI far-side broadcast must follow the actual ball, not an offscreen teammate")
+			else:
+				# When the near white line is threatened, the new safeguard
+				# deliberately aims lower than the historical ball-only value.
+				assert(stage.smoothed_restart_look_z >= expected_lane - 0.03,
+					"XI near-side broadcast has lost its live ball tracking")
+				var touchline_pixel := stage.screen_position_for_world(
+					Vector2(live_spot.x, game.match_pitch.end.y), 0.02
+				)
+				assert(touchline_pixel.y < bounds.y - 45.0,
+					"XI near-side camera loses the actual white touchline")
 			var in_frame := stage.screen_position_for_world(live_spot, 0.02)
 			assert(in_frame.x > 70.0 and in_frame.x < bounds.x - 70.0,
 				"Close-follow XI broadcast lost the ball horizontally")
