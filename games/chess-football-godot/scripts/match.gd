@@ -73,6 +73,9 @@ const KEEPER_CLEAR_LIFT := 210.0
 
 const AI_DECISION_INTERVAL := 0.28
 const AI_SHOOT_DISTANCE := 650.0
+# CPU XI avoids speculative byline shots when the real mouth is too narrow.
+# Angle depends on actual player/post positions; no aim or physics buffs.
+const AI_XI_SHOT_MIN_MOUTH_ANGLE_DEGREES := 18.0
 const AI_PRESSURE_RADIUS := 180.0
 const AI_FORWARD_PASS_GAIN := 145.0
 # XI possession: real ground balls lose speed to friction. Avoid 700-unit
@@ -2163,12 +2166,31 @@ func _ai_xi_should_wait_for_support(
 	return receiver.velocity.normalized().dot(remaining.normalized()) > AI_XI_SUPPORT_RUN_ALIGN_MIN
 
 
+# Check the real aperture between BOTH goalposts from the ball carrier.
+# A narrow byline angle should favor the existing pass/carry path, while a
+# central chance keeps the same shot power, direction, and keeper mechanics.
+func _ai_xi_has_shot_angle(player: Footballer, goal: Vector2) -> bool:
+	var goalward: float = 1.0 if player.team_id == 0 else -1.0
+	if (goal.x - player.global_position.x) * goalward <= 0.0:
+		return false
+	var upper: Vector2 = Vector2(
+		goal.x, goal.y - ChessFootballMath.GOAL_HALF_HEIGHT
+	) - player.global_position
+	var lower: Vector2 = Vector2(
+		goal.x, goal.y + ChessFootballMath.GOAL_HALF_HEIGHT
+	) - player.global_position
+	return absf(rad_to_deg(upper.angle_to(lower))) >= AI_XI_SHOT_MIN_MOUTH_ANGLE_DEGREES
+
+
 func _ai_attack(player: Footballer) -> void:
 	if ball.carrier != player:
 		return
 	var goal := ChessFootballMath.goal_center(player.team_id, match_pitch)
 	var goal_distance := player.global_position.distance_to(goal)
-	if goal_distance < AI_SHOOT_DISTANCE * float(quick_difficulty_profile["shoot"]):
+	if (
+		goal_distance < AI_SHOOT_DISTANCE * float(quick_difficulty_profile["shoot"])
+		and (match_team_size != 11 or _ai_xi_has_shot_angle(player, goal))
+	):
 		var defending_keeper: Footballer = teams[1 - player.team_id][0]
 		var aim_y := goal.y + (-70.0 if defending_keeper.global_position.y > goal.y else 70.0)
 		var shot_target := Vector2(goal.x, aim_y)
