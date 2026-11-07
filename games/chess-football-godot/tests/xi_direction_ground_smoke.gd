@@ -170,14 +170,34 @@ func _initialize() -> void:
 	var far_shadow_scale: float = (
 		stage.player_nodes[winger_key].get_node("ContactShadow") as MeshInstance3D
 	).scale.x
+	var marker_proxy: Node3D = stage.player_nodes[winger_key]
+	var active_ring := marker_proxy.get_node("ActiveDisc") as MeshInstance3D
+	var receiver_ring := marker_proxy.get_node("SetPieceReceiverDisc") as MeshInstance3D
+	var far_ring_scale: float = active_ring.scale.x
+	assert(is_equal_approx(far_ring_scale, far_shadow_scale))
+	assert(is_equal_approx(receiver_ring.scale.x, far_shadow_scale))
+	assert(is_equal_approx(active_ring.scale.z, far_shadow_scale))
+	assert(is_equal_approx(receiver_ring.scale.z, far_shadow_scale))
+	assert(is_equal_approx(active_ring.scale.y, 1.0))
 	winger.global_position = Vector2(center_x, game.match_pitch.end.y - 110.0)
 	stage.sync_presentation(0.0, "broadcast")
 	var near_body_scale: float = stage.player_sprites[winger_key].scale.x
 	var near_shadow_scale: float = (
 		stage.player_nodes[winger_key].get_node("ContactShadow") as MeshInstance3D
 	).scale.x
+	var near_ring_scale: float = active_ring.scale.x
+	assert(is_equal_approx(near_ring_scale, near_shadow_scale))
+	assert(is_equal_approx(receiver_ring.scale.x, near_shadow_scale))
+	assert(is_equal_approx(active_ring.scale.z, near_shadow_scale))
+	assert(is_equal_approx(receiver_ring.scale.z, near_shadow_scale))
 	assert(far_body_scale > near_body_scale)
 	assert(far_shadow_scale > near_shadow_scale)
+	assert(far_ring_scale > near_ring_scale)
+	# A ring should stay proportionate to its actor, rather than shrink
+	# on the far touchline while the approved body scales to stay readable.
+	var far_ring_to_body: float = far_ring_scale / far_body_scale
+	var near_ring_to_body: float = near_ring_scale / near_body_scale
+	assert(absf(far_ring_to_body / near_ring_to_body - 1.0) < 0.08)
 	# Only additional synthetic motion fades with distance. Both runners
 	# keep their approved atlas, identical locomotion phase and actual pace.
 	assert(is_equal_approx(stage.xi_distant_stride_weight(0.80), 1.0))
@@ -305,5 +325,10 @@ func _initialize() -> void:
 	].get_node("ContactShadow") as MeshInstance3D
 	assert(is_equal_approx(small_shadow.scale.x, 1.0))
 	assert(is_equal_approx(small_shadow.scale.z, 1.0))
-	print("FOOTBALL_XI_DIRECTION_GROUND_OK clubs=2 views=4 cameras=2 boot_gap_px_lt_4 shadow_depth=1 small_unchanged=1")
+	var small_marker: Node3D = small.presentation_3d.player_nodes[
+		small_player.get_instance_id()
+	]
+	assert((small_marker.get_node("ActiveDisc") as MeshInstance3D).scale == Vector3.ONE)
+	assert((small_marker.get_node("SetPieceReceiverDisc") as MeshInstance3D).scale == Vector3.ONE)
+	print("FOOTBALL_XI_DIRECTION_GROUND_OK clubs=2 views=4 cameras=2 boot_gap_px_lt_4 shadow_depth=1 markers_match_body=1 small_unchanged=1")
 	quit(0)
