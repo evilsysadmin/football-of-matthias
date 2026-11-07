@@ -73,6 +73,12 @@ const XI_BROADCAST_X_LIMIT_RATIO := 0.43
 const XI_BROADCAST_VERTICAL_FOLLOW := 0.31
 const XI_BROADCAST_VERTICAL_FOLLOW_MIN := -5.2
 const XI_BROADCAST_VERTICAL_FOLLOW_MAX := 6.3
+# During open play the broadcast near touchline must stay inside the screen
+# when the live ball or the selected human enters its final 28% of the pitch.
+# Measured from the ACTUAL projected white line, not an arbitrary camera pan.
+const XI_BROADCAST_NEAR_GUARD_START := 0.72
+const XI_BROADCAST_NEAR_GUARD_FULL := 0.87
+const XI_BROADCAST_NEAR_LINE_MARGIN_PX := 48.0
 const TACTICAL_HEIGHT := 27.0
 const PLAYER_PIXEL_SIZE := 0.0124
 const TACTICAL_PLAYER_PIXEL_SIZE := 0.0162
@@ -3050,6 +3056,58 @@ static func xi_broadcast_target_look_z(lane_z: float, restart_z: float) -> float
 	return minf(restart_z, lane_z)
 
 
+# Project one grass point onto the camera's vertical axis without moving
+# the actual Camera3D. The camera aims in the stage's YZ plane in ordinary
+# broadcast; fov is vertical because Godot keeps height by default.
+static func xi_broadcast_line_screen_y(
+	camera_position: Vector3, look_z: float, grass_z: float,
+	vertical_fov: float, viewport_height: float
+) -> float:
+	if viewport_height <= 0.0 or vertical_fov <= 0.0:
+		return INF
+	var forward := Vector2(-camera_position.y, look_z - camera_position.z).normalized()
+	var up := Vector2(-forward.y, forward.x)
+	var to_grass := Vector2(0.02 - camera_position.y, grass_z - camera_position.z)
+	var forward_distance: float = to_grass.dot(forward)
+	if forward_distance <= 0.01:
+		return INF
+	var vertical_ratio: float = to_grass.dot(up) / forward_distance
+	return viewport_height * 0.5 * (
+		1.0 - vertical_ratio / tan(deg_to_rad(vertical_fov) * 0.5)
+	)
+
+
+# Find the MINIMUM broadcast pitch that keeps the actual lower white line
+# visible with room for a controlled player's ground ring. This is used
+# only near that touchline: midfield/far-side camera zoom stays untouched.
+# A short binary search solves the real perspective equation without
+# moving the camera or changing any player/world scale.
+static func xi_broadcast_near_line_safe_look_z(
+	camera_position: Vector3, vertical_fov: float, viewport_height: float,
+	near_line_z: float, original_look_z: float, margin_px: float
+) -> float:
+	if viewport_height <= margin_px or camera_position.y <= 0.0:
+		return original_look_z
+	var bottom_limit: float = viewport_height - margin_px
+	if xi_broadcast_line_screen_y(
+		camera_position, original_look_z, near_line_z, vertical_fov, viewport_height
+	) <= bottom_limit:
+		return original_look_z
+	var lower: float = original_look_z
+	var upper: float = minf(camera_position.z - 0.5, near_line_z + 8.0)
+	if upper <= lower:
+		return lower
+	for step in range(16):
+		var middle: float = (lower + upper) * 0.5
+		if xi_broadcast_line_screen_y(
+			camera_position, middle, near_line_z, vertical_fov, viewport_height
+		) > bottom_limit:
+			lower = middle
+		else:
+			upper = middle
+	return upper
+
+
 static func xi_broadcast_fov_for_aspect(view_size: Vector2, wide_restart: bool = false) -> float:
 	if wide_restart or view_size.y <= 0.0:
 		return XI_BROADCAST_FOV
@@ -3225,6 +3283,13 @@ func _sync_camera(delta: float, mode: String) -> void:
 		if match_node.match_team_size == 11:
 			wanted_position.y *= XI_BROADCAST_HEIGHT_SCALE
 			wanted_position.z *= XI_BROADCAST_DEPTH_SCALE
+		wanted_fov = (
+			xi_broadcast_live_fov(
+				get_viewport().get_visible_rect().size,
+				match_node.ball.global_position, match_node.match_pitch,
+				bool(match_node.set_piece_active) or easing_corner_release,
+			) if match_node.match_team_size == 11 else 37.5
+		)
 		var restart_look_z := broadcast_restart_look_z(
 			bool(match_node.set_piece_active),
 			int(match_node.set_piece_team_id),
@@ -3239,6 +3304,34 @@ func _sync_camera(delta: float, mode: String) -> void:
 				match_node.ball.global_position, match_node.match_pitch
 			)
 			restart_look_z = xi_broadcast_target_look_z(lane_z, restart_look_z)
+			# A ball near the goal can leave a selected human winger at the
+			# camera-side touchline while the white line drops below the view.
+			# Honor that actual line only when play (or the human) is nearby.
+			# The ordinary camera and genuine corner/throw framing are intact.
+			if not match_node.set_piece_active and not easing_corner_release and penalty_camera_mix < 0.01:
+				var near_interest_y: float = match_node.ball.global_position.y
+				var human: Footballer = match_node.controlled
+				if human != null and human.team_id == 0 and not human.sent_off:
+					near_interest_y = maxf(near_interest_y, human.global_position.y)
+				var near_fraction: float = (
+					(near_interest_y - match_node.match_pitch.position.y)
+					/ match_node.match_pitch.size.y
+				)
+				var guard_weight: float = smoothstep(
+					XI_BROADCAST_NEAR_GUARD_START, XI_BROADCAST_NEAR_GUARD_FULL,
+					near_fraction
+				)
+				if guard_weight > 0.0:
+					var line_z: float = (
+						match_node.match_pitch.end.y - match_node.match_pitch.get_center().y
+					) * WORLD_SCALE
+					var minimum_look_z: float = xi_broadcast_near_line_safe_look_z(
+						wanted_position, wanted_fov, get_viewport().get_visible_rect().size.y,
+						line_z, restart_look_z, XI_BROADCAST_NEAR_LINE_MARGIN_PX
+					)
+					restart_look_z = lerpf(
+						restart_look_z, maxf(restart_look_z, minimum_look_z), guard_weight
+					)
 		if easing_corner_release:
 			restart_look_z = maxf(
 				restart_look_z,
@@ -3256,13 +3349,6 @@ func _sync_camera(delta: float, mode: String) -> void:
 			_camera_smoothing_factor(pitch_speed, delta),
 		)
 		wanted_look = Vector3(wanted_position.x, 0.0, smoothed_restart_look_z)
-		wanted_fov = (
-			xi_broadcast_live_fov(
-				get_viewport().get_visible_rect().size,
-				match_node.ball.global_position, match_node.match_pitch,
-				bool(match_node.set_piece_active) or easing_corner_release,
-			) if match_node.match_team_size == 11 else 37.5
-		)
 		wanted_position = wanted_position.lerp(
 			penalty_camera_position, penalty_camera_mix
 		)
