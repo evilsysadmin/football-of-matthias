@@ -3123,9 +3123,15 @@ func _sync_camera(delta: float, mode: String) -> void:
 
 	if mode != last_camera_mode:
 		if mode == "broadcast":
+			# A genuine switch from the XI aerial view must immediately
+			# re-acquire the live ball, not keep an old broadcast focus.
 			smoothed_focus_x = focus.x
 			smoothed_lead_x = clampf(match_node.ball.velocity.x * WORLD_SCALE * 0.26, -2.2, 2.2)
-		last_camera_mode = mode
+		# Remember tactical mode too in XI. Otherwise the returning aerial
+		# depth masquerades as a near-corner release and uses the slower
+		# corner camera recovery. Legacy 5v5 state handling is unchanged.
+		if match_node.match_team_size == 11 or mode == "broadcast":
+			last_camera_mode = mode
 
 	if mode == "tactical":
 		smoothed_restart_look_z = BROADCAST_BASE_LOOK_Z
