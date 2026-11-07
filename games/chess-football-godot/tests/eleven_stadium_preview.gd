@@ -361,6 +361,63 @@ func _initialize() -> void:
 	game.ball.global_position = original_ball
 	stage.sync_presentation(8.0, "broadcast")
 	print("FOOTBALL_XI_CAMERA_ROUNDTRIP_OK no_false_corner_easing=1 real_ball_focus=1 frames=90")
+	# Regression: the real screenshot shows a human selected near the
+	# camera-side band, while the goalkeeper/ball are farther upfield.
+	# Previously the live broadcast could show that selected player but
+	# crop the entire LOWER WHITE TOUCHLINE beyond the bottom viewport.
+	# Test the real camera projection, not an assumed fixed camera offset.
+	var original_selected: Footballer = game.controlled
+	assert(original_selected != null and original_selected.team_id == 0)
+	var selected_home: Vector2 = original_selected.global_position
+	var near_line_x: float = game.match_pitch.position.x + game.match_pitch.size.x * 0.24
+	var goal_side_ball: Vector2 = Vector2(
+		game.match_pitch.position.x + game.match_pitch.size.x * 0.10,
+		center.y
+	)
+	original_selected.global_position = Vector2(
+		near_line_x, game.match_pitch.end.y - game.match_pitch.size.y * 0.035
+	)
+	game.ball.global_position = goal_side_ball
+	stage.sync_presentation(8.0, "broadcast")
+	var near_line: Vector2 = Vector2(near_line_x, game.match_pitch.end.y)
+	var line_pixel: Vector2 = stage.screen_position_for_world(near_line, 0.02)
+	var selected_pixel: Vector2 = stage.screen_position_for_world(
+		original_selected.global_position, 0.02
+	)
+	assert(line_pixel.x > 30.0 and line_pixel.x < bounds.x - 30.0)
+	assert(line_pixel.y > 150.0 and line_pixel.y < bounds.y - 45.0,
+		"XI live broadcast still crops camera-side white touchline")
+	assert(selected_pixel.y < line_pixel.y,
+		"XI controlled player and its ring must remain above the near sideline")
+	var actual_stage_line_z: float = (
+		game.match_pitch.end.y - game.match_pitch.get_center().y
+	) * stage.WORLD_SCALE
+	var estimated_line_y: float = stage.xi_broadcast_line_screen_y(
+		stage.camera.position, stage.smoothed_restart_look_z,
+		actual_stage_line_z, stage.camera.fov, bounds.y
+	)
+	assert(absf(line_pixel.y - estimated_line_y) < 2.0,
+		"Near-line guard is not using the actual Godot projection")
+	# Ball alone close to the near side should trigger the same protection,
+	# even when the selected player has moved back into midfield.
+	original_selected.global_position = center
+	game.ball.global_position = Vector2(center.x, game.match_pitch.end.y - 10.0)
+	stage.sync_presentation(8.0, "broadcast")
+	var ball_near_line: Vector2 = stage.screen_position_for_world(
+		Vector2(center.x, game.match_pitch.end.y), 0.02
+	)
+	assert(ball_near_line.y < bounds.y - 45.0)
+	# Unthreatened midfield preserves the original close broadcast lens;
+	# the new protection must not zoom out every camera frame.
+	game.ball.global_position = center
+	stage.sync_presentation(8.0, "broadcast")
+	assert(absf(stage.smoothed_restart_look_z - stage.xi_broadcast_lane_look_z(
+		center, game.match_pitch
+	)) < 0.03)
+	original_selected.global_position = selected_home
+	game.ball.global_position = original_ball
+	stage.sync_presentation(8.0, "broadcast")
+	print("FOOTBALL_XI_NEAR_LINE_SAFE_OK human=1 ball=1 margin_px=45")
 	assert(not ChessFootball3DPresenter.broadcast_corner_release_active(
 		"broadcast", false, stage.camera.position.z, true
 	), "Normal XI broadcast must not trigger the corner-release camera")
@@ -394,8 +451,19 @@ func _initialize() -> void:
 			var expected_lane: float = ChessFootball3DPresenter.xi_broadcast_lane_look_z(
 				live_spot, game.match_pitch
 			)
-			assert(absf(stage.smoothed_restart_look_z - expected_lane) < 0.03,
-				"XI broadcast does not follow the active ball in both vertical lanes")
+			if y_fraction < stage.XI_BROADCAST_NEAR_GUARD_START:
+				assert(absf(stage.smoothed_restart_look_z - expected_lane) < 0.03,
+					"XI far-side broadcast must follow the actual ball, not an offscreen teammate")
+			else:
+				# When the near white line is threatened, the new safeguard
+				# deliberately aims lower than the historical ball-only value.
+				assert(stage.smoothed_restart_look_z >= expected_lane - 0.03,
+					"XI near-side broadcast has lost its live ball tracking")
+				var touchline_pixel := stage.screen_position_for_world(
+					Vector2(live_spot.x, game.match_pitch.end.y), 0.02
+				)
+				assert(touchline_pixel.y < bounds.y - 45.0,
+					"XI near-side camera loses the actual white touchline")
 			var in_frame := stage.screen_position_for_world(live_spot, 0.02)
 			assert(in_frame.x > 70.0 and in_frame.x < bounds.x - 70.0,
 				"Close-follow XI broadcast lost the ball horizontally")
@@ -443,7 +511,16 @@ func _initialize() -> void:
 			var expected_lane_z: float = ChessFootball3DPresenter.xi_broadcast_lane_look_z(
 				lane_spot, game.match_pitch
 			)
-			assert(absf(stage.smoothed_restart_look_z - expected_lane_z) < 0.03)
+			if lane_name == "FAR":
+				assert(absf(stage.smoothed_restart_look_z - expected_lane_z) < 0.03,
+					"Far XI lane must retain unmodified ball-only pitch follow")
+			else:
+				assert(stage.smoothed_restart_look_z >= expected_lane_z - 0.03)
+				var near_white_line := stage.screen_position_for_world(
+					Vector2(lane_spot.x, game.match_pitch.end.y), 0.02
+				)
+				assert(near_white_line.y < bounds.y - 45.0,
+					"Near XI lane screenshot must include the lower white touchline")
 			var ball_pixel: Vector2 = stage.screen_position_for_world(lane_spot, 0.02)
 			assert(ball_pixel.x > 70.0 and ball_pixel.x < bounds.x - 70.0)
 			assert(ball_pixel.y > 155.0 and ball_pixel.y < bounds.y - 35.0)
