@@ -298,7 +298,7 @@ var ai_secondary_presser_cache: Array = [null, null]
 var ai_xi_defensive_role_owner: Footballer = null
 var keeper_distribution_started_at: Dictionary = {}
 var quick_difficulty: String = "normal"
-var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0,"shot_read":0.50,"pass_error":0.24,"pass_error_degrees":9.0}
+var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0,"shot_read":0.50,"pass_error":0.24,"pass_error_degrees":9.0,"pass_power_error":0.18,"pass_power_error_ratio":0.16}
 var ai_adaptive_level: int = 0
 var ai_adapt_human_pressure: float = 0.0
 var ai_adapt_cpu_pressure: float = 0.0
@@ -2201,6 +2201,30 @@ func _ai_xi_pass_aim_error_degrees(
 	)
 
 
+# Some XI CPU passes arrive short or too strong even when the aim is good.
+# Pressure magnifies a single release-time mis-hit; calm balls usually retain
+# nominal pace. Only the physical launch speed changes, never ball friction,
+# flight, player movement, interception rules or the chosen receiver.
+func _ai_xi_pass_power_error_ratio(
+	player: Footballer, pressure_distance: float,
+	chance_roll: float, power_roll: float
+) -> float:
+	if match_team_size != 11 or player.team_id != 1:
+		return 0.0
+	var stress: float = (
+		1.0 if pressure_distance <= AI_XI_PASS_CLOSE_PRESS_RADIUS
+		else AI_XI_PASS_CALM_ERROR_MULTIPLIER
+	)
+	var skill_factor: float = clampf(
+		1.0 - float(player.scouting_passing - 75) * 0.003, 0.90, 1.12
+	)
+	if chance_roll >= float(quick_difficulty_profile["pass_power_error"]) * stress * skill_factor:
+		return 0.0
+	return float(quick_difficulty_profile["pass_power_error_ratio"]) * stress * clampf(
+		power_roll, -1.0, 1.0
+	)
+
+
 func _ai_xi_has_shot_angle(player: Footballer, goal: Vector2) -> bool:
 	var goalward: float = 1.0 if player.team_id == 0 else -1.0
 	if (goal.x - player.global_position.x) * goalward <= 0.0:
@@ -2340,6 +2364,12 @@ func _ai_attack(player: Footballer) -> void:
 				player, pressure_distance, randf(), randf_range(-1.0, 1.0)
 			)
 			kick_direction = kick_direction.rotated(deg_to_rad(error_degrees))
+			# An independent bounded first-touch power error may underhit or
+			# overhit this physical pass. Never adjust the ball in flight.
+			var power_error_ratio: float = _ai_xi_pass_power_error_ratio(
+				player, pressure_distance, randf(), randf_range(-1.0, 1.0)
+			)
+			pass_power *= 1.0 + power_error_ratio
 		ball.release(kick_direction, pass_power * player.pass_power_multiplier())
 
 func _best_ai_pass_target(player: Footballer) -> Footballer:
