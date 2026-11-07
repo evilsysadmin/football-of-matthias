@@ -3311,7 +3311,18 @@ func _sync_camera(delta: float, mode: String) -> void:
 			if not match_node.set_piece_active and not easing_corner_release and penalty_camera_mix < 0.01:
 				var near_interest_y: float = match_node.ball.global_position.y
 				var human: Footballer = match_node.controlled
-				if human != null and human.team_id == 0 and not human.sent_off:
+				# If the ball is on the OPPOSITE far touchline, keep the
+				# ball in frame instead of panning down to a remote selected
+				# teammate. A near-side selected winger can share the shot
+				# with the goalmouth only while the ball is not far upfield.
+				var ball_fraction: float = (
+					(match_node.ball.global_position.y - match_node.match_pitch.position.y)
+					/ match_node.match_pitch.size.y
+				)
+				if (
+					human != null and human.team_id == 0 and not human.sent_off
+					and ball_fraction >= 0.30
+				):
 					near_interest_y = maxf(near_interest_y, human.global_position.y)
 				var near_fraction: float = (
 					(near_interest_y - match_node.match_pitch.position.y)
