@@ -389,6 +389,37 @@ func _initialize() -> void:
 		"XI live broadcast still crops camera-side white touchline")
 	assert(selected_pixel.y < line_pixel.y,
 		"XI controlled player and its ring must remain above the near sideline")
+	# Change lanes at the real 60Hz render cadence, not just with an 8s
+	# teleport/settle. The old target-only guard passed the static
+	# screenshot but could crop the line on the FIRST live frames.
+	original_selected.global_position = center
+	game.ball.global_position = goal_side_ball
+	stage.sync_presentation(8.0, "broadcast")
+	original_selected.global_position = Vector2(
+		near_line_x, game.match_pitch.end.y - game.match_pitch.size.y * 0.035
+	)
+	for frame_index in range(36):
+		stage.sync_presentation(1.0 / 60.0, "broadcast")
+		var live_near_line: Vector2 = stage.screen_position_for_world(near_line, 0.02)
+		assert(live_near_line.y < bounds.y - 46.0,
+			"XI camera crops white touchline during live follow on frame %d" % frame_index)
+		var live_human: Vector2 = stage.screen_position_for_world(
+			original_selected.global_position, 0.02
+		)
+		assert(live_human.y < live_near_line.y,
+			"XI controlled winger falls below the visible white sideline")
+	# Record the actual user-like goalmouth/near-human composition rather
+	# than relying on the midfield-only stadium preview screenshot.
+	if DisplayServer.get_name() != "headless":
+		for _frame in range(3):
+			stage.sync_presentation(0.0, "broadcast")
+			await process_frame
+			await RenderingServer.frame_post_draw
+		var near_human_image: Image = root.get_viewport().get_texture().get_image()
+		var near_human_path := "user://chess-football-xi-near-human-live.png"
+		assert(near_human_image.save_png(near_human_path) == OK)
+		print("FOOTBALL_XI_NEAR_HUMAN_CAPTURE=" + ProjectSettings.globalize_path(near_human_path))
+	print("FOOTBALL_XI_NEAR_TRANSIENT_OK frames=36 margin=46")
 	var actual_stage_line_z: float = (
 		game.match_pitch.end.y - game.match_pitch.get_center().y
 	) * stage.WORLD_SCALE
