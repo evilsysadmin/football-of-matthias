@@ -635,13 +635,13 @@
 .chess-football-entry__quick-kickoff { min-height:48px; padding:.75rem 1.5rem; border:1px solid #d8c28b; border-radius:12px; background:#507046; color:#fff6db; font:inherit; font-weight:800; cursor:pointer; }
 .chess-football-entry__quick-setup > .chess-football-entry__quick-hint { margin:.75rem auto 0; font-size:.83rem; color:#becbb9; }
 /* No new match HUD: release provenance appears only on explicit preflight tap. */
-.chess-football-entry__quick-version { max-width:25rem; margin:.3rem auto 0; text-align:left; font-size:.85rem; color:#c2d0bb; }
+.chess-football-entry__quick-version { max-width:25rem; margin:0 auto; text-align:left; font-size:.85rem; color:#c2d0bb; }
 .chess-football-entry__quick-version > summary { min-height:44px; cursor:pointer; display:list-item; align-content:center; width:max-content; max-width:100%; margin:auto; padding:0 .4rem; }
 .chess-football-entry__quick-version > summary:focus-visible { outline:3px solid #f2d892; outline-offset:2px; border-radius:4px; }
-.chess-football-entry__quick-version-content { padding:.5rem .75rem; border:1px solid rgba(223,203,157,.24); border-radius:9px; background:rgba(5,13,8,.85); }
-.chess-football-entry__quick-version-content p { margin:.3rem 0; display:flex; gap:.5rem; justify-content:space-between; flex-wrap:wrap; }
+.chess-football-entry__quick-version-content { padding:.3rem .6rem; border:1px solid rgba(223,203,157,.24); border-radius:9px; background:rgba(5,13,8,.85); }
+.chess-football-entry__quick-version-content p { margin:.12rem 0; display:flex; gap:.5rem; justify-content:space-between; flex-wrap:wrap; }
 .chess-football-entry__quick-version-content code { font:600 .85rem ui-monospace, monospace; overflow-wrap:anywhere; color:#f2d892; }
-.chess-football-entry__quick-version-content small { display:block; line-height:1.45; color:#c2d0bb; }
+.chess-football-entry__quick-version-content small { display:block; line-height:1.3; font-size:.74rem; color:#c2d0bb; }
 .chess-football-entry__quick-version-content [role=alert] { color:#ffd6a3; font-weight:700; }
 @media(max-width:680px) { .chess-football-entry__quick-setup { padding:1rem .75rem; } .chess-football-entry__quick-levels { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.45rem; } .chess-football-entry__quick-level { min-height:104px; padding:.65rem; } .chess-football-entry__quick-level.is-selected { padding:calc(.65rem - 1px); } .chess-football-entry__quick-kickoff { width:100%; } }
 
