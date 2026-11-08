@@ -3,6 +3,7 @@ import { fetchWithTimeout } from './asyncControl.js';
 export const DEFAULT_CHESS_FOOTBALL_MANIFEST_URL = typeof location === 'undefined' ? 'https://staging.football.shadowops.dpdns.org/runtime.json' : new URL('/runtime.json',location.origin).href;
 
 const RELEASE_RE = /^[0-9a-f]{16}$/;
+const SOURCE_SHA_RE = /^[a-f0-9]{40}$/;
 
 function configuredDirectUrl(env = {}) {
   const value = env.VITE_CHESS_FOOTBALL_GODOT_URL;
@@ -31,7 +32,8 @@ export function validateChessFootballManifest(value, manifestUrl = DEFAULT_CHESS
     version: 1,
     release: value.release,
     index: indexUrl.href,
-    sourceSha: typeof value.sourceSha === 'string' ? value.sourceSha : '',
+    sourceSha: typeof value.sourceSha === 'string' && SOURCE_SHA_RE.test(value.sourceSha)
+      && !/^0+$/.test(value.sourceSha) ? value.sourceSha : '',
   };
 }
 
@@ -42,7 +44,7 @@ export async function resolveChessFootballGodotUrl({
   now = Date.now,
 } = {}) {
   const directUrl = configuredDirectUrl(env);
-  if (directUrl) return { url: directUrl, source: 'override', release: '' };
+  if (directUrl) return { url: directUrl, source: 'override', release: '', sourceSha: '' };
 
   try {
     const requestUrl = new URL(manifestUrl);
@@ -53,12 +55,13 @@ export async function resolveChessFootballGodotUrl({
     });
     if (!response?.ok) throw new Error(`manifest Chess Football HTTP ${response?.status || 0}`);
     const manifest = validateChessFootballManifest(await response.json(), manifestUrl);
-    return { url: manifest.index, source: 'r2', release: manifest.release };
+    return { url: manifest.index, source: 'r2', release: manifest.release, sourceSha: manifest.sourceSha };
   } catch (error) {
     return {
       url: '',
       source: 'fallback',
       release: '',
+      sourceSha: '',
       error: error instanceof Error ? error.message : String(error),
     };
   }

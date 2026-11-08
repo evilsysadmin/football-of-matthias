@@ -10,6 +10,8 @@ import { createFootballCareer, editFootballCareer, playFootballCareerRound, star
 import { getFootballClubRoster, getDefaultFootballLineup, FOOTBALL_FIVE_POSITIONS, getFootballFatigue } from '../footballManagerRoster.js';
 import { FOOTBALL_SCOUTING_ATTRIBUTES } from '../footballPlayerProfiles.js';
 import { FOOTBALL_QUICK_DIFFICULTIES, DEFAULT_FOOTBALL_QUICK_DIFFICULTY } from '../footballQuickDifficulty.js';
+import { resolveChessFootballGodotUrl } from '../chessFootballGodotRuntime.js';
+import { FOOTBALL_BUILD_ID } from '../releaseUpdate.js';
 import './ChessFootballEntry.css';
 import './FootballHome.css';
 import './FootballQuickSetup.css';
@@ -18,6 +20,42 @@ import FootballSaveTransfer from './FootballSaveTransfer.jsx';
 import FootballManagerDesk from './FootballManagerDesk.jsx';
 
 const ChessFootballGodotHost = lazy(() => import('./ChessFootballGodotHost.jsx'));
+
+// Support feedback about an apparently unchanged match without adding
+// anything to the playable pitch. Fetch the protected runtime manifest only
+// after the player explicitly opens this compact pre-match diagnostic.
+function FootballQuickVersionDetails() {
+  const [open, setOpen] = useState(false);
+  const [runtime, setRuntime] = useState(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    let active = true;
+    setRuntime(null);
+    resolveChessFootballGodotUrl().then((value) => {
+      if (active) setRuntime(value);
+    });
+    return () => { active = false; };
+  }, [open]);
+  const loadedSha = FOOTBALL_BUILD_ID;
+  const runtimeSha = runtime?.sourceSha || '';
+  const mismatch = Boolean(loadedSha && runtimeSha && loadedSha !== runtimeSha);
+  return (
+    <details className="chess-football-entry__quick-version" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>Versión del partido</summary>
+      {open ? (
+        <div className="chess-football-entry__quick-version-content">
+          <p>Menú cargado: <code>{loadedSha ? loadedSha.slice(0, 12) : 'Desarrollo local'}</code></p>
+          <p>Motor anunciado: <code>{runtime === null ? 'Comprobando…' : runtimeSha ? runtimeSha.slice(0, 12) : 'No verificable'}</code></p>
+          {runtime?.release ? <p>Release Godot: <code>{runtime.release}</code></p> : null}
+          {mismatch ? (
+            <p role="alert">El menú y el motor anuncian versiones distintas. Vuelve al vestuario y actualiza antes de comparar cambios.</p>
+          ) : null}
+          <small>Lecturas del navegador y del manifiesto; no prueban el despliegue.</small>
+        </div>
+      ) : null}
+    </details>
+  );
+}
 
 function FootballSquadDevelopment({ players }) {
   const grown = players.filter((player) => player.attackGrowth || player.defenseGrowth).length;
@@ -332,6 +370,7 @@ export default function ChessFootballEntry({ onExit, careerStorage='local' }) {
               </button>
             </div>
             <p className="chess-football-entry__quick-hint">Puedes volver a Football desde el menú del partido.</p>
+            <FootballQuickVersionDetails />
           </section>
         ) : view === 'manager' ? (
           <section className="chess-football-entry__manager chess-football-entry__manager--selection" aria-labelledby="football-manager-title">
