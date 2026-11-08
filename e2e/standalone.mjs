@@ -244,6 +244,23 @@ try{
   await page.getByRole('button',{name:/^Difícil\b/}).click();
   assert.ok(await page.getByRole('button',{name:'Saltar al campo · 11v11 · Difícil'}).isVisible());
   assert.ok(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),'XI-only setup must not overflow viewport');
+  const versionInfo=page.locator('details.chess-football-entry__quick-version');
+  assert.ok(await versionInfo.locator('summary').isVisible(),'XI version info must be discoverable before kickoff');
+  assert.equal(await versionInfo.locator('code').count(),0,'Version diagnostic must be closed by default');
+  if(viewport.width===1500){
+   await versionInfo.locator('summary').click();
+   await page.waitForFunction(()=>document.querySelector('.chess-football-entry__quick-version')?.textContent?.includes('1234567890abcdef'));
+   const codes=await versionInfo.locator('code').allTextContents();
+   assert.deepEqual(codes,[
+    testVersionNotice?currentBuild.slice(0,12):'Desarrollo local',
+    testVersionNotice?currentBuild.slice(0,12):'No verificable',
+    '1234567890abcdef'
+   ],'Preflight must distinguish loaded frontend source, protected Godot manifest source and runtime release');
+   assert.equal(await versionInfo.getByRole('alert').count(),0,'Matching source releases must not be flagged as drift');
+   assert.ok(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),'Expanded version info must fit 1500px');
+   await page.screenshot({path:resolve(out,'1500-xi-version-details.png')});
+   await versionInfo.locator('summary').click();
+  }
   await page.screenshot({path:resolve(out,viewport.width+'-staging-xi-setup.png')});
   await page.getByRole('button',{name:'Saltar al campo · 11v11 · Difícil'}).click();
   const frame=page.locator('iframe.chess-football-godot-host__frame');
