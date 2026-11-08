@@ -559,9 +559,17 @@ try {
   await expectRealMovement('ArrowRight', 'x', 1, true);
 
   // The reported cropped touchline was seen in a 1500x788 BROWSER, not
-  // just in native Godot. Keep the actual XI WASM running while resizing
-  // Chromium: relaunching at a second resolution would miss regressions
-  // where the engine's canvas does not follow a live browser resize.
+  // just in native Godot. Keep the actual XI WASM running while resizing.
+  // Godot's exported project launches in fullscreen, where Chromium rejects
+  // window resizing at the protocol level. A real user first leaves
+  // fullscreen to resize; do that here without rebooting the match.
+  const wasFullscreen = await page.evaluate(async () => {
+    const hadFullscreen = Boolean(document.fullscreenElement);
+    if (hadFullscreen) await document.exitFullscreen();
+    return hadFullscreen;
+  });
+  await page.waitForFunction(() => !document.fullscreenElement, null, { timeout: 10000 });
+  console.log('FOOTBALL_XI_WEB_RESIZE_EXIT_FULLSCREEN', wasFullscreen);
   await page.setViewportSize({ width: 1500, height: 788 });
   await page.waitForFunction(() => {
     const canvas = document.querySelector('canvas');
