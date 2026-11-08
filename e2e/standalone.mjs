@@ -202,7 +202,7 @@ try{
  // including refusal of old 5v5 handshakes on desktop and mobile.
  const stagingOrigin='https://staging.football.shadowops.dpdns.org';
  const runtimeIndex='https://assets.chess-studio.shadowops.dpdns.org/football-of-matthias/staging/releases/1234567890abcdef/index.html';
- for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
+ for(const viewport of [{width:1280,height:800},{width:1500,height:788},{width:390,height:844}]){
   const page=await browser.newPage({viewport});
   const errors=[];page.on('pageerror',error=>errors.push(String(error)));
   await page.route(stagingOrigin+'/**',async route=>{
@@ -252,6 +252,29 @@ try{
   assert.equal(await frame.getAttribute('referrerpolicy'),'origin');
   await page.waitForFunction(()=>document.querySelector('.chess-football-godot-host')?.dataset.runtimeReady==='true');
   assert.equal(await page.locator('.chess-football-godot-host__fallback').count(),0);
+  // The outer full-screen shell contains an independent, cross-origin
+  // Web canvas. Verify its IFRAME fits the browser exactly, including
+  // the user's real 1500x788 viewport. Godot WASM coverage tests the
+  // actual canvas separately (not this mocked ready handshake).
+  const hostBox=await page.locator('.chess-football-godot-host').boundingBox();
+  const frameBox=await frame.boundingBox();
+  assert.ok(hostBox && frameBox && [hostBox,frameBox].every(box=>
+    Math.abs(box.x)<=1 && Math.abs(box.y)<=1 &&
+    Math.abs(box.width-viewport.width)<=1 &&
+    Math.abs(box.height-viewport.height)<=1
+  ),'XI Web iframe and immersive host must fill the viewport without clipping');
+  assert.ok(await page.evaluate(()=>
+    document.documentElement.scrollWidth<=innerWidth+1 &&
+    document.documentElement.scrollHeight<=innerHeight+1
+  ),'XI immersive host must not add a scrollable cropped edge');
+  if(viewport.width===1500){
+   const exitBox=await page.getByRole('button',{name:'Salir de Chess Football'}).boundingBox();
+   assert.ok(exitBox && exitBox.x>=0 && exitBox.y>=0 &&
+    exitBox.x+exitBox.width<=viewport.width+1 &&
+    exitBox.y+exitBox.height<=viewport.height+1,
+    'Exit button must remain reachable at the 1500x788 user viewport');
+   await page.screenshot({path:resolve(out,'1500-xi-iframe-host.png')});
+  }
   await page.getByRole('button',{name:'Salir de Chess Football'}).click();
   await page.getByRole('button',{name:/Partida rápida/}).click();
   await page.getByRole('button',{name:/^Difícil\b/}).click();
@@ -268,6 +291,6 @@ try{
   assert.equal(errors.length,0,errors.join('\n'));
   await page.close();
  }
- console.log('FOOTBALL_STAGING_XI_ONLY_BROWSER_OK players=22 viewports=1280+390 legacy_5v5_rejected=1');
+ console.log('FOOTBALL_STAGING_XI_ONLY_BROWSER_OK players=22 viewports=1280+1500x788+390 iframe_fills_viewport=1 legacy_5v5_rejected=1');
  console.log('FOOTBALL_STANDALONE_DESKTOP_MOBILE_OK');
 }finally{await browser.close();await new Promise(ok=>server.close(ok));}
