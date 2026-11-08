@@ -46,11 +46,11 @@ function FootballQuickVersionDetails() {
         <div className="chess-football-entry__quick-version-content">
           <p>Menú cargado: <code>{loadedSha ? loadedSha.slice(0, 12) : 'Desarrollo local'}</code></p>
           <p>Motor anunciado: <code>{runtime === null ? 'Comprobando…' : runtimeSha ? runtimeSha.slice(0, 12) : 'No verificable'}</code></p>
-          {runtime?.release ? <p>Atlas y motor: <code>{runtime.release}</code></p> : null}
+          {runtime?.release ? <p>Release Godot: <code>{runtime.release}</code></p> : null}
           {mismatch ? (
             <p role="alert">El menú y el motor anuncian versiones distintas. Vuelve al vestuario y actualiza antes de comparar cambios.</p>
           ) : null}
-          <small>Datos de la aplicación cargada y del manifiesto de staging; no sustituyen la comprobación del despliegue.</small>
+          <small>Lecturas del navegador y del manifiesto; no prueban el despliegue.</small>
         </div>
       ) : null}
     </details>
