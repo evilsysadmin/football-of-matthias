@@ -272,7 +272,7 @@ try{
    assert.ok(exitBox && exitBox.x>=0 && exitBox.y>=0 &&
     exitBox.x+exitBox.width<=viewport.width+1 &&
     exitBox.y+exitBox.height<=viewport.height+1,
-    'Exit button must remain reachable at the user's 1500x788 resolution');
+    'Exit button must remain reachable at the 1500x788 user viewport');
    await page.screenshot({path:resolve(out,'1500-xi-iframe-host.png')});
   }
   await page.getByRole('button',{name:'Salir de Chess Football'}).click();
