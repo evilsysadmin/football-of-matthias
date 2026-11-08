@@ -557,7 +557,40 @@ try {
   // Native endurance tests cover tactics and restarts; here confirm browser
   // input drives a real player on the full-size XI pitch as well.
   await expectRealMovement('ArrowRight', 'x', 1, true);
-  if (failures.length) throw new Error('XI Web runtime errors: ' + failures.slice(-8).join('\\n'));
+
+  // The reported cropped touchline was seen in a 1500x788 BROWSER, not
+  // just in native Godot. Keep the actual XI WASM running while resizing
+  // Chromium: relaunching at a second resolution would miss regressions
+  // where the engine's canvas does not follow a live browser resize.
+  await page.setViewportSize({ width: 1500, height: 788 });
+  await page.waitForFunction(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return false;
+    const rect = canvas.getBoundingClientRect();
+    return innerWidth === 1500 && innerHeight === 788 &&
+      Math.abs(rect.width - innerWidth) <= 2 &&
+      Math.abs(rect.height - innerHeight) <= 2;
+  }, null, { timeout: 15000 });
+  const resizeGeometry = await page.evaluate(() => {
+    const rect = document.querySelector('canvas').getBoundingClientRect();
+    return {
+      x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+      scrollWidth: document.documentElement.scrollWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+      viewWidth: innerWidth, viewHeight: innerHeight,
+    };
+  });
+  if (Math.abs(resizeGeometry.x) > 2 || Math.abs(resizeGeometry.y) > 2 ||
+      resizeGeometry.scrollWidth > 1502 || resizeGeometry.scrollHeight > 790) {
+    throw new Error('XI Godot Web canvas cropped or overflowed after 1500x788 resize: ' +
+      JSON.stringify(resizeGeometry));
+  }
+  // A fitted canvas that cannot take a real physical keyboard event is
+  // still broken, so verify the exported XI match remains playable.
+  await page.mouse.click(500, 370);
+  await expectRealMovement('ArrowRight', 'x', 1);
+  console.log('FOOTBALL_XI_REAL_WEB_1500X788_OK canvas=fills_browser keyboard=1 resized_in_place=1');
+  if (failures.length) throw new Error('XI Web runtime errors: ' + failures.slice(0, 8).join('\\n'));
   await page.screenshot({ path: resolve(output, 'real-web-xi-kickoff.png'), timeout: 4000 })
     .catch((error) => console.warn('Optional XI software-WebGL screenshot unavailable: ' + error.message));
   console.log('FOOTBALL_XI_REAL_WEB_OK players=22 pitch=4000x2600');
