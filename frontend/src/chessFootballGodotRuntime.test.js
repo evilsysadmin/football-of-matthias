@@ -17,7 +17,14 @@ describe('Chess Football Godot runtime', () => {
     expect(validateChessFootballManifest(VALID_MANIFEST)).toMatchObject({
       release: VALID_MANIFEST.release,
       index: VALID_MANIFEST.index,
+      sourceSha: VALID_MANIFEST.sourceSha,
     });
+  });
+
+  it('does not present malformed or placeholder source SHAs as verified releases', () => {
+    for (const sourceSha of ['not-a-commit', '0'.repeat(40), 'a'.repeat(41)]) {
+      expect(validateChessFootballManifest({ ...VALID_MANIFEST, sourceSha }).sourceSha).toBe('');
+    }
   });
 
   it('rejects an index outside the expected release path', () => {
@@ -36,6 +43,7 @@ describe('Chess Football Godot runtime', () => {
       url: 'https://example.test/football/index.html',
       source: 'override',
       release: '',
+      sourceSha: '',
     });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -49,6 +57,7 @@ describe('Chess Football Godot runtime', () => {
       url: VALID_MANIFEST.index,
       source: 'r2',
       release: VALID_MANIFEST.release,
+      sourceSha: VALID_MANIFEST.sourceSha,
     });
     expect(fetchImpl).toHaveBeenCalledWith(
       `${DEFAULT_CHESS_FOOTBALL_MANIFEST_URL}?v=42`,
