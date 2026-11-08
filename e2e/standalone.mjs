@@ -258,6 +258,9 @@ try{
    ],'Preflight must distinguish loaded frontend source, protected Godot manifest source and runtime release');
    assert.equal(await versionInfo.getByRole('alert').count(),0,'Matching source releases must not be flagged as drift');
    assert.ok(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),'Expanded version info must fit 1500px');
+   const diagnosticBox=await versionInfo.locator('.chess-football-entry__quick-version-content').boundingBox();
+   assert.ok(diagnosticBox && diagnosticBox.y>=0 && diagnosticBox.y+diagnosticBox.height<=viewport.height-4,
+    'Expanded XI version diagnostic must be entirely visible at 1500x788 (not clipped at bottom)');
    await page.screenshot({path:resolve(out,'1500-xi-version-details.png')});
    await versionInfo.locator('summary').click();
   }
