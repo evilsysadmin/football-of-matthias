@@ -1146,7 +1146,7 @@ jobs:
             echo '::error::Native v2 action poses failed exact-public-byte 3D Godot capture.'
             exit 1
           fi
-          grep -q 'FOOTBALL_ACTION_POSES_R2_GODOT_REVIEW_OK teams=2 actions=4 phases=2 cameras=2 exact_r2=1' "$log"
+          grep -q 'FOOTBALL_ACTION_POSES_R2_GODOT_REVIEW_OK teams=2 active_dribbles=2 held_tackles=2 phases=2 cameras=2 exact_r2=1' "$log"
           for mode in broadcast tactical; do
             for phase in before after; do
               test -s "$RUNNER_TEMP/chess-football-review/action-poses-$phase-$mode.png"
