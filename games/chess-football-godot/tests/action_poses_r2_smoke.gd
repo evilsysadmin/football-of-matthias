@@ -6,8 +6,8 @@ func _synthetic_sheet() -> Image:
 	var sheet := Image.create(1024, 144, false, Image.FORMAT_RGBA8)
 	sheet.fill(Color.TRANSPARENT)
 	for i in range(8):
-		var top := 75 if i == 4 else 18
-		var height := 58 if i == 4 else 116
+		var top := 73 if i == 4 else 18
+		var height := 61 if i == 4 else 116
 		sheet.fill_rect(Rect2i(i * 128 + 16, top, 90, height),
 			Color(0.15 + float(i) * 0.08, 0.65, 0.3, 1.0))
 	return sheet
