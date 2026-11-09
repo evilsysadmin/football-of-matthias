@@ -434,7 +434,7 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_PENALTY_SHOOTOUT_RULES_OK' "$log"
-      - name: Contextual E · real XI dribble, technique and double-tap slide
+      - name: Contextual E · real XI dribble, standing tackle and Shift+E slide
         shell: bash
         run: |
           set -euo pipefail
