@@ -40,7 +40,8 @@ static func sheet_meta(team_id: int, animation: StringName) -> Dictionary:
 		return {}
 	if contract.get("cdn_base") != TRUSTED_ROOT.trim_suffix("/"):
 		return {}
-	if contract.get("cell") != {"width": WIDTH, "height": HEIGHT}:
+	var cell: Variant = contract.get("cell", {})
+	if not cell is Dictionary or int(cell.get("width", 0)) != WIDTH or int(cell.get("height", 0)) != HEIGHT:
 		return {}
 	if int(contract.get("columns", 0)) != COLUMNS or int(contract.get("rows", 0)) != ROWS:
 		return {}
