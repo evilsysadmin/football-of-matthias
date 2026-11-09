@@ -378,7 +378,7 @@ async function bridgeVerifiedStagingActionPosesR2(page) {
       meta.footline !== 134 ||
       meta.cell?.width !== 128 || meta.cell?.height !== 144 ||
       JSON.stringify(meta.animations) !== JSON.stringify(['dribble_cut', 'dribble_burst', 'tackle', 'slide_tackle']) ||
-      JSON.stringify(meta.enabled_actions) !== JSON.stringify(['dribble_cut', 'dribble_burst']) ||
+      JSON.stringify(meta.enabled_actions) !== JSON.stringify(['dribble_cut', 'dribble_burst', 'tackle', 'slide_tackle']) ||
       !Array.isArray(meta.entries) || meta.entries.length !== expected.size) {
     throw new Error('Invalid native action pose R2 contract');
   }
