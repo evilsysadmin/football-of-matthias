@@ -68,7 +68,7 @@ static func sheet_meta(team_id: int, animation: StringName) -> Dictionary:
 	var selected_key: String = String(CLUBS[team_id]) + ":" + String(animation)
 	if not seen.has(selected_key):
 		return {}
-	var filename: String = String(CLUBS[team_id]) + "_" + String(animation) + "_poses_v1.webp
+	var filename: String = String(CLUBS[team_id]) + "_" + String(animation) + "_poses_v1.webp"
 	var meta := {
 		"url": TRUSTED_ROOT + filename,
 		"sha256": PINNED_SHA[selected_key],
