@@ -35,7 +35,7 @@ func _initialize() -> void:
 	game._select_player(carrier)
 	game.ball.attach_to(carrier)
 	carrier.velocity = Vector2.ZERO
-	var initial_score := game.score.duplicate()
+	var initial_score: Array = game.score.duplicate()
 	var initial_home: Vector2 = carrier.global_position
 
 	# A stationary E is a short feint, direction+E is a cut, sprint+E
