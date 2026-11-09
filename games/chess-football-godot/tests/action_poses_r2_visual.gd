@@ -38,6 +38,14 @@ func _initialize() -> void:
 	for team_id in range(2):
 		for action in ACTIONS:
 			var meta := ChessFootballActionPosesR2.sheet_meta(team_id, action)
+			if action not in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
+				# This stage retains canonical E and Shift+E poses; don't
+				# load the shadow-heavy v2 tackle/slide even for screenshots.
+				assert(meta.is_empty())
+				assert(not stage._action_poses_r2_loaded.has(
+					"%d:%s" % [team_id, String(action)]
+				))
+				continue
 			assert(not meta.is_empty())
 			var filename := String(ChessFootballActionPosesR2.CLUBS[team_id]) + "_" + String(action) + "_poses_v2.webp"
 			var full_path := directory.path_join(filename)
@@ -60,7 +68,7 @@ func _initialize() -> void:
 		var after := await _matrix(game, stage, actors, mode, true)
 		_save(after, "AFTER_" + mode.to_upper(), "action-poses-after-" + mode + ".png")
 	assert(game.score == scores_before)
-	print("FOOTBALL_ACTION_POSES_R2_GODOT_REVIEW_OK teams=2 actions=4 phases=2 cameras=2 exact_r2=1")
+	print("FOOTBALL_ACTION_POSES_R2_GODOT_REVIEW_OK teams=2 active_dribbles=2 held_tackles=2 phases=2 cameras=2 exact_r2=1")
 	quit(0)
 
 
