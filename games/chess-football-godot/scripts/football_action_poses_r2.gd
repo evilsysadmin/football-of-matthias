@@ -8,6 +8,9 @@ const META_PATH := "res://optional_action_poses_v2.json"
 const TRUSTED_ROOT := "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v2/"
 const CLUBS := ["fc_matthias", "real_enroque"]
 const ANIMATIONS := [&"dribble_cut", &"dribble_burst", &"tackle", &"slide_tackle"]
+# Only visually approved v2 gestures may become active. Leave the still
+# imperfect grounded slide and standing tackle on their existing fallback.
+const ACTIVE_ANIMATIONS := [&"dribble_cut", &"dribble_burst"]
 const WIDTH := 128
 const HEIGHT := 144
 const COLUMNS := 8
@@ -31,7 +34,7 @@ static func metadata() -> Dictionary:
 
 
 static func sheet_meta(team_id: int, animation: StringName) -> Dictionary:
-	if team_id not in [0, 1] or animation not in ANIMATIONS:
+	if team_id not in [0, 1] or animation not in ACTIVE_ANIMATIONS:
 		return {}
 	var contract := metadata()
 	if contract.get("enabled") != true or contract.get("version") != 2 or contract.get("quality_contract") != "football-approved-r2-action-recomposition-v2":
@@ -48,6 +51,8 @@ static func sheet_meta(team_id: int, animation: StringName) -> Dictionary:
 	if int(contract.get("footline", 0)) != FOOTLINE:
 		return {}
 	if contract.get("animations") != ["dribble_cut", "dribble_burst", "tackle", "slide_tackle"]:
+		return {}
+	if contract.get("enabled_actions") != ["dribble_cut", "dribble_burst"]:
 		return {}
 	var entries: Variant = contract.get("entries", [])
 	if not entries is Array or entries.size() != PINNED_SHA.size():
