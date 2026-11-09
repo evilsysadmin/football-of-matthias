@@ -101,8 +101,12 @@ func _capture(game: Node, stage: ChessFootball3DPresenter,
 			game.ball.release(Vector2.RIGHT, 0.0)
 		game.ball.global_position = Vector2(-9999.0, -9999.0)
 		actor.dribble_burst_seconds = 0.0
-		actor.action_lock_seconds = 0.30
 		actor.action_visual_duration_seconds = 0.50 if action == &"tackle" else 0.64
+		# For the verified new action pack the 3D phase is tied to the real
+		# authoritative action countdown, not a manually seeded preview clock.
+		actor.action_lock_seconds = actor.action_visual_duration_seconds * (
+			1.0 - (float(pose) + 0.20) / 8.0
+		)
 		actor.visual.play(action)
 	stage.player_run_views[key] = "side"
 	stage.sync_presentation(0.0, mode)
