@@ -18,7 +18,7 @@
     "tackle",
     "slide_tackle"
   ],
-  "note": "New independently SHA-pinned authentic-runtime-derived v2 action sheets. No v1 fallback activation. Merge only after all eight public R2 bytes/CORS match, real Godot visual review, chromium/Web and final gate on exact HEAD.",
+  "note": "Stage v2 P0: only dribble_cut and dribble_burst are visually approved for runtime. Tackles/slide objects are pinned and integrity-checked but NOT loaded, because the slide pose has an oversized black ground shadow in real Godot tactical capture. Keep canonical tackle/slide sprites, E/Shift+E controls and physics unchanged. Require visual gate on exact SHA.",
   "entries": [
     {
       "team": "fc_matthias",
@@ -68,5 +68,9 @@
       "file": "real_enroque_slide_tackle_poses_v2.webp",
       "sha256": "819e008a135797e4d3fd901457f2433e08f94358bc43b8b3ef0f1ddc756ec564"
     }
+  ],
+  "enabled_actions": [
+    "dribble_cut",
+    "dribble_burst"
   ]
 }
