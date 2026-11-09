@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-"""Fail closed on all eight operator-uploaded native action pose WebPs."""
-import hashlib
+"""Do not publish the visually rejected v1 action WebPs in staging."""
 import json
-import os
 from pathlib import Path
-from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "games/chess-football-godot/optional_action_poses_v1.json"
@@ -22,17 +19,12 @@ EXPECTED = {
 }
 
 
-def dimensions(raw: bytes) -> tuple[int, int]:
-    if len(raw) < 25 or raw[:4] != b"RIFF" or raw[8:12] != b"WEBP" or raw[12:16] != b"VP8L" or raw[20] != 0x2F:
-        raise ValueError("Expected lossless VP8L WebP")
-    bits = int.from_bytes(raw[21:25], "little")
-    return ((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1)
-
-
 def main() -> None:
     contract = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert contract["enabled"] is True and contract["version"] == 1
-    assert contract["quality_contract"] == "football-action-poses-native-v1"
+    # v1 passes transport/integrity checks but FAILS canonical human visual QA.
+    # Never fetch or publish it merely because the bucket still serves 200s.
+    assert contract["enabled"] is False, "Rejected v1 poses must remain disabled"
+    assert contract["version"] == 1 and contract["quality_contract"] == "football-action-poses-native-v1"
     assert contract["bucket"] == "football" and contract["prefix"] == "atlases/v2/"
     assert contract["cdn_base"] == BASE
     assert contract["cell"] == {"width": 128, "height": 144}
@@ -41,27 +33,11 @@ def main() -> None:
     entries = contract["entries"]
     assert len(entries) == len(EXPECTED)
     assert {(e["team"], e["animation"]) for e in entries} == set(EXPECTED)
-    out = Path(os.environ["RUNNER_TEMP"]) / "football-action-poses-r2"
-    out.mkdir(parents=True, exist_ok=True)
     for entry in entries:
         key = (entry["team"], entry["animation"])
-        name = f"{key[0]}_{key[1]}_poses_v1.webp"
-        sha = EXPECTED[key]
-        assert entry["file"] == name and entry["sha256"] == sha
-        request = Request(BASE + "/" + name, headers={
-            "Origin": ORIGIN, "User-Agent": "Football-native-action-R2-CI/1.0"
-        })
-        with urlopen(request, timeout=20) as response:
-            assert response.status == 200, (name, response.status)
-            assert "image/webp" in response.headers.get("Content-Type", "").lower(), name
-            assert response.headers.get("Access-Control-Allow-Origin", "") in ("*", ORIGIN), name
-            raw = response.read(4_194_305)
-        assert 25 <= len(raw) <= 4_194_304
-        assert dimensions(raw) == (1024, 144), name
-        assert hashlib.sha256(raw).hexdigest() == sha, "SHA mismatch: " + name
-        (out / name).write_bytes(raw)
-        print(f"FOOTBALL_ACTION_POSES_R2_VERIFIED team={key[0]} action={key[1]} bytes={len(raw)}")
-    print("FOOTBALL_ACTION_POSES_R2_ALL_VERIFIED teams=2 actions=4 files=8")
+        assert entry["file"] == f"{key[0]}_{key[1]}_poses_v1.webp"
+        assert entry["sha256"] == EXPECTED[key]
+    print("FOOTBALL_ACTION_POSES_V1_VISUAL_HOLD_OK enabled=false clubs=2 actions=4 fallback=1")
 
 
 if __name__ == "__main__":
