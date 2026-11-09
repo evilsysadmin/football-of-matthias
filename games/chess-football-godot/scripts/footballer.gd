@@ -45,6 +45,12 @@ const DRIBBLE_COOLDOWN_SECONDS := 0.68
 const DRIBBLE_SPEED_MULTIPLIER := 1.52
 const DRIBBLE_ACCELERATION := 3900.0
 const DRIBBLE_TOUCH_DISTANCE := 24.0
+const DRIBBLE_FEINT_SECONDS := 0.16
+const DRIBBLE_LONG_TOUCH_SECONDS := 0.27
+const DRIBBLE_FEINT_SPEED := 0.65
+const DRIBBLE_LONG_TOUCH_SPEED := 1.56
+const DRIBBLE_FEINT_TOUCH := 8.0
+const DRIBBLE_LONG_TOUCH := 32.0
 const FACING_SWITCH_SPEED := 18.0
 var home_position: Vector2
 var active: bool = false
@@ -72,6 +78,9 @@ var tackle_aggressive: bool = false
 var dribble_cooldown_seconds: float = 0.0
 var dribble_burst_seconds: float = 0.0
 var dribble_direction: Vector2 = Vector2.RIGHT
+var dribble_mode: String = "cut"
+var dribble_duration_seconds: float = DRIBBLE_BURST_SECONDS
+var dribble_touch_distance: float = DRIBBLE_TOUCH_DISTANCE
 var yellow_cards: int = 0
 var sent_off: bool = false
 var contact_stun_seconds: float = 0.0
@@ -203,7 +212,11 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	var actual_sprint := _update_stamina(delta, sprinting and not dribbling, moving)
 	last_sprinting = actual_sprint or dribbling
 	var speed := (
-		base_speed * DRIBBLE_SPEED_MULTIPLIER
+		base_speed * (
+			DRIBBLE_FEINT_SPEED if dribble_mode == "feint"
+			else DRIBBLE_LONG_TOUCH_SPEED if dribble_mode == "burst"
+			else DRIBBLE_SPEED_MULTIPLIER
+		)
 		if dribbling
 		else base_speed * (SPRINT_SPEED_MULTIPLIER if actual_sprint else 1.0)
 	)
@@ -345,17 +358,35 @@ func can_dribble() -> bool:
 		and tackle_recovery_seconds <= 0.0
 	)
 
-func start_dribble(direction: Vector2) -> bool:
-	if not can_dribble():
+func start_dribble(direction: Vector2, kind: String = "cut") -> bool:
+	if not can_dribble() or kind not in ["feint", "cut", "burst"]:
 		return false
 	var wanted := direction
 	if wanted.length_squared() < 0.001:
 		var facing := -1.0 if visual != null and visual.flip_h else 1.0
 		wanted = Vector2(facing, 0.0)
 	dribble_direction = wanted.normalized()
-	dribble_burst_seconds = DRIBBLE_BURST_SECONDS
-	dribble_cooldown_seconds = DRIBBLE_COOLDOWN_SECONDS
-	velocity = dribble_direction * base_speed * 0.72
+	dribble_mode = kind
+	dribble_duration_seconds = (
+		DRIBBLE_FEINT_SECONDS if kind == "feint"
+		else DRIBBLE_LONG_TOUCH_SECONDS if kind == "burst"
+		else DRIBBLE_BURST_SECONDS
+	)
+	dribble_touch_distance = (
+		DRIBBLE_FEINT_TOUCH if kind == "feint"
+		else DRIBBLE_LONG_TOUCH if kind == "burst"
+		else DRIBBLE_TOUCH_DISTANCE
+	)
+	dribble_burst_seconds = dribble_duration_seconds
+	# Scouting technique makes execution/recovery noticeably more responsive,
+	# not an RNG success roll or collision immunity. Rating 75 is neutral.
+	var base_cooldown := (
+		0.48 if kind == "feint" else 0.88 if kind == "burst" else DRIBBLE_COOLDOWN_SECONDS
+	)
+	dribble_cooldown_seconds = base_cooldown * clampf(
+		1.0 - float(scouting_technique - 75) * 0.004, 0.90, 1.18
+	)
+	velocity = dribble_direction * base_speed * (0.20 if kind == "feint" else 0.72)
 	return true
 
 func dribble_active() -> bool:
@@ -364,7 +395,7 @@ func dribble_active() -> bool:
 func dribble_touch_ratio() -> float:
 	if not dribble_active():
 		return 0.0
-	var progress := 1.0 - clampf(dribble_burst_seconds / DRIBBLE_BURST_SECONDS, 0.0, 1.0)
+	var progress := 1.0 - clampf(dribble_burst_seconds / maxf(dribble_duration_seconds, 0.001), 0.0, 1.0)
 	return sin(PI * progress)
 
 func receive_yellow_card() -> bool:
@@ -394,6 +425,9 @@ func send_off() -> void:
 	dribble_cooldown_seconds = 0.0
 	dribble_burst_seconds = 0.0
 	dribble_direction = Vector2.RIGHT
+	dribble_mode = "cut"
+	dribble_duration_seconds = DRIBBLE_BURST_SECONDS
+	dribble_touch_distance = DRIBBLE_TOUCH_DISTANCE
 	action_lock_seconds = 0.0
 	contact_stun_seconds = 0.0
 	collision_layer = 0
@@ -450,7 +484,7 @@ func ball_anchor() -> Vector2:
 	if match_pitch != Formation.ELEVEN_PITCH_RECT or role == "keeper":
 		var legacy := Vector2(18.0 * facing * scale.x, -5.0)
 		if dribble_active():
-			legacy += dribble_direction * DRIBBLE_TOUCH_DISTANCE * dribble_touch_ratio()
+			legacy += dribble_direction * dribble_touch_distance * dribble_touch_ratio()
 		return legacy
 	# The previous fixed horizontal +18/-5 offset put the ball *between*
 	# the legs or beside a runner travelling vertically/diagonally.
@@ -463,7 +497,7 @@ func ball_anchor() -> Vector2:
 		forward = forward.normalized()
 	var touch_distance := 37.0
 	if dribble_active():
-		touch_distance += DRIBBLE_TOUCH_DISTANCE * dribble_touch_ratio()
+		touch_distance += dribble_touch_distance * dribble_touch_ratio()
 	# Slightly out of the support-foot axis, but always AHEAD of travel.
 	var side := Vector2(-forward.y, forward.x) * (3.5 * facing)
 	return forward * touch_distance + side

@@ -787,10 +787,7 @@ func _handle_human(delta: float) -> void:
 		_cancel_pass_charge()
 		_select_player(_best_switch_candidate())
 	if Input.is_action_just_pressed("tackle"):
-		if controlled.has_ball:
-			_try_dribble(direction)
-		else:
-			_try_tackle(controlled, Input.is_action_pressed("sprint"))
+		_handle_contextual_e(direction, Input.is_action_pressed("sprint"))
 	var pass_pressed := Input.is_action_pressed("pass_ball")
 	if pass_pressed and not desktop_pass_input_active:
 		desktop_pass_input_active = true
@@ -2704,15 +2701,32 @@ func _auto_dribble_direction(player: Footballer) -> Vector2:
 			best_direction = candidate
 	return best_direction
 
-func _try_dribble(direction: Vector2) -> bool:
+func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 	if controlled == null or ball.carrier != controlled:
 		return false
 	_cancel_shot_charge()
 	_cancel_pass_charge()
+	var stationary: bool = (
+		direction.length_squared() < 0.0324
+		and controlled.velocity.length() < controlled.base_speed * 0.35
+	)
+	var kind := "burst" if sprinting else "feint" if stationary else "cut"
 	var wanted := direction
 	if wanted.length_squared() < 0.0324:
 		wanted = _auto_dribble_direction(controlled)
-	return controlled.start_dribble(wanted)
+	return controlled.start_dribble(wanted, kind)
+
+
+# Explicit and deterministic: E always stands, Shift+E always slides
+# when defending. There is no hidden timing state, double tap or input delay.
+func _handle_contextual_e(direction: Vector2, sprinting: bool) -> void:
+	if controlled == null or controlled.sent_off:
+		return
+	if controlled.has_ball:
+		_try_dribble(direction, sprinting)
+	else:
+		_try_tackle(controlled, sprinting)
+
 
 func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
 	if ball.carrier == null or ball.carrier == tackler:
