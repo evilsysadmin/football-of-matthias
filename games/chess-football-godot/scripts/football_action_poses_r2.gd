@@ -1,10 +1,10 @@
 class_name ChessFootballActionPosesR2
 extends RefCounted
 
-# Separate native 8x128x144 action sheets uploaded by the operator to R2 v2.
+# Separate original-runtime-derived action sheets under eight immutable v2 R2 keys.
 # DO NOT feed these into the legacy 2172x724 tackle source crop decoder.
 # Exact HTTPS path + SHA-256 + dimensions are checked by the shared loader.
-const META_PATH := "res://optional_action_poses_v1.json"
+const META_PATH := "res://optional_action_poses_v2.json"
 const TRUSTED_ROOT := "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v2/"
 const CLUBS := ["fc_matthias", "real_enroque"]
 const ANIMATIONS := [&"dribble_cut", &"dribble_burst", &"tackle", &"slide_tackle"]
@@ -14,14 +14,14 @@ const COLUMNS := 8
 const ROWS := 1
 const FOOTLINE := 134
 const PINNED_SHA := {
-	"fc_matthias:dribble_cut": "08d1f14578b5081e90cb3177e13ebff4eefc6d6a4ead238d50dc2566da0835c1",
-	"fc_matthias:dribble_burst": "9f28275a1275dfe62c78f39f3b4e584eb3fa23adabb95ab802653d1275370068",
-	"fc_matthias:tackle": "86863025bd79a686afd23b1d6355d456f387e044fa9108e9a53f1e1315076e52",
-	"fc_matthias:slide_tackle": "66caf6a528c29d9be96db23ed2968d3be7656aa2d5cf33ac4d50d977714ac631",
-	"real_enroque:dribble_cut": "7114bac7f966449d1db645d9ceb1b4a2d65f97b903bfba57305e2505eebf7120",
-	"real_enroque:dribble_burst": "cf85bf0c1a9003e197ac1ef5d20590471dace55ad246c4725043a6ed40bc7988",
-	"real_enroque:tackle": "854e912dbd21e2a66f42faeaec4cefe274747fe5ce69d196585ab7ed45c26d8e",
-	"real_enroque:slide_tackle": "20a057e9de63bef269472f2a7f5880a7789ab6753d4716dfe7e274a992dff4c3",
+	"fc_matthias:dribble_cut": "0ebe3ed766f9adf90e3c8327315cbf53282bdb3e1d6dbceac1fa0e4e81cd8c93",
+	"fc_matthias:dribble_burst": "d516759fb53668d5fc02daf0581b8d61e1bddbb29b9725e9e4fa3edcd9729d9b",
+	"fc_matthias:tackle": "a3c50d36bc62104bb88e60e96da2134c99180bd4afe50dc7d92115271d08b18c",
+	"fc_matthias:slide_tackle": "21b1f297d52752977d20d7d6d4f2952c5158605922157bf1edb6a063fdd76071",
+	"real_enroque:dribble_cut": "6acec93d0e91c227c9367ba326330083a4d358b965f78b1df339d588353c37aa",
+	"real_enroque:dribble_burst": "2625c30ae31784008c3f2c665ec22ce79bfa664f663510ce5d463933c67f54b5",
+	"real_enroque:tackle": "1e64f42753f9a30d4361008abb99e6f71092d74dc85f05104a822ae9fa82fb77",
+	"real_enroque:slide_tackle": "819e008a135797e4d3fd901457f2433e08f94358bc43b8b3ef0f1ddc756ec564",
 }
 
 
@@ -34,7 +34,7 @@ static func sheet_meta(team_id: int, animation: StringName) -> Dictionary:
 	if team_id not in [0, 1] or animation not in ANIMATIONS:
 		return {}
 	var contract := metadata()
-	if contract.get("enabled") != true or contract.get("quality_contract") != "football-action-poses-native-v1":
+	if contract.get("enabled") != true or contract.get("version") != 2 or contract.get("quality_contract") != "football-approved-r2-action-recomposition-v2":
 		return {}
 	if contract.get("bucket") != "football" or contract.get("prefix") != "atlases/v2/":
 		return {}
@@ -60,7 +60,7 @@ static func sheet_meta(team_id: int, animation: StringName) -> Dictionary:
 		var team := String(entry.get("team", ""))
 		var action := String(entry.get("animation", ""))
 		var key := team + ":" + action
-		var expected_filename := team + "_" + action + "_poses_v1.webp"
+		var expected_filename := team + "_" + action + "_poses_v2.webp"
 		if not PINNED_SHA.has(key) or seen.has(key):
 			return {}
 		if entry.get("file") != expected_filename or entry.get("sha256") != PINNED_SHA[key]:
@@ -69,7 +69,7 @@ static func sheet_meta(team_id: int, animation: StringName) -> Dictionary:
 	var selected_key: String = String(CLUBS[team_id]) + ":" + String(animation)
 	if not seen.has(selected_key):
 		return {}
-	var filename: String = String(CLUBS[team_id]) + "_" + String(animation) + "_poses_v1.webp"
+	var filename: String = String(CLUBS[team_id]) + "_" + String(animation) + "_poses_v2.webp"
 	var meta := {
 		"url": TRUSTED_ROOT + filename,
 		"sha256": PINNED_SHA[selected_key],
