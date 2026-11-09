@@ -18,7 +18,7 @@
     "tackle",
     "slide_tackle"
   ],
-  "note": "Stage v2 P0: only dribble_cut and dribble_burst are visually approved for runtime. Tackles/slide objects are pinned and integrity-checked but NOT loaded, because the slide pose has an oversized black ground shadow in real Godot tactical capture. Keep canonical tackle/slide sprites, E/Shift+E controls and physics unchanged. Require visual gate on exact SHA.",
+  "note": "Only original SHA-pinned v2 R2 bytes are trusted. Runtime repairs the known v2 slide's oversized translucent painted ground shadow AFTER SHA validation and BEFORE texture registration (frames 3-5 only). No image overwritten in R2. Approved canonical running/dribbling is unchanged; 11v11 E/Shift+E keep authoritative physics, cooldown and foul semantics. Human Godot broadcast/tactical review and exact-head gate required.",
   "entries": [
     {
       "team": "fc_matthias",
@@ -71,6 +71,8 @@
   ],
   "enabled_actions": [
     "dribble_cut",
-    "dribble_burst"
+    "dribble_burst",
+    "tackle",
+    "slide_tackle"
   ]
 }
