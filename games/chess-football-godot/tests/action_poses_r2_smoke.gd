@@ -21,25 +21,6 @@ func _initialize() -> void:
 	for team_id in range(2):
 		for action in ChessFootballActionPosesR2.ANIMATIONS:
 			var meta := ChessFootballActionPosesR2.sheet_meta(team_id, action)
-			if meta.is_empty():
-				var raw_meta := {
-					"url": ChessFootballActionPosesR2.TRUSTED_ROOT
-						+ String(ChessFootballActionPosesR2.CLUBS[team_id])
-						+ "_" + String(action) + "_poses_v1.webp",
-					"sha256": ChessFootballActionPosesR2.PINNED_SHA[
-						String(ChessFootballActionPosesR2.CLUBS[team_id]) + ":" + String(action)
-					],
-					"cell": {"width": 128, "height": 144},
-					"columns": 8, "rows": 1,
-				}
-				print("ACTION_META_DEBUG team=", team_id, " action=", action,
-					" cell=", contract.get("cell") == {"width":128,"height":144},
-					" animations=", contract.get("animations") == ["dribble_cut", "dribble_burst", "tackle", "slide_tackle"],
-					" counts=", (contract.get("entries", []) as Array).size(),
-					" sha_count=", ChessFootballActionPosesR2.PINNED_SHA.size(),
-					" root=", contract.get("cdn_base") == ChessFootballActionPosesR2.TRUSTED_ROOT.trim_suffix("/"),
-					" valid_url=", ChessFootballR2AtlasLoader.valid_metadata(
-						raw_meta, ChessFootballActionPosesR2.TRUSTED_ROOT))
 			assert(not meta.is_empty())
 			assert(meta["url"].begins_with(ChessFootballActionPosesR2.TRUSTED_ROOT))
 			assert(ChessFootballR2AtlasLoader.decode_verified_webp(
