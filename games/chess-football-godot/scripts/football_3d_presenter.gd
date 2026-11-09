@@ -665,7 +665,8 @@ func _apply_verified_carry_dribble_frames(textures: Array[Texture2D], team_id: i
 # Native R2 v2 eight-pose action pack, independent of the legacy source-
 # sized tackler decoder. A failed fetch/shape/hash leaves local canon intact.
 func _request_action_poses_from_r2() -> void:
-	if not OS.has_feature("web"):
+	# Old 5v5 remains the canon-only headless fixture.
+	if not OS.has_feature("web") or match_node.match_team_size != 11:
 		return
 	for team_id in range(2):
 		for action in ChessFootballActionPosesR2.ANIMATIONS:
