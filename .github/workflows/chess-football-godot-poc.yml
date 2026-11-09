@@ -68,6 +68,13 @@ jobs:
         run: python3 scripts/check_football_pass_shoot_r2.py
       - name: Verify R2 carry/dribble objects and staging CORS (fail closed)
         run: python3 scripts/check_football_carry_dribble_r2.py
+      # Probe the NEW canonical-style v2 candidates independently. v1 is
+      # blocked by human visual review; a missing v2 is informative, not an
+      # authorization to enable the old pack. Corrupt published bytes fail.
+      - name: Probe pending v2 action artwork on public R2 (no activation)
+        if: github.event_name == 'pull_request'
+        id: action_poses_v2_probe
+        run: python3 scripts/probe_football_action_poses_v2.py
       - name: Verify eight user-published native action poses in R2 (HTTP, CORS, SHA)
         run: python3 scripts/check_football_action_poses_r2.py
       # Provide the exact real XI raster source for action-art review. These
