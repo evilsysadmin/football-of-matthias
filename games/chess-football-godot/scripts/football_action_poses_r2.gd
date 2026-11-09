@@ -8,9 +8,10 @@ const META_PATH := "res://optional_action_poses_v2.json"
 const TRUSTED_ROOT := "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v2/"
 const CLUBS := ["fc_matthias", "real_enroque"]
 const ANIMATIONS := [&"dribble_cut", &"dribble_burst", &"tackle", &"slide_tackle"]
-# Only visually approved v2 gestures may become active. Leave the still
-# imperfect grounded slide and standing tackle on their existing fallback.
-const ACTIVE_ANIMATIONS := [&"dribble_cut", &"dribble_burst"]
+# Stage all four action sheets only after immutable v2 SHA verification.
+# The slide's oversized painted ground shadow is removed deterministically
+# from three middle frames, so the game's own contact shadow stays canonical.
+const ACTIVE_ANIMATIONS := [&"dribble_cut", &"dribble_burst", &"tackle", &"slide_tackle"]
 const WIDTH := 128
 const HEIGHT := 144
 const COLUMNS := 8
@@ -52,7 +53,7 @@ static func sheet_meta(team_id: int, animation: StringName) -> Dictionary:
 		return {}
 	if contract.get("animations") != ["dribble_cut", "dribble_burst", "tackle", "slide_tackle"]:
 		return {}
-	if contract.get("enabled_actions") != ["dribble_cut", "dribble_burst"]:
+	if contract.get("enabled_actions") != ["dribble_cut", "dribble_burst", "tackle", "slide_tackle"]:
 		return {}
 	var entries: Variant = contract.get("entries", [])
 	if not entries is Array or entries.size() != PINNED_SHA.size():
@@ -103,7 +104,27 @@ static func animation_for(
 
 # Called AFTER the shared loader verifies SHA-256 and true WebP geometry.
 # Validate all eight silhouettes before creating ANY GPU textures.
-static func frames_from_image(image: Image) -> Array[Texture2D]:
+# Only the verified slide v2 contains a *second* baked floor shadow.
+# Keep every authored body pixel (including black boots) while erasing the
+# broad, faint dark band drawn BELOW the player's foot contact. This pass
+# only touches central sliding poses; other 5 frames and all other actions
+# are byte-for-byte equivalent to the decoded sheet.
+static func _trim_slide_ground_shadow(cell: Image, pose_index: int) -> Image:
+	if pose_index not in [3, 4, 5]:
+		return cell
+	var clean := cell.duplicate()
+	for y in range(126, HEIGHT):
+		for x in range(WIDTH):
+			var px := clean.get_pixel(x, y)
+			if (
+				px.a > 0.0 and px.a < 0.53
+				and px.r < 0.23 and px.g < 0.23 and px.b < 0.26
+			):
+				clean.set_pixel(x, y, Color.TRANSPARENT)
+	return clean
+
+
+static func frames_from_image(image: Image, action: StringName = &"") -> Array[Texture2D]:
 	var result: Array[Texture2D] = []
 	if image == null or image.get_size() != Vector2i(WIDTH * COLUMNS, HEIGHT):
 		return result
@@ -114,6 +135,8 @@ static func frames_from_image(image: Image) -> Array[Texture2D]:
 	var cells: Array[Image] = []
 	for i in range(COLUMNS):
 		var cell := source.get_region(Rect2i(i * WIDTH, 0, WIDTH, HEIGHT))
+		if action == &"slide_tackle":
+			cell = _trim_slide_ground_shadow(cell, i)
 		var box := cell.get_used_rect()
 		# The authored slide can be low to the ground, but it still has
 		# a grounded boot/hip line. Reject blank, clipped and opaque sheets.
