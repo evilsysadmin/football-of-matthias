@@ -419,6 +419,21 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_QUICK_DIFFICULTY_OK' "$log"
+      - name: Penalty shootout · isolated turn, scoring and sudden-death contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-penalty-shootout-rules.log"
+          set +e
+          timeout 20s "$godot" --headless --quit-after 180 --path games/chess-football-godot --script res://tests/penalty_shootout_rules_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Football penalty shootout rules failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_PENALTY_SHOOTOUT_RULES_OK' "$log"
       - name: Playable throw-ins and corners (keyboard, touch, AI and timeout)
         shell: bash
         run: |
