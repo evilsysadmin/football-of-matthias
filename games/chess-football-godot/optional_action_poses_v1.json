@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "enabled": false,
+  "bucket": "football",
+  "prefix": "atlases/v2/",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v2",
+  "quality_contract": "football-action-poses-native-v1",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "columns": 8,
+  "rows": 1,
+  "footline": 134,
+  "animations": [
+    "dribble_cut",
+    "dribble_burst",
+    "tackle",
+    "slide_tackle"
+  ],
+  "note": "HOLD: v1 action sheets failed canonical human visual review. Never fetch/activate. Native loader and deterministic action clocks are staging-prepared only. Exact v2 keys/SHA and independent full-size Godot review required before activation.",
+  "entries": [
+    {
+      "team": "fc_matthias",
+      "animation": "dribble_cut",
+      "file": "fc_matthias_dribble_cut_poses_v1.webp",
+      "sha256": "08d1f14578b5081e90cb3177e13ebff4eefc6d6a4ead238d50dc2566da0835c1"
+    },
+    {
+      "team": "fc_matthias",
+      "animation": "dribble_burst",
+      "file": "fc_matthias_dribble_burst_poses_v1.webp",
+      "sha256": "9f28275a1275dfe62c78f39f3b4e584eb3fa23adabb95ab802653d1275370068"
+    },
+    {
+      "team": "fc_matthias",
+      "animation": "tackle",
+      "file": "fc_matthias_tackle_poses_v1.webp",
+      "sha256": "86863025bd79a686afd23b1d6355d456f387e044fa9108e9a53f1e1315076e52"
+    },
+    {
+      "team": "fc_matthias",
+      "animation": "slide_tackle",
+      "file": "fc_matthias_slide_tackle_poses_v1.webp",
+      "sha256": "66caf6a528c29d9be96db23ed2968d3be7656aa2d5cf33ac4d50d977714ac631"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "dribble_cut",
+      "file": "real_enroque_dribble_cut_poses_v1.webp",
+      "sha256": "7114bac7f966449d1db645d9ceb1b4a2d65f97b903bfba57305e2505eebf7120"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "dribble_burst",
+      "file": "real_enroque_dribble_burst_poses_v1.webp",
+      "sha256": "cf85bf0c1a9003e197ac1ef5d20590471dace55ad246c4725043a6ed40bc7988"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "tackle",
+      "file": "real_enroque_tackle_poses_v1.webp",
+      "sha256": "854e912dbd21e2a66f42faeaec4cefe274747fe5ce69d196585ab7ed45c26d8e"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "slide_tackle",
+      "file": "real_enroque_slide_tackle_poses_v1.webp",
+      "sha256": "20a057e9de63bef269472f2a7f5880a7789ab6753d4716dfe7e274a992dff4c3"
+    }
+  ]
+}

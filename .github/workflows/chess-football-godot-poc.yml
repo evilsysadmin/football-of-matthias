@@ -68,6 +68,29 @@ jobs:
         run: python3 scripts/check_football_pass_shoot_r2.py
       - name: Verify R2 carry/dribble objects and staging CORS (fail closed)
         run: python3 scripts/check_football_carry_dribble_r2.py
+      # Probe the NEW canonical-style v2 candidates independently. v1 is
+      # blocked by human visual review; a missing v2 is informative, not an
+      # authorization to enable the old pack. Corrupt published bytes fail.
+      - name: Probe pending v2 action artwork on public R2 (no activation)
+        if: github.event_name == 'pull_request'
+        id: action_poses_v2_probe
+        run: python3 scripts/probe_football_action_poses_v2.py
+      - name: Enforce visual HOLD for rejected v1 action poses (no fetch)
+        run: python3 scripts/check_football_action_poses_r2.py
+      # Provide the exact real XI raster source for action-art review. These
+      # files were already fetched and SHA-checked above; no binary assets in Git
+      # and no Cloudflare credentials. PR-only, time-limited reference artifact.
+      - name: Export verified XI side-run and ball-control art references
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-real-r2-art-reference
+          path: |
+            ${{ runner.temp }}/football-run-v3-r2/*.webp
+            ${{ runner.temp }}/football-pass-shoot-r2/*.webp
+            ${{ runner.temp }}/football-carry-dribble-r2/*.webp
+          if-no-files-found: error
+          retention-days: 2
       - name: Verify dedicated football R2 WebPs when public origin is configured
         id: keeper_r2
         shell: bash
@@ -749,6 +772,21 @@ jobs:
             exit 1
           fi
           grep -q 'football carry/dribble R2 optional visual states, all-or-nothing and fallback: OK' "$log"
+      - name: Native action loader with v1 disabled and synthetic fail-closed test
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-action-poses-r2-smoke.log"
+          set +e
+          timeout 55s "$godot" --headless --quit-after 430 --path games/chess-football-godot --script res://tests/action_poses_r2_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|Failed to load script' "$log"; then
+            echo '::error::Native R2 action pose, keeper or gameplay authority contract regressed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_ACTION_POSES_R2_SMOKE_OK clubs=2 actions=4 frames=8 fallback=1 visual_only=1' "$log"
       - name: Optional keeper catch R2 eight-frame and fallback contract
         shell: bash
         run: |
@@ -1082,6 +1120,36 @@ jobs:
           for mode in broadcast tactical; do
             for phase in before after; do
               test -s "$RUNNER_TEMP/chess-football-review/carry-dribble-$phase-$mode.png"
+            done
+          done
+      - name: Capture canonical XI fallback with v1 action art disabled (broadcast/tactical)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-action-poses-r2-visual.log"
+          export FOOTBALL_ACTION_POSES_PREVIEW_DIR="$RUNNER_TEMP/football-action-poses-r2"
+          set +e
+          timeout 150s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/action_poses_r2_visual.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          for mode in broadcast tactical; do
+            for phase in BEFORE AFTER; do
+              marker="FOOTBALL_ACTION_POSES_CAPTURE_${phase}_${mode^^}"
+              shot="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
+              if [[ -n "$shot" && -s "$shot" ]]; then
+                cp "$shot" "$RUNNER_TEMP/chess-football-review/action-poses-${phase,,}-$mode.png"
+              fi
+            done
+          done
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
+            echo '::error::XI canonical fallback regressed or rejected v1 poses activated.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_ACTION_POSES_R2_FALLBACK_GODOT_REVIEW_OK teams=2 actions=4 cameras=2 v1_disabled=1' "$log"
+          for mode in broadcast tactical; do
+            for phase in before after; do
+              test -s "$RUNNER_TEMP/chess-football-review/action-poses-$phase-$mode.png"
             done
           done
       - name: Real XI carrier side versus diagonal with authoritative ball ahead
