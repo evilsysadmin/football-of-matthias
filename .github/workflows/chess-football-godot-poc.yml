@@ -70,6 +70,20 @@ jobs:
         run: python3 scripts/check_football_carry_dribble_r2.py
       - name: Verify eight user-published native action poses in R2 (HTTP, CORS, SHA)
         run: python3 scripts/check_football_action_poses_r2.py
+      # Provide the exact real XI raster source for action-art review. These
+      # files were already fetched and SHA-checked above; no binary assets in Git
+      # and no Cloudflare credentials. PR-only, time-limited reference artifact.
+      - name: Export verified XI side-run and ball-control art references
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-real-r2-art-reference
+          path: |
+            ${{ runner.temp }}/football-run-v3-r2/*.webp
+            ${{ runner.temp }}/football-pass-shoot-r2/*.webp
+            ${{ runner.temp }}/football-carry-dribble-r2/*.webp
+          if-no-files-found: error
+          retention-days: 2
       - name: Verify dedicated football R2 WebPs when public origin is configured
         id: keeper_r2
         shell: bash
