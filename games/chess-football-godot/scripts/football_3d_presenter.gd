@@ -669,12 +669,12 @@ func _request_action_poses_from_r2() -> void:
 	if not OS.has_feature("web") or match_node.match_team_size != 11:
 		return
 	for team_id in range(2):
-		for action in ChessFootballActionPosesR2.ANIMATIONS:
+		for action in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
 			var meta := ChessFootballActionPosesR2.sheet_meta(team_id, action)
 			if meta.is_empty():
 				continue
 			var loader := ChessFootballR2AtlasLoader.new()
-			loader.name = "ActionPosesV1_%d_%s" % [team_id, String(action)]
+			loader.name = "ActionPosesV2_%d_%s" % [team_id, String(action)]
 			add_child(loader)
 			loader.atlas_ready.connect(_on_action_pose_ready.bind(team_id, action))
 			loader.start(meta, ChessFootballActionPosesR2.TRUSTED_ROOT)
@@ -689,7 +689,7 @@ func _on_action_pose_ready(image: Image, team_id: int, action: StringName) -> vo
 func _apply_verified_action_pose_frames(
 	textures: Array[Texture2D], team_id: int, action: StringName
 ) -> void:
-	if team_id not in [0, 1] or action not in ChessFootballActionPosesR2.ANIMATIONS:
+	if team_id not in [0, 1] or action not in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
 		return
 	if textures.size() != ChessFootballActionPosesR2.COLUMNS:
 		return

@@ -1,17 +1,15 @@
 extends SceneTree
 
-# Actual 1280x720 Godot fallback captures for human visual review.
-# No new R2 action art activates until v2 is independently approved.
+# Real 1280x720 Godot 3D captures, before/after verified CDN bytes.
+# 2 clubs x 4 actions x 2 contact/recovery poses x 2 cameras.
 const CROP := Vector2i(240, 320)
 const PHASES := [3, 6]
 const ACTIONS := [&"dribble_cut", &"dribble_burst", &"tackle", &"slide_tackle"]
 
 
 func _initialize() -> void:
-	# Release staging with canonical art: the v1 pack is rejected by human
-	# visual QA even though its SHA/CORS are valid. Capture the REAL fallback
-	# through both cameras, never silently show v1's oversized-head players.
-	assert(ChessFootballActionPosesR2.metadata().get("enabled") == false)
+	var directory := OS.get_environment("FOOTBALL_ACTION_POSES_PREVIEW_DIR")
+	assert(not directory.is_empty(), "Missing exact R2 action pose verification directory")
 	var scene := load("res://main.tscn") as PackedScene
 	assert(scene != null)
 	var game = scene.instantiate()
@@ -24,9 +22,6 @@ func _initialize() -> void:
 	game.set_physics_process(false)
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null and stage.xi_raster_meshes.size() == 22)
-	assert(stage._action_poses_r2_loaded.is_empty())
-	for node in stage.get_children():
-		assert(not String(node.name).begins_with("ActionPosesV1_"))
 	var scores_before: Array = game.score.duplicate()
 	var actors: Array[Footballer] = [game.teams[0][1], game.teams[1][1]]
 	for team in game.teams:
@@ -35,15 +30,47 @@ func _initialize() -> void:
 			player.action_lock_seconds = 0.0
 			player.global_position = Vector2(-9999.0, -9999.0)
 	game.ball.global_position = Vector2(-9999.0, -9999.0)
+
 	for mode in ["broadcast", "tactical"]:
 		var before := await _matrix(game, stage, actors, mode, false)
 		_save(before, "BEFORE_" + mode.to_upper(), "action-poses-before-" + mode + ".png")
-		var after := await _matrix(game, stage, actors, mode, false)
+
+	for team_id in range(2):
+		for action in ACTIONS:
+			var meta := ChessFootballActionPosesR2.sheet_meta(team_id, action)
+			if action not in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
+				# This stage retains canonical E and Shift+E poses; don't
+				# load the shadow-heavy v2 tackle/slide even for screenshots.
+				assert(meta.is_empty())
+				assert(not stage._action_poses_r2_loaded.has(
+					"%d:%s" % [team_id, String(action)]
+				))
+				continue
+			assert(not meta.is_empty())
+			var filename := String(ChessFootballActionPosesR2.CLUBS[team_id]) + "_" + String(action) + "_poses_v2.webp"
+			var full_path := directory.path_join(filename)
+			assert(FileAccess.file_exists(full_path), "Verified R2 WebP unavailable: " + full_path)
+			var raw := FileAccess.get_file_as_bytes(full_path)
+			var decoded := ChessFootballR2AtlasLoader.decode_verified_webp(
+				raw, meta, ChessFootballActionPosesR2.TRUSTED_ROOT
+			)
+			assert(decoded != null, "R2 WebP SHA/geometry rejected by real Godot: " + filename)
+			stage._on_action_pose_ready(decoded, team_id, action)
+			assert(stage._action_poses_r2_loaded.has("%d:%s" % [team_id, String(action)]))
+			for actor in game.teams[team_id]:
+				if actor.role == "keeper":
+					continue
+				var driver: AnimatedSprite3D = stage.player_sprites[actor.get_instance_id()]
+				assert(driver.sprite_frames.has_animation(action))
+				assert(driver.sprite_frames.get_frame_count(action) == 8)
+
+	for mode in ["broadcast", "tactical"]:
+		var after := await _matrix(game, stage, actors, mode, true)
 		_save(after, "AFTER_" + mode.to_upper(), "action-poses-after-" + mode + ".png")
-	assert(stage._action_poses_r2_loaded.is_empty())
 	assert(game.score == scores_before)
-	print("FOOTBALL_ACTION_POSES_R2_FALLBACK_GODOT_REVIEW_OK teams=2 actions=4 cameras=2 v1_disabled=1")
+	print("FOOTBALL_ACTION_POSES_R2_GODOT_REVIEW_OK teams=2 active_dribbles=2 held_tackles=2 phases=2 cameras=2 exact_r2=1")
 	quit(0)
+
 
 func _matrix(game: Node, stage: ChessFootball3DPresenter,
 		actors: Array[Footballer], mode: String, with_new: bool) -> Image:

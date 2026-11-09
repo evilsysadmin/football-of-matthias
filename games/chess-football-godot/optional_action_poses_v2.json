@@ -1,0 +1,76 @@
+{
+  "version": 2,
+  "enabled": true,
+  "bucket": "football",
+  "prefix": "atlases/v2/",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v2",
+  "quality_contract": "football-approved-r2-action-recomposition-v2",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "columns": 8,
+  "rows": 1,
+  "footline": 134,
+  "animations": [
+    "dribble_cut",
+    "dribble_burst",
+    "tackle",
+    "slide_tackle"
+  ],
+  "note": "Stage v2 P0: only dribble_cut and dribble_burst are visually approved for runtime. Tackles/slide objects are pinned and integrity-checked but NOT loaded, because the slide pose has an oversized black ground shadow in real Godot tactical capture. Keep canonical tackle/slide sprites, E/Shift+E controls and physics unchanged. Require visual gate on exact SHA.",
+  "entries": [
+    {
+      "team": "fc_matthias",
+      "animation": "dribble_cut",
+      "file": "fc_matthias_dribble_cut_poses_v2.webp",
+      "sha256": "0ebe3ed766f9adf90e3c8327315cbf53282bdb3e1d6dbceac1fa0e4e81cd8c93"
+    },
+    {
+      "team": "fc_matthias",
+      "animation": "dribble_burst",
+      "file": "fc_matthias_dribble_burst_poses_v2.webp",
+      "sha256": "d516759fb53668d5fc02daf0581b8d61e1bddbb29b9725e9e4fa3edcd9729d9b"
+    },
+    {
+      "team": "fc_matthias",
+      "animation": "tackle",
+      "file": "fc_matthias_tackle_poses_v2.webp",
+      "sha256": "a3c50d36bc62104bb88e60e96da2134c99180bd4afe50dc7d92115271d08b18c"
+    },
+    {
+      "team": "fc_matthias",
+      "animation": "slide_tackle",
+      "file": "fc_matthias_slide_tackle_poses_v2.webp",
+      "sha256": "21b1f297d52752977d20d7d6d4f2952c5158605922157bf1edb6a063fdd76071"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "dribble_cut",
+      "file": "real_enroque_dribble_cut_poses_v2.webp",
+      "sha256": "6acec93d0e91c227c9367ba326330083a4d358b965f78b1df339d588353c37aa"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "dribble_burst",
+      "file": "real_enroque_dribble_burst_poses_v2.webp",
+      "sha256": "2625c30ae31784008c3f2c665ec22ce79bfa664f663510ce5d463933c67f54b5"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "tackle",
+      "file": "real_enroque_tackle_poses_v2.webp",
+      "sha256": "1e64f42753f9a30d4361008abb99e6f71092d74dc85f05104a822ae9fa82fb77"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "slide_tackle",
+      "file": "real_enroque_slide_tackle_poses_v2.webp",
+      "sha256": "819e008a135797e4d3fd901457f2433e08f94358bc43b8b3ef0f1ddc756ec564"
+    }
+  ],
+  "enabled_actions": [
+    "dribble_cut",
+    "dribble_burst"
+  ]
+}
