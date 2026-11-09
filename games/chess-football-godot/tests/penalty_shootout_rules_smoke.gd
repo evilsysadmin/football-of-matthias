@@ -65,7 +65,7 @@ func _initialize() -> void:
 	var extra_id: int = int(shootout.current_attempt()["id"])
 	_kick(shootout, 0, "goal")
 	assert(not shootout.finished)
-	assert(not shootout.current_attempt()["sudden_death"] == false)
+	assert(shootout.current_attempt()["sudden_death"])
 	assert(shootout.current_attempt()["team_id"] == 1)
 	_kick(shootout, 1, "saved")
 	assert(shootout.finished and shootout.winner_team_id == 0)
