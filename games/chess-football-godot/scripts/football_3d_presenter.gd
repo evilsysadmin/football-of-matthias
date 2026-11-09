@@ -723,6 +723,28 @@ func _apply_verified_action_pose_frames(
 			else:
 				bank.add_frame(action, textures[i])
 	_action_poses_r2_loaded[key] = true
+	# Explicit CI-only proof from the ACTUAL browser renderer: all four
+	# SHA-verified action sheets were installed for both teams, not merely
+	# fetched successfully or rendered in native/headless Godot tests.
+	# No user telemetry or public probe flag is introduced.
+	if match_node.match_team_size == 11 and OS.has_feature("web"):
+		var expected_sheets := (
+			ChessFootballActionPosesR2.CLUBS.size()
+			* ChessFootballActionPosesR2.ACTIVE_ANIMATIONS.size()
+		)
+		if _action_poses_r2_loaded.size() == expected_sheets:
+			var every_sheet_installed := true
+			for club_id in range(ChessFootballActionPosesR2.CLUBS.size()):
+				for approved_action in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
+					if not _action_poses_r2_loaded.has(
+						"%d:%s" % [club_id, String(approved_action)]
+					):
+						every_sheet_installed = false
+			if every_sheet_installed:
+				JavaScriptBridge.eval(
+					"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) window.parent.postMessage({source:'chess-football-godot', type:'ci-action-poses-installed', team_size:11, sheets:8}, '*');",
+					true
+				)
 	# The new artist poses have their own stable silhouette geometry; clear
 	# only derived presenter measurements, not sprite/physics action clocks.
 	body_scale_cache.clear()
