@@ -75,9 +75,6 @@ var tackle_recovery_seconds: float = 0.0
 var tackle_active_seconds: float = 0.0
 var tackle_launch_speed_ratio: float = 0.0
 var tackle_aggressive: bool = false
-# Guards double-E escalation once a standing challenge has already touched
-# an opponent. Never turn a completed clean challenge into a late slide.
-var tackle_contact_resolved: bool = false
 var dribble_cooldown_seconds: float = 0.0
 var dribble_burst_seconds: float = 0.0
 var dribble_direction: Vector2 = Vector2.RIGHT
@@ -329,7 +326,6 @@ func start_tackle(aggressive: bool = false) -> bool:
 	if not can_tackle():
 		return false
 	tackle_aggressive = aggressive
-	tackle_contact_resolved = false
 	tackle_cooldown_seconds = 1.45 if aggressive else 1.10
 	tackle_recovery_seconds = 0.68 if aggressive else 0.38
 	tackle_active_seconds = SLIDE_TACKLE_ACTIVE_SECONDS if aggressive else TACKLE_ACTIVE_SECONDS
@@ -341,25 +337,6 @@ func start_tackle(aggressive: bool = false) -> bool:
 	velocity *= 0.68 if aggressive else 0.35
 	play_action("slide_tackle" if aggressive else "tackle", 0.64 if aggressive else 0.50)
 	return true
-
-# Double E can promote an unfinished standing challenge without delaying the
-# first tackle. It is impossible after actual contact or after its action
-# animation has ended; Shift+E remains the reliable direct slide shortcut.
-func upgrade_standing_tackle_to_slide() -> bool:
-	if (
-		sent_off or has_ball or tackle_aggressive or tackle_contact_resolved
-		or action_lock_seconds <= 0.0 or tackle_cooldown_seconds <= 0.0
-		or visual == null or visual.animation != &"tackle"
-	):
-		return false
-	tackle_aggressive = true
-	tackle_cooldown_seconds = maxf(tackle_cooldown_seconds, 1.45)
-	tackle_recovery_seconds = maxf(tackle_recovery_seconds, 0.68)
-	tackle_active_seconds = SLIDE_TACKLE_ACTIVE_SECONDS
-	velocity *= 0.68
-	play_action("slide_tackle", 0.64)
-	return true
-
 
 func tackle_active() -> bool:
 	return tackle_active_seconds > 0.0
@@ -445,7 +422,6 @@ func send_off() -> void:
 	tackle_active_seconds = 0.0
 	tackle_launch_speed_ratio = 0.0
 	tackle_aggressive = false
-	tackle_contact_resolved = false
 	dribble_cooldown_seconds = 0.0
 	dribble_burst_seconds = 0.0
 	dribble_direction = Vector2.RIGHT
