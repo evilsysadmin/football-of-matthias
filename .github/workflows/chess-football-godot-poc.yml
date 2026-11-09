@@ -75,7 +75,7 @@ jobs:
         if: github.event_name == 'pull_request'
         id: action_poses_v2_probe
         run: python3 scripts/probe_football_action_poses_v2.py
-      - name: Verify eight user-published native action poses in R2 (HTTP, CORS, SHA)
+      - name: Enforce visual HOLD for rejected v1 action poses (no fetch)
         run: python3 scripts/check_football_action_poses_r2.py
       # Provide the exact real XI raster source for action-art review. These
       # files were already fetched and SHA-checked above; no binary assets in Git
@@ -772,7 +772,7 @@ jobs:
             exit 1
           fi
           grep -q 'football carry/dribble R2 optional visual states, all-or-nothing and fallback: OK' "$log"
-      - name: Native action poses R2 v2 eight-sheet visual-only contract
+      - name: Native action loader with v1 disabled and synthetic fail-closed test
         shell: bash
         run: |
           set -euo pipefail
@@ -1122,7 +1122,7 @@ jobs:
               test -s "$RUNNER_TEMP/chess-football-review/carry-dribble-$phase-$mode.png"
             done
           done
-      - name: Capture native action poses before and after, real XI Godot broadcast/tactical
+      - name: Capture canonical XI fallback with v1 action art disabled (broadcast/tactical)
         shell: bash
         run: |
           set -euo pipefail
@@ -1143,10 +1143,10 @@ jobs:
             done
           done
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
-            echo '::error::Native R2 action poses failed visual capture in real Godot.'
+            echo '::error::XI canonical fallback regressed or rejected v1 poses activated.'
             exit 1
           fi
-          grep -q 'FOOTBALL_ACTION_POSES_R2_GODOT_REVIEW_OK teams=2 actions=4 phases=2 cameras=2 exact_r2=1' "$log"
+          grep -q 'FOOTBALL_ACTION_POSES_R2_FALLBACK_GODOT_REVIEW_OK teams=2 actions=4 cameras=2 v1_disabled=1' "$log"
           for mode in broadcast tactical; do
             for phase in before after; do
               test -s "$RUNNER_TEMP/chess-football-review/action-poses-$phase-$mode.png"
