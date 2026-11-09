@@ -15,18 +15,14 @@ func _synthetic_sheet() -> Image:
 
 func _initialize() -> void:
 	var contract := ChessFootballActionPosesR2.metadata()
-	assert(contract.get("enabled") == true)
+	# v1 has valid bytes but failed HUMAN visual approval: a green hash
+	# must not activate a different-shaped footballer in deployed staging.
+	assert(contract.get("enabled") == false)
 	assert(contract.get("quality_contract") == "football-action-poses-native-v1")
 	assert((contract.get("entries", []) as Array).size() == 8)
 	for team_id in range(2):
 		for action in ChessFootballActionPosesR2.ANIMATIONS:
-			var meta := ChessFootballActionPosesR2.sheet_meta(team_id, action)
-			assert(not meta.is_empty())
-			assert(meta["url"].begins_with(ChessFootballActionPosesR2.TRUSTED_ROOT))
-			assert(ChessFootballR2AtlasLoader.decode_verified_webp(
-				PackedByteArray([1, 2, 3]), meta,
-				ChessFootballActionPosesR2.TRUSTED_ROOT
-			) == null)
+			assert(ChessFootballActionPosesR2.sheet_meta(team_id, action).is_empty())
 	assert(ChessFootballActionPosesR2.sheet_meta(2, &"tackle").is_empty())
 	assert(ChessFootballActionPosesR2.sheet_meta(0, &"celebrate").is_empty())
 	assert(ChessFootballActionPosesR2.animation_for(
@@ -71,6 +67,10 @@ func _initialize() -> void:
 	game.set_physics_process(false)
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null and stage.xi_raster_meshes.size() == 22)
+	assert(stage._action_poses_r2_loaded.is_empty())
+	# No action-sheet HTTP loader may exist in the default XI staging scene.
+	for node in stage.get_children():
+		assert(not String(node.name).begins_with("ActionPosesV1_"))
 	var original_score: Array = game.score.duplicate()
 	for team_id in range(2):
 		var athlete: Footballer = game.teams[team_id][1]
