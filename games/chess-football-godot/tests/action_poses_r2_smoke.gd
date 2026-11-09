@@ -127,12 +127,24 @@ func _initialize() -> void:
 		assert(sprite.animation == &"shoot")
 		game.ball.release(Vector2.RIGHT, 0.0)
 		athlete.visual.play(&"tackle")
+		athlete.action_visual_duration_seconds = 0.50
 		athlete.action_lock_seconds = 0.35
 		stage.sync_presentation(0.0, "broadcast")
 		assert(sprite.animation == &"tackle")
+		assert(sprite.frame == stage.xi_complete_action_phase(8, 0.50, 0.35))
+		# Final pixels are not cut off by the old 10fps fallback clock.
+		athlete.action_lock_seconds = 0.04
+		stage.sync_presentation(0.0, "broadcast")
+		assert(sprite.frame == 7)
 		athlete.visual.play(&"slide_tackle")
+		athlete.action_visual_duration_seconds = 0.64
+		athlete.action_lock_seconds = 0.32
 		stage.sync_presentation(0.0, "broadcast")
 		assert(sprite.animation == &"slide_tackle")
+		assert(sprite.frame == 4)
+		athlete.action_lock_seconds = 0.04
+		stage.sync_presentation(0.0, "broadcast")
+		assert(sprite.frame == 7)
 		assert(bank.get_frame_texture(&"run", 0) == original_run)
 
 	assert(game.score == original_score)
