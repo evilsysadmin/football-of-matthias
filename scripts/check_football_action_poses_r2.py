@@ -38,7 +38,7 @@ def main() -> None:
     assert contract["cell"] == {"width": 128, "height": 144}
     assert (contract["columns"], contract["rows"], contract["footline"]) == (8, 1, 134)
     assert contract["animations"] == ["dribble_cut", "dribble_burst", "tackle", "slide_tackle"]
-    assert contract["enabled_actions"] == ["dribble_cut", "dribble_burst"], "Unapproved R2 tackle/slide sprites enabled"
+    assert contract["enabled_actions"] == ["dribble_cut", "dribble_burst", "tackle", "slide_tackle"], "Exact approved de-shadowed v2 contract required"
     entries = contract["entries"]
     assert len(entries) == len(EXPECTED)
     assert {(e["team"], e["animation"]) for e in entries} == set(EXPECTED)
