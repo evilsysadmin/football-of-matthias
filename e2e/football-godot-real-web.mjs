@@ -354,6 +354,73 @@ async function bridgeVerifiedStagingCarryDribbleR2(page) {
   if (expected.size) throw new Error('Missing Football carry/dribble club');
 }
 
+// The localhost WASM smoke cannot fetch staging-only R2 CORS directly.
+// Verify real public objects with the staging Origin, then bridge ONLY their
+// immutable, hash-pinned bytes. Godot still verifies SHA/dimensions on receipt.
+async function bridgeVerifiedStagingActionPosesR2(page) {
+  if (process.env.CI !== 'true') throw new Error('Action poses R2 bridge is CI-only');
+  const meta = JSON.parse(readFileSync('games/chess-football-godot/optional_action_poses_v1.json', 'utf8'));
+  if (meta.enabled !== true) return;
+  const base = 'https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v2';
+  const expected = new Map([
+    ['fc_matthias:dribble_cut', '08d1f14578b5081e90cb3177e13ebff4eefc6d6a4ead238d50dc2566da0835c1'],
+    ['fc_matthias:dribble_burst', '9f28275a1275dfe62c78f39f3b4e584eb3fa23adabb95ab802653d1275370068'],
+    ['fc_matthias:tackle', '86863025bd79a686afd23b1d6355d456f387e044fa9108e9a53f1e1315076e52'],
+    ['fc_matthias:slide_tackle', '66caf6a528c29d9be96db23ed2968d3be7656aa2d5cf33ac4d50d977714ac631'],
+    ['real_enroque:dribble_cut', '7114bac7f966449d1db645d9ceb1b4a2d65f97b903bfba57305e2505eebf7120'],
+    ['real_enroque:dribble_burst', 'cf85bf0c1a9003e197ac1ef5d20590471dace55ad246c4725043a6ed40bc7988'],
+    ['real_enroque:tackle', '854e912dbd21e2a66f42faeaec4cefe274747fe5ce69d196585ab7ed45c26d8e'],
+    ['real_enroque:slide_tackle', '20a057e9de63bef269472f2a7f5880a7789ab6753d4716dfe7e274a992dff4c3'],
+  ]);
+  if (meta.quality_contract !== 'football-action-poses-native-v1' ||
+      meta.bucket !== 'football' || meta.prefix !== 'atlases/v2/' ||
+      meta.cdn_base !== base || meta.columns !== 8 || meta.rows !== 1 ||
+      meta.footline !== 134 ||
+      meta.cell?.width !== 128 || meta.cell?.height !== 144 ||
+      JSON.stringify(meta.animations) !== JSON.stringify(['dribble_cut', 'dribble_burst', 'tackle', 'slide_tackle']) ||
+      !Array.isArray(meta.entries) || meta.entries.length !== expected.size) {
+    throw new Error('Invalid native action pose R2 contract');
+  }
+  const origin = 'https://staging.football.shadowops.dpdns.org';
+  for (const entry of meta.entries) {
+    const key = entry.team + ':' + entry.animation;
+    const expectedHash = expected.get(key);
+    const filename = entry.team + '_' + entry.animation + '_poses_v1.webp';
+    if (!expectedHash || entry.file !== filename || entry.sha256 !== expectedHash) {
+      throw new Error('Unpinned or duplicate native action R2 sheet: ' + key);
+    }
+    expected.delete(key);
+    const url = base + '/' + filename;
+    const response = await fetch(url, {
+      headers: { Origin: origin, 'User-Agent': 'Football-native-action-Web-CI/1.0' },
+      signal: AbortSignal.timeout(15000)
+    });
+    const cors = response.headers.get('access-control-allow-origin');
+    if (response.status !== 200 ||
+        !response.headers.get('content-type')?.toLowerCase().includes('image/webp') ||
+        (cors !== '*' && cors !== origin)) {
+      throw new Error('Action R2 requires public WebP 200 + staging CORS: ' + url);
+    }
+    const data = Buffer.from(await response.arrayBuffer());
+    if (data.length < 25 || data.length > 4194304 ||
+        data.toString('ascii', 0, 4) !== 'RIFF' ||
+        data.toString('ascii', 8, 12) !== 'WEBP' ||
+        data.toString('ascii', 12, 16) !== 'VP8L' || data[20] !== 0x2f ||
+        ((data.readUInt32LE(21) & 0x3fff) + 1) !== 1024 ||
+        (((data.readUInt32LE(21) >>> 14) & 0x3fff) + 1) !== 144 ||
+        createHash('sha256').update(data).digest('hex') !== expectedHash) {
+      throw new Error('Action R2 bytes/geometry/SHA invalid: ' + url);
+    }
+    await page.route(url, route => route.fulfill({
+      status: 200, contentType: 'image/webp',
+      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+      body: data
+    }));
+    console.log('FOOTBALL_WEB_CI_ACTION_POSES_R2_VERIFIED', key, data.length);
+  }
+  if (expected.size) throw new Error('Missing an action R2 sheet');
+}
+
 const server = createServer((req, res) => {
   try {
     let path = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
@@ -380,6 +447,7 @@ try {
     await bridgeVerifiedRunV3R2(page);
     await bridgeVerifiedStagingPassShootR2(page);
     await bridgeVerifiedStagingCarryDribbleR2(page);
+    await bridgeVerifiedStagingActionPosesR2(page);
   }
   await page.addInitScript(() => {
     window.__chessFootballWebReady = false;
