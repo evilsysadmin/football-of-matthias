@@ -186,6 +186,8 @@ var _run_v3_r2_loaded: Dictionary = {}
 var _pass_shoot_r2_loaded: Dictionary = {}
 # Verified side-view carrier animations. Never alter the 2D ball or physics.
 var _carry_dribble_r2_loaded: Dictionary = {}
+# Independent v2 action sheet state: one verified replacement per club/action.
+var _action_poses_r2_loaded: Dictionary = {}
 var _contact_shadow_material: ShaderMaterial
 var keeper_catch_carrier_id: int = 0
 var keeper_catch_origin: Vector3 = Vector3.ZERO
@@ -542,7 +544,10 @@ func _apply_verified_lateral_run(textures: Array[Texture2D], team_id: int) -> vo
 		for animation in names:
 			if animation == &"idle":
 				continue
-			if animation == &"tackle" and _tackle_r2_loaded.has("%d:tackle" % team_id):
+			if animation == &"tackle" and (
+				_tackle_r2_loaded.has("%d:tackle" % team_id)
+				or _action_poses_r2_loaded.has("%d:tackle" % team_id)
+			):
 				continue
 			if animation in [&"pass", &"shoot"] and _pass_shoot_r2_loaded.has(team_id):
 				continue
@@ -657,6 +662,72 @@ func _apply_verified_carry_dribble_frames(textures: Array[Texture2D], team_id: i
 	tone_gain_cache.clear()
 
 
+# Native R2 v2 eight-pose action pack, independent of the legacy source-
+# sized tackler decoder. A failed fetch/shape/hash leaves local canon intact.
+func _request_action_poses_from_r2() -> void:
+	if not OS.has_feature("web"):
+		return
+	for team_id in range(2):
+		for action in ChessFootballActionPosesR2.ANIMATIONS:
+			var meta := ChessFootballActionPosesR2.sheet_meta(team_id, action)
+			if meta.is_empty():
+				continue
+			var loader := ChessFootballR2AtlasLoader.new()
+			loader.name = "ActionPosesV1_%d_%s" % [team_id, String(action)]
+			add_child(loader)
+			loader.atlas_ready.connect(_on_action_pose_ready.bind(team_id, action))
+			loader.start(meta, ChessFootballActionPosesR2.TRUSTED_ROOT)
+
+
+func _on_action_pose_ready(image: Image, team_id: int, action: StringName) -> void:
+	_apply_verified_action_pose_frames(
+		ChessFootballActionPosesR2.frames_from_image(image), team_id, action
+	)
+
+
+func _apply_verified_action_pose_frames(
+	textures: Array[Texture2D], team_id: int, action: StringName
+) -> void:
+	if team_id not in [0, 1] or action not in ChessFootballActionPosesR2.ANIMATIONS:
+		return
+	if textures.size() != ChessFootballActionPosesR2.COLUMNS:
+		return
+	var key := "%d:%s" % [team_id, String(action)]
+	if _action_poses_r2_loaded.has(key):
+		return
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null or sprite.sprite_frames == null:
+			return
+		var bank := sprite.sprite_frames
+		if action in [&"tackle", &"slide_tackle"]:
+			if not bank.has_animation(action) or bank.get_frame_count(action) != 8:
+				return
+		elif bank.has_animation(action):
+			return
+		targets.append(bank)
+	if targets.size() != match_node.match_team_size - 1:
+		return
+	for bank in targets:
+		if action in [&"dribble_cut", &"dribble_burst"]:
+			bank.add_animation(action)
+			bank.set_animation_speed(action, 36.0 if action == &"dribble_cut" else 30.0)
+			bank.set_animation_loop(action, false)
+		for i in range(ChessFootballActionPosesR2.COLUMNS):
+			if action in [&"tackle", &"slide_tackle"]:
+				bank.set_frame(action, i, textures[i])
+			else:
+				bank.add_frame(action, textures[i])
+	_action_poses_r2_loaded[key] = true
+	# The new artist poses have their own stable silhouette geometry; clear
+	# only derived presenter measurements, not sprite/physics action clocks.
+	body_scale_cache.clear()
+	tone_gain_cache.clear()
+
+
 # Four source-sized R2 sheets: standing tackle and slide tackle for each
 # club. They are opt-in until the public endpoint, CORS and bytes are proven.
 var _tackle_r2_loaded: Dictionary = {}
@@ -686,6 +757,8 @@ func _on_tackle_atlas_ready(image: Image, team_id: int, animation: StringName) -
 func _apply_verified_tackle_frames(
 	textures: Array[Texture2D], team_id: int, animation: StringName
 ) -> void:
+	if _action_poses_r2_loaded.has("%d:%s" % [team_id, String(animation)]):
+		return
 	if textures.size() != 8 or team_id not in [0, 1] or animation not in [&"tackle", &"slide_tackle"]:
 		return
 	var targets: Array[SpriteFrames] = []
@@ -780,6 +853,7 @@ func setup(p_match: Node) -> void:
 	_request_pass_shoot_from_r2()
 	_request_carry_dribble_from_r2()
 	_request_tackle_atlases_from_r2()
+	_request_action_poses_from_r2()
 	_request_keeper_catch_atlases_from_r2()
 
 func _build_environment() -> void:
@@ -2075,6 +2149,15 @@ func sync_presentation(delta: float, mode: String) -> void:
 				)
 				if sprite.sprite_frames.has_animation(carrier_action):
 					wanted_animation = carrier_action
+				# The new action pack is side-only and never overrides a shot,
+				# keeper action, normal carry or an unapproved/failed R2 sheet.
+				var action_pose := ChessFootballActionPosesR2.animation_for(
+					wanted_animation, run_view, player.role,
+					player.has_ball and match_node.ball.carrier == player,
+					player.dribble_active(), player.dribble_mode
+				)
+				if sprite.sprite_frames.has_animation(action_pose):
+					wanted_animation = action_pose
 				var save_before_catch := xi_keeper_dive_before_catch(
 					match_node.match_team_size, player == holding_keeper,
 					_keeper_catch_r2_loaded.has(int(player.team_id)),
@@ -2494,6 +2577,15 @@ func _sync_visible_animation(
 	elif (
 		match_node.match_team_size == 11
 		and not is_keeper
+		and wanted in [&"dribble_cut", &"dribble_burst"]
+		and player.dribble_active()
+	):
+		phase = xi_complete_action_phase(
+			count, player.dribble_duration_seconds, player.dribble_burst_seconds
+		)
+	elif (
+		match_node.match_team_size == 11
+		and not is_keeper
 		and wanted in [&"pass", &"shoot"]
 		and player.action_lock_seconds > 0.0
 		and player.action_visual_duration_seconds > 0.0
@@ -2679,7 +2771,7 @@ func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "", team_id:
 	# The ball carrier sometimes uses an older, separately painted 8-pose
 	# carry/dribble atlas instead of the 12-pose v3 running row. Measuring
 	# its height from v3 'run' makes the player pop in size on possession.
-	if current_name in ["carry", "dribble"]:
+	if current_name in ["carry", "dribble", "dribble_cut", "dribble_burst"]:
 		reference_name = StringName(current_name)
 	# Different club sheets and action sources must never share a cached
 	# height; measure only once per family, not once per actor or frame.
@@ -2766,8 +2858,24 @@ func _sync_player_secondary_motion(
 		stretch_x = 1.00
 		stretch_y = 1.01
 		tilt_degrees = -facing_sign * 12.0
+	elif animation_name in ["dribble_cut", "dribble_burst"]:
+		# The eight source poses supply the actual change of direction/stride.
+		# Avoid a second procedural tilt or bounce that shifts the boots.
+		bob = 0.0
+		lateral_sway = 0.0
+		stretch_x = 1.0
+		stretch_y = 1.0
+		tilt_degrees = 0.0
 	elif animation_name in ["tackle", "slide_tackle"]:
-		if player.tackle_aggressive_active():
+		if _action_poses_r2_loaded.has("%d:%s" % [player.team_id, animation_name]):
+			# Source slides are already low and horizontal. The old renderer
+			# rotated/stretched the fallback tackle sprite into a fake slide.
+			bob = 0.0
+			lateral_sway = 0.0
+			stretch_x = 1.0
+			stretch_y = 1.0
+			tilt_degrees = 0.0
+		elif player.tackle_aggressive_active():
 			bob = -0.105
 			lateral_sway = facing_sign * 0.095
 			stretch_x = 1.16
