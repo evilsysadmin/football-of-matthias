@@ -104,6 +104,11 @@ func _initialize() -> void:
 	# No repeated E means no surprise slide. Shift+E remains immediate
 	# and does not require a previous standing attempt.
 	_reset_tackle(defender)
+	game.set_piece_active = false
+	game.set_piece_player = null
+	defender.global_position = center
+	victim.global_position = center + Vector2(83, 0)
+	game.ball.attach_to(victim)
 	game.last_e_tackle_player = null
 	game.match_seconds = 12.0
 	game._press_contextual_tackle(false)
