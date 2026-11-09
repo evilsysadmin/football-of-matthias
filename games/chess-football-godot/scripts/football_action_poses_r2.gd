@@ -112,10 +112,10 @@ static func animation_for(
 static func _trim_slide_ground_shadow(cell: Image, pose_index: int) -> Image:
 	if pose_index not in [3, 4, 5]:
 		return cell
-	var clean := cell.duplicate()
+	var clean: Image = cell.duplicate() as Image
 	for y in range(126, HEIGHT):
 		for x in range(WIDTH):
-			var px := clean.get_pixel(x, y)
+			var px: Color = clean.get_pixel(x, y)
 			if (
 				px.a > 0.0 and px.a < 0.53
 				and px.r < 0.23 and px.g < 0.23 and px.b < 0.26
