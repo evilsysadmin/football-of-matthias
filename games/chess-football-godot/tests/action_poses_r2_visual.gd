@@ -38,14 +38,6 @@ func _initialize() -> void:
 	for team_id in range(2):
 		for action in ACTIONS:
 			var meta := ChessFootballActionPosesR2.sheet_meta(team_id, action)
-			if action not in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
-				# This stage retains canonical E and Shift+E poses; don't
-				# load the shadow-heavy v2 tackle/slide even for screenshots.
-				assert(meta.is_empty())
-				assert(not stage._action_poses_r2_loaded.has(
-					"%d:%s" % [team_id, String(action)]
-				))
-				continue
 			assert(not meta.is_empty())
 			var filename := String(ChessFootballActionPosesR2.CLUBS[team_id]) + "_" + String(action) + "_poses_v2.webp"
 			var full_path := directory.path_join(filename)
@@ -55,6 +47,39 @@ func _initialize() -> void:
 				raw, meta, ChessFootballActionPosesR2.TRUSTED_ROOT
 			)
 			assert(decoded != null, "R2 WebP SHA/geometry rejected by real Godot: " + filename)
+			if action == &"slide_tackle":
+				var clean := ChessFootballActionPosesR2.frames_from_image(
+					decoded, action
+				)
+				assert(clean.size() == 8)
+				# The old v2 has a horizontal alpha-painted band on the
+				# middle three slide frames. Remove only that band, not
+				# the grounded opaque boots or any of the other poses.
+				for i in range(8):
+					var source := decoded.get_region(Rect2i(i * 128, 0, 128, 144))
+					if source.get_format() != Image.FORMAT_RGBA8:
+						source.convert(Image.FORMAT_RGBA8)
+					var result := clean[i].get_image()
+					if i not in [3, 4, 5]:
+						assert(result.get_data() == source.get_data())
+						continue
+					var erased := 0
+					var ground_opaque_before := 0
+					var ground_opaque_after := 0
+					for y in range(126, 144):
+						for x in range(128):
+							var px := source.get_pixel(x, y)
+							var after := result.get_pixel(x, y)
+							if px.a > 0.0 and after.a <= 0.01:
+								erased += 1
+							if px.a >= 0.95:
+								ground_opaque_before += 1
+								if after.a >= 0.95:
+									ground_opaque_after += 1
+					assert(erased >= 650 and erased <= 1200)
+					assert(ground_opaque_before > 25)
+					assert(ground_opaque_before == ground_opaque_after)
+				print("FOOTBALL_ACTION_SLIDE_SHADOW_CLEAN_OK team=", team_id)
 			stage._on_action_pose_ready(decoded, team_id, action)
 			assert(stage._action_poses_r2_loaded.has("%d:%s" % [team_id, String(action)]))
 			for actor in game.teams[team_id]:
@@ -68,7 +93,7 @@ func _initialize() -> void:
 		var after := await _matrix(game, stage, actors, mode, true)
 		_save(after, "AFTER_" + mode.to_upper(), "action-poses-after-" + mode + ".png")
 	assert(game.score == scores_before)
-	print("FOOTBALL_ACTION_POSES_R2_GODOT_REVIEW_OK teams=2 active_dribbles=2 held_tackles=2 phases=2 cameras=2 exact_r2=1")
+	print("FOOTBALL_ACTION_POSES_R2_GODOT_REVIEW_OK teams=2 actions=4 slide_shadow_clean=1 phases=2 cameras=2 exact_r2=1")
 	quit(0)
 
 
