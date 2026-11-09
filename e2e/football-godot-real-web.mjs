@@ -456,9 +456,13 @@ try {
     // Unlike Input.action_press smoke tests, these are actual browser events.
     window.__chessFootballInputProbe = true;
     window.__chessFootballInputSamples = [];
+    window.__chessFootballActionPoseReceipts = [];
     window.addEventListener('message', (event) => {
       if (event.data?.source !== 'chess-football-godot') return;
       if (event.data.type === 'ready') window.__chessFootballWebReady = true;
+      if (event.data.type === 'ci-action-poses-installed') {
+        window.__chessFootballActionPoseReceipts.push(event.data);
+      }
       if (event.data.type === 'ci-keyboard-sample') {
         window.__chessFootballInputSamples.push(event.data);
         if (window.__chessFootballInputSamples.length > 400) {
@@ -607,6 +611,16 @@ try {
   if (await page.locator('canvas').count() === 0) {
     throw new Error('XI Web runtime reported ready without canvas');
   }
+  // A SHA/CORS-valid HTTP response alone does NOT prove installed sprites.
+  // Require a CI-only receipt from the real XI Godot WASM presenter, emitted
+  // only after ALL eight R2 action sheets replace the real team sprite banks.
+  // If a browser silently falls back to old art, the required gate fails.
+  await page.waitForFunction(
+    () => window.__chessFootballActionPoseReceipts.some((receipt) =>
+      receipt.team_size === 11 && receipt.sheets === 8),
+    null, { timeout: 60000 }
+  );
+  console.log('FOOTBALL_XI_REAL_WEB_ACTION_POSES_INSTALLED_OK teams=2 actions=4 sheets=8');
   // The first 5v5 boot already exercised Playwright's real canvas.click.
   // After a full WASM reboot in software WebGL, locator.click can hang in
   // actionability/scroll checks during ReadPixels GPU stalls despite a real,
