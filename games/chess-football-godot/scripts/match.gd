@@ -36,6 +36,9 @@ const TACKLE_LOOSE_POKE_POWER := 310.0
 const TACKLE_GLANCING_RECLAIM_DELAY := 0.12
 const SLIDE_TACKLE_FORWARD_BONUS := 26.0
 const SLIDE_TACKLE_HALF_WIDTH_BONUS := 4.0
+# No input lag on the first E: a second defensive E can upgrade an
+# unresolved standing challenge into an aggressive slide.
+const TACKLE_DOUBLE_E_SECONDS := 0.30
 const PENALTY_SHOT_POWER := 930.0
 const PENALTY_SHOT_LIFT := 150.0
 const PENALTY_KEEPER_MOVE_SPEED := 310.0
@@ -348,6 +351,8 @@ var pending_human_pass_receiver: Footballer = null
 var desktop_pass_input_active: bool = false
 var pending_tackle_player: Footballer = null
 var pending_tackle_seconds: float = 0.0
+var last_e_tackle_at: float = -10.0
+var last_e_tackle_player: Footballer = null
 
 var score_label: Label
 var help_label: Label
@@ -725,6 +730,7 @@ func _menu_change_view() -> void:
 	_toggle_pause_menu()
 
 func _restart_match() -> void:
+	last_e_tackle_player = null
 	score = [0, 0]
 	last_goal_text = ""
 	_reset_ai_adaptation()
@@ -747,7 +753,7 @@ func _refresh_hud() -> void:
 		else:
 			help_label.text = "PENALTI RIVAL · W/S mueve al portero antes del disparo"
 	else:
-		help_label.text = "WASD/Flechas · Shift sprint · Space pase · Enter tiro · E regate/entrada · Shift+E segada · Q/Tab jugador cercano · V vista · ESC menú"
+		help_label.text = "WASD/Flechas · Shift sprint · Space pase · Enter tiro · E regate/entrada · doble E o Shift+E segada · Q/Tab jugador cercano · V vista · ESC menú"
 	var charge_visible := shot_charging or pass_charging
 	if shot_meter != null:
 		shot_meter.visible = charge_visible
@@ -788,9 +794,10 @@ func _handle_human(delta: float) -> void:
 		_select_player(_best_switch_candidate())
 	if Input.is_action_just_pressed("tackle"):
 		if controlled.has_ball:
-			_try_dribble(direction)
+			last_e_tackle_player = null
+			_try_dribble(direction, Input.is_action_pressed("sprint"))
 		else:
-			_try_tackle(controlled, Input.is_action_pressed("sprint"))
+			_press_contextual_tackle(Input.is_action_pressed("sprint"))
 	var pass_pressed := Input.is_action_pressed("pass_ball")
 	if pass_pressed and not desktop_pass_input_active:
 		desktop_pass_input_active = true
@@ -2704,15 +2711,45 @@ func _auto_dribble_direction(player: Footballer) -> Vector2:
 			best_direction = candidate
 	return best_direction
 
-func _try_dribble(direction: Vector2) -> bool:
+func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 	if controlled == null or ball.carrier != controlled:
 		return false
 	_cancel_shot_charge()
 	_cancel_pass_charge()
+	var stationary: bool = (
+		direction.length_squared() < 0.0324
+		and controlled.velocity.length() < controlled.base_speed * 0.35
+	)
+	var kind := "burst" if sprinting else "feint" if stationary else "cut"
 	var wanted := direction
 	if wanted.length_squared() < 0.0324:
 		wanted = _auto_dribble_direction(controlled)
-	return controlled.start_dribble(wanted)
+	return controlled.start_dribble(wanted, kind)
+
+
+func _press_contextual_tackle(sprinting: bool) -> void:
+	if controlled == null or controlled.sent_off or controlled.has_ball:
+		last_e_tackle_player = null
+		return
+	var double_tap := (
+		not sprinting
+		and last_e_tackle_player == controlled
+		and match_seconds >= last_e_tackle_at
+		and match_seconds - last_e_tackle_at <= TACKLE_DOUBLE_E_SECONDS
+	)
+	last_e_tackle_player = null if double_tap or sprinting else controlled
+	last_e_tackle_at = match_seconds
+	if double_tap and controlled.upgrade_standing_tackle_to_slide():
+		# Re-evaluate the *actual* live ball carrier against the same physical
+		# hitbox as Shift+E. Escalation cannot manufacture a steal or bypass a
+		# foul, and is refused if the standing contact already happened.
+		var victim: Footballer = ball.carrier
+		if victim != null and victim.team_id != controlled.team_id:
+			_resolve_tackle_contact(
+				controlled, victim, _tackle_hitbox(controlled, victim.global_position, true)
+			)
+		return
+	_try_tackle(controlled, sprinting or double_tap)
 
 func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
 	if ball.carrier == null or ball.carrier == tackler:
@@ -2750,6 +2787,9 @@ func _resolve_tackle_contact(
 		return false
 
 	var push_direction := offset.normalized() if offset.length_squared() > 0.001 else _tackle_forward(tackler)
+	# A completed standing contact cannot be re-labelled as a slide on the
+	# next keypress; cards and ball ownership stay tied to the original hit.
+	tackler.tackle_contact_resolved = true
 	var foul_spot := victim.global_position
 	victim.receive_tackle_contact(push_direction)
 	if audio_fx != null:
@@ -2989,6 +3029,8 @@ func _nearest_player_to_ball(team_id: int) -> Footballer:
 func _select_player(player: Footballer) -> void:
 	if player == null or player.sent_off:
 		return
+	if player != controlled:
+		last_e_tackle_player = null
 	# Explicit/manual or possession-driven selection overrides a queued pass.
 	if pending_human_pass_receiver != null and player != pending_human_pass_receiver:
 		pending_human_pass_receiver = null
