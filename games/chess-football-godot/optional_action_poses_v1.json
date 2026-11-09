@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "enabled": true,
+  "enabled": false,
   "bucket": "football",
   "prefix": "atlases/v2/",
   "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v2",
@@ -18,7 +18,7 @@
     "tackle",
     "slide_tackle"
   ],
-  "note": "Staging-only; all eight original R2 WebPs must pass exact public bytes, staging Origin CORS, lossless WebP and SHA-256 in CI; approved canon remains fallback. Do not alter physical tackle/dribble rules or manager journal.",
+  "note": "HOLD: v1 action sheets failed canonical human visual review. Never fetch/activate. Native loader and deterministic action clocks are staging-prepared only. Exact v2 keys/SHA and independent full-size Godot review required before activation.",
   "entries": [
     {
       "team": "fc_matthias",
