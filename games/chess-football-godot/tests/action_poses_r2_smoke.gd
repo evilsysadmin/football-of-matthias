@@ -10,7 +10,7 @@ func _synthetic_sheet() -> Image:
 		# Shadow first, then a grounded opaque athlete. It deliberately
 		# overlaps the boots, so the filter must keep the opaque body.
 		if i in [3, 4, 5]:
-			sheet.fill_rect(Rect2i(i * 128 + 4, 126, 120, 11),
+			sheet.fill_rect(Rect2i(i * 128 + 7, 126, 114, 11),
 				Color(0.03, 0.04, 0.06, 0.24))
 		sheet.fill_rect(Rect2i(i * 128 + 16, 18, 90, 116),
 			Color(0.15 + float(i) * 0.08, 0.65, 0.3, 1.0))
