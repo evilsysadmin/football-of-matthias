@@ -682,7 +682,7 @@ func _request_action_poses_from_r2() -> void:
 
 func _on_action_pose_ready(image: Image, team_id: int, action: StringName) -> void:
 	_apply_verified_action_pose_frames(
-		ChessFootballActionPosesR2.frames_from_image(image), team_id, action
+		ChessFootballActionPosesR2.frames_from_image(image, action), team_id, action
 	)
 
 
