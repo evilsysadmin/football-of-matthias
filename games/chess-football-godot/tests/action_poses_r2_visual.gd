@@ -93,7 +93,8 @@ func _capture(game: Node, stage: ChessFootball3DPresenter,
 		actor.action_lock_seconds = 0.0
 		actor.dribble_mode = "cut" if action == &"dribble_cut" else "burst"
 		actor.dribble_duration_seconds = 0.22 if action == &"dribble_cut" else 0.27
-		actor.dribble_burst_seconds = actor.dribble_duration_seconds * 0.5
+		# The 3D player derives pose directly from the real dribble countdown.
+		actor.dribble_burst_seconds = actor.dribble_duration_seconds * (1.0 - (float(pose) + 0.2) / 8.0)
 		actor.visual.play(&"sprint")
 	else:
 		if game.ball.carrier != null:
