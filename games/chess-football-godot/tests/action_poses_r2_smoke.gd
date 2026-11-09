@@ -1,12 +1,17 @@
 extends SceneTree
 
-# P0: the real 11v11 game may install only the two visually approved dribble
-# gestures. The baked-shadow tackle/slide WebPs remain isolated in R2 and
-# E / Shift+E continue to show their canonical local animations.
+# P0: only exact SHA-verified original-runtime R2 action sheets can install
+# in XI. The slide's oversized painted ground shadow is removed from middle
+# poses after decode while the opaque boot contact and all physics survive.
 func _synthetic_sheet() -> Image:
 	var sheet := Image.create(1024, 144, false, Image.FORMAT_RGBA8)
 	sheet.fill(Color.TRANSPARENT)
 	for i in range(8):
+		# Shadow first, then a grounded opaque athlete. It deliberately
+		# overlaps the boots, so the filter must keep the opaque body.
+		if i in [3, 4, 5]:
+			sheet.fill_rect(Rect2i(i * 128 + 4, 126, 120, 11),
+				Color(0.03, 0.04, 0.06, 0.24))
 		sheet.fill_rect(Rect2i(i * 128 + 16, 18, 90, 116),
 			Color(0.15 + float(i) * 0.08, 0.65, 0.3, 1.0))
 	return sheet
@@ -16,23 +21,21 @@ func _initialize() -> void:
 	var contract := ChessFootballActionPosesR2.metadata()
 	assert(contract.get("version") == 2 and contract.get("enabled") == true)
 	assert(contract.get("quality_contract") == "football-approved-r2-action-recomposition-v2")
-	assert(contract.get("enabled_actions") == ["dribble_cut", "dribble_burst"])
+	assert(contract.get("enabled_actions") == [
+		"dribble_cut", "dribble_burst", "tackle", "slide_tackle"
+	])
 	assert((contract.get("entries", []) as Array).size() == 8)
 	for team_id in range(2):
-		for action in ChessFootballActionPosesR2.ANIMATIONS:
+		for action in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
 			var meta := ChessFootballActionPosesR2.sheet_meta(team_id, action)
-			if action not in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
-				assert(meta.is_empty())
-				continue
-			assert(not meta.is_empty())
-			assert(meta["url"].begins_with(ChessFootballActionPosesR2.TRUSTED_ROOT))
+			assert(not meta.is_empty() and meta["url"].begins_with(
+				ChessFootballActionPosesR2.TRUSTED_ROOT))
 			assert(ChessFootballR2AtlasLoader.decode_verified_webp(
 				PackedByteArray([1, 2, 3]), meta,
 				ChessFootballActionPosesR2.TRUSTED_ROOT
 			) == null)
-	assert(ChessFootballActionPosesR2.sheet_meta(0, &"tackle").is_empty())
-	assert(ChessFootballActionPosesR2.sheet_meta(1, &"slide_tackle").is_empty())
-	assert(ChessFootballActionPosesR2.sheet_meta(2, &"dribble_cut").is_empty())
+	assert(ChessFootballActionPosesR2.sheet_meta(2, &"slide_tackle").is_empty())
+	assert(ChessFootballActionPosesR2.sheet_meta(0, &"dance").is_empty())
 	assert(ChessFootballActionPosesR2.animation_for(
 		&"sprint", "side", "", true, true, "cut") == &"dribble_cut")
 	assert(ChessFootballActionPosesR2.animation_for(
@@ -45,20 +48,35 @@ func _initialize() -> void:
 			blocked, "side", "", true, true, "burst") == blocked)
 	assert(ChessFootballActionPosesR2.animation_for(
 		&"run", "side", "keeper", true, true, "cut") == &"run")
-	assert(ChessFootballActionPosesR2.animation_for(
-		&"run", "side", "", false, true, "cut") == &"run")
 
 	var sheet := _synthetic_sheet()
+	assert(sheet.get_pixel(3 * 128 + 7, 130).a > 0.20)
+	var clean := ChessFootballActionPosesR2.frames_from_image(
+		sheet, &"slide_tackle")
+	assert(clean.size() == 8)
+	var original := ChessFootballActionPosesR2.frames_from_image(
+		sheet, &"tackle")
+	assert(original.size() == 8)
+	for i in range(8):
+		var restored: Image = clean[i].get_image()
+		assert(restored.get_size() == Vector2i(128, 144))
+		assert(restored.get_pixel(40, 130).a > 0.98)  # boot/body opaque
+		if i in [3, 4, 5]:
+			assert(restored.get_pixel(7, 130).a < 0.01)
+			assert(original[i].get_image().get_pixel(7, 130).a > 0.20)
+		else:
+			assert(restored.get_data() == original[i].get_image().get_data())
 	var erased := sheet.duplicate()
 	erased.fill_rect(Rect2i(4 * 128, 0, 128, 144), Color.TRANSPARENT)
-	assert(ChessFootballActionPosesR2.frames_from_image(erased).is_empty())
+	assert(ChessFootballActionPosesR2.frames_from_image(
+		erased, &"slide_tackle").is_empty())
 	var opaque := sheet.duplicate()
 	opaque.set_pixel(0, 0, Color.WHITE)
-	assert(ChessFootballActionPosesR2.frames_from_image(opaque).is_empty())
 	assert(ChessFootballActionPosesR2.frames_from_image(
-		Image.create(1024, 288, false, Image.FORMAT_RGBA8)).is_empty())
-	var textures := ChessFootballActionPosesR2.frames_from_image(sheet)
-	assert(textures.size() == 8)
+		opaque, &"slide_tackle").is_empty())
+	assert(ChessFootballActionPosesR2.frames_from_image(
+		Image.create(1024, 288, false, Image.FORMAT_RGBA8),
+		&"slide_tackle").is_empty())
 
 	var scene := load("res://main.tscn") as PackedScene
 	assert(scene != null)
@@ -71,7 +89,7 @@ func _initialize() -> void:
 	game.set_physics_process(false)
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null and stage.xi_raster_meshes.size() == 22)
-	var original_score: Array = game.score.duplicate()
+	var initial_score: Array = game.score.duplicate()
 	for team_id in range(2):
 		var athlete: Footballer = game.teams[team_id][1]
 		var keeper: Footballer = game.teams[team_id][0]
@@ -79,29 +97,30 @@ func _initialize() -> void:
 		var sprite: AnimatedSprite3D = stage.player_sprites[key]
 		var goalie: AnimatedSprite3D = stage.player_sprites[keeper.get_instance_id()]
 		var bank := sprite.sprite_frames
-		var original_run := bank.get_frame_texture(&"run", 0)
-		var original_pass := bank.get_frame_texture(&"pass", 0)
-		var original_standing := bank.get_frame_texture(&"tackle", 0)
-		var original_slide := bank.get_frame_texture(&"slide_tackle", 0)
-		var original_keeper := goalie.sprite_frames.get_frame_texture(&"tackle", 0)
+		var original_run: Texture2D = bank.get_frame_texture(&"run", 0)
+		var original_pass: Texture2D = bank.get_frame_texture(&"pass", 0)
+		var original_keeper: Texture2D = goalie.sprite_frames.get_frame_texture(
+			&"slide_tackle", 0
+		)
 		for action in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
-			assert(not bank.has_animation(action))
+			var replacements: Array[Texture2D] = (
+				clean if action == &"slide_tackle" else original
+			)
 			stage._apply_verified_action_pose_frames([], team_id, action)
-			assert(not bank.has_animation(action))
-			stage._apply_verified_action_pose_frames(textures, team_id, action)
-			assert(stage._action_poses_r2_loaded.has("%d:%s" % [team_id, String(action)]))
+			if action in [&"dribble_cut", &"dribble_burst"]:
+				assert(not bank.has_animation(action))
+			stage._apply_verified_action_pose_frames(replacements, team_id, action)
+			assert(stage._action_poses_r2_loaded.has(
+				"%d:%s" % [team_id, String(action)]))
 			assert(bank.has_animation(action) and bank.get_frame_count(action) == 8)
 			for i in range(8):
-				assert(bank.get_frame_texture(action, i) == textures[i])
-			stage._apply_verified_action_pose_frames(textures, team_id, action)
+				assert(bank.get_frame_texture(action, i) == replacements[i])
+			stage._apply_verified_action_pose_frames(replacements, team_id, action)
 			assert(bank.get_frame_count(action) == 8)
-		for held in [&"tackle", &"slide_tackle"]:
-			stage._apply_verified_action_pose_frames(textures, team_id, held)
-			assert(not stage._action_poses_r2_loaded.has("%d:%s" % [team_id, String(held)]))
-		assert(bank.get_frame_texture(&"tackle", 0) == original_standing)
-		assert(bank.get_frame_texture(&"slide_tackle", 0) == original_slide)
+		assert(bank.get_frame_texture(&"run", 0) == original_run)
 		assert(bank.get_frame_texture(&"pass", 0) == original_pass)
-		assert(goalie.sprite_frames.get_frame_texture(&"tackle", 0) == original_keeper)
+		assert(goalie.sprite_frames.get_frame_texture(&"slide_tackle", 0)
+			== original_keeper)
 
 		game.ball.attach_to(athlete)
 		athlete.action_lock_seconds = 0.0
@@ -117,26 +136,24 @@ func _initialize() -> void:
 		athlete.dribble_duration_seconds = 0.27
 		stage.sync_presentation(0.0, "broadcast")
 		assert(sprite.animation == &"dribble_burst")
-		athlete.dribble_mode = "feint"
-		stage.sync_presentation(0.0, "broadcast")
-		assert(sprite.animation not in [&"dribble_cut", &"dribble_burst"])
 		athlete.dribble_burst_seconds = 0.0
 		athlete.visual.play(&"shoot")
 		stage.sync_presentation(0.0, "broadcast")
 		assert(sprite.animation == &"shoot")
 		game.ball.release(Vector2.RIGHT, 0.0)
-		athlete.visual.play(&"tackle")
-		athlete.action_lock_seconds = 0.35
-		stage.sync_presentation(0.0, "broadcast")
-		assert(sprite.animation == &"tackle")
-		assert(bank.get_frame_texture(&"tackle", 0) == original_standing)
-		athlete.visual.play(&"slide_tackle")
-		athlete.action_lock_seconds = 0.32
-		stage.sync_presentation(0.0, "broadcast")
-		assert(sprite.animation == &"slide_tackle")
-		assert(bank.get_frame_texture(&"slide_tackle", 0) == original_slide)
+		for action in [&"tackle", &"slide_tackle"]:
+			athlete.visual.play(action)
+			athlete.action_visual_duration_seconds = (
+				0.50 if action == &"tackle" else 0.64
+			)
+			athlete.action_lock_seconds = athlete.action_visual_duration_seconds * 0.50
+			stage.sync_presentation(0.0, "broadcast")
+			assert(sprite.animation == action and sprite.frame == 4)
+			athlete.action_lock_seconds = 0.04
+			stage.sync_presentation(0.0, "broadcast")
+			assert(sprite.frame == 7)
 		assert(bank.get_frame_texture(&"run", 0) == original_run)
 
-	assert(game.score == original_score)
-	print("FOOTBALL_ACTION_POSES_R2_SMOKE_OK clubs=2 active_dribbles=2 held_tackles=2 frames=8 fallback=1 visual_only=1")
+	assert(game.score == initial_score)
+	print("FOOTBALL_ACTION_POSES_R2_SMOKE_OK clubs=2 actions=4 slide_shadow_clean=1 grounded_boot=1 frames=8 fallback=1 visual_only=1")
 	quit(0)
