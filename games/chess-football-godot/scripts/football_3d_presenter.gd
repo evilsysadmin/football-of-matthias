@@ -2587,7 +2587,15 @@ func _sync_visible_animation(
 	elif (
 		match_node.match_team_size == 11
 		and not is_keeper
-		and wanted in [&"pass", &"shoot"]
+		and (
+			wanted in [&"pass", &"shoot"]
+			or (
+				wanted in [&"tackle", &"slide_tackle"]
+				and _action_poses_r2_loaded.has(
+					"%d:%s" % [player.team_id, String(wanted)]
+				)
+			)
+		)
 		and player.action_lock_seconds > 0.0
 		and player.action_visual_duration_seconds > 0.0
 	):
