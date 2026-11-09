@@ -786,7 +786,7 @@ jobs:
             echo '::error::Native R2 action pose, keeper or gameplay authority contract regressed.'
             exit 1
           fi
-          grep -q 'FOOTBALL_ACTION_POSES_R2_SMOKE_OK clubs=2 actions=4 frames=8 fallback=1 visual_only=1' "$log"
+          grep -q 'FOOTBALL_ACTION_POSES_R2_SMOKE_OK clubs=2 active_dribbles=2 held_tackles=2 frames=8 fallback=1 visual_only=1' "$log"
       - name: Optional keeper catch R2 eight-frame and fallback contract
         shell: bash
         run: |
