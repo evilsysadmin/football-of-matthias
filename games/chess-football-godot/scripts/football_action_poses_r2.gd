@@ -65,10 +65,10 @@ static func sheet_meta(team_id: int, animation: StringName) -> Dictionary:
 		if entry.get("file") != expected_filename or entry.get("sha256") != PINNED_SHA[key]:
 			return {}
 		seen[key] = true
-	var selected_key := CLUBS[team_id] + ":" + String(animation)
+	var selected_key: String = String(CLUBS[team_id]) + ":" + String(animation)
 	if not seen.has(selected_key):
 		return {}
-	var filename := CLUBS[team_id] + "_" + String(animation) + "_poses_v1.webp"
+	var filename: String = String(CLUBS[team_id]) + "_" + String(animation) + "_poses_v1.webp
 	var meta := {
 		"url": TRUSTED_ROOT + filename,
 		"sha256": PINNED_SHA[selected_key],
