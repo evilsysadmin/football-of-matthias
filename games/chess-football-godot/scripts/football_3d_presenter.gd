@@ -2203,13 +2203,21 @@ func sync_presentation(delta: float, mode: String) -> void:
 				)
 				if sprite.sprite_frames.has_animation(action_pose):
 					wanted_animation = action_pose
-				# The verified R2 cut/burst atlas contains a real planted-foot
-				# action, but was previously restricted to lateral running.
-				# For a real XI front/diagonal dribble, briefly turn the body
-				# into that authored planted stance before returning to the
-				# correct directional runner. A non-Web/local R2 miss retains
-				# the existing directional fallback without any proxy art.
-				if match_node.match_team_size == 11 and player.role != "keeper":
+				# The verified V3 pack has real 12-frame FRONT and DIAGONAL
+				# views with alternating legs. During a feint, use those
+				# authored directional plants rather than turning the entire
+				# actor sideways to the unrelated lateral action sheet.
+				# If V3 fails SHA/CORS/geometry, retain the approved R2
+				# side-plant fallback. Neither path changes 2D facing/physics.
+				var v3_directional_feint := xi_use_v3_directional_feint(
+					match_node.match_team_size, run_view, player.role,
+					player.has_ball and match_node.ball.carrier == player,
+					player.dribble_active(), player.dribble_mode,
+					wanted_animation, _run_v3_r2_loaded.has(player.team_id),
+					sprite.sprite_frames.get_frame_count(wanted_animation)
+					if sprite.sprite_frames.has_animation(wanted_animation) else 0
+				)
+				if match_node.match_team_size == 11 and player.role != "keeper" and not v3_directional_feint:
 					var pivot_progress := 1.0 - clampf(
 						player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
 						0.0, 1.0
@@ -2613,6 +2621,26 @@ static func xi_outfield_stride_advance(
 	var cycle_travel_px := 180.0 if sprinting else 168.0
 	var stride_fps := travel_speed * float(frame_count) / cycle_travel_px
 	return delta * minf(stride_fps, base_fps * 1.35)
+
+
+# Only a fully SHA-verified V3 pack can replace the sideways R2 stand-in
+# during front/diagonal XI feints. The 12 authored directional run frames
+# provide two actual opposite leg plants at indices 3 and 9; the display
+# ball and its contact shadow still use the existing countdown-based touch.
+# No sprite sheet is invented or altered; a missing V3 falls back to R2.
+static func xi_use_v3_directional_feint(
+	team_size: int, view: String, role: String,
+	owns_ball: bool, active: bool, mode: String,
+	animation: StringName, has_verified_v3: bool, frames: int
+) -> bool:
+	if (
+		team_size != 11 or role == "keeper" or not owns_ball
+		or not active or mode != "feint" or not has_verified_v3
+		or frames != ChessFootballRunV3R2.COLUMNS
+		or view not in ["front", "back", "front_diagonal", "back_diagonal"]
+	):
+		return false
+	return animation == StringName("run_" + view) or animation == StringName("sprint_" + view)
 
 
 # Draw every original pass/shot pose in its actual lock window. For a
@@ -3053,6 +3081,16 @@ static func xi_dribble_fallback_footwork(mode: String, progress: float) -> Vecto
 	return Vector3(0.145 * contact, 22.0 * contact, 1.0 - 0.06 * contact)
 
 
+# A V3 directional runner already PAINTS its torso facing the direction
+# of travel. Keep its counterstep readable, but don't rotate that torso
+# by the old 25 degrees or smear its soles through the grass.
+static func xi_v3_feint_footwork(progress: float) -> Vector3:
+	var t := clampf(progress, 0.0, 1.0)
+	var contact := sin(PI * t)
+	var plant := sin(TAU * t) * contact
+	return Vector3(0.095 * plant, 9.0 * plant, 1.0 - 0.025 * contact)
+
+
 # Only the DISPLAYED XI ball follows the planted foot while the actual
 # possession action is active. Physics, keeper catches and the 2D ball remain
 # authoritative and untouched. Bounded offsets return to zero at both ends;
@@ -3286,6 +3324,15 @@ func _sync_player_secondary_motion(
 			0.0, 1.0
 		)
 		var step := xi_dribble_fallback_footwork(player.dribble_mode, progress)
+		if xi_use_v3_directional_feint(
+			match_node.match_team_size,
+			String(player_run_views.get(player.get_instance_id(), "side")),
+			player.role, player.has_ball and match_node.ball.carrier == player,
+			player.dribble_active(), player.dribble_mode,
+			sprite.animation, _run_v3_r2_loaded.has(player.team_id),
+			frame_count
+		):
+			step = xi_v3_feint_footwork(progress)
 		var pivot_sign := 1.0 if player.dribble_direction.y >= 0.0 else -1.0
 		if absf(player.dribble_direction.y) <= 0.12:
 			pivot_sign = -1.0 if sprite.flip_h else 1.0
