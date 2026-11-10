@@ -18,6 +18,12 @@ func _synthetic_sheet() -> Image:
 
 
 func _initialize() -> void:
+	# The scrape is bounded, reversible and tied only to the action clock.
+	assert(ChessFootball3DPresenter.xi_slide_scrape_weight(0.64, 0.64) == 0.0)
+	assert(is_equal_approx(ChessFootball3DPresenter.xi_slide_scrape_weight(0.64, 0.32), 1.0))
+	assert(ChessFootball3DPresenter.xi_slide_scrape_weight(0.64, 0.0) == 0.0)
+	assert(ChessFootball3DPresenter.xi_slide_scrape_weight(0.0, 0.32) == 0.0)
+	assert(ChessFootball3DPresenter.xi_slide_scrape_weight(0.64, 0.12) < 0.60)
 	var contract := ChessFootballActionPosesR2.metadata()
 	assert(contract.get("version") == 2 and contract.get("enabled") == true)
 	assert(contract.get("quality_contract") == "football-approved-r2-action-recomposition-v2")
@@ -149,9 +155,18 @@ func _initialize() -> void:
 			athlete.action_lock_seconds = athlete.action_visual_duration_seconds * 0.50
 			stage.sync_presentation(0.0, "broadcast")
 			assert(sprite.animation == action and sprite.frame == 4)
+			if action == &"slide_tackle":
+				# R2 slide now has a small grounded scrape, never a gameplay
+				# displacement, and its body position returns towards zero.
+				assert(absf(sprite.position.x) > 0.055)
+				assert(absf(sprite.rotation.z) < deg_to_rad(3.0))
+			else:
+				assert(absf(sprite.position.x) < 0.001)
 			athlete.action_lock_seconds = 0.04
 			stage.sync_presentation(0.0, "broadcast")
 			assert(sprite.frame == 7)
+			if action == &"slide_tackle":
+				assert(absf(sprite.position.x) < 0.025)
 		assert(bank.get_frame_texture(&"run", 0) == original_run)
 
 	assert(game.score == initial_score)
