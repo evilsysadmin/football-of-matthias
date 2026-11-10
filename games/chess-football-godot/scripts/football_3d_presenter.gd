@@ -2377,6 +2377,11 @@ func sync_presentation(delta: float, mode: String) -> void:
 			dribble_ball_offset = xi_dribble_visual_ball_offset(
 				ball_carrier.dribble_mode, dribble_progress, ball_carrier.dribble_direction
 			)
+			# The overhead tactical lens projects the same planted-foot touch
+			# into fewer native pixels. Compensate on the rendered ball and
+			# its shadow ONLY; broadcast already keeps the touch by the boot.
+			if mode == "tactical":
+				dribble_ball_offset *= 1.6
 
 	if ball_node != null:
 		var grip_progress := 1.0
