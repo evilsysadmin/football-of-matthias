@@ -193,6 +193,34 @@ func _initialize() -> void:
 				assert(contact.distance_to(player_foot) < 0.49)
 				assert(contact.y == ball_baseline.y)
 
+	# The one rendered ball follows the real extended R2 cut foot,
+	# including the mirrored side view, without altering game ownership.
+	# A bounded contact pulse is symmetric in time and must leave no
+	# dangling offset after the cut has finished.
+	var cut_base_ball := Vector3(0.0, 0.16, 0.38)
+	var cut_foot := Vector3(0.0, 0.16, 0.0)
+	for old_flip in [false, true]:
+		var target := ChessFootball3DPresenter.xi_cut_display_ball_contact(
+			cut_base_ball, cut_foot, old_flip, 0.50
+		)
+		var expected_side := -1.0 if old_flip else 1.0
+		assert(target.x * expected_side > 0.25)
+		assert(target.distance_to(cut_foot) < 0.46)
+		assert(target.y == cut_base_ball.y)
+		assert(ChessFootball3DPresenter.xi_cut_display_ball_contact(
+			cut_base_ball, cut_foot, old_flip, 0.0
+		) == cut_base_ball)
+		assert(ChessFootball3DPresenter.xi_cut_display_ball_contact(
+			cut_base_ball, cut_foot, old_flip, 1.0
+		).distance_to(cut_base_ball) < 0.001)
+		var before_mid := ChessFootball3DPresenter.xi_cut_display_ball_contact(
+			cut_base_ball, cut_foot, old_flip, 0.499
+		)
+		var after_mid := ChessFootball3DPresenter.xi_cut_display_ball_contact(
+			cut_base_ball, cut_foot, old_flip, 0.501
+		)
+		assert(before_mid.distance_to(after_mid) < 0.005)
+
 	# Moving E is CUT, not stationary FEINT. At 0.22s the original
 	# eight R2 frames require 36 FPS; the strongest authored straight-leg
 	# plant at index 4 must actually survive 15/20/30 FPS sampling.
