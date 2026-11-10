@@ -46,7 +46,7 @@ func _initialize() -> void:
 	for view in ["front", "back", "front_diagonal", "back_diagonal"]:
 		var base := StringName("run_" + view)
 		assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
-			base, view, "midfielder", true, true, "feint", 0.15, true, true
+			base, view, "midfielder", true, true, "feint", 0.10, true, true
 		) == base)
 		assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
 			base, view, "midfielder", true, true, "feint", 0.48, true, true
@@ -110,6 +110,36 @@ func _initialize() -> void:
 		false, 11, "side", "midfielder", true, true, "feint",
 		&"dribble_cut", 0.65
 	) == false)
+
+	# Real 0.24s 11v11 feint at 15, 20 and 30 Hz: even with the
+	# sampling phase shifted nearly one full frame, both R2 painted foot
+	# plants must actually be seen. The old 8/0.24=33 FPS clock skipped
+	# these on Web clients. No extra frames extend the physics window.
+	assert(ChessFootball3DPresenter.xi_feint_r2_contact_pose(8, 0.30) == 2.0)
+	assert(ChessFootball3DPresenter.xi_feint_r2_contact_pose(8, 0.70) == 5.0)
+	assert(ChessFootball3DPresenter.xi_feint_r2_contact_pose(3, 0.70) == 0.0)
+	for fps in [15.0, 20.0, 30.0]:
+		for sample_offset in [0.0, 0.25, 0.5, 0.95]:
+			var saw_first := false
+			var saw_second := false
+			for frame_index in range(8):
+				var elapsed: float = (float(frame_index) + sample_offset) / fps
+				if elapsed >= Footballer.XI_DRIBBLE_FEINT_SECONDS:
+					break
+				var progress: float = elapsed / Footballer.XI_DRIBBLE_FEINT_SECONDS
+				var wanted := ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+					&"run_front", "front", "midfielder",
+					true, true, "feint", progress, true, true
+				)
+				if wanted != &"dribble_cut":
+					continue
+				var selected := ChessFootball3DPresenter.xi_feint_r2_contact_pose(
+					8, progress
+				)
+				saw_first = saw_first or selected == 2.0
+				saw_second = saw_second or selected == 5.0
+			assert(saw_first and saw_second,
+				"Both planted feet must survive a 15/20/30-FPS Web frame budget")
 
 	assert(ChessFootballActionPosesR2.sheet_meta(2, &"slide_tackle").is_empty())
 	assert(ChessFootballActionPosesR2.sheet_meta(0, &"dance").is_empty())
