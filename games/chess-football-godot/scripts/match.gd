@@ -755,14 +755,14 @@ func contextual_help_text(touch: bool = false) -> String:
 		return (
 			"ATACAS · compañero: pase · portería: tiro · césped libre: regate"
 			if touch else
-			"ATACAS · Space pase · Enter tiro · E amago/recorte · Shift+E toque largo"
+			"ATACAS · Space pase · Enter tiro · E amago/recorte · F toque largo"
 		)
 	if ball.carrier.team_id == 0:
 		return "ATACAMOS · toca un compañero para controlarlo" if touch else "ATACAMOS · Q/Tab cambia jugador · WASD mueve · Shift sprint"
 	return (
 		"DEFIENDES · rival: entrada · mantén para segada · compañero: cambia"
 		if touch else
-		"DEFIENDES · E entrada · Shift+E segada · Q/Tab cambia · Shift sprint"
+		"DEFIENDES · E entrada · F segada · Q/Tab cambia · Shift sprint"
 	)
 
 func _show_action_feedback(cue: String) -> void:
@@ -826,8 +826,12 @@ func _handle_human(delta: float) -> void:
 		_select_player(_best_switch_candidate())
 		if controlled != previous_controlled:
 			_show_action_feedback("CAMBIO DE JUGADOR")
-	if Input.is_action_just_pressed("tackle"):
-		_handle_contextual_e(direction, Input.is_action_pressed("sprint"))
+	# F is a deliberate XI special action, independent of Shift (sprint).
+	# If E and F land together, the explicit special takes priority.
+	if match_team_size == 11 and Input.is_action_just_pressed("special_move"):
+		_handle_contextual_special(direction)
+	elif Input.is_action_just_pressed("tackle"):
+		_handle_contextual_e(direction, Input.is_action_pressed("sprint") and match_team_size != 11)
 	var pass_pressed := Input.is_action_pressed("pass_ball")
 	if pass_pressed and not desktop_pass_input_active:
 		desktop_pass_input_active = true
@@ -2756,18 +2760,34 @@ func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 	var wanted := direction
 	if wanted.length_squared() < 0.0324:
 		wanted = _auto_dribble_direction(controlled)
-	return controlled.start_dribble(wanted, kind)
+	var started := controlled.start_dribble(wanted, kind)
+	if started and match_team_size == 11:
+		_show_action_feedback(
+			"AMAGO" if kind == "feint" else "TOQUE LARGO" if kind == "burst" else "RECORTE"
+		)
+	return started
 
 
-# Explicit and deterministic: E always stands, Shift+E always slides
-# when defending. There is no hidden timing state, double tap or input delay.
+# XI: E is the ordinary contextual action even while Shift is held.
+# Legacy 5v5 keeps its historical sprint+E behavior for test parity.
 func _handle_contextual_e(direction: Vector2, sprinting: bool) -> void:
 	if controlled == null or controlled.sent_off:
 		return
+	var special := sprinting and match_team_size != 11
 	if controlled.has_ball:
-		_try_dribble(direction, sprinting)
+		_try_dribble(direction, special)
 	else:
-		_try_tackle(controlled, sprinting)
+		_try_tackle(controlled, special)
+
+
+# XI: F alone triggers the deliberate special, whether sprinting or not.
+func _handle_contextual_special(direction: Vector2) -> void:
+	if match_team_size != 11 or controlled == null or controlled.sent_off:
+		return
+	if controlled.has_ball:
+		_try_dribble(direction, true)
+	else:
+		_try_tackle(controlled, true)
 
 
 func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
@@ -2784,6 +2804,8 @@ func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
 	var hitbox := _tackle_hitbox(tackler, victim.global_position, aggressive)
 	if not tackler.start_tackle(aggressive):
 		return false
+	if tackler == controlled and match_team_size == 11:
+		_show_action_feedback("SEGADA" if aggressive else "ENTRADA")
 	if not bool(hitbox.get("contact", hitbox.get("inside", false))):
 		return false
 	return _resolve_tackle_contact(tackler, victim, hitbox)
