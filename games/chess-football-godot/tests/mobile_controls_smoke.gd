@@ -17,6 +17,8 @@ func _initialize() -> void:
 	assert(controls.debug_controls_visible())
 	assert(controls.debug_fixed_action_count() == 0)
 	assert(not controls.debug_joystick_visible())
+	# Historical 5v5 help remains unchanged, independently of XI cues.
+	assert(match_node.contextual_help_text().begins_with("WASD/Flechas"))
 
 	match_node.debug_prepare_kickoff(0)
 	match_node.debug_force_kickoff_ready()
@@ -206,6 +208,21 @@ func _initialize() -> void:
 	assert(xi.match_pitch.size == Vector2(4000.0, 2600.0))
 	xi.debug_prepare_kickoff(0)
 	xi.debug_force_kickoff_ready()
+	# The active XI guide teaches the CURRENT situation instead of a
+	# single instruction wall. Both keyboard and touch derive from the
+	# same ball carrier; neither modifies that carrier or match state.
+	xi.ball.attach_to(xi.controlled)
+	xi.debug_refresh_hud()
+	assert(xi.help_label.text.begins_with("ATACAS"))
+	assert(xi.contextual_help_text(true).begins_with("ATACAS"))
+	xi.ball.attach_to(xi.teams[1][10])
+	xi.debug_refresh_hud()
+	assert(xi.help_label.text.begins_with("DEFIENDES"))
+	assert(xi.contextual_help_text(true).begins_with("DEFIENDES"))
+	xi.ball.release(Vector2.RIGHT, 180.0)
+	xi.debug_refresh_hud()
+	assert(xi.help_label.text.begins_with("BALÓN SUELTO"))
+	assert(xi.contextual_help_text(true).begins_with("BALÓN SUELTO"))
 	xi.camera_mode = "tactical"
 	xi.presentation_3d.sync_presentation(2.0, "tactical")
 	var xi_touch = xi.get_node_or_null("MobileControls")
@@ -240,6 +257,23 @@ func _initialize() -> void:
 	assert(xi_touch.debug_touch_down(43, xi_receiver_screen))
 	assert(xi_touch.debug_touch_up(43, xi_receiver_screen))
 	assert(xi.ball.carrier == null and xi.controlled == xi_defender)
+	xi.debug_refresh_hud()
+	assert(xi.view_label.text == "PASE")
+	assert(xi.action_feedback_seconds > 0.0)
+	# An actual charged human shot produces a different receipt, using the
+	# existing view label; neither text nor countdown manipulates the ball.
+	xi.ball.attach_to(xi_defender)
+	xi._begin_shot_charge(0.0)
+	xi._release_charged_shot()
+	xi.debug_refresh_hud()
+	assert(xi.ball.carrier == null and xi.ball.last_release_was_shot)
+	assert(xi.view_label.text == "TIRO")
+	assert(xi.mobile_activate_teammate(xi_passer))
+	xi.debug_refresh_hud()
+	assert(xi.view_label.text == "CAMBIO DE JUGADOR")
+	xi.action_feedback_seconds = 0.0
+	xi.debug_refresh_hud()
+	assert(xi.view_label.text != "CAMBIO DE JUGADOR")
 
 	# A rival carrying the ball has a 1.24x magnet. Its former search
 	# cutoff of 76px cancelled the promised 94px reach. Move other actors
@@ -255,6 +289,8 @@ func _initialize() -> void:
 				displaced += 1
 	xi_carrier.global_position = xi.match_pitch.get_center()
 	xi.ball.attach_to(xi_carrier)
+	xi_touch._process(0.0)
+	assert(xi.help_label.text.begins_with("DEFIENDES"))
 	xi.presentation_3d.sync_presentation(2.0, "tactical")
 	var xi_carrier_screen: Vector2 = xi.mobile_player_screen_position(xi_carrier)
 	assert(xi_carrier_screen.x > 85.0 and xi_carrier_screen.x < 1190.0)

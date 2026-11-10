@@ -282,6 +282,10 @@ var match_seconds: float = 0.0
 var camera_mode: String = CAMERA_MODE_BROADCAST
 var last_goal_text: String = ""
 var camera_hint_seconds: float = 4.5
+# Brief confirmation of successful local actions in the existing camera-hint slot.
+# Presentation only: neither ball physics nor CPU actions consume these fields.
+var action_feedback_text: String = ""
+var action_feedback_seconds: float = 0.0
 var presentation_3d: ChessFootball3DPresenter
 var audio_fx: ChessFootballAudio
 var ai_next_decision: Dictionary = {}
@@ -404,6 +408,7 @@ func _physics_process(delta: float) -> void:
 		return
 	match_seconds += delta
 	camera_hint_seconds = maxf(0.0, camera_hint_seconds - delta)
+	action_feedback_seconds = maxf(0.0, action_feedback_seconds - delta)
 	if goal_restart_active:
 		_update_goal_restart(delta)
 		_update_3d_presentation(delta)
@@ -737,6 +742,35 @@ func _exit_to_host() -> void:
 		return
 	get_tree().quit()
 
+# State-aware instructions: never announce an attack action while the rival
+# holds the ball. The 5v5 historical test fixture retains its old strip.
+func contextual_help_text(touch: bool = false) -> String:
+	if match_team_size != 11:
+		return "WASD/Flechas · Shift sprint · Space pase · Enter tiro · E regate/entrada · Shift+E segada · Q/Tab jugador cercano · V vista · ESC menú"
+	if kickoff_active or goal_restart_active:
+		return "REANUDACIÓN · espera al saque" if touch else "REANUDACIÓN · espera al saque · V vista · ESC menú"
+	if ball == null or ball.carrier == null:
+		return "BALÓN SUELTO · joystick persigue · toca compañero para cambiar" if touch else "BALÓN SUELTO · WASD persigue · Shift sprint · Q/Tab cambia jugador"
+	if ball.carrier == controlled:
+		return (
+			"ATACAS · compañero: pase · portería: tiro · césped libre: regate"
+			if touch else
+			"ATACAS · Space pase · Enter tiro · E amago/recorte · F toque largo"
+		)
+	if ball.carrier.team_id == 0:
+		return "ATACAMOS · toca un compañero para controlarlo" if touch else "ATACAMOS · Q/Tab cambia jugador · WASD mueve · Shift sprint"
+	return (
+		"DEFIENDES · rival: entrada · mantén para segada · compañero: cambia"
+		if touch else
+		"DEFIENDES · E entrada · F segada · Q/Tab cambia · Shift sprint"
+	)
+
+func _show_action_feedback(cue: String) -> void:
+	if match_team_size != 11:
+		return
+	action_feedback_text = cue
+	action_feedback_seconds = 0.70
+
 func _refresh_hud() -> void:
 	score_label.text = "FC Matthias %d - %d Real Enroque" % [score[0], score[1]]
 	if human_set_piece_available():
@@ -747,7 +781,7 @@ func _refresh_hud() -> void:
 		else:
 			help_label.text = "PENALTI RIVAL · W/S mueve al portero antes del disparo"
 	else:
-		help_label.text = "WASD/Flechas · Shift sprint · Space pase · Enter tiro · E regate/entrada · Shift+E segada · Q/Tab jugador cercano · V vista · ESC menú"
+		help_label.text = contextual_help_text()
 	var charge_visible := shot_charging or pass_charging
 	if shot_meter != null:
 		shot_meter.visible = charge_visible
@@ -761,7 +795,10 @@ func _refresh_hud() -> void:
 		else:
 			shot_meter_label.text = "POTENCIA"
 	var view_name := "BROADCAST 3D" if camera_mode == CAMERA_MODE_BROADCAST else "TÁCTICA AÉREA"
-	view_label.text = "VISTA · %s" % view_name if camera_hint_seconds > 0.0 else ""
+	if action_feedback_seconds > 0.0 and last_goal_text.is_empty():
+		view_label.text = action_feedback_text
+	else:
+		view_label.text = "VISTA · %s" % view_name if camera_hint_seconds > 0.0 else ""
 	goal_label.text = last_goal_text
 	goal_label.visible = not last_goal_text.is_empty()
 
@@ -785,9 +822,16 @@ func _handle_human(delta: float) -> void:
 		pending_human_pass_receiver = null
 		_cancel_shot_charge()
 		_cancel_pass_charge()
+		var previous_controlled: Footballer = controlled
 		_select_player(_best_switch_candidate())
-	if Input.is_action_just_pressed("tackle"):
-		_handle_contextual_e(direction, Input.is_action_pressed("sprint"))
+		if controlled != previous_controlled:
+			_show_action_feedback("CAMBIO DE JUGADOR")
+	# F is a deliberate XI special action, independent of Shift (sprint).
+	# If E and F land together, the explicit special takes priority.
+	if match_team_size == 11 and Input.is_action_just_pressed("special_move"):
+		_handle_contextual_special(direction)
+	elif Input.is_action_just_pressed("tackle"):
+		_handle_contextual_e(direction, Input.is_action_pressed("sprint") and match_team_size != 11)
 	var pass_pressed := Input.is_action_pressed("pass_ball")
 	if pass_pressed and not desktop_pass_input_active:
 		desktop_pass_input_active = true
@@ -956,6 +1000,7 @@ func _release_charged_pass() -> bool:
 	if audio_fx != null:
 		audio_fx.play_pass()
 	ball.release(release_direction, power * passer.pass_power_multiplier())
+	_show_action_feedback("PASE")
 	# Desktop directional passes retain the passer at release. The intended
 	# receiver moves toward the flight path and inherits control near arrival.
 	# Explicit touch-target passes keep their existing immediate selection.
@@ -1040,6 +1085,7 @@ func _release_charged_shot() -> void:
 		audio_fx.play_shot(ratio)
 	_record_ai_pressure(0, 2.0)
 	ball.release(target - controlled.global_position, power, lift, true)
+	_show_action_feedback("TIRO")
 
 func _update_ai(delta: float) -> void:
 	if (
@@ -2714,18 +2760,34 @@ func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 	var wanted := direction
 	if wanted.length_squared() < 0.0324:
 		wanted = _auto_dribble_direction(controlled)
-	return controlled.start_dribble(wanted, kind)
+	var started := controlled.start_dribble(wanted, kind)
+	if started and match_team_size == 11:
+		_show_action_feedback(
+			"AMAGO" if kind == "feint" else "TOQUE LARGO" if kind == "burst" else "RECORTE"
+		)
+	return started
 
 
-# Explicit and deterministic: E always stands, Shift+E always slides
-# when defending. There is no hidden timing state, double tap or input delay.
+# XI: E is the ordinary contextual action even while Shift is held.
+# Legacy 5v5 keeps its historical sprint+E behavior for test parity.
 func _handle_contextual_e(direction: Vector2, sprinting: bool) -> void:
 	if controlled == null or controlled.sent_off:
 		return
+	var special := sprinting and match_team_size != 11
 	if controlled.has_ball:
-		_try_dribble(direction, sprinting)
+		_try_dribble(direction, special)
 	else:
-		_try_tackle(controlled, sprinting)
+		_try_tackle(controlled, special)
+
+
+# XI: F alone triggers the deliberate special, whether sprinting or not.
+func _handle_contextual_special(direction: Vector2) -> void:
+	if match_team_size != 11 or controlled == null or controlled.sent_off:
+		return
+	if controlled.has_ball:
+		_try_dribble(direction, true)
+	else:
+		_try_tackle(controlled, true)
 
 
 func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
@@ -2742,6 +2804,8 @@ func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
 	var hitbox := _tackle_hitbox(tackler, victim.global_position, aggressive)
 	if not tackler.start_tackle(aggressive):
 		return false
+	if tackler == controlled and match_team_size == 11:
+		_show_action_feedback("SEGADA" if aggressive else "ENTRADA")
 	if not bool(hitbox.get("contact", hitbox.get("inside", false))):
 		return false
 	return _resolve_tackle_contact(tackler, victim, hitbox)
@@ -3823,7 +3887,10 @@ func mobile_activate_teammate(player: Footballer) -> bool:
 		return false
 	_cancel_shot_charge()
 	_cancel_pass_charge()
+	var previous_controlled: Footballer = controlled
 	_select_player(player)
+	if controlled != previous_controlled:
+		_show_action_feedback("CAMBIO DE JUGADOR")
 	return controlled == player
 
 func mobile_activate_opponent(player: Footballer, aggressive: bool = false) -> bool:
