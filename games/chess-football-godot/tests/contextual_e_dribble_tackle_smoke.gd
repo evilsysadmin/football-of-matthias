@@ -48,7 +48,7 @@ func _initialize() -> void:
 	game._handle_contextual_e(Vector2.ZERO, false)
 	assert(game.action_feedback_text == "AMAGO")
 	assert(carrier.dribble_mode == "feint")
-	assert(is_equal_approx(carrier.dribble_duration_seconds, carrier.DRIBBLE_FEINT_SECONDS))
+	assert(is_equal_approx(carrier.dribble_duration_seconds, carrier.XI_DRIBBLE_FEINT_SECONDS))
 	assert(is_equal_approx(carrier.dribble_touch_distance, carrier.DRIBBLE_FEINT_TOUCH))
 	assert(game.ball.carrier == carrier)
 	_reset_dribble(carrier)
@@ -212,6 +212,26 @@ func _initialize() -> void:
 	assert(defender.visual.animation == &"tackle")
 	assert(not defender.tackle_aggressive)
 	assert(game.score == initial_score)
+
+	# The longer two-beat action is XI-only; the legacy five-a-side feint
+	# retains its exact old window and speed profile.
+	var historical = packed.instantiate()
+	historical.match_team_size = 5
+	root.add_child(historical)
+	await process_frame
+	await process_frame
+	historical.set_process(false)
+	historical.set_physics_process(false)
+	historical.kickoff_active = false
+	var legacy_actor: Footballer = historical.teams[0][2]
+	historical._select_player(legacy_actor)
+	historical.ball.attach_to(legacy_actor)
+	legacy_actor.velocity = Vector2.ZERO
+	historical._handle_contextual_e(Vector2.ZERO, false)
+	assert(legacy_actor.dribble_mode == "feint")
+	assert(is_equal_approx(legacy_actor.dribble_duration_seconds, 0.16))
+	assert(is_equal_approx(legacy_actor.DRIBBLE_FEINT_SPEED, 0.65))
+	assert(historical.ball.carrier == legacy_actor)
 
 	print("FOOTBALL_CONTEXTUAL_E_OK feint_cut_burst=1 technique=1 E_standing=1 repeated_E_no_slide=1 F_slide=1 shift_E_normal=1 physical_contact=1 score_isolated=1")
 	quit(0)
