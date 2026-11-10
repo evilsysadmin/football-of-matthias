@@ -49,6 +49,11 @@ func _initialize() -> void:
 	assert(game.action_feedback_text == "AMAGO")
 	assert(carrier.dribble_mode == "feint")
 	assert(is_equal_approx(carrier.dribble_duration_seconds, carrier.XI_DRIBBLE_FEINT_SECONDS))
+	# The longer visual beat must not grant extra forward distance: this
+	# speed×window proxy differs by less than two percent from 5v5.
+	var legacy_footprint: float = carrier.DRIBBLE_FEINT_SECONDS * carrier.DRIBBLE_FEINT_SPEED
+	var xi_footprint: float = carrier.XI_DRIBBLE_FEINT_SECONDS * carrier.XI_DRIBBLE_FEINT_SPEED
+	assert(absf(xi_footprint - legacy_footprint) < 0.004)
 	assert(is_equal_approx(carrier.dribble_touch_distance, carrier.DRIBBLE_FEINT_TOUCH))
 	assert(game.ball.carrier == carrier)
 	_reset_dribble(carrier)
