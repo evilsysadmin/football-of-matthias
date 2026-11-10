@@ -2710,6 +2710,19 @@ static func xi_feint_r2_contact_pose(frame_count: int, progress: float) -> float
 	))
 
 
+# The 12-pose V3 feint first enters from its natural facing/boot stance,
+# plants one directional leg, counters with the other, then exits toward
+# the same run orientation. The two contact frames are held long enough
+# to be caught at 15 FPS; the boundary poses avoid a sudden side-body pop.
+static func xi_v3_feint_contact_pose(frame_count: int, progress: float) -> float:
+	if frame_count != ChessFootballRunV3R2.COLUMNS:
+		return 0.0
+	var t := clampf(progress, 0.0, 1.0)
+	if t < 0.14 or t > 0.86:
+		return 0.0
+	return 3.0 if t < 0.5 else 9.0
+
+
 # An in-place front/diagonal feint must actually change the planted LEG,
 # not just tilt the same running frame. Two opposite painted strides from the
 # existing approved directional atlas follow the authoritative countdown.
@@ -2776,7 +2789,17 @@ func _sync_visible_animation(
 			player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
 			0.0, 1.0
 		)
-		phase = xi_front_feint_foot_pose(count, feint_progress)
+		phase = (
+			xi_v3_feint_contact_pose(count, feint_progress)
+			if xi_use_v3_directional_feint(
+				match_node.match_team_size,
+				String(player_run_views.get(key, "side")),
+				player.role, player.has_ball and match_node.ball.carrier == player,
+				player.dribble_active(), player.dribble_mode,
+				wanted, _run_v3_r2_loaded.has(player.team_id), count
+			)
+			else xi_front_feint_foot_pose(count, feint_progress)
+		)
 	elif _keeper_locomotion(wanted):
 		# Movement-phase continuity survives turns and run/sprint switches.
 		# A stationary actor must not run in place.
