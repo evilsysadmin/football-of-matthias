@@ -45,11 +45,13 @@ const DRIBBLE_COOLDOWN_SECONDS := 0.68
 const DRIBBLE_SPEED_MULTIPLIER := 1.52
 const DRIBBLE_ACCELERATION := 3900.0
 const DRIBBLE_TOUCH_DISTANCE := 24.0
-# A feint must complete both visible weight-transfer beats at Web frame rates.
-# Slower travel preserves the original small, grounded feint footprint.
-const DRIBBLE_FEINT_SECONDS := 0.24
+const DRIBBLE_FEINT_SECONDS := 0.16
+# XI only: allow two rendered shoulder beats while preserving the old feint
+# travel footprint. 5v5/keepers retain their historical timings.
+const XI_DRIBBLE_FEINT_SECONDS := 0.24
 const DRIBBLE_LONG_TOUCH_SECONDS := 0.27
-const DRIBBLE_FEINT_SPEED := 0.44
+const DRIBBLE_FEINT_SPEED := 0.65
+const XI_DRIBBLE_FEINT_SPEED := 0.44
 const DRIBBLE_LONG_TOUCH_SPEED := 1.56
 const DRIBBLE_FEINT_TOUCH := 8.0
 const DRIBBLE_LONG_TOUCH := 32.0
@@ -213,9 +215,14 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	var moving := wanted_direction.length_squared() > 0.001
 	var actual_sprint := _update_stamina(delta, sprinting and not dribbling, moving)
 	last_sprinting = actual_sprint or dribbling
+	var xi_feint_speed := (
+		XI_DRIBBLE_FEINT_SPEED
+		if match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
+		else DRIBBLE_FEINT_SPEED
+	)
 	var speed := (
 		base_speed * (
-			DRIBBLE_FEINT_SPEED if dribble_mode == "feint"
+			xi_feint_speed if dribble_mode == "feint"
 			else DRIBBLE_LONG_TOUCH_SPEED if dribble_mode == "burst"
 			else DRIBBLE_SPEED_MULTIPLIER
 		)
@@ -369,8 +376,13 @@ func start_dribble(direction: Vector2, kind: String = "cut") -> bool:
 		wanted = Vector2(facing, 0.0)
 	dribble_direction = wanted.normalized()
 	dribble_mode = kind
+	var feint_window := (
+		XI_DRIBBLE_FEINT_SECONDS
+		if match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
+		else DRIBBLE_FEINT_SECONDS
+	)
 	dribble_duration_seconds = (
-		DRIBBLE_FEINT_SECONDS if kind == "feint"
+		feint_window if kind == "feint"
 		else DRIBBLE_LONG_TOUCH_SECONDS if kind == "burst"
 		else DRIBBLE_BURST_SECONDS
 	)
