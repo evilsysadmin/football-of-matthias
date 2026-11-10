@@ -2566,6 +2566,17 @@ static func xi_outfield_stride_advance(
 # 0.58-second pass the old fixed 10-FPS clock only reached ~frame 5/8.
 # The visual phase uses the same lock that already controls gameplay;
 # never prolong the kick or delay the authoritative ball release.
+# An in-place front/diagonal feint must actually change the planted LEG,
+# not just tilt the same running frame. Two opposite painted strides from the
+# existing approved directional atlas follow the authoritative countdown.
+# Side-facing approved R2 poses and normal locomotion keep their own clock.
+static func xi_front_feint_foot_pose(frame_count: int, progress: float) -> float:
+	if frame_count < 2:
+		return 0.0
+	var stride := 0.25 if progress < 0.5 else 0.75
+	return float(clampi(int(floorf(float(frame_count) * stride)), 0, frame_count - 1))
+
+
 static func xi_complete_action_phase(
 	frame_count: int, total_seconds: float, remaining_seconds: float
 ) -> float:
@@ -2609,7 +2620,20 @@ func _sync_visible_animation(
 		sprite.pause()
 		names[key] = wanted
 	var advance := maxf(delta, 0.0) * frames.get_animation_speed(wanted)
-	if _keeper_locomotion(wanted):
+	if (
+		match_node.match_team_size == 11 and not is_keeper
+		and player.has_ball and player.dribble_active() and player.dribble_mode == "feint"
+		and String(wanted) in [
+			"run_front", "run_front_diagonal", "run_back", "run_back_diagonal",
+			"sprint_front", "sprint_front_diagonal", "sprint_back", "sprint_back_diagonal"
+		]
+	):
+		var feint_progress := 1.0 - clampf(
+			player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
+			0.0, 1.0
+		)
+		phase = xi_front_feint_foot_pose(count, feint_progress)
+	elif _keeper_locomotion(wanted):
 		# Movement-phase continuity survives turns and run/sprint switches.
 		# A stationary actor must not run in place.
 		if player.velocity.length() >= 12.0:
@@ -2916,7 +2940,7 @@ static func xi_dribble_visual_ball_offset(mode: String, progress: float, directi
 	var lead := 0.0
 	if mode == "feint":
 		var counterstep := sin(TAU * t)
-		lateral = (0.10 * maxf(counterstep, 0.0) - 0.40 * maxf(-counterstep, 0.0)) * weight
+		lateral = (0.08 * maxf(counterstep, 0.0) - 0.24 * maxf(-counterstep, 0.0)) * weight
 	elif mode == "burst":
 		lead = 0.33 * weight
 	else:
