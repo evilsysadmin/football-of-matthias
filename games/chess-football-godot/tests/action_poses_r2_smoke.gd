@@ -111,6 +111,88 @@ func _initialize() -> void:
 		&"dribble_cut", 0.65
 	) == false)
 
+	# The older first touch was only 0.08 versus -0.24 for the
+	# countertouch: it was nearly invisible in broadcast even while both
+	# planted boots were present. Both displayed touches now have genuine,
+	# opposite signed displacement without moving the 2D possession ball.
+	var first_touch := ChessFootball3DPresenter.xi_dribble_visual_ball_offset(
+		"feint", 0.34, Vector2.DOWN
+	)
+	var second_touch := ChessFootball3DPresenter.xi_dribble_visual_ball_offset(
+		"feint", 0.65, Vector2.DOWN
+	)
+	assert(first_touch.x < -0.16 and second_touch.x > 0.16)
+	assert(absf(first_touch.x) / absf(second_touch.x) > 0.75)
+	assert(absf(first_touch.x) / absf(second_touch.x) < 1.25)
+	assert(absf(first_touch.z) < 0.001 and absf(second_touch.z) < 0.001)
+	for boundary in [0.0, 0.5, 1.0]:
+		assert(ChessFootball3DPresenter.xi_dribble_visual_ball_offset(
+			"feint", boundary, Vector2.RIGHT
+		).length() < 0.001)
+	assert(ChessFootball3DPresenter.xi_dribble_visual_ball_offset(
+		"feint", 0.34, Vector2.ZERO
+	) == Vector3.ZERO)
+	# Rotating the actual travel vector also rotates the two display
+	# touches. The mechanic/ball speed is NEVER the source of the motion.
+	var diagonal_touch := ChessFootball3DPresenter.xi_dribble_visual_ball_offset(
+		"feint", 0.34, Vector2(1.0, 1.0)
+	)
+	assert(absf(diagonal_touch.length() - first_touch.length()) < 0.001)
+
+	# Approved R2 contact geometry differs by club: a blue first
+	# plant goes to the right, a red first plant goes to the left.
+	# The corrected *single* display ball follows each painted support
+	# foot, then crosses smoothly without teleporting at the phase split.
+	var ball_baseline := Vector3(0.0, 0.16, 0.35)
+	var player_foot := Vector3(0.0, 0.16, 0.0)
+	for team_id in [0, 1]:
+		var first := ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 0.34
+		)
+		var second := ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 0.65
+		)
+		var contact_sign := 1.0 if team_id == 0 else -1.0
+		assert(first.x * contact_sign > 0.12)
+		assert(second.x * contact_sign < -0.12)
+		assert(first.distance_to(player_foot) < 0.49)
+		assert(second.distance_to(player_foot) < 0.49)
+		var half_before := ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 0.499
+		)
+		var half_after := ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 0.501
+		)
+		assert(half_before.distance_to(half_after) < 0.008,
+			"No visible ball teleport at the 50% mirrored R2 plant")
+		assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 0.0
+		) == ball_baseline)
+		assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 1.0
+		).distance_to(ball_baseline) < 0.001)
+	assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
+		ball_baseline, player_foot, Vector2.DOWN, 0, true, 0.34
+	).x < 0.0)
+	assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
+		ball_baseline, player_foot, Vector2.ZERO, 0, false, 0.34
+	) == ball_baseline)
+	assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
+		ball_baseline, player_foot, Vector2.DOWN, -1, false, 0.34
+	) == ball_baseline)
+	# A diagonal run is precisely where the old 37px forward possession
+	# anchor could leave the DISPLAYED ball beyond an R2 boot. Validate
+	# both clubs and the mirror branch without inventing a second ball.
+	var diagonal := Vector2(1.0, 1.0).normalized()
+	for club in [0, 1]:
+		for old_flip in [false, true]:
+			for action_t in [0.34, 0.65]:
+				var contact := ChessFootball3DPresenter.xi_feint_display_foot_contact(
+					ball_baseline, player_foot, diagonal, club, old_flip, action_t
+				)
+				assert(contact.distance_to(player_foot) < 0.49)
+				assert(contact.y == ball_baseline.y)
+
 	# Real 0.24s 11v11 feint at 15, 20 and 30 Hz: even with the
 	# sampling phase shifted nearly one full frame, both R2 painted foot
 	# plants must actually be seen. The old 8/0.24=33 FPS clock skipped
