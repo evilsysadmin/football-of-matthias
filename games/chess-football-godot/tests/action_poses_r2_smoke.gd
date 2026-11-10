@@ -80,6 +80,37 @@ func _initialize() -> void:
 		&"shoot", "front", "midfielder", true, true, "cut", 0.50, true, true
 	) == &"shoot")
 
+	# Against front/diagonal XI movement, an authentic R2 plant sells
+	# one side and recovers through an *opposite* boot/shoulder plant.
+	# No flip survives the action or leaks into a real directional runner.
+	for view in ["front", "back", "front_diagonal", "back_diagonal"]:
+		for original_flip in [false, true]:
+			assert(ChessFootball3DPresenter.xi_feint_pivot_mirror(
+				original_flip, 11, view, "midfielder",
+				true, true, "feint", &"dribble_cut", 0.34
+			) == original_flip)
+			assert(ChessFootball3DPresenter.xi_feint_pivot_mirror(
+				original_flip, 11, view, "midfielder",
+				true, true, "feint", &"dribble_cut", 0.65
+			) != original_flip)
+			for excluded in [
+				[5, view, "midfielder", true, true, "feint", &"dribble_cut"],
+				[11, view, "keeper", true, true, "feint", &"dribble_cut"],
+				[11, view, "midfielder", false, true, "feint", &"dribble_cut"],
+				[11, view, "midfielder", true, false, "feint", &"dribble_cut"],
+				[11, view, "midfielder", true, true, "burst", &"dribble_burst"],
+				[11, view, "midfielder", true, true, "cut", &"dribble_cut"],
+				[11, view, "midfielder", true, true, "feint", &"run_front"],
+			]:
+				assert(ChessFootball3DPresenter.xi_feint_pivot_mirror(
+					original_flip, excluded[0], excluded[1], excluded[2],
+					excluded[3], excluded[4], excluded[5], excluded[6], 0.65
+				) == original_flip)
+	assert(ChessFootball3DPresenter.xi_feint_pivot_mirror(
+		false, 11, "side", "midfielder", true, true, "feint",
+		&"dribble_cut", 0.65
+	) == false)
+
 	assert(ChessFootballActionPosesR2.sheet_meta(2, &"slide_tackle").is_empty())
 	assert(ChessFootballActionPosesR2.sheet_meta(0, &"dance").is_empty())
 	assert(ChessFootballActionPosesR2.animation_for(

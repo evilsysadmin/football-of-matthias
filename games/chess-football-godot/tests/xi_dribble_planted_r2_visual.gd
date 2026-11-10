@@ -108,6 +108,21 @@ func _initialize() -> void:
 						var material := quad.material_override as StandardMaterial3D
 						assert(material.albedo_texture ==
 							sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame))
+						var original_flip: bool = athlete.visual.flip_h
+						var expected_flip := stage.xi_feint_pivot_mirror(
+							original_flip, match_node.match_team_size,
+							view, athlete.role, true, true, action, sprite.animation,
+							progress
+						)
+						assert(sprite.flip_h == expected_flip)
+						assert((material.uv1_scale.x < 0.0) == expected_flip,
+							"Rendered R2 QuadMesh must show the counter-planted leg")
+						if action == "feint" and phase_id == 2:
+							assert(sprite.flip_h != original_flip,
+								"Second step of XI feint must reverse the actual R2 pose")
+						if phase_id == 0 or phase_id == PROGRESS.size() - 1:
+							assert(sprite.flip_h == original_flip,
+								"No XI feint mirror can leak into directional running")
 						await process_frame
 						await RenderingServer.frame_post_draw
 						var frame := match_node.get_viewport().get_texture().get_image()
