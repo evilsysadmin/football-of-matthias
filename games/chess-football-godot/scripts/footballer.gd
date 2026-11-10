@@ -45,9 +45,11 @@ const DRIBBLE_COOLDOWN_SECONDS := 0.68
 const DRIBBLE_SPEED_MULTIPLIER := 1.52
 const DRIBBLE_ACCELERATION := 3900.0
 const DRIBBLE_TOUCH_DISTANCE := 24.0
-const DRIBBLE_FEINT_SECONDS := 0.16
+# A feint must complete both visible weight-transfer beats at Web frame rates.
+# Slower travel preserves the original small, grounded feint footprint.
+const DRIBBLE_FEINT_SECONDS := 0.24
 const DRIBBLE_LONG_TOUCH_SECONDS := 0.27
-const DRIBBLE_FEINT_SPEED := 0.65
+const DRIBBLE_FEINT_SPEED := 0.44
 const DRIBBLE_LONG_TOUCH_SPEED := 1.56
 const DRIBBLE_FEINT_TOUCH := 8.0
 const DRIBBLE_LONG_TOUCH := 32.0
