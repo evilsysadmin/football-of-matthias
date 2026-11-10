@@ -3055,6 +3055,25 @@ func _sync_player_secondary_motion(
 		stretch_x = lerpf(1.0, stretch_x, stride_weight)
 		stretch_y = lerpf(1.0, stretch_y, stride_weight)
 
+	# Verified action sprites are side-facing only. From front/diagonal views,
+	# a successful XI dribble used to look exactly like an ordinary run.
+	# Give that fallback a brief, grounded pivot synced to the REAL dribble
+	# window. Never alter authored side poses, footline, shadow or 2D physics.
+	if (
+		match_node.match_team_size == 11 and player.role != "keeper"
+		and player.has_ball and player.dribble_active()
+		and animation_name not in ["dribble_cut", "dribble_burst"]
+	):
+		var dribble_weight := player.dribble_touch_ratio()
+		var pivot_sign := 1.0 if player.dribble_direction.y >= 0.0 else -1.0
+		if absf(player.dribble_direction.y) <= 0.12:
+			pivot_sign = -1.0 if sprite.flip_h else 1.0
+		lateral_sway += pivot_sign * 0.045 * dribble_weight
+		tilt_degrees += pivot_sign * (
+			6.0 if player.dribble_mode == "feint" else 9.0
+		) * dribble_weight
+		stretch_x *= 1.0 - 0.028 * dribble_weight
+
 	# One body-height reference for both teams, all views and all roles.
 	var canonical_scale := _canonical_body_scale(sprite, player.role, player.team_id)
 	var view_adjust := view_compensation(sprite.animation)
