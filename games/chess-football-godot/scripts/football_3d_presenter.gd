@@ -3070,7 +3070,11 @@ static func xi_dribble_visual_ball_offset(mode: String, progress: float, directi
 	var lead := 0.0
 	if mode == "feint":
 		var counterstep := sin(TAU * t)
-		lateral = (0.08 * maxf(counterstep, 0.0) - 0.24 * maxf(-counterstep, 0.0)) * weight
+		# The previous first touch (0.08) was a third of the countertouch
+		# and barely registered in XI broadcast. Balance the *display* ball
+		# between the two real R2 planted feet. Both signed contacts still
+		# decay to zero with the authoritative 0.24s action countdown.
+		lateral = (0.26 * maxf(counterstep, 0.0) - 0.30 * maxf(-counterstep, 0.0)) * weight
 	elif mode == "burst":
 		lead = 0.33 * weight
 	else:
