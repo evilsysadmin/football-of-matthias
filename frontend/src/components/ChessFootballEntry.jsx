@@ -370,7 +370,7 @@ export default function ChessFootballEntry({ onExit, careerStorage='local' }) {
               </button>
             </div>
             <details className="chess-football-entry__quick-controls">
-              <summary>Controles del partido <span>Teclado y móvil</span></summary>
+              <summary>¿Cómo se juega? <span>Teclado y táctil · MENÚ para salir</span></summary>
               <div className="chess-football-entry__quick-controls-grid">
                 <div>
                   <strong>Teclado</strong>
@@ -396,7 +396,6 @@ export default function ChessFootballEntry({ onExit, careerStorage='local' }) {
               </div>
               <p>Durante el encuentro, MENÚ pausa el partido. Los gestos cambian según tengas o no la posesión.</p>
             </details>
-            <p className="chess-football-entry__quick-hint">Puedes volver a Football desde el menú del partido.</p>
             <FootballQuickVersionDetails />
           </section>
         ) : view === 'manager' ? (
