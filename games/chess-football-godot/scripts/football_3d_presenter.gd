@@ -2417,7 +2417,23 @@ func sync_presentation(delta: float, mode: String) -> void:
 			# multiplier. A small native-pixel countertouch stays readable in
 			# tactical without inflating broadcast or changing the 2D ball.
 			# The sinusoidal target fades to zero with the authoritative action.
-			if mode == "tactical" and dribble_ball_offset.length_squared() > 0.000001:
+			# The verified frontal/diagonal R2 feint is subsequently
+			# pulled toward the *painted boot* from the same authoritative
+			# base ball. The old tactical amplification must NOT run first:
+			# it would double-tune the target and desynchronise the exact
+			# contact/grass-shadow contract on that camera. Other modes
+			# retain their existing tactical correction.
+			var has_authored_feint_contact := (
+				ball_carrier.dribble_mode == "feint"
+				and _action_poses_r2_loaded.has("%d:dribble_cut" % ball_carrier.team_id)
+				and String(player_run_views.get(ball_carrier.get_instance_id(), "side")) in [
+					"front", "back", "front_diagonal", "back_diagonal"
+				]
+			)
+			if (
+				mode == "tactical" and not has_authored_feint_contact
+				and dribble_ball_offset.length_squared() > 0.000001
+			):
 				var ball_anchor := world_to_stage(
 					match_node.ball.global_position,
 					XI_BALL_VISUAL_RADIUS + BALL_VISUAL_GROUND_CLEARANCE
