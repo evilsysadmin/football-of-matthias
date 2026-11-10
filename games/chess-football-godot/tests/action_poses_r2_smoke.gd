@@ -177,6 +177,21 @@ func _initialize() -> void:
 	assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
 		ball_baseline, player_foot, Vector2.ZERO, 0, false, 0.34
 	) == ball_baseline)
+	assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
+		ball_baseline, player_foot, Vector2.DOWN, -1, false, 0.34
+	) == ball_baseline)
+	# A diagonal run is precisely where the old 37px forward possession
+	# anchor could leave the DISPLAYED ball beyond an R2 boot. Validate
+	# both clubs and the mirror branch without inventing a second ball.
+	var diagonal := Vector2(1.0, 1.0).normalized()
+	for club in [0, 1]:
+		for old_flip in [false, true]:
+			for action_t in [0.34, 0.65]:
+				var contact := ChessFootball3DPresenter.xi_feint_display_foot_contact(
+					ball_baseline, player_foot, diagonal, club, old_flip, action_t
+				)
+				assert(contact.distance_to(player_foot) < 0.49)
+				assert(contact.y == ball_baseline.y)
 
 	# Real 0.24s 11v11 feint at 15, 20 and 30 Hz: even with the
 	# sampling phase shifted nearly one full frame, both R2 painted foot
