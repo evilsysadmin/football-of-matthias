@@ -80,9 +80,13 @@ func _initialize() -> void:
 	assert(ChessFootball3DPresenter.xi_v3_feint_contact_pose(8, 0.65) == 0.0)
 	var v3_first := ChessFootball3DPresenter.xi_v3_feint_footwork(0.34)
 	var v3_second := ChessFootball3DPresenter.xi_v3_feint_footwork(0.65)
-	assert(v3_first.x > 0.04 and v3_second.x < -0.04)
-	assert(v3_first.y > 5.0 and v3_second.y < -5.0)
+	# A real broadcast juke must move more than a nearly invisible
+	# cosmetic shimmy, while remaining bounded and fully reversible.
+	assert(v3_first.x > 0.10 and v3_second.x < -0.10)
+	assert(v3_first.y > 10.0 and v3_second.y < -10.0)
 	assert(v3_first.z > 0.94 and v3_second.z > 0.94)
+	assert(absf(v3_first.x) < 0.19 and absf(v3_second.x) < 0.19)
+	assert(absf(v3_first.y) < 17.0 and absf(v3_second.y) < 17.0)
 	assert(ChessFootball3DPresenter.xi_v3_feint_footwork(0.0) == Vector3(0, 0, 1))
 	assert(absf(ChessFootball3DPresenter.xi_v3_feint_footwork(1.0).x) < 0.001)
 
