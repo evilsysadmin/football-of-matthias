@@ -2377,11 +2377,23 @@ func sync_presentation(delta: float, mode: String) -> void:
 			dribble_ball_offset = xi_dribble_visual_ball_offset(
 				ball_carrier.dribble_mode, dribble_progress, ball_carrier.dribble_direction
 			)
-			# The overhead tactical lens projects the same planted-foot touch
-			# into fewer native pixels. Compensate on the rendered ball and
-			# its shadow ONLY; broadcast already keeps the touch by the boot.
-			if mode == "tactical":
-				dribble_ball_offset *= 1.6
+			# Match the real overhead lens, not an arbitrary world-unit
+			# multiplier. A small native-pixel countertouch stays readable in
+			# tactical without inflating broadcast or changing the 2D ball.
+			# The sinusoidal target fades to zero with the authoritative action.
+			if mode == "tactical" and dribble_ball_offset.length_squared() > 0.000001:
+				var ball_anchor := world_to_stage(
+					match_node.ball.global_position,
+					XI_BALL_VISUAL_RADIUS + BALL_VISUAL_GROUND_CLEARANCE
+				)
+				var start_px := camera.unproject_position(ball_anchor)
+				var moved_px := camera.unproject_position(ball_anchor + dribble_ball_offset)
+				var projected_pixels := start_px.distance_to(moved_px)
+				if projected_pixels > 0.001:
+					var target_pixels := 6.25 * maxf(0.0, sin(PI * dribble_progress))
+					dribble_ball_offset *= clampf(
+						target_pixels / projected_pixels, 1.0, 3.25
+					)
 
 	if ball_node != null:
 		var grip_progress := 1.0
