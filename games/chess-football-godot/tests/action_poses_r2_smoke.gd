@@ -193,6 +193,35 @@ func _initialize() -> void:
 				assert(contact.distance_to(player_foot) < 0.49)
 				assert(contact.y == ball_baseline.y)
 
+	# Moving E is CUT, not stationary FEINT. At 0.22s the original
+	# eight R2 frames require 36 FPS; the strongest authored straight-leg
+	# plant at index 4 must actually survive 15/20/30 FPS sampling.
+	assert(ChessFootball3DPresenter.xi_cut_r2_contact_pose(8, 0.22) == 2.0)
+	assert(ChessFootball3DPresenter.xi_cut_r2_contact_pose(8, 0.50) == 4.0)
+	assert(ChessFootball3DPresenter.xi_cut_r2_contact_pose(8, 0.81) == 6.0)
+	assert(ChessFootball3DPresenter.xi_cut_r2_contact_pose(8, 0.96) == 0.0)
+	assert(ChessFootball3DPresenter.xi_cut_r2_contact_pose(6, 0.50) == 0.0)
+	for fps in [15.0, 20.0, 30.0]:
+		for sample_offset in [0.0, 0.25, 0.5, 0.95]:
+			var saw_cut_contact := false
+			for frame_index in range(8):
+				var elapsed := (float(frame_index) + sample_offset) / fps
+				if elapsed >= Footballer.DRIBBLE_BURST_SECONDS:
+					break
+				var progress := elapsed / Footballer.DRIBBLE_BURST_SECONDS
+				var wanted := ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+					&"run_front", "front", "midfielder", true,
+					true, "cut", progress, true, true
+				)
+				if wanted == &"dribble_cut":
+					saw_cut_contact = saw_cut_contact or (
+						ChessFootball3DPresenter.xi_cut_r2_contact_pose(
+							8, progress
+						) == 4.0
+					)
+			assert(saw_cut_contact,
+				"Real 0.22s moving XI cut must visibly plant R2 index 4 even at 15 FPS")
+
 	# Real 0.24s 11v11 feint at 15, 20 and 30 Hz: even with the
 	# sampling phase shifted nearly one full frame, both R2 painted foot
 	# plants must actually be seen. The old 8/0.24=33 FPS clock skipped
