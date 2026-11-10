@@ -204,7 +204,14 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
         </div>
       ) : null}
       {runtimeReady ? (
-        <details className="chess-football-godot-host__art-details">
+        <details className="chess-football-godot-host__art-details"
+          onToggle={(event) => {
+            // A status inspection must not leave keyboard play trapped on
+            // the HTML summary after the player closes the panel.
+            if (!event.currentTarget.open && !mobileViewport.coarse) {
+              frameRef.current?.focus({ preventScroll: true });
+            }
+          }}>
           <summary aria-label="Comprobar sprites de regate y entradas">
             Arte R2 · {poseInstalled.length === FOOTBALL_POSE_TOTAL
               ? '8/8' : poseScanFinished ? `${poseInstalled.length}/8` : 'comprobando'}
