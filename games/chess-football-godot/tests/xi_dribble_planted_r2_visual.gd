@@ -118,13 +118,20 @@ func _initialize() -> void:
 								if action == "feint"
 								else stage.xi_cut_r2_contact_pose(actual_count, progress)
 							)
-							assert(sprite.frame == expected_contact)
+							assert(sprite.frame == expected_contact,
+								"XI contact phase mismatch action=%s mode=%s team=%d view=%s progress=%.4f expected=%d actual=%d" % [
+									action, mode, team_id, view, progress,
+									expected_contact, sprite.frame
+								])
 							if action == "feint":
 								if phase_id == 1:
 									assert(sprite.frame == 2)
 								elif phase_id == 2:
 									assert(sprite.frame == 5)
-							elif phase_id in [1, 2]:
+							elif phase_id == 1:
+								assert(sprite.frame == 2,
+									"Moving XI cut should retain its planted lead-in")
+							elif phase_id == 2:
 								assert(sprite.frame == 4,
 									"Moving XI E must show the authored extended boot")
 						assert(match_node.ball.carrier == athlete)
