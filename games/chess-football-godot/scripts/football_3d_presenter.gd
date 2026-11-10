@@ -2865,6 +2865,21 @@ static func xi_slide_scrape_weight(total_seconds: float, remaining_seconds: floa
 	return maxf(0.0, sin(PI * progress))
 
 
+# (lateral sway in stage units, shoulder lean degrees, width multiplier).
+# Fully fades at the beginning/end of a successful real dribble. Deliberately
+# visual-only and deterministic: no timers, random effects or asset changes.
+# Feints counter-lean; cuts/long touches plant once in the chosen direction.
+static func xi_dribble_fallback_footwork(mode: String, progress: float) -> Vector3:
+	var t := clampf(progress, 0.0, 1.0)
+	var contact := sin(PI * t)
+	if mode == "feint":
+		var counterstep := sin(TAU * t) * contact
+		return Vector3(0.105 * counterstep, 18.0 * counterstep, 1.0 - 0.05 * contact)
+	if mode == "burst":
+		return Vector3(0.085 * contact, 14.0 * contact, 1.0 - 0.035 * contact)
+	return Vector3(0.095 * contact, 16.0 * contact, 1.0 - 0.045 * contact)
+
+
 func _sync_player_secondary_motion(
 	player: Footballer, sprite: AnimatedSprite3D, proxy: Node3D, delta: float = 0.0
 ) -> void:
@@ -3055,24 +3070,28 @@ func _sync_player_secondary_motion(
 		stretch_x = lerpf(1.0, stretch_x, stride_weight)
 		stretch_y = lerpf(1.0, stretch_y, stride_weight)
 
-	# Verified action sprites are side-facing only. From front/diagonal views,
-	# a successful XI dribble used to look exactly like an ordinary run.
-	# Give that fallback a brief, grounded pivot synced to the REAL dribble
-	# window. Never alter authored side poses, footline, shadow or 2D physics.
+	# XI action R2 paintings are side-only: front/diagonal dribbles use a
+	# two-beat visual foot plant on the SAME approved directional runner.
+	# Real possession time drives it; nothing here changes motion, contacts,
+	# 2D ball/boots or the existing 3D contact shadow. A feint reverses
+	# shoulder weight (sell one side, leave the other), while a cut/long touch
+	# visibly commits the shoulder in the actual intended direction.
 	if (
 		match_node.match_team_size == 11 and player.role != "keeper"
 		and player.has_ball and player.dribble_active()
 		and animation_name not in ["dribble_cut", "dribble_burst"]
 	):
-		var dribble_weight := player.dribble_touch_ratio()
+		var progress := 1.0 - clampf(
+			player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
+			0.0, 1.0
+		)
+		var step := xi_dribble_fallback_footwork(player.dribble_mode, progress)
 		var pivot_sign := 1.0 if player.dribble_direction.y >= 0.0 else -1.0
 		if absf(player.dribble_direction.y) <= 0.12:
 			pivot_sign = -1.0 if sprite.flip_h else 1.0
-		lateral_sway += pivot_sign * 0.045 * dribble_weight
-		tilt_degrees += pivot_sign * (
-			6.0 if player.dribble_mode == "feint" else 9.0
-		) * dribble_weight
-		stretch_x *= 1.0 - 0.028 * dribble_weight
+		lateral_sway += pivot_sign * step.x
+		tilt_degrees += pivot_sign * step.y
+		stretch_x *= step.z
 
 	# One body-height reference for both teams, all views and all roles.
 	var canonical_scale := _canonical_body_scale(sprite, player.role, player.team_id)
