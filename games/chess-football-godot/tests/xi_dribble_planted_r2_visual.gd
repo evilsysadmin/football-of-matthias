@@ -58,6 +58,15 @@ func _initialize() -> void:
 			var sheet := Image.create(CELL.x * PROGRESS.size(), CELL.y * 4,
 				false, Image.FORMAT_RGBA8)
 			sheet.fill(Color("#15392f"))
+			# Unlike the four deliberate pose snapshots, these FIVE samples
+			# follow the actual 0.24-second feint at 15 FPS. Reviewers can
+			# see which real poses the Godot renderer exposes on a slow Web
+			# client, including the final return to directional running.
+			var playback_sheet: Image = null
+			if action == "feint":
+				playback_sheet = Image.create(CELL.x * 5, CELL.y * 4,
+					false, Image.FORMAT_RGBA8)
+				playback_sheet.fill(Color("#15392f"))
 			for team_id in range(2):
 				var athlete: Footballer = match_node.teams[team_id][1]
 				for direction_id in range(2):
@@ -153,6 +162,55 @@ func _initialize() -> void:
 					assert(captured_images[0].get_data() != captured_images[1].get_data())
 					assert(captured_images[1].get_data() != captured_images[2].get_data())
 					assert(captured_images[2].get_data() != captured_images[3].get_data())
+					if playback_sheet != null:
+						var seen_first := false
+						var seen_second := false
+						for tick in range(5):
+							var sampled_elapsed: float = float(tick) / 15.0
+							var sampled_progress := clampf(
+								sampled_elapsed / athlete.dribble_duration_seconds, 0.0, 1.0
+							)
+							athlete.dribble_burst_seconds = maxf(
+								0.0, athlete.dribble_duration_seconds - sampled_elapsed
+							)
+							match_node.ball.tick_ball(0.0)
+							var authoritative_ball: Vector2 = match_node.ball.global_position
+							stage.sync_presentation(0.0, mode)
+							var sampled_sprite: AnimatedSprite3D = stage.player_sprites[key]
+							var expected_sample := stage.xi_verified_dribble_pivot_animation(
+								StringName("run_" + view), view, athlete.role,
+								true, athlete.dribble_active(), "feint", sampled_progress,
+								true, true
+							)
+							assert(sampled_sprite.animation == expected_sample)
+							if expected_sample == &"dribble_cut":
+								var expected_frame := int(stage.xi_feint_r2_contact_pose(
+									sampled_sprite.sprite_frames.get_frame_count(expected_sample),
+									sampled_progress
+								))
+								assert(sampled_sprite.frame == expected_frame)
+								seen_first = seen_first or expected_frame == 2
+								seen_second = seen_second or expected_frame == 5
+							if tick == 4:
+								assert(not athlete.dribble_active())
+								assert(sampled_sprite.animation == StringName("run_" + view))
+							assert(athlete.global_position == unchanged_position)
+							assert(match_node.ball.global_position == authoritative_ball)
+							await process_frame
+							await RenderingServer.frame_post_draw
+							var frame := match_node.get_viewport().get_texture().get_image()
+							assert(frame != null and frame.get_size() == Vector2i(1280, 720))
+							var center: Vector2 = stage.camera.unproject_position(
+								stage.player_nodes[key].global_position + Vector3.UP * 0.75
+							)
+							var left := clampi(int(center.x) - CELL.x / 2, 0, 1280 - CELL.x)
+							var top := clampi(int(center.y) - CELL.y / 2, 0, 720 - CELL.y)
+							var crop := frame.get_region(Rect2i(left, top, CELL.x, CELL.y))
+							var row: int = team_id * 2 + direction_id
+							playback_sheet.blit_rect(crop, Rect2i(Vector2i.ZERO, CELL),
+								Vector2i(tick * CELL.x, row * CELL.y))
+						assert(seen_first and seen_second,
+							"15 FPS XI Web capture must show BOTH painted planted feet")
 					match_node.ball.release(Vector2.RIGHT, 0.0)
 					athlete.dribble_burst_seconds = 0.0
 					athlete.global_position = Vector2(-9999, -9999)
@@ -162,6 +220,12 @@ func _initialize() -> void:
 				mode.to_upper(), action.to_upper(),
 				ProjectSettings.globalize_path(path)
 			])
+			if playback_sheet != null:
+				var timeline_path := "user://xi-feint-playback-15fps-%s.png" % mode
+				assert(playback_sheet.save_png(timeline_path) == OK)
+				print("FOOTBALL_XI_FEINT_PLAYBACK_15FPS_%s=%s" % [
+					mode.to_upper(), ProjectSettings.globalize_path(timeline_path)
+				])
 	assert(match_node.score == score_before)
 	assert(is_equal_approx(match_node.match_seconds, match_time_before))
 	print("FOOTBALL_XI_DRIBBLE_PLANTED_OK clubs=2 views=2 actions=3 phases=4 cameras=2 r2_verified=1 authority_intact=1")
