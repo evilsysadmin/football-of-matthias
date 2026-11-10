@@ -130,7 +130,7 @@ try{
   await controlGuide.locator('summary').click();
   assert.ok(await controlGuide.getByText('Teclado',{exact:true}).isVisible());
   assert.ok(await controlGuide.getByText('Móvil y táctil',{exact:true}).isVisible());
-  assert.ok(await controlGuide.getByText('Shift + E',{exact:true}).isVisible());
+  assert.ok(await controlGuide.getByText('F',{exact:true}).isVisible());
   assert.ok(await controlGuide.getByText('Toca la portería',{exact:true}).isVisible());
   assert.equal(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),true,
     'Expanded controls must not overflow horizontally');
