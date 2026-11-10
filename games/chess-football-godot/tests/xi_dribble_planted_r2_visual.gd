@@ -139,9 +139,19 @@ func _initialize() -> void:
 								"feint", progress, direction
 							)
 							assert(Vector2(touch.x, touch.z).length() > 0.15)
-							assert(Vector2(touch.x, touch.z).dot(
-								Vector2(expected_touch.x, expected_touch.z)
-							) > 0.0)
+							var foot_anchor := stage.world_to_stage(
+								athlete.global_position,
+								stage.XI_BALL_VISUAL_RADIUS + stage.BALL_VISUAL_GROUND_CLEARANCE
+							)
+							var expected_render := stage.xi_feint_display_foot_contact(
+								base_ball + expected_touch, foot_anchor, direction,
+								team_id, athlete.visual.flip_h, progress
+							)
+							assert(moved_ball.distance_to(expected_render) < 0.001,
+								"Actual XI ball must follow the R2 foot-contact, not a far diagonal anchor")
+							assert(Vector2(moved_ball.x - foot_anchor.x,
+								moved_ball.z - foot_anchor.z).length() < 0.55,
+								"Rendered feint must keep the ball within foot reach")
 							var actual_pixels: float = stage.camera.unproject_position(
 								moved_ball
 							).distance_to(stage.camera.unproject_position(base_ball))
