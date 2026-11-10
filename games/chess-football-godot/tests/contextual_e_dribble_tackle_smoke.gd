@@ -70,6 +70,39 @@ func _initialize() -> void:
 	assert(game.score == initial_score and carrier.global_position == initial_home)
 	_reset_dribble(carrier)
 
+	# Exercise the actual XI keyboard action through the same human input
+	# path used by Chromium (not just the direct decision helper).
+	game.ball.attach_to(carrier)
+	_reset_dribble(carrier)
+	Input.action_press("special_move")
+	game._handle_human(1.0 / 60.0)
+	Input.action_release("special_move")
+	assert(carrier.dribble_mode == "burst", "F did not reach the real XI player")
+	assert(game.action_feedback_text == "TOQUE LARGO")
+	_reset_dribble(carrier)
+
+	# Front/diagonal run atlases cannot use a sideways dribble pose.
+	# The presenter must still show a grounded, visible body pivot during
+	# an ACTUAL legal dribble, without moving the gameplay actor or its ball.
+	var stage: ChessFootball3DPresenter = game.presentation_3d
+	var key: int = carrier.get_instance_id()
+	var actor_sprite: AnimatedSprite3D = stage.player_sprites[key]
+	var actor_proxy: Node3D = stage.player_nodes[key]
+	assert(actor_sprite.sprite_frames.has_animation(&"run_front"))
+	actor_sprite.play(&"run_front")
+	actor_sprite.pause()
+	carrier.velocity = Vector2.UP * carrier.base_speed
+	stage._sync_player_secondary_motion(carrier, actor_sprite, actor_proxy)
+	var resting_tilt: float = actor_sprite.rotation.z
+	var physical_point: Vector2 = carrier.global_position
+	assert(carrier.start_dribble(Vector2.UP, "cut"))
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.5
+	stage._sync_player_secondary_motion(carrier, actor_sprite, actor_proxy)
+	assert(absf(actor_sprite.rotation.z - resting_tilt) > deg_to_rad(3.0))
+	assert(carrier.global_position == physical_point)
+	assert(game.ball.carrier == carrier)
+	_reset_dribble(carrier)
+
 	# Technique improves recovery, but never grants a guaranteed tackle
 	# evasion, a ghost ball, or a random skill-success result.
 	carrier.scouting_technique = 75
