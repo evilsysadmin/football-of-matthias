@@ -124,6 +124,32 @@ func _initialize() -> void:
 						assert(match_node.ball.carrier == athlete)
 						assert(athlete.global_position == unchanged_position)
 						assert(match_node.ball.global_position == authoritative_ball)
+						if action == "feint" and phase_id in [1, 2]:
+							# In real Godot, not just a math helper, require
+							# BOTH signed contacts visible in broadcast AND
+							# tactical. No ghost-ball: the existing single
+							# ball and its ground shadow follow one offset.
+							var base_ball := stage.world_to_stage(
+								authoritative_ball,
+								stage.XI_BALL_VISUAL_RADIUS + stage.BALL_VISUAL_GROUND_CLEARANCE
+							)
+							var moved_ball: Vector3 = stage.ball_node.position
+							var touch := moved_ball - base_ball
+							var expected_touch := stage.xi_dribble_visual_ball_offset(
+								"feint", progress, direction
+							)
+							assert(Vector2(touch.x, touch.z).length() > 0.15)
+							assert(Vector2(touch.x, touch.z).dot(
+								Vector2(expected_touch.x, expected_touch.z)
+							) > 0.0)
+							var actual_pixels: float = stage.camera.unproject_position(
+								moved_ball
+							).distance_to(stage.camera.unproject_position(base_ball))
+							assert(actual_pixels > 2.0,
+								"Both XI feint ball touches must register at actual match zoom")
+							assert(stage.ball_shadow != null and stage.ball_shadow.visible)
+							assert(absf(stage.ball_shadow.position.x - moved_ball.x) < 0.001)
+							assert(absf(stage.ball_shadow.position.z - moved_ball.z) < 0.001)
 						var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 						assert(quad.visible)
 						var material := quad.material_override as StandardMaterial3D
