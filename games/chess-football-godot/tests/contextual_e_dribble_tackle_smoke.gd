@@ -1,8 +1,8 @@
 extends SceneTree
 
 # Real XI actors and authoritative physical tackle path, not input mocks.
-# Attack: E selects feint/cut/burst from movement; defense: E always stands,
-# Shift+E always slides. No double-tap timing, animation/physics shortcuts.
+# XI: E feints/cuts, F makes a long touch with possession or slides in defense.
+# Shift remains sprint ONLY. No double tap or animation/physics shortcuts.
 func _reset_dribble(player: Footballer) -> void:
 	player.dribble_burst_seconds = 0.0
 	player.dribble_cooldown_seconds = 0.0
@@ -31,6 +31,11 @@ func _initialize() -> void:
 	game.set_physics_process(false)
 	game.kickoff_active = false
 
+	assert(InputMap.has_action("special_move"))
+	var mapped := InputMap.action_get_events("special_move")
+	assert(mapped.size() == 1 and mapped[0] is InputEventKey)
+	assert(mapped[0].physical_keycode == KEY_F)
+
 	var carrier: Footballer = game.teams[0][10]
 	game._select_player(carrier)
 	game.ball.attach_to(carrier)
@@ -38,23 +43,29 @@ func _initialize() -> void:
 	var initial_score: Array = game.score.duplicate()
 	var initial_home: Vector2 = carrier.global_position
 
-	# Stationary E: feint; moving E: cut; sprint+E: long touch.
-	# All use the SAME real input decision helper and keep possession.
+	# Stationary E: feint; moving E: cut, even if Shift is held.
+	# F: long touch independently of sprint; all retain real ball possession.
 	game._handle_contextual_e(Vector2.ZERO, false)
+	assert(game.action_feedback_text == "AMAGO")
 	assert(carrier.dribble_mode == "feint")
 	assert(is_equal_approx(carrier.dribble_duration_seconds, carrier.DRIBBLE_FEINT_SECONDS))
 	assert(is_equal_approx(carrier.dribble_touch_distance, carrier.DRIBBLE_FEINT_TOUCH))
 	assert(game.ball.carrier == carrier)
 	_reset_dribble(carrier)
 	game._handle_contextual_e(Vector2.UP, false)
+	assert(game.action_feedback_text == "RECORTE")
 	assert(carrier.dribble_mode == "cut")
 	assert(carrier.dribble_direction.is_equal_approx(Vector2.UP))
 	assert(is_equal_approx(carrier.dribble_touch_distance, carrier.DRIBBLE_TOUCH_DISTANCE))
 	_reset_dribble(carrier)
 	game._handle_contextual_e(Vector2.RIGHT, true)
+	assert(carrier.dribble_mode == "cut", "Shift cannot turn E into a long touch")
+	_reset_dribble(carrier)
+	game._handle_contextual_special(Vector2.RIGHT)
 	assert(carrier.dribble_mode == "burst")
 	assert(carrier.dribble_duration_seconds > carrier.DRIBBLE_BURST_SECONDS)
 	assert(carrier.dribble_touch_distance > carrier.DRIBBLE_TOUCH_DISTANCE)
+	assert(game.action_feedback_text == "TOQUE LARGO")
 	assert(game.ball.carrier == carrier)
 	assert(game.score == initial_score and carrier.global_position == initial_home)
 	_reset_dribble(carrier)
@@ -97,14 +108,20 @@ func _initialize() -> void:
 	assert(not defender.tackle_aggressive)
 	assert(game.score == initial_score)
 
-	# Shift+E triggers the EXISTING aggressive physical slide instantly,
-	# using the same foul/card and goalkeeper rules as before.
+	# Shift+E must stay an ordinary tackle; dedicated F slides.
+	_reset_tackle(defender)
+	victim.global_position = center + Vector2(83, 0)
+	game.ball.attach_to(victim)
+	game._handle_contextual_e(Vector2.ZERO, true)
+	assert(defender.visual.animation == &"tackle")
+	assert(not defender.tackle_aggressive_active())
 	_reset_tackle(defender)
 	victim.global_position = center + Vector2(108, 0)
 	game.ball.attach_to(victim)
-	game._handle_contextual_e(Vector2.ZERO, true)
+	game._handle_contextual_special(Vector2.ZERO)
 	assert(defender.visual.animation == &"slide_tackle")
 	assert(defender.tackle_aggressive_active())
+	assert(game.action_feedback_text == "SEGADA")
 	assert(defender.tackle_recovery_seconds >= 0.68)
 	assert(game.score == initial_score)
 
@@ -134,5 +151,5 @@ func _initialize() -> void:
 	assert(not defender.tackle_aggressive)
 	assert(game.score == initial_score)
 
-	print("FOOTBALL_CONTEXTUAL_E_OK feint_cut_burst=1 technique=1 E_standing=1 repeated_E_no_slide=1 shift_E_slide=1 physical_contact=1 score_isolated=1")
+	print("FOOTBALL_CONTEXTUAL_E_OK feint_cut_burst=1 technique=1 E_standing=1 repeated_E_no_slide=1 F_slide=1 shift_E_normal=1 physical_contact=1 score_isolated=1")
 	quit(0)
