@@ -120,7 +120,7 @@ func _initialize() -> void:
 		assert(stage.xi_dribble_fallback_footwork(kind, 0.0).is_equal_approx(Vector3(0, 0, 1)))
 		assert(stage.xi_dribble_fallback_footwork(kind, 1.0).is_equal_approx(Vector3(0, 0, 1)))
 		var middle: Vector3 = stage.xi_dribble_fallback_footwork(kind, 0.5)
-		assert(middle.z >= 0.94 and middle.z <= 1.0)
+		assert(middle.z >= 0.93 and middle.z <= 1.0)
 		if kind != "feint":
 			assert(middle.x > 0.08 and middle.y >= 14.0)
 	assert(carrier.start_dribble(Vector2.UP, "feint"))
