@@ -4,7 +4,9 @@ extends SceneTree
 # not merely change a GDScript variable. Genuine Godot 3D pixels in the
 # actual broadcast/tactical cameras; three consecutive poses per player.
 # No external atlas or cloud credentials are required for this fallback.
-const CELL := Vector2i(240, 300)
+# A 420px crop is required at the real tactical camera angle: the 300px
+# crop cut off the shoulder counter-lean and defeated visual review.
+const CELL := Vector2i(240, 420)
 const PROGRESS := [0.0, 0.25, 0.75]
 
 
