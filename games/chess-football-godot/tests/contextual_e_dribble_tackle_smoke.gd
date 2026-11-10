@@ -48,7 +48,12 @@ func _initialize() -> void:
 	game._handle_contextual_e(Vector2.ZERO, false)
 	assert(game.action_feedback_text == "AMAGO")
 	assert(carrier.dribble_mode == "feint")
-	assert(is_equal_approx(carrier.dribble_duration_seconds, carrier.DRIBBLE_FEINT_SECONDS))
+	assert(is_equal_approx(carrier.dribble_duration_seconds, carrier.XI_DRIBBLE_FEINT_SECONDS))
+	# The longer visual beat must not grant extra forward distance: this
+	# speed×window proxy differs by less than two percent from 5v5.
+	var legacy_footprint: float = carrier.DRIBBLE_FEINT_SECONDS * carrier.DRIBBLE_FEINT_SPEED
+	var xi_footprint: float = carrier.XI_DRIBBLE_FEINT_SECONDS * carrier.XI_DRIBBLE_FEINT_SPEED
+	assert(absf(xi_footprint - legacy_footprint) < 0.004)
 	assert(is_equal_approx(carrier.dribble_touch_distance, carrier.DRIBBLE_FEINT_TOUCH))
 	assert(game.ball.carrier == carrier)
 	_reset_dribble(carrier)
@@ -101,6 +106,35 @@ func _initialize() -> void:
 	assert(absf(actor_sprite.rotation.z - resting_tilt) > deg_to_rad(3.0))
 	assert(carrier.global_position == physical_point)
 	assert(game.ball.carrier == carrier)
+	_reset_dribble(carrier)
+
+	# A fake must genuinely sell one side, then counter-lean to the other.
+	# The output blends to neutral at both ends and is driven by the
+	# AUTHORITATIVE (unmodified) dribble countdown, not a new fake clock.
+	var first_step := stage.xi_dribble_fallback_footwork("feint", 0.25)
+	var second_step := stage.xi_dribble_fallback_footwork("feint", 0.75)
+	assert(first_step.x > 0.06 and first_step.y > 10.0)
+	assert(second_step.x < -0.06 and second_step.y < -10.0)
+	assert(absf(first_step.x + second_step.x) < 0.001)
+	for kind in ["feint", "cut", "burst"]:
+		assert(stage.xi_dribble_fallback_footwork(kind, 0.0).is_equal_approx(Vector3(0, 0, 1)))
+		assert(stage.xi_dribble_fallback_footwork(kind, 1.0).is_equal_approx(Vector3(0, 0, 1)))
+		var middle: Vector3 = stage.xi_dribble_fallback_footwork(kind, 0.5)
+		assert(middle.z >= 0.94 and middle.z <= 1.0)
+		if kind != "feint":
+			assert(middle.x > 0.08 and middle.y >= 14.0)
+	assert(carrier.start_dribble(Vector2.UP, "feint"))
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.75
+	stage._sync_player_secondary_motion(carrier, actor_sprite, actor_proxy)
+	var fake_first_tilt := actor_sprite.rotation.z
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.25
+	stage._sync_player_secondary_motion(carrier, actor_sprite, actor_proxy)
+	var fake_second_tilt := actor_sprite.rotation.z
+	# A UP-facing dribble reverses the sign of the lean: assert the two
+	# opposed beats, not an arbitrary world-space direction.
+	assert(absf(fake_first_tilt - fake_second_tilt) > deg_to_rad(20.0),
+		"Front-view feint must visibly reverse shoulder direction")
+	assert(carrier.global_position == physical_point and game.ball.carrier == carrier)
 	_reset_dribble(carrier)
 
 	# Technique improves recovery, but never grants a guaranteed tackle
@@ -183,6 +217,26 @@ func _initialize() -> void:
 	assert(defender.visual.animation == &"tackle")
 	assert(not defender.tackle_aggressive)
 	assert(game.score == initial_score)
+
+	# The longer two-beat action is XI-only; the legacy five-a-side feint
+	# retains its exact old window and speed profile.
+	var historical = packed.instantiate()
+	historical.match_team_size = 5
+	root.add_child(historical)
+	await process_frame
+	await process_frame
+	historical.set_process(false)
+	historical.set_physics_process(false)
+	historical.kickoff_active = false
+	var legacy_actor: Footballer = historical.teams[0][2]
+	historical._select_player(legacy_actor)
+	historical.ball.attach_to(legacy_actor)
+	legacy_actor.velocity = Vector2.ZERO
+	historical._handle_contextual_e(Vector2.ZERO, false)
+	assert(legacy_actor.dribble_mode == "feint")
+	assert(is_equal_approx(legacy_actor.dribble_duration_seconds, 0.16))
+	assert(is_equal_approx(legacy_actor.DRIBBLE_FEINT_SPEED, 0.65))
+	assert(historical.ball.carrier == legacy_actor)
 
 	print("FOOTBALL_CONTEXTUAL_E_OK feint_cut_burst=1 technique=1 E_standing=1 repeated_E_no_slide=1 F_slide=1 shift_E_normal=1 physical_contact=1 score_isolated=1")
 	quit(0)
