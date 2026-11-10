@@ -111,6 +111,34 @@ func _initialize() -> void:
 		&"dribble_cut", 0.65
 	) == false)
 
+	# The older first touch was only 0.08 versus -0.24 for the
+	# countertouch: it was nearly invisible in broadcast even while both
+	# planted boots were present. Both displayed touches now have genuine,
+	# opposite signed displacement without moving the 2D possession ball.
+	var first_touch := ChessFootball3DPresenter.xi_dribble_visual_ball_offset(
+		"feint", 0.34, Vector2.DOWN
+	)
+	var second_touch := ChessFootball3DPresenter.xi_dribble_visual_ball_offset(
+		"feint", 0.65, Vector2.DOWN
+	)
+	assert(first_touch.x < -0.16 and second_touch.x > 0.16)
+	assert(absf(first_touch.x) / absf(second_touch.x) > 0.75)
+	assert(absf(first_touch.x) / absf(second_touch.x) < 1.25)
+	assert(absf(first_touch.z) < 0.001 and absf(second_touch.z) < 0.001)
+	for boundary in [0.0, 0.5, 1.0]:
+		assert(ChessFootball3DPresenter.xi_dribble_visual_ball_offset(
+			"feint", boundary, Vector2.RIGHT
+		).length() < 0.001)
+	assert(ChessFootball3DPresenter.xi_dribble_visual_ball_offset(
+		"feint", 0.34, Vector2.ZERO
+	) == Vector3.ZERO)
+	# Rotating the actual travel vector also rotates the two display
+	# touches. The mechanic/ball speed is NEVER the source of the motion.
+	var diagonal_touch := ChessFootball3DPresenter.xi_dribble_visual_ball_offset(
+		"feint", 0.34, Vector2(1.0, 1.0)
+	)
+	assert(absf(diagonal_touch.length() - first_touch.length()) < 0.001)
+
 	# Real 0.24s 11v11 feint at 15, 20 and 30 Hz: even with the
 	# sampling phase shifted nearly one full frame, both R2 painted foot
 	# plants must actually be seen. The old 8/0.24=33 FPS clock skipped
