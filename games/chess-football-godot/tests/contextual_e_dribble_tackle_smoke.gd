@@ -125,7 +125,9 @@ func _initialize() -> void:
 	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.25
 	stage._sync_player_secondary_motion(carrier, actor_sprite, actor_proxy)
 	var fake_second_tilt := actor_sprite.rotation.z
-	assert(fake_first_tilt - fake_second_tilt > deg_to_rad(20.0),
+	# A UP-facing dribble reverses the sign of the lean: assert the two
+	# opposed beats, not an arbitrary world-space direction.
+	assert(absf(fake_first_tilt - fake_second_tilt) > deg_to_rad(20.0),
 		"Front-view feint must visibly reverse shoulder direction")
 	assert(carrier.global_position == physical_point and game.ball.carrier == carrier)
 	_reset_dribble(carrier)
