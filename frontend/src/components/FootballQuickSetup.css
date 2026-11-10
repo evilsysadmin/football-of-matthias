@@ -359,12 +359,11 @@
    pitch, the difficulty selector or the primary kick-off action. */
 .chess-football-entry__quick-controls {
   min-width: 0;
-  padding-top: .4rem;
-  border-top: 1px solid rgba(221, 191, 130, .22);
+  padding-top: 0;
   color: #e8e5ce;
 }
 .chess-football-entry__quick-controls > summary {
-  min-height: 36px;
+  min-height: 20px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
