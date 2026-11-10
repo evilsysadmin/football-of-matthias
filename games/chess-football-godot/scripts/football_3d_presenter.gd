@@ -2423,15 +2423,20 @@ func sync_presentation(delta: float, mode: String) -> void:
 			# it would double-tune the target and desynchronise the exact
 			# contact/grass-shadow contract on that camera. Other modes
 			# retain their existing tactical correction.
-			var has_authored_feint_contact := (
-				ball_carrier.dribble_mode == "feint"
-				and _action_poses_r2_loaded.has("%d:dribble_cut" % ball_carrier.team_id)
-				and String(player_run_views.get(ball_carrier.get_instance_id(), "side")) in [
-					"front", "back", "front_diagonal", "back_diagonal"
-				]
+			var verified_cut := _action_poses_r2_loaded.has(
+				"%d:dribble_cut" % ball_carrier.team_id
+			)
+			var has_authored_foot_contact := verified_cut and (
+				ball_carrier.dribble_mode == "cut"
+				or (
+					ball_carrier.dribble_mode == "feint"
+					and String(player_run_views.get(
+						ball_carrier.get_instance_id(), "side"
+					)) in ["front", "back", "front_diagonal", "back_diagonal"]
+				)
 			)
 			if (
-				mode == "tactical" and not has_authored_feint_contact
+				mode == "tactical" and not has_authored_foot_contact
 				and dribble_ball_offset.length_squared() > 0.000001
 			):
 				var ball_anchor := world_to_stage(
