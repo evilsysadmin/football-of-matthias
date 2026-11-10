@@ -2203,6 +2203,26 @@ func sync_presentation(delta: float, mode: String) -> void:
 				)
 				if sprite.sprite_frames.has_animation(action_pose):
 					wanted_animation = action_pose
+				# The verified R2 cut/burst atlas contains a real planted-foot
+				# action, but was previously restricted to lateral running.
+				# For a real XI front/diagonal dribble, briefly turn the body
+				# into that authored planted stance before returning to the
+				# correct directional runner. A non-Web/local R2 miss retains
+				# the existing directional fallback without any proxy art.
+				if match_node.match_team_size == 11 and player.role != "keeper":
+					var pivot_progress := 1.0 - clampf(
+						player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
+						0.0, 1.0
+					)
+					var pivot_pose := xi_verified_dribble_pivot_animation(
+						wanted_animation, run_view, player.role,
+						player.has_ball and match_node.ball.carrier == player,
+						player.dribble_active(), player.dribble_mode, pivot_progress,
+						_action_poses_r2_loaded.has("%d:dribble_cut" % player.team_id),
+						_action_poses_r2_loaded.has("%d:dribble_burst" % player.team_id)
+					)
+					if sprite.sprite_frames.has_animation(pivot_pose):
+						wanted_animation = pivot_pose
 				var save_before_catch := xi_keeper_dive_before_catch(
 					match_node.match_team_size, player == holding_keeper,
 					_keeper_catch_r2_loaded.has(int(player.team_id)),
@@ -2360,6 +2380,41 @@ func sync_presentation(delta: float, mode: String) -> void:
 				stamina_fill.scale.x = fill_ratio
 				stamina_fill.position.x = -STAMINA_BAR_WIDTH * 0.5 * (1.0 - fill_ratio)
 
+	# Front/diagonal XI dribbles need a readable ball *touch*, not just a
+	# shoulder lean. Keep the rendered ball and its contact shadow together.
+	# Never move the actual 2D ball, its collision, or keeper possession.
+	var dribble_ball_offset := Vector3.ZERO
+	if match_node.match_team_size == 11 and holding_keeper == null:
+		var ball_carrier: Footballer = match_node.ball.carrier
+		if (
+			ball_carrier != null and ball_carrier.role != "keeper"
+			and ball_carrier.has_ball and ball_carrier.dribble_active()
+		):
+			var dribble_progress := 1.0 - clampf(
+				ball_carrier.dribble_burst_seconds / maxf(ball_carrier.dribble_duration_seconds, 0.001),
+				0.0, 1.0
+			)
+			dribble_ball_offset = xi_dribble_visual_ball_offset(
+				ball_carrier.dribble_mode, dribble_progress, ball_carrier.dribble_direction
+			)
+			# Match the real overhead lens, not an arbitrary world-unit
+			# multiplier. A small native-pixel countertouch stays readable in
+			# tactical without inflating broadcast or changing the 2D ball.
+			# The sinusoidal target fades to zero with the authoritative action.
+			if mode == "tactical" and dribble_ball_offset.length_squared() > 0.000001:
+				var ball_anchor := world_to_stage(
+					match_node.ball.global_position,
+					XI_BALL_VISUAL_RADIUS + BALL_VISUAL_GROUND_CLEARANCE
+				)
+				var start_px := camera.unproject_position(ball_anchor)
+				var moved_px := camera.unproject_position(ball_anchor + dribble_ball_offset)
+				var projected_pixels := start_px.distance_to(moved_px)
+				if projected_pixels > 0.001:
+					var target_pixels := 6.25 * maxf(0.0, sin(PI * dribble_progress))
+					dribble_ball_offset *= clampf(
+						target_pixels / projected_pixels, 1.0, 3.25
+					)
+
 	if ball_node != null:
 		var grip_progress := 1.0
 		# Keep clearance above the grass constant as visual radius changes;
@@ -2431,14 +2486,14 @@ func sync_presentation(delta: float, mode: String) -> void:
 		else:
 			keeper_catch_carrier_id = 0
 			keeper_catch_elapsed = 0.0
-		ball_node.position = ball_at
+		ball_node.position = ball_at + dribble_ball_offset
 		_sync_ball_visual_roll(delta)
 		_sync_keeper_catch_hands(holding_keeper, ball_at, grip_progress)
 	if ball_shadow != null:
 		# The carried ball is not simultaneously painted at the keeper's boots.
 		ball_shadow.visible = holding_keeper == null
 		if ball_shadow.visible:
-			ball_shadow.position = world_to_stage(match_node.ball.global_position, 0.010)
+			ball_shadow.position = world_to_stage(match_node.ball.global_position, 0.010) + dribble_ball_offset
 			var shadow_scale: float = lerpf(1.0, 0.62, clampf(float(match_node.ball.flight_height) / 90.0, 0.0, 1.0))
 			ball_shadow.scale = Vector3(shadow_scale, 1.0, shadow_scale)
 
@@ -2548,6 +2603,46 @@ static func xi_outfield_stride_advance(
 # 0.58-second pass the old fixed 10-FPS clock only reached ~frame 5/8.
 # The visual phase uses the same lock that already controls gameplay;
 # never prolong the kick or delay the authoritative ball release.
+# A short, intentional pivot reveals the original authored side-action
+# FOOTWORK for the otherwise unanimated front/diagonal XI dribble. This does
+# not claim to be a new front atlas; it is a body turn during the genuine
+# possession window. Outside the planted interval and without fully verified
+# R2 action art the player's directional runner stays canonical.
+static func xi_verified_dribble_pivot_animation(
+	base: StringName, view: String, role: String,
+	owns_ball: bool, active: bool, mode: String, progress: float,
+	has_cut: bool, has_burst: bool
+) -> StringName:
+	if (
+		role == "keeper" or not owns_ball or not active
+		or view not in ["front", "back", "front_diagonal", "back_diagonal"]
+		or base not in [
+			&"run_front", &"run_back", &"run_front_diagonal", &"run_back_diagonal",
+			&"sprint_front", &"sprint_back", &"sprint_front_diagonal", &"sprint_back_diagonal"
+		]
+	):
+		return base
+	var t := clampf(progress, 0.0, 1.0)
+	if mode == "feint":
+		return &"dribble_cut" if has_cut and t >= 0.23 and t <= 0.78 else base
+	if mode == "cut":
+		return &"dribble_cut" if has_cut and t >= 0.16 and t <= 0.87 else base
+	if mode == "burst":
+		return &"dribble_burst" if has_burst and t >= 0.12 and t <= 0.87 else base
+	return base
+
+
+# An in-place front/diagonal feint must actually change the planted LEG,
+# not just tilt the same running frame. Two opposite painted strides from the
+# existing approved directional atlas follow the authoritative countdown.
+# Side-facing approved R2 poses and normal locomotion keep their own clock.
+static func xi_front_feint_foot_pose(frame_count: int, progress: float) -> float:
+	if frame_count < 2:
+		return 0.0
+	var stride := 0.25 if progress < 0.5 else 0.75
+	return float(clampi(int(floorf(float(frame_count) * stride)), 0, frame_count - 1))
+
+
 static func xi_complete_action_phase(
 	frame_count: int, total_seconds: float, remaining_seconds: float
 ) -> float:
@@ -2591,7 +2686,20 @@ func _sync_visible_animation(
 		sprite.pause()
 		names[key] = wanted
 	var advance := maxf(delta, 0.0) * frames.get_animation_speed(wanted)
-	if _keeper_locomotion(wanted):
+	if (
+		match_node.match_team_size == 11 and not is_keeper
+		and player.has_ball and player.dribble_active() and player.dribble_mode == "feint"
+		and String(wanted) in [
+			"run_front", "run_front_diagonal", "run_back", "run_back_diagonal",
+			"sprint_front", "sprint_front_diagonal", "sprint_back", "sprint_back_diagonal"
+		]
+	):
+		var feint_progress := 1.0 - clampf(
+			player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
+			0.0, 1.0
+		)
+		phase = xi_front_feint_foot_pose(count, feint_progress)
+	elif _keeper_locomotion(wanted):
 		# Movement-phase continuity survives turns and run/sprint switches.
 		# A stationary actor must not run in place.
 		if player.velocity.length() >= 12.0:
@@ -2874,10 +2982,38 @@ static func xi_dribble_fallback_footwork(mode: String, progress: float) -> Vecto
 	var contact := sin(PI * t)
 	if mode == "feint":
 		var counterstep := sin(TAU * t) * contact
-		return Vector3(0.105 * counterstep, 18.0 * counterstep, 1.0 - 0.05 * contact)
+		# Two distinct, grounded shoulder plants at the actual broadcast scale.
+		return Vector3(0.20 * counterstep, 25.0 * counterstep, 1.0 - 0.065 * contact)
 	if mode == "burst":
-		return Vector3(0.085 * contact, 14.0 * contact, 1.0 - 0.035 * contact)
-	return Vector3(0.095 * contact, 16.0 * contact, 1.0 - 0.045 * contact)
+		return Vector3(0.13 * contact, 19.0 * contact, 1.0 - 0.05 * contact)
+	return Vector3(0.145 * contact, 22.0 * contact, 1.0 - 0.06 * contact)
+
+
+# Only the DISPLAYED XI ball follows the planted foot while the actual
+# possession action is active. Physics, keeper catches and the 2D ball remain
+# authoritative and untouched. Bounded offsets return to zero at both ends;
+# no independent clock or after-image can cause a phantom dribble.
+# A feint sells one side with the shoulder, then nudges the ball across the
+# opposite boot. A cut moves it laterally; a long touch pushes it forward.
+static func xi_dribble_visual_ball_offset(mode: String, progress: float, direction: Vector2) -> Vector3:
+	var t := clampf(progress, 0.0, 1.0)
+	var weight := maxf(0.0, sin(PI * t))
+	if weight <= 0.0 or direction.length_squared() < 0.001:
+		return Vector3.ZERO
+	var forward := direction.normalized()
+	var side := Vector2(-forward.y, forward.x)
+	var lateral := 0.0
+	var lead := 0.0
+	if mode == "feint":
+		var counterstep := sin(TAU * t)
+		lateral = (0.08 * maxf(counterstep, 0.0) - 0.24 * maxf(-counterstep, 0.0)) * weight
+	elif mode == "burst":
+		lead = 0.33 * weight
+	else:
+		lateral = 0.31 * weight
+		lead = 0.08 * weight
+	var step: Vector2 = side * lateral + forward * lead
+	return Vector3(step.x, 0.0, step.y)
 
 
 func _sync_player_secondary_motion(

@@ -40,6 +40,46 @@ func _initialize() -> void:
 				PackedByteArray([1, 2, 3]), meta,
 				ChessFootballActionPosesR2.TRUSTED_ROOT
 			) == null)
+	# A verified, authored lateral plant can sell a brief body turn for
+	# front/diagonal XI dribbles. Enter and exit in the original runner;
+	# never use a non-verified atlas or overlay a keeper/off-ball action.
+	for view in ["front", "back", "front_diagonal", "back_diagonal"]:
+		var base := StringName("run_" + view)
+		assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+			base, view, "midfielder", true, true, "feint", 0.15, true, true
+		) == base)
+		assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+			base, view, "midfielder", true, true, "feint", 0.48, true, true
+		) == &"dribble_cut")
+		assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+			base, view, "midfielder", true, true, "feint", 0.92, true, true
+		) == base)
+		assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+			base, view, "midfielder", true, true, "cut", 0.50, true, true
+		) == &"dribble_cut")
+		assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+			base, view, "midfielder", true, true, "burst", 0.50, true, true
+		) == &"dribble_burst")
+		for blocked in [
+			["keeper", true, true, true],
+			["midfielder", false, true, true],
+			["midfielder", true, false, true],
+			["midfielder", true, true, false],
+		]:
+			assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+				base, view, blocked[0], blocked[1], blocked[2],
+				"feint", 0.50, blocked[3], true
+			) == base)
+		assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+			base, view, "midfielder", true, true, "burst", 0.50, true, false
+		) == base)
+	assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+		&"run", "side", "midfielder", true, true, "cut", 0.50, true, true
+	) == &"run")
+	assert(ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
+		&"shoot", "front", "midfielder", true, true, "cut", 0.50, true, true
+	) == &"shoot")
+
 	assert(ChessFootballActionPosesR2.sheet_meta(2, &"slide_tackle").is_empty())
 	assert(ChessFootballActionPosesR2.sheet_meta(0, &"dance").is_empty())
 	assert(ChessFootballActionPosesR2.animation_for(
