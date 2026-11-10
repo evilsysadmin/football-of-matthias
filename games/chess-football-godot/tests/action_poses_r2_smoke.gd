@@ -40,6 +40,52 @@ func _initialize() -> void:
 				PackedByteArray([1, 2, 3]), meta,
 				ChessFootballActionPosesR2.TRUSTED_ROOT
 			) == null)
+	# Prefer the authenticated twelve directional V3 poses for feints,
+	# so an athlete running at the camera no longer teleports into profile.
+	# Only the XI ball carrier may use it. Failed/unverified V3 keeps the
+	# existing R2 side action fallback, not a generic/proxy silhouette.
+	for view in ["front", "back", "front_diagonal", "back_diagonal"]:
+		var name := StringName("run_" + view)
+		assert(ChessFootball3DPresenter.xi_use_v3_directional_feint(
+			11, view, "midfielder", true, true, "feint", name, true, 12
+		))
+		for bad in [
+			[5, view, "midfielder", true, true, "feint", name, true, 12],
+			[11, view, "keeper", true, true, "feint", name, true, 12],
+			[11, view, "midfielder", false, true, "feint", name, true, 12],
+			[11, view, "midfielder", true, false, "feint", name, true, 12],
+			[11, view, "midfielder", true, true, "cut", name, true, 12],
+			[11, view, "midfielder", true, true, "feint", name, false, 12],
+			[11, view, "midfielder", true, true, "feint", name, true, 8],
+		]:
+			assert(not ChessFootball3DPresenter.xi_use_v3_directional_feint(
+				bad[0], bad[1], bad[2], bad[3], bad[4], bad[5],
+				bad[6], bad[7], bad[8]
+			))
+	assert(not ChessFootball3DPresenter.xi_use_v3_directional_feint(
+		11, "side", "midfielder", true, true, "feint", &"run", true, 12
+	))
+	assert(not ChessFootball3DPresenter.xi_use_v3_directional_feint(
+		11, "front", "midfielder", true, true, "feint", &"shoot", true, 12
+	))
+	# There are FOUR body states, not 8 sideways frames: forward run,
+	# first forward/diagonal boot plant, counterplant, forward recovery.
+	for phase in [0.0, 0.04, 0.14, 0.34, 0.49, 0.50, 0.65, 0.86, 0.87, 1.0]:
+		var expected: float = (
+			0.0 if phase < 0.14 or phase > 0.86
+			else 3.0 if phase < 0.5 else 9.0
+		)
+		assert(ChessFootball3DPresenter.xi_v3_feint_contact_pose(12, phase)
+			== expected)
+	assert(ChessFootball3DPresenter.xi_v3_feint_contact_pose(8, 0.65) == 0.0)
+	var v3_first := ChessFootball3DPresenter.xi_v3_feint_footwork(0.34)
+	var v3_second := ChessFootball3DPresenter.xi_v3_feint_footwork(0.65)
+	assert(v3_first.x > 0.04 and v3_second.x < -0.04)
+	assert(v3_first.y > 5.0 and v3_second.y < -5.0)
+	assert(v3_first.z > 0.94 and v3_second.z > 0.94)
+	assert(ChessFootball3DPresenter.xi_v3_feint_footwork(0.0) == Vector3(0, 0, 1))
+	assert(absf(ChessFootball3DPresenter.xi_v3_feint_footwork(1.0).x) < 0.001)
+
 	# A verified, authored lateral plant can sell a brief body turn for
 	# front/diagonal XI dribbles. Enter and exit in the original runner;
 	# never use a non-verified atlas or overlay a keeper/off-ball action.
