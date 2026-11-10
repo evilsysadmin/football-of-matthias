@@ -1209,6 +1209,7 @@ jobs:
           godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
           log="$RUNNER_TEMP/football-xi-planted-r2-review.log"
           export FOOTBALL_ACTION_POSES_PREVIEW_DIR="$RUNNER_TEMP/football-action-poses-r2"
+          export FOOTBALL_RUN_V3_PREVIEW_DIR="$RUNNER_TEMP/football-run-v3-r2"
           set +e
           timeout 160s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/xi_dribble_planted_r2_visual.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
