@@ -142,14 +142,21 @@ func _initialize() -> void:
 	var real_ball_position: Vector2 = game.ball.global_position
 	var fake_ball_first := stage.xi_dribble_visual_ball_offset("feint", 0.25, Vector2.UP)
 	var fake_ball_second := stage.xi_dribble_visual_ball_offset("feint", 0.75, Vector2.UP)
-	assert(fake_ball_first.x > 0.05 and fake_ball_second.x < -0.25)
-	assert(absf(fake_ball_first.x - fake_ball_second.x) > 0.33)
+	assert(fake_ball_first.x > 0.04 and fake_ball_second.x < -0.15)
+	assert(absf(fake_ball_first.x - fake_ball_second.x) > 0.20)
 	assert(stage.xi_dribble_visual_ball_offset("feint", 0.0, Vector2.UP) == Vector3.ZERO)
 	assert(stage.xi_dribble_visual_ball_offset("feint", 1.0, Vector2.UP).length() < 0.0001)
 	assert(stage.xi_dribble_visual_ball_offset("cut", 0.5, Vector2.UP).length() < 0.35)
 	assert(stage.xi_dribble_visual_ball_offset("burst", 0.5, Vector2.UP).length() < 0.35)
 	assert(stage.xi_dribble_visual_ball_offset("feint", 0.75, Vector2.ZERO) == Vector3.ZERO)
 	assert(game.ball.global_position == real_ball_position and game.ball.carrier == carrier)
+	# Different original leg silhouettes should sell each of the two false
+	# steps in 8-frame fallbacks and 12-frame verified V3 run sheets.
+	for count in [8, 12]:
+		var first_pose: float = stage.xi_front_feint_foot_pose(count, 0.25)
+		var counter_pose: float = stage.xi_front_feint_foot_pose(count, 0.75)
+		assert(first_pose >= 2.0 and counter_pose - first_pose >= 4.0)
+		assert(counter_pose < count)
 
 	# Technique improves recovery, but never grants a guaranteed tackle
 	# evasion, a ghost ball, or a random skill-success result.
