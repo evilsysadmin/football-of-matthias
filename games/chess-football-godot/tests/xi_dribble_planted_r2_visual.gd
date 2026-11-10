@@ -100,6 +100,18 @@ func _initialize() -> void:
 						)
 						assert(sprite.animation == expected,
 							"Actual XI front/diagonal view must pivot only in the planted interval")
+						if action == "feint" and expected == &"dribble_cut":
+							# Actual loaded R2 frame, not just the selected
+							# animation name: source contact silhouettes are
+							# held long enough to survive low-FPS sampling.
+							var expected_contact := int(stage.xi_feint_r2_contact_pose(
+								sprite.sprite_frames.get_frame_count(expected), progress
+							))
+							assert(sprite.frame == expected_contact)
+							if phase_id == 1:
+								assert(sprite.frame == 2)
+							elif phase_id == 2:
+								assert(sprite.frame == 5)
 						assert(match_node.ball.carrier == athlete)
 						assert(athlete.global_position == unchanged_position)
 						assert(match_node.ball.global_position == authoritative_ball)
