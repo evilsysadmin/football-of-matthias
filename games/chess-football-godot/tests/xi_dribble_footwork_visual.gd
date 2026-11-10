@@ -50,7 +50,7 @@ func _initialize() -> void:
 				actor.visual.frame = 0
 				actor.dribble_mode = "feint"
 				actor.dribble_direction = axis
-				actor.dribble_duration_seconds = actor.DRIBBLE_FEINT_SECONDS
+				actor.dribble_duration_seconds = actor.XI_DRIBBLE_FEINT_SECONDS
 				match_node.ball.attach_to(actor)
 				var physical_position: Vector2 = actor.global_position
 				var key: int = actor.get_instance_id()
