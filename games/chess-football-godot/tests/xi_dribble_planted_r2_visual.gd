@@ -175,6 +175,35 @@ func _initialize() -> void:
 							assert(stage.ball_shadow != null and stage.ball_shadow.visible)
 							assert(absf(stage.ball_shadow.position.x - moved_ball.x) < 0.001)
 							assert(absf(stage.ball_shadow.position.z - moved_ball.z) < 0.001)
+						if action == "cut" and phase_id in [1, 2]:
+							# The real single 3D ball must actually follow
+							# the extended R2 cut toe (both clubs, two views,
+							# broadcast + tactical), with its existing ground
+							# shadow. No gameplay ball, 2D anchor or collider
+							# is permitted to move during this visual pass.
+							var base_cut_ball := stage.world_to_stage(
+								authoritative_ball,
+								stage.XI_BALL_VISUAL_RADIUS + stage.BALL_VISUAL_GROUND_CLEARANCE
+							)
+							var natural_cut := stage.xi_dribble_visual_ball_offset(
+								"cut", progress, direction
+							)
+							var cut_foot := stage.world_to_stage(
+								athlete.global_position,
+								stage.XI_BALL_VISUAL_RADIUS + stage.BALL_VISUAL_GROUND_CLEARANCE
+							)
+							var expected_cut := stage.xi_cut_display_ball_contact(
+								base_cut_ball + natural_cut, cut_foot,
+								sprite.flip_h, progress
+							)
+							var actual_cut := stage.ball_node.position
+							assert(actual_cut.distance_to(expected_cut) < 0.001,
+								"XI moving-cut ball must track the actual R2 boot, not the old forward axis")
+							assert(absf(actual_cut.x - cut_foot.x) > 0.16,
+								"Extended R2 cut must take the ball to the planted side")
+							assert(stage.ball_shadow != null and stage.ball_shadow.visible)
+							assert(absf(stage.ball_shadow.position.x - actual_cut.x) < 0.001)
+							assert(absf(stage.ball_shadow.position.z - actual_cut.z) < 0.001)
 						var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 						assert(quad.visible)
 						var material := quad.material_override as StandardMaterial3D
