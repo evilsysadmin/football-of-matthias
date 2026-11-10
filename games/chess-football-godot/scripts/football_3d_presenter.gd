@@ -2259,7 +2259,23 @@ func sync_presentation(delta: float, mode: String) -> void:
 					)
 					sprite.flip_h = player.visual.flip_h != alternate_leg
 				else:
-					sprite.flip_h = player.visual.flip_h
+					# The feint has two opposed boot plants. The R2 lateral
+					# pose used for front/diagonal XI turns previously showed
+					# the same shoulder/leg orientation in both halves, even
+					# while the physical ball visibly changed sides. Reverse
+					# ONLY the painted second plant; the real facing, running
+					# view, ball ownership and 2D game stay authoritative.
+					var feint_progress := 1.0 - clampf(
+						player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
+						0.0, 1.0
+					)
+					sprite.flip_h = xi_feint_pivot_mirror(
+						player.visual.flip_h, match_node.match_team_size,
+						run_view, player.role,
+						player.has_ball and match_node.ball.carrier == player,
+						player.dribble_active(), player.dribble_mode,
+						wanted_animation, feint_progress
+					)
 			sprite.pixel_size = TACTICAL_PLAYER_PIXEL_SIZE if mode == "tactical" else PLAYER_PIXEL_SIZE
 			_sync_player_secondary_motion(player, sprite, proxy, delta)
 			var tone_gain := _tonal_view_gain(sprite)
@@ -2630,6 +2646,26 @@ static func xi_verified_dribble_pivot_animation(
 	if mode == "burst":
 		return &"dribble_burst" if has_burst and t >= 0.12 and t <= 0.87 else base
 	return base
+
+
+# A real front/diagonal feint sells one painted R2 side step, then plants
+# the opposite foot. The second half is a visual mirror of the SAME verified
+# action texture, never a rotation or physical direction reversal. Other
+# actions, keepers, five-a-side and fallback directional runs are untouched.
+static func xi_feint_pivot_mirror(
+	base_flip: bool, team_size: int, view: String, role: String,
+	owns_ball: bool, active: bool, mode: String,
+	animation: StringName, progress: float
+) -> bool:
+	if (
+		team_size != 11 or role == "keeper" or not owns_ball or not active
+		or mode != "feint" or animation != &"dribble_cut"
+		or view not in ["front", "back", "front_diagonal", "back_diagonal"]
+	):
+		return base_flip
+	# A clean two-beat counterstep: at the mid-point the shoulder and
+	# support foot commit to the opposite side while the ball follows.
+	return base_flip != (clampf(progress, 0.0, 1.0) >= 0.5)
 
 
 # An in-place front/diagonal feint must actually change the planted LEG,
