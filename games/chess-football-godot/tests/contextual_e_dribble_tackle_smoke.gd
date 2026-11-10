@@ -103,6 +103,33 @@ func _initialize() -> void:
 	assert(game.ball.carrier == carrier)
 	_reset_dribble(carrier)
 
+	# A fake must genuinely sell one side, then counter-lean to the other.
+	# The output blends to neutral at both ends and is driven by the
+	# AUTHORITATIVE (unmodified) dribble countdown, not a new fake clock.
+	var first_step := stage.xi_dribble_fallback_footwork("feint", 0.25)
+	var second_step := stage.xi_dribble_fallback_footwork("feint", 0.75)
+	assert(first_step.x > 0.06 and first_step.y > 10.0)
+	assert(second_step.x < -0.06 and second_step.y < -10.0)
+	assert(absf(first_step.x + second_step.x) < 0.001)
+	for kind in ["feint", "cut", "burst"]:
+		assert(stage.xi_dribble_fallback_footwork(kind, 0.0).is_equal_approx(Vector3(0, 0, 1)))
+		assert(stage.xi_dribble_fallback_footwork(kind, 1.0).is_equal_approx(Vector3(0, 0, 1)))
+		var middle: Vector3 = stage.xi_dribble_fallback_footwork(kind, 0.5)
+		assert(middle.z >= 0.94 and middle.z <= 1.0)
+		if kind != "feint":
+			assert(middle.x > 0.08 and middle.y >= 14.0)
+	assert(carrier.start_dribble(Vector2.UP, "feint"))
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.75
+	stage._sync_player_secondary_motion(carrier, actor_sprite, actor_proxy)
+	var fake_first_tilt := actor_sprite.rotation.z
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.25
+	stage._sync_player_secondary_motion(carrier, actor_sprite, actor_proxy)
+	var fake_second_tilt := actor_sprite.rotation.z
+	assert(fake_first_tilt - fake_second_tilt > deg_to_rad(20.0),
+		"Front-view feint must visibly reverse shoulder direction")
+	assert(carrier.global_position == physical_point and game.ball.carrier == carrier)
+	_reset_dribble(carrier)
+
 	# Technique improves recovery, but never grants a guaranteed tackle
 	# evasion, a ghost ball, or a random skill-success result.
 	carrier.scouting_technique = 75
