@@ -212,7 +212,6 @@ def main() -> int:
             args.source_dir / "football-action-poses-r2" / f"{team}_dribble_cut_poses_v2.webp",
             CUT_SHA[index], (W * 8, H),
         )
-        references = [crop(run, i, row) for row in RUN_ROWS for i in range(FRAMES)]
         source_sheet = Image.new("RGBA", (W * FRAMES, H * ROWS))
         for row in range(ROWS):
             for col in range(FRAMES):
@@ -255,4 +254,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (ArtworkRejected, OSError, json.JSONDecodeError) as exc:
+        print(f"FOOTBALL_DIRECTIONAL_FEINT_ART_REJECTED reason={exc}")
+        raise SystemExit(1) from exc
