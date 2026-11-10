@@ -3105,13 +3105,14 @@ static func xi_dribble_fallback_footwork(mode: String, progress: float) -> Vecto
 
 
 # A V3 directional runner already PAINTS its torso facing the direction
-# of travel. Keep its counterstep readable, but don't rotate that torso
-# by the old 25 degrees or smear its soles through the grass.
+# of travel. Show an unmistakable opposing weight transfer at the REAL
+# 11v11 broadcast lens, without the 25-degree lateral stand-in's huge
+# sideways body turn. Motion fades at both ends and cannot move a collider.
 static func xi_v3_feint_footwork(progress: float) -> Vector3:
 	var t := clampf(progress, 0.0, 1.0)
 	var contact := sin(PI * t)
 	var plant := sin(TAU * t) * contact
-	return Vector3(0.095 * plant, 9.0 * plant, 1.0 - 0.025 * contact)
+	return Vector3(0.17 * plant, 16.0 * plant, 1.0 - 0.045 * contact)
 
 
 # Only the DISPLAYED XI ball follows the planted foot while the actual
