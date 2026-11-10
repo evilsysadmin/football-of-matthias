@@ -139,6 +139,45 @@ func _initialize() -> void:
 	)
 	assert(absf(diagonal_touch.length() - first_touch.length()) < 0.001)
 
+	# Approved R2 contact geometry differs by club: a blue first
+	# plant goes to the right, a red first plant goes to the left.
+	# The corrected *single* display ball follows each painted support
+	# foot, then crosses smoothly without teleporting at the phase split.
+	var ball_baseline := Vector3(0.0, 0.16, 0.35)
+	var player_foot := Vector3(0.0, 0.16, 0.0)
+	for team_id in [0, 1]:
+		var first := ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 0.34
+		)
+		var second := ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 0.65
+		)
+		var contact_sign := 1.0 if team_id == 0 else -1.0
+		assert(first.x * contact_sign > 0.12)
+		assert(second.x * contact_sign < -0.12)
+		assert(first.distance_to(player_foot) < 0.49)
+		assert(second.distance_to(player_foot) < 0.49)
+		var half_before := ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 0.499
+		)
+		var half_after := ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 0.501
+		)
+		assert(half_before.distance_to(half_after) < 0.008,
+			"No visible ball teleport at the 50% mirrored R2 plant")
+		assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 0.0
+		) == ball_baseline)
+		assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
+			ball_baseline, player_foot, Vector2.DOWN, team_id, false, 1.0
+		).distance_to(ball_baseline) < 0.001)
+	assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
+		ball_baseline, player_foot, Vector2.DOWN, 0, true, 0.34
+	).x < 0.0)
+	assert(ChessFootball3DPresenter.xi_feint_display_foot_contact(
+		ball_baseline, player_foot, Vector2.ZERO, 0, false, 0.34
+	) == ball_baseline)
+
 	# Real 0.24s 11v11 feint at 15, 20 and 30 Hz: even with the
 	# sampling phase shifted nearly one full frame, both R2 painted foot
 	# plants must actually be seen. The old 8/0.24=33 FPS clock skipped
