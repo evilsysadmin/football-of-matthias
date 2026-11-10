@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { resolveChessFootballGodotUrl } from '../chessFootballGodotRuntime.js';
 import { footballQuickMatchUrl } from '../footballQuickDifficulty.js';
+import { FOOTBALL_POSE_TEAMS, FOOTBALL_POSE_ACTIONS, FOOTBALL_POSE_TOTAL,
+  footballPoseTeamCount, parseFootballPoseReceipt } from '../footballActionPoseStatus.js';
 import { exitWarRoomBrowserFullscreen, requestWarRoomLandscapeFullscreen, unlockWarRoomOrientation } from './useWarRoomImmersive.js';
 import './ChessFootballGodotHost.css';
 
@@ -27,6 +29,8 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
   const frameRef = useRef(null);
   const [attempt, setAttempt] = useState(0);
   const [runtimeReady, setRuntimeReady] = useState(false);
+  const [poseInstalled, setPoseInstalled] = useState([]);
+  const [poseScanFinished, setPoseScanFinished] = useState(false);
   const [bootFailed, setBootFailed] = useState(false);
   const [mobileViewport, setMobileViewport] = useState(readMobileViewport);
   const [runtime, setRuntime] = useState({
@@ -81,6 +85,12 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
         }
         setBootFailed(false);
         setRuntimeReady(true);
+      } else if (message.type === 'action-poses-status') {
+        // The iframe alone owns these installed SpriteFrames. Never infer
+        // success from an HTTP 200, and never trust another frame/origin.
+        if (event.origin !== 'https://assets.chess-studio.shadowops.dpdns.org') return;
+        const installed = parseFootballPoseReceipt(message);
+        if (installed) setPoseInstalled(installed);
       } else if (message.type === 'exit') {
         releaseChessFootballImmersiveMode();
         onExit?.();
@@ -94,12 +104,22 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
     let cancelled = false;
     setRuntimeReady(false);
     setBootFailed(false);
+    setPoseInstalled([]);
+    setPoseScanFinished(false);
     setRuntime({ url: '', source: 'resolving', release: '' });
     resolveChessFootballGodotUrl().then((resolved) => {
       if (!cancelled) setRuntime(resolved);
     });
     return () => { cancelled = true; };
   }, [attempt]);
+
+  // Each optional R2 sheet has an 8-second loader deadline. An absent
+  // receipt is displayed as "not confirmed", never invented as a success.
+  useEffect(() => {
+    if (!runtimeReady) return undefined;
+    const timer = window.setTimeout(() => setPoseScanFinished(true), 11000);
+    return () => window.clearTimeout(timer);
+  }, [runtimeReady, attempt]);
 
   // Godot is hosted in a cross-origin iframe. When it becomes ready,
   // keyboard focus must move into the game rather than remain on the
@@ -182,6 +202,33 @@ export default function ChessFootballGodotHost({ onExit, difficulty = 'normal' }
             </div>
           </div>
         </div>
+      ) : null}
+      {runtimeReady ? (
+        <details className="chess-football-godot-host__art-details">
+          <summary aria-label="Comprobar sprites de regate y entradas">
+            Arte R2 · {poseInstalled.length === FOOTBALL_POSE_TOTAL
+              ? '8/8' : poseScanFinished ? `${poseInstalled.length}/8` : 'comprobando'}
+          </summary>
+          <div className="chess-football-godot-host__art-panel">
+            <strong>Sprites en este partido</strong>
+            <p>{poseInstalled.length === FOOTBALL_POSE_TOTAL
+              ? 'Los ocho atlas verificados están instalados.'
+              : poseScanFinished
+                ? 'Los gestos sin confirmar mantienen su animación anterior.'
+                : 'Comprobando descargas y texturas de ambos equipos…'}</p>
+            <ul>
+              {FOOTBALL_POSE_TEAMS.map((team) => (
+                <li key={team.id}>
+                  <strong>{team.label} · {footballPoseTeamCount(poseInstalled, team.id)}/4</strong>
+                  <span>{FOOTBALL_POSE_ACTIONS.map((pose) => (
+                    `${pose.label}: ${poseInstalled.includes(`${team.id}:${pose.id}`) ? 'R2' : poseScanFinished ? 'fallback' : '…'}`
+                  )).join(' · ')}</span>
+                </li>
+              ))}
+            </ul>
+            <small>Solo lectura. No registra tu partida ni envía datos.</small>
+          </div>
+        </details>
       ) : null}
       {!runtimeReady ? (
         <div className="chess-football-godot-host__status" aria-live="polite">
