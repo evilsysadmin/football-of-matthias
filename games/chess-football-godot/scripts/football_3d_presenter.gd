@@ -2502,6 +2502,34 @@ func sync_presentation(delta: float, mode: String) -> void:
 		else:
 			keeper_catch_carrier_id = 0
 			keeper_catch_elapsed = 0.0
+		# A real frontal/diagonal XI R2 plant should touch the SINGLE
+		# displayed ball, not leave it stranded at the far diagonal
+		# possession anchor. Keep the physical 2D ball unchanged; keep
+		# its 3D grass shadow on the exact same corrected path.
+		var feint_carrier: Footballer = match_node.ball.carrier
+		if (
+			feint_carrier != null and holding_keeper == null
+			and match_node.match_team_size == 11
+			and feint_carrier.role != "keeper"
+			and feint_carrier.has_ball and feint_carrier.dribble_active()
+			and feint_carrier.dribble_mode == "feint"
+			and _action_poses_r2_loaded.has("%d:dribble_cut" % feint_carrier.team_id)
+			and String(player_run_views.get(feint_carrier.get_instance_id(), "side")) in [
+				"front", "back", "front_diagonal", "back_diagonal"
+			]
+		):
+			var feint_progress := 1.0 - clampf(
+				feint_carrier.dribble_burst_seconds /
+					maxf(feint_carrier.dribble_duration_seconds, 0.001),
+				0.0, 1.0
+			)
+			var foot_anchor := world_to_stage(feint_carrier.global_position, ground_center_y)
+			var corrected_ball := xi_feint_display_foot_contact(
+				ball_at + dribble_ball_offset, foot_anchor,
+				feint_carrier.dribble_direction, feint_carrier.team_id,
+				feint_carrier.visual.flip_h, feint_progress
+			)
+			dribble_ball_offset = corrected_ball - ball_at
 		ball_node.position = ball_at + dribble_ball_offset
 		_sync_ball_visual_roll(delta)
 		_sync_keeper_catch_hands(holding_keeper, ball_at, grip_progress)
@@ -3051,6 +3079,36 @@ static func xi_dribble_fallback_footwork(mode: String, progress: float) -> Vecto
 	if mode == "burst":
 		return Vector3(0.13 * contact, 19.0 * contact, 1.0 - 0.05 * contact)
 	return Vector3(0.145 * contact, 22.0 * contact, 1.0 - 0.06 * contact)
+
+
+# The authored SIDE R2 planted foot is on opposite screen sides for the
+# two clubs, whereas the actual XI carrier anchor can sit well ahead in a
+# diagonal. A bigger lateral offset alone made the ball visibly miss the
+# painted boot. Blend the SAME displayed ball toward a bounded contact point
+# at the player's feet, with a continuous right-to-left crossing (no snap
+# when the second R2 frame is mirrored). Keep its 2D authority unchanged.
+static func xi_feint_display_foot_contact(
+	base_ball: Vector3, carrier_foot: Vector3,
+	travel: Vector2, team_id: int, base_flip: bool, progress: float
+) -> Vector3:
+	if team_id not in [0, 1] or travel.length_squared() < 0.001:
+		return base_ball
+	var t := clampf(progress, 0.0, 1.0)
+	var weight := clampf(sin(PI * t) * 1.08, 0.0, 0.94)
+	if weight <= 0.0:
+		return base_ball
+	var dir := travel.normalized()
+	var art_side := (1.0 if team_id == 0 else -1.0) * (
+		-1.0 if base_flip else 1.0
+	)
+	# Traverse the two boots continuously even though the source R2
+	# bitmap changes at 50%. The old diagonal ball could sit a full
+	# boot-length beyond the painted leg.
+	var cross := cos(PI * clampf((t - 0.14) / 0.72, 0.0, 1.0))
+	var target := carrier_foot + Vector3(
+		dir.x * 0.20 + art_side * 0.30 * cross, 0.0, dir.y * 0.20
+	)
+	return base_ball.lerp(target, weight)
 
 
 # Only the DISPLAYED XI ball follows the planted foot while the actual
