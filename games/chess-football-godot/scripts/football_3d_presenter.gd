@@ -2726,6 +2726,23 @@ static func xi_feint_r2_contact_pose(frame_count: int, progress: float) -> float
 	))
 
 
+# Moving E uses CUT (0.22s), not the stationary FEINT. The original
+# eight-frame R2 cut was scanned at ~36 FPS, so low-FPS Web samples could
+# skip the authentic fully-extended kicking boot (frame 4) entirely.
+# Hold a lead-in, the actual contact, and a short recovery at the same
+# authoritative action progress; nothing modifies velocity/collisions.
+# The images are the untouched signed R2 originals, never invented frames.
+static func xi_cut_r2_contact_pose(frame_count: int, progress: float) -> float:
+	if frame_count != ChessFootballActionPosesR2.COLUMNS:
+		return 0.0
+	var t := clampf(progress, 0.0, 1.0)
+	if t < 0.16 or t > 0.87:
+		return 0.0
+	if t < 0.34:
+		return 2.0
+	return 4.0 if t <= 0.76 else 6.0
+
+
 # An in-place front/diagonal feint must actually change the planted LEG,
 # not just tilt the same running frame. Two opposite painted strides from the
 # existing approved directional atlas follow the authoritative countdown.
@@ -2835,6 +2852,20 @@ func _sync_visible_animation(
 			0.0, 1.0
 		)
 		phase = xi_feint_r2_contact_pose(count, planted_progress)
+	elif (
+		match_node.match_team_size == 11
+		and not is_keeper
+		and player.has_ball and match_node.ball.carrier == player
+		and wanted == &"dribble_cut" and player.dribble_mode == "cut"
+		and player.dribble_active()
+		and _action_poses_r2_loaded.has("%d:dribble_cut" % player.team_id)
+		and count == ChessFootballActionPosesR2.COLUMNS
+	):
+		var cut_progress := 1.0 - clampf(
+			player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
+			0.0, 1.0
+		)
+		phase = xi_cut_r2_contact_pose(count, cut_progress)
 	elif (
 		match_node.match_team_size == 11
 		and not is_keeper
