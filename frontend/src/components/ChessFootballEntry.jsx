@@ -369,7 +369,33 @@ export default function ChessFootballEntry({ onExit, careerStorage='local' }) {
                 Saltar al campo · 11v11 · {FOOTBALL_QUICK_DIFFICULTIES.find(({ id }) => id === quickDifficulty)?.label}
               </button>
             </div>
-            <p className="chess-football-entry__quick-hint">Puedes volver a Football desde el menú del partido.</p>
+            <details className="chess-football-entry__quick-controls">
+              <summary>¿Cómo se juega? <span>Teclado y táctil · MENÚ para salir</span></summary>
+              <div className="chess-football-entry__quick-controls-grid">
+                <div>
+                  <strong>Teclado</strong>
+                  <dl>
+                    <div><dt>WASD / flechas</dt><dd>Mover</dd></div>
+                    <div><dt>Shift</dt><dd>Esprintar</dd></div>
+                    <div><dt>Espacio / Intro</dt><dd>Pasar / tirar</dd></div>
+                    <div><dt>Q / V</dt><dd>Cambiar jugador / cámara</dd></div>
+                    <div><dt>E</dt><dd>Amago parado, recorte corriendo o entrada defendiendo</dd></div>
+                    <div><dt>Shift + E</dt><dd>Toque largo con balón o segada defendiendo</dd></div>
+                  </dl>
+                </div>
+                <div>
+                  <strong>Móvil y táctil</strong>
+                  <dl>
+                    <div><dt>Joystick izquierdo</dt><dd>Mover; doble toque y mantener para esprintar</dd></div>
+                    <div><dt>Toca al compañero</dt><dd>Pasar</dd></div>
+                    <div><dt>Toca la portería</dt><dd>Tirar</dd></div>
+                    <div><dt>Toca al rival</dt><dd>Entrar al balón</dd></div>
+                    <div><dt>Toca césped libre</dt><dd>Regatear</dd></div>
+                  </dl>
+                </div>
+              </div>
+              <p>Durante el encuentro, MENÚ pausa el partido. Los gestos cambian según tengas o no la posesión.</p>
+            </details>
             <FootballQuickVersionDetails />
           </section>
         ) : view === 'manager' ? (

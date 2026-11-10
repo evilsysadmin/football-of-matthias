@@ -123,6 +123,21 @@ try{
   assert.equal(await page.getByRole('button',{name:/^Experto\b/}).getAttribute('aria-pressed'),'true');
   const kickoff=page.getByRole('button',{name:/Saltar al campo · 11v11 · Experto/});
   assert.ok(await kickoff.isVisible());
+  // Discoverability without a modal over the active match or a changed
+  // kickoff position. Keyboard and touch guidance must remain readable.
+  const controlGuide=page.locator('.chess-football-entry__quick-controls');
+  assert.equal(await controlGuide.getAttribute('open'),null,'control guide starts collapsed');
+  await controlGuide.locator('summary').click();
+  assert.ok(await controlGuide.getByText('Teclado',{exact:true}).isVisible());
+  assert.ok(await controlGuide.getByText('Móvil y táctil',{exact:true}).isVisible());
+  assert.ok(await controlGuide.getByText('Shift + E',{exact:true}).isVisible());
+  assert.ok(await controlGuide.getByText('Toca la portería',{exact:true}).isVisible());
+  assert.equal(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),true,
+    'Expanded controls must not overflow horizontally');
+  await page.screenshot({path:resolve(out,viewport.width+'-controls-guide.png')});
+  await controlGuide.locator('summary').click();
+  assert.equal(await controlGuide.getAttribute('open'),null,'control guide closes again');
+  await page.locator('.chess-football-entry').evaluate(el=>{el.scrollTop=0;});
   assert.equal(await page.locator('.chess-football-entry').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'Difficulty briefing must fit mobile');
   const quickTitle=await page.getByRole('heading',{name:'Elige a tu rival'}).boundingBox();
   const kickoffBox=await kickoff.boundingBox();
