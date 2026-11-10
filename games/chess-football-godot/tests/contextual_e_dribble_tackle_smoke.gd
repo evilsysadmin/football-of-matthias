@@ -137,6 +137,20 @@ func _initialize() -> void:
 	assert(carrier.global_position == physical_point and game.ball.carrier == carrier)
 	_reset_dribble(carrier)
 
+	# The visual ball travels ACROSS the other foot during a feint. The
+	# ball's actual 2D position, possession and physical touch stay unchanged.
+	var real_ball_position: Vector2 = game.ball.global_position
+	var fake_ball_first := stage.xi_dribble_visual_ball_offset("feint", 0.25, Vector2.UP)
+	var fake_ball_second := stage.xi_dribble_visual_ball_offset("feint", 0.75, Vector2.UP)
+	assert(fake_ball_first.x > 0.05 and fake_ball_second.x < -0.25)
+	assert(absf(fake_ball_first.x - fake_ball_second.x) > 0.33)
+	assert(stage.xi_dribble_visual_ball_offset("feint", 0.0, Vector2.UP) == Vector3.ZERO)
+	assert(stage.xi_dribble_visual_ball_offset("feint", 1.0, Vector2.UP).length() < 0.0001)
+	assert(stage.xi_dribble_visual_ball_offset("cut", 0.5, Vector2.UP).length() < 0.35)
+	assert(stage.xi_dribble_visual_ball_offset("burst", 0.5, Vector2.UP).length() < 0.35)
+	assert(stage.xi_dribble_visual_ball_offset("feint", 0.75, Vector2.ZERO) == Vector3.ZERO)
+	assert(game.ball.global_position == real_ball_position and game.ball.carrier == carrier)
+
 	# Technique improves recovery, but never grants a guaranteed tackle
 	# evasion, a ghost ball, or a random skill-success result.
 	carrier.scouting_technique = 75
