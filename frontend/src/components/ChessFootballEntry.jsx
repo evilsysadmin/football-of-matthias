@@ -380,7 +380,7 @@ export default function ChessFootballEntry({ onExit, careerStorage='local' }) {
                     <div><dt>Espacio / Intro</dt><dd>Pasar / tirar</dd></div>
                     <div><dt>Q / V</dt><dd>Cambiar jugador / cámara</dd></div>
                     <div><dt>E</dt><dd>Amago parado, recorte corriendo o entrada defendiendo</dd></div>
-                    <div><dt>Shift + E</dt><dd>Toque largo con balón o segada defendiendo</dd></div>
+                    <div><dt>F</dt><dd>Toque largo con balón o segada defendiendo</dd></div>
                   </dl>
                 </div>
                 <div>
