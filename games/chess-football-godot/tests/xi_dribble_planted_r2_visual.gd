@@ -11,7 +11,9 @@ const ACTIONS := ["feint", "cut", "burst"]
 
 func _initialize() -> void:
 	var directory := OS.get_environment("FOOTBALL_ACTION_POSES_PREVIEW_DIR")
+	var run_directory := OS.get_environment("FOOTBALL_RUN_V3_PREVIEW_DIR")
 	assert(not directory.is_empty(), "Missing SHA-verified real R2 action PNG source")
+	assert(not run_directory.is_empty(), "Missing SHA-verified V3 directional frames")
 	var packed := load("res://main.tscn") as PackedScene
 	assert(packed != null)
 	var match_node = packed.instantiate()
@@ -52,6 +54,21 @@ func _initialize() -> void:
 			assert(decoded != null)
 			stage._on_action_pose_ready(decoded, team_id, action)
 			assert(stage._action_poses_r2_loaded.has("%d:%s" % [team_id, String(action)]))
+		# The complete original 12x5 atlas must pass its pinned SHA before
+		# replacing any run frame. Test the real loaded Web path, not a
+		# source-only helper that could accept the wrong facing silhouette.
+		var run_meta := ChessFootballRunV3R2.sheet_meta(team_id)
+		assert(not run_meta.is_empty())
+		var run_file := String(ChessFootballRunV3R2.KINDS[team_id]) + "_run_v3_clean.webp"
+		var run_path := run_directory.path_join(run_file)
+		assert(FileAccess.file_exists(run_path))
+		var run_image := ChessFootballR2AtlasLoader.decode_verified_webp(
+			FileAccess.get_file_as_bytes(run_path),
+			run_meta, ChessFootballRunV3R2.TRUSTED_ROOT
+		)
+		assert(run_image != null)
+		stage._on_run_v3_ready(run_image, team_id)
+		assert(stage._run_v3_r2_loaded.has(team_id))
 
 	for mode in ["broadcast", "tactical"]:
 		for action in ACTIONS:
@@ -103,24 +120,27 @@ func _initialize() -> void:
 						var authoritative_ball: Vector2 = match_node.ball.global_position
 						stage.sync_presentation(0.0, mode)
 						var sprite: AnimatedSprite3D = stage.player_sprites[key]
-						var expected := stage.xi_verified_dribble_pivot_animation(
-							StringName("run_" + view), view, athlete.role, true,
-							true, action, progress, true, true
+						var expected := StringName("run_" + view) if action == "feint" else (
+							stage.xi_verified_dribble_pivot_animation(
+								StringName("run_" + view), view, athlete.role, true,
+								true, action, progress, true, true
+							)
 						)
 						assert(sprite.animation == expected,
-							"Actual XI front/diagonal view must pivot only in the planted interval")
-						if action == "feint" and expected == &"dribble_cut":
-							# Actual loaded R2 frame, not just the selected
-							# animation name: source contact silhouettes are
-							# held long enough to survive low-FPS sampling.
-							var expected_contact := int(stage.xi_feint_r2_contact_pose(
-								sprite.sprite_frames.get_frame_count(expected), progress
+							"Verified V3 feint must preserve facing; cut/burst retain R2 actions")
+						if action == "feint":
+							assert(sprite.sprite_frames.get_frame_count(expected) == 12)
+							assert(stage.xi_use_v3_directional_feint(
+								11, view, athlete.role, true, true, "feint",
+								expected, true, 12
 							))
-							assert(sprite.frame == expected_contact)
-							if phase_id == 1:
-								assert(sprite.frame == 2)
-							elif phase_id == 2:
-								assert(sprite.frame == 5)
+							var contact_pose := int(stage.xi_v3_feint_contact_pose(
+								12, progress
+							))
+							assert(sprite.frame == contact_pose)
+							assert(contact_pose == [0, 3, 9, 0][phase_id])
+							assert(sprite.flip_h == athlete.visual.flip_h,
+								"The diagonal athlete must not turn sideways or mirror the view")
 						assert(match_node.ball.carrier == athlete)
 						assert(athlete.global_position == unchanged_position)
 						assert(match_node.ball.global_position == authoritative_ball)
@@ -177,20 +197,17 @@ func _initialize() -> void:
 							var authoritative_ball: Vector2 = match_node.ball.global_position
 							stage.sync_presentation(0.0, mode)
 							var sampled_sprite: AnimatedSprite3D = stage.player_sprites[key]
-							var expected_sample := stage.xi_verified_dribble_pivot_animation(
-								StringName("run_" + view), view, athlete.role,
-								true, athlete.dribble_active(), "feint", sampled_progress,
-								true, true
-							)
-							assert(sampled_sprite.animation == expected_sample)
-							if expected_sample == &"dribble_cut":
-								var expected_frame := int(stage.xi_feint_r2_contact_pose(
+							var expected_sample := StringName("run_" + view)
+							assert(sampled_sprite.animation == expected_sample,
+								"V3 feint never jumps to a side-only action")
+							if athlete.dribble_active():
+								var expected_frame := int(stage.xi_v3_feint_contact_pose(
 									sampled_sprite.sprite_frames.get_frame_count(expected_sample),
 									sampled_progress
 								))
 								assert(sampled_sprite.frame == expected_frame)
-								seen_first = seen_first or expected_frame == 2
-								seen_second = seen_second or expected_frame == 5
+								seen_first = seen_first or expected_frame == 3
+								seen_second = seen_second or expected_frame == 9
 							if tick == 4:
 								assert(not athlete.dribble_active())
 								assert(sampled_sprite.animation == StringName("run_" + view))
@@ -210,7 +227,7 @@ func _initialize() -> void:
 							playback_sheet.blit_rect(crop, Rect2i(Vector2i.ZERO, CELL),
 								Vector2i(tick * CELL.x, row * CELL.y))
 						assert(seen_first and seen_second,
-							"15 FPS XI Web capture must show BOTH painted planted feet")
+							"15 FPS XI Web capture must show BOTH verified V3 directional planted feet")
 					match_node.ball.release(Vector2.RIGHT, 0.0)
 					athlete.dribble_burst_seconds = 0.0
 					athlete.global_position = Vector2(-9999, -9999)
