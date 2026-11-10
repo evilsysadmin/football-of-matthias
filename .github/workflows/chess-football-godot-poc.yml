@@ -77,9 +77,12 @@ jobs:
         run: python3 scripts/probe_football_action_poses_v2.py
       - name: Verify all eight v2 action poses on public R2 (CORS, SHA, WebP geometry)
         run: python3 scripts/check_football_action_poses_r2.py
-      # Provide the exact real XI raster source for action-art review. These
-      # files were already fetched and SHA-checked above; no binary assets in Git
-      # and no Cloudflare credentials. PR-only, time-limited reference artifact.
+      # Archive both the exact facing V3 originals AND the approved side
+      # action/plant frames as a bounded PR-only art reference pack. A
+      # directional-feint candidate must be visually approved against
+      # BOTH before activation: no generic run rebranding, no sideways
+      # teleport and no low-body/jersey Frankenstein compositions.
+      # Files are public R2 bytes already SHA-checked above; never Git blobs.
       - name: Export verified XI side-run and ball-control art references
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v7
@@ -89,6 +92,7 @@ jobs:
             ${{ runner.temp }}/football-run-v3-r2/*.webp
             ${{ runner.temp }}/football-pass-shoot-r2/*.webp
             ${{ runner.temp }}/football-carry-dribble-r2/*.webp
+            ${{ runner.temp }}/football-action-poses-r2/*.webp
           if-no-files-found: error
           retention-days: 2
       - name: Verify dedicated football R2 WebPs when public origin is configured
