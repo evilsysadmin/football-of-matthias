@@ -77,6 +77,18 @@ jobs:
         run: python3 scripts/probe_football_action_poses_v2.py
       - name: Verify all eight v2 action poses on public R2 (CORS, SHA, WebP geometry)
         run: python3 scripts/check_football_action_poses_r2.py
+      - name: Review original XI directional-feint art references (no new asset activation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/football-art-venv"
+          "$RUNNER_TEMP/football-art-venv/bin/python" -m pip install --disable-pip-version-check --no-deps Pillow==12.0.0
+          "$RUNNER_TEMP/football-art-venv/bin/python" -m unittest discover -s scripts -p 'test_football_directional_art_gate.py' -v
+          "$RUNNER_TEMP/football-art-venv/bin/python" scripts/football_directional_art_gate.py references \
+            --source-dir "$RUNNER_TEMP" \
+            --output-dir "$RUNNER_TEMP/chess-football-review"
+          test -s "$RUNNER_TEMP/chess-football-review/fc_matthias_directional_feint_references.png"
+          test -s "$RUNNER_TEMP/chess-football-review/real_enroque_directional_feint_references.png"
       # Provide the exact real XI raster source for action-art review. These
       # files were already fetched and SHA-checked above; no binary assets in Git
       # and no Cloudflare credentials. PR-only, time-limited reference artifact.
