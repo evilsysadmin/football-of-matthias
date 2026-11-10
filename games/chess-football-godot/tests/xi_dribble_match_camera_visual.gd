@@ -93,7 +93,11 @@ func _initialize() -> void:
 					)
 					var visual_px: Vector2 = stage.camera.unproject_position(stage.ball_node.global_position)
 					var physical_px: Vector2 = stage.camera.unproject_position(physical_ball_stage)
-					assert(visual_px.distance_to(physical_px) >= 4.0,
+					var displacement_px := visual_px.distance_to(physical_px)
+					print("FOOTBALL_XI_FEINT_NATIVE_PIXELS mode=%s direction=%d pixels=%.2f" % [
+						mode, direction_id, displacement_px
+					])
+					assert(displacement_px >= 4.0,
 						"XI countertouch must travel at least four native match-camera pixels")
 					assert(absf(stage.ball_node.position.x - stage.ball_shadow.position.x) < 0.001)
 					assert(absf(stage.ball_node.position.z - stage.ball_shadow.position.z) < 0.001)
