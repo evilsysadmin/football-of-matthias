@@ -95,7 +95,7 @@ func _initialize() -> void:
 				actor.dribble_burst_seconds = 0.0
 				match_node.ball.release(Vector2.RIGHT, 0.0)
 				actor.global_position = Vector2(-9999, -9999)
-		var filename := "xi-feint-footwork-" + mode + ".png"
+		var filename: String = "xi-feint-footwork-" + String(mode) + ".png"
 		var output: String = "user://" + filename
 		assert(sheet.save_png(output) == OK)
 		print("FOOTBALL_XI_FEINT_FOOTWORK_CAPTURE_" + mode.to_upper() +
