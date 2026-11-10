@@ -2738,7 +2738,7 @@ static func xi_cut_r2_contact_pose(frame_count: int, progress: float) -> float:
 	var t := clampf(progress, 0.0, 1.0)
 	if t < 0.16 or t > 0.87:
 		return 0.0
-	if t < 0.34:
+	if t < 0.36:
 		return 2.0
 	return 4.0 if t <= 0.76 else 6.0
 
