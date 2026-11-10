@@ -2546,6 +2546,33 @@ func sync_presentation(delta: float, mode: String) -> void:
 				feint_carrier.visual.flip_h, feint_progress
 			)
 			dribble_ball_offset = corrected_ball - ball_at
+		elif (
+			feint_carrier != null and holding_keeper == null
+			and match_node.match_team_size == 11
+			and feint_carrier.role != "keeper"
+			and feint_carrier.has_ball and feint_carrier.dribble_active()
+			and feint_carrier.dribble_mode == "cut"
+			and _action_poses_r2_loaded.has("%d:dribble_cut" % feint_carrier.team_id)
+		):
+			# The physical ball, possession, and cut velocity are unchanged.
+			# Correct only the one visible ball + its existing grass shadow
+			# toward the actual lateral R2 extended toe, including mirrored
+			# side views. This fades out with the 0.22s cut action.
+			var cut_progress := 1.0 - clampf(
+				feint_carrier.dribble_burst_seconds /
+					maxf(feint_carrier.dribble_duration_seconds, 0.001),
+				0.0, 1.0
+			)
+			var cut_driver: AnimatedSprite3D = player_sprites.get(
+				feint_carrier.get_instance_id()
+			)
+			if cut_driver != null:
+				var cut_foot := world_to_stage(feint_carrier.global_position, ground_center_y)
+				var visible_ball := xi_cut_display_ball_contact(
+					ball_at + dribble_ball_offset, cut_foot,
+					cut_driver.flip_h, cut_progress
+				)
+				dribble_ball_offset = visible_ball - ball_at
 		ball_node.position = ball_at + dribble_ball_offset
 		_sync_ball_visual_roll(delta)
 		_sync_keeper_catch_hands(holding_keeper, ball_at, grip_progress)
@@ -3155,6 +3182,25 @@ static func xi_feint_display_foot_contact(
 	var target := carrier_foot + Vector3(
 		dir.x * 0.20 + art_side * 0.30 * cross, 0.0, dir.y * 0.20
 	)
+	return base_ball.lerp(target, weight)
+
+
+# The real R2 moving CUT plants a fully extended boot to the lateral
+# side of its authored SIDE frame. Holding that boot alone left the
+# visible XI ball on the old forward axis (especially in front/diagonal
+# camera views). Draw the SAME existing ball close to that foot, with
+# a bounded smooth return to the unchanged 2D anchor. No new ball, trail,
+# script timer, fake sprites, or gameplay change.
+static func xi_cut_display_ball_contact(
+	base_ball: Vector3, carrier_foot: Vector3,
+	base_flip: bool, progress: float
+) -> Vector3:
+	var t := clampf(progress, 0.0, 1.0)
+	var weight := clampf(sin(PI * t) * 0.98, 0.0, 0.92)
+	if weight <= 0.0:
+		return base_ball
+	var foot_sign := -1.0 if base_flip else 1.0
+	var target := carrier_foot + Vector3(0.35 * foot_sign, 0.0, 0.04)
 	return base_ball.lerp(target, weight)
 
 
