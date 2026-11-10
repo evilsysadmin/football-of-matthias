@@ -723,6 +723,28 @@ func _apply_verified_action_pose_frames(
 			else:
 				bank.add_frame(action, textures[i])
 	_action_poses_r2_loaded[key] = true
+	# Local, opt-in player-facing diagnostics. Report only the exact set of
+	# verified R2 sheets installed in SpriteFrames, not network attempts,
+	# gameplay, user identity or telemetry. Only the authenticated staging
+	# parent may receive this read-only state; never broadcast to *.
+	if match_node.match_team_size == 11 and OS.has_feature("web"):
+		var installed: Array[String] = []
+		for club_id in range(ChessFootballActionPosesR2.CLUBS.size()):
+			for pose in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
+				var pose_key := "%d:%s" % [club_id, String(pose)]
+				if _action_poses_r2_loaded.has(pose_key):
+					installed.append(pose_key)
+		var receipt: String = JSON.stringify({
+			"source": "chess-football-godot",
+			"type": "action-poses-status",
+			"team_size": 11,
+			"expected": 8,
+			"installed": installed,
+		})
+		JavaScriptBridge.eval(
+			"if (location.hostname === 'assets.chess-studio.shadowops.dpdns.org' && document.referrer.startsWith('https://staging.football.shadowops.dpdns.org/')) window.parent.postMessage(%s, 'https://staging.football.shadowops.dpdns.org');" % receipt,
+			true
+		)
 	# Explicit CI-only proof from the ACTUAL browser renderer: all four
 	# SHA-verified action sheets were installed for both teams, not merely
 	# fetched successfully or rendered in native/headless Godot tests.
@@ -2833,6 +2855,16 @@ func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "", team_id:
 	return scale
 
 
+# A short body-only scrape across the planted contact shadow, driven by
+# the authoritative action lock. Zero before/after contact so the sprite
+# never teleports on return to running; no player/collider movement.
+static func xi_slide_scrape_weight(total_seconds: float, remaining_seconds: float) -> float:
+	if total_seconds <= 0.0 or remaining_seconds <= 0.0:
+		return 0.0
+	var progress := clampf(1.0 - remaining_seconds / total_seconds, 0.0, 1.0)
+	return maxf(0.0, sin(PI * progress))
+
+
 func _sync_player_secondary_motion(
 	player: Footballer, sprite: AnimatedSprite3D, proxy: Node3D, delta: float = 0.0
 ) -> void:
@@ -2858,6 +2890,7 @@ func _sync_player_secondary_motion(
 	var stretch_y := 1.02
 	var tilt_degrees := sin(phase) * 0.7
 	var facing_sign := -1.0 if sprite.flip_h else 1.0
+	var slide_scrape_weight := 0.0
 
 	if animation_name == "idle" or animation_name.begins_with("idle_"):
 		# The authored eight-frame cycle supplies its own breathing/weight shift.
@@ -2906,6 +2939,15 @@ func _sync_player_secondary_motion(
 			stretch_x = 1.0
 			stretch_y = 1.0
 			tilt_degrees = 0.0
+			if animation_name == "slide_tackle" and match_node.match_team_size == 11:
+				slide_scrape_weight = xi_slide_scrape_weight(
+					player.action_visual_duration_seconds,
+					player.action_lock_seconds
+				)
+				# A subtle forward pitch scrape; the frame's opaque boot baseline
+				# remains grounded and the 2D action / collision never moves.
+				lateral_sway = facing_sign * 0.075 * slide_scrape_weight
+				tilt_degrees = -facing_sign * 2.5 * slide_scrape_weight
 		elif player.tackle_aggressive_active():
 			bob = -0.105
 			lateral_sway = facing_sign * 0.095
@@ -3046,7 +3088,11 @@ func _sync_player_secondary_motion(
 	var shadow := proxy.get_node_or_null("ContactShadow") as MeshInstance3D
 	if shadow != null:
 		var shadow_scale := clampf(1.0 - maxf(bob, 0.0) * 2.2, 0.76, 1.0)
-		shadow.scale = Vector3(shadow_scale, 1.0, shadow_scale)
+		shadow.scale = Vector3(
+			shadow_scale * (1.0 + 0.12 * slide_scrape_weight),
+			1.0,
+			shadow_scale * (1.0 - 0.05 * slide_scrape_weight)
+		)
 
 # Human-owned touchline restarts need a little extra camera clearance on
 # either edge: far away from the top chyron, near restarts above the bottom crop.
