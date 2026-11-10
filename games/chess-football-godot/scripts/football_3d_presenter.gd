@@ -2214,7 +2214,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 						player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
 						0.0, 1.0
 					)
-					var pivot_pose := xi_xi_pivot_dribble_pose(
+					var pivot_pose := xi_verified_dribble_pivot_animation(
 						wanted_animation, run_view, player.role,
 						player.has_ball and match_node.ball.carrier == player,
 						player.dribble_active(), player.dribble_mode, pivot_progress,
@@ -2608,7 +2608,7 @@ static func xi_outfield_stride_advance(
 # not claim to be a new front atlas; it is a body turn during the genuine
 # possession window. Outside the planted interval and without fully verified
 # R2 action art the player's directional runner stays canonical.
-static func xi_xi_pivot_dribble_pose(
+static func xi_verified_dribble_pivot_animation(
 	base: StringName, view: String, role: String,
 	owns_ball: bool, active: bool, mode: String, progress: float,
 	has_cut: bool, has_burst: bool
