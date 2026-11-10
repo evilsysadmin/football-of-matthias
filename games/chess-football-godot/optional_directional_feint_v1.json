@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "enabled": false,
+  "status": "ART_NOT_APPROVED",
+  "quality_contract": "football-xi-directional-feint-art-review-v1",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "columns": 8,
+  "rows": 4,
+  "footline": 134,
+  "views": [
+    "front",
+    "back",
+    "front_diagonal",
+    "back_diagonal"
+  ],
+  "candidate_filenames": [
+    "fc_matthias_feint_4views_v1.webp",
+    "real_enroque_feint_4views_v1.webp"
+  ],
+  "notes": "OFFLINE ART REVIEW CONTRACT ONLY. No active R2 URL or SHA has been approved. Never load these candidates in runtime, publish them to R2, or count a structural preflight as human visual approval. Author all poses in correct directional view with connected boots, preserved club colors and two genuinely different contact steps. Revisit runtime integration only in a separate PR after Godot screenshots and immutable SHA/CORS publication."
+}
