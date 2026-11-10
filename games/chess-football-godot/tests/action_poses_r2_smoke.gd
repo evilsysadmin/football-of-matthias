@@ -205,10 +205,10 @@ func _initialize() -> void:
 		for sample_offset in [0.0, 0.25, 0.5, 0.95]:
 			var saw_cut_contact := false
 			for frame_index in range(8):
-				var elapsed := (float(frame_index) + sample_offset) / fps
+				var elapsed: float = (float(frame_index) + sample_offset) / fps
 				if elapsed >= Footballer.DRIBBLE_BURST_SECONDS:
 					break
-				var progress := elapsed / Footballer.DRIBBLE_BURST_SECONDS
+				var progress: float = elapsed / Footballer.DRIBBLE_BURST_SECONDS
 				var wanted := ChessFootball3DPresenter.xi_verified_dribble_pivot_animation(
 					&"run_front", "front", "midfielder", true,
 					true, "cut", progress, true, true
