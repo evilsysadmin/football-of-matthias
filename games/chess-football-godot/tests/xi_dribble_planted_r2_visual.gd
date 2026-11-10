@@ -148,7 +148,9 @@ func _initialize() -> void:
 								team_id, athlete.visual.flip_h, progress
 							)
 							assert(moved_ball.distance_to(expected_render) < 0.001,
-								"Actual XI ball must follow the R2 foot-contact, not a far diagonal anchor")
+								"XI R2 foot contact mismatch camera=%s team=%d view=%s diff=%.4f" % [
+									mode, team_id, view, moved_ball.distance_to(expected_render)
+								])
 							assert(Vector2(moved_ball.x - foot_anchor.x,
 								moved_ball.z - foot_anchor.z).length() < 0.55,
 								"Rendered feint must keep the ball within foot reach")
