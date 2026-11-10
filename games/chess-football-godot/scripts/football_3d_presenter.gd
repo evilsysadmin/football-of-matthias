@@ -2203,6 +2203,26 @@ func sync_presentation(delta: float, mode: String) -> void:
 				)
 				if sprite.sprite_frames.has_animation(action_pose):
 					wanted_animation = action_pose
+				# The verified R2 cut/burst atlas contains a real planted-foot
+				# action, but was previously restricted to lateral running.
+				# For a real XI front/diagonal dribble, briefly turn the body
+				# into that authored planted stance before returning to the
+				# correct directional runner. A non-Web/local R2 miss retains
+				# the existing directional fallback without any proxy art.
+				if match_node.match_team_size == 11 and player.role != "keeper":
+					var pivot_progress := 1.0 - clampf(
+						player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
+						0.0, 1.0
+					)
+					var pivot_pose := xi_xi_pivot_dribble_pose(
+						wanted_animation, run_view, player.role,
+						player.has_ball and match_node.ball.carrier == player,
+						player.dribble_active(), player.dribble_mode, pivot_progress,
+						_action_poses_r2_loaded.has("%d:dribble_cut" % player.team_id),
+						_action_poses_r2_loaded.has("%d:dribble_burst" % player.team_id)
+					)
+					if sprite.sprite_frames.has_animation(pivot_pose):
+						wanted_animation = pivot_pose
 				var save_before_catch := xi_keeper_dive_before_catch(
 					match_node.match_team_size, player == holding_keeper,
 					_keeper_catch_r2_loaded.has(int(player.team_id)),
@@ -2583,6 +2603,35 @@ static func xi_outfield_stride_advance(
 # 0.58-second pass the old fixed 10-FPS clock only reached ~frame 5/8.
 # The visual phase uses the same lock that already controls gameplay;
 # never prolong the kick or delay the authoritative ball release.
+# A short, intentional pivot reveals the original authored side-action
+# FOOTWORK for the otherwise unanimated front/diagonal XI dribble. This does
+# not claim to be a new front atlas; it is a body turn during the genuine
+# possession window. Outside the planted interval and without fully verified
+# R2 action art the player's directional runner stays canonical.
+static func xi_xi_pivot_dribble_pose(
+	base: StringName, view: String, role: String,
+	owns_ball: bool, active: bool, mode: String, progress: float,
+	has_cut: bool, has_burst: bool
+) -> StringName:
+	if (
+		role == "keeper" or not owns_ball or not active
+		or view not in ["front", "back", "front_diagonal", "back_diagonal"]
+		or base not in [
+			&"run_front", &"run_back", &"run_front_diagonal", &"run_back_diagonal",
+			&"sprint_front", &"sprint_back", &"sprint_front_diagonal", &"sprint_back_diagonal"
+		]
+	):
+		return base
+	var t := clampf(progress, 0.0, 1.0)
+	if mode == "feint":
+		return &"dribble_cut" if has_cut and t >= 0.23 and t <= 0.78 else base
+	if mode == "cut":
+		return &"dribble_cut" if has_cut and t >= 0.16 and t <= 0.87 else base
+	if mode == "burst":
+		return &"dribble_burst" if has_burst and t >= 0.12 and t <= 0.87 else base
+	return base
+
+
 # An in-place front/diagonal feint must actually change the planted LEG,
 # not just tilt the same running frame. Two opposite painted strides from the
 # existing approved directional atlas follow the authoritative countdown.
