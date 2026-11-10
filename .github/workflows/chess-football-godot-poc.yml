@@ -1122,6 +1122,31 @@ jobs:
               test -s "$RUNNER_TEMP/chess-football-review/carry-dribble-$phase-$mode.png"
             done
           done
+      - name: Capture XI human feint front and diagonal (real 3D, both cameras)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-feint-footwork-visual.log"
+          set +e
+          timeout 80s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/xi_dribble_footwork_visual.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          for mode in broadcast tactical; do
+            marker="FOOTBALL_XI_FEINT_FOOTWORK_CAPTURE_${mode^^}"
+            capture="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
+            if [[ -n "$capture" && -s "$capture" ]]; then
+              cp "$capture" "$RUNNER_TEMP/chess-football-review/xi-feint-footwork-$mode.png"
+            fi
+          done
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
+            echo '::error::Real XI front/diagonal feint visual proof failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_FEINT_FOOTWORK_OK teams=2 directions=2 phases=3 cameras=2 pixels_change=1 authority_unchanged=1' "$log"
+          for mode in broadcast tactical; do
+            test -s "$RUNNER_TEMP/chess-football-review/xi-feint-footwork-$mode.png"
+          done
       - name: Review exact v2 R2 actions in real Godot XI (broadcast/tactical)
         shell: bash
         run: |
