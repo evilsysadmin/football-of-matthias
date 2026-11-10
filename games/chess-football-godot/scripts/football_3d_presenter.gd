@@ -2640,7 +2640,7 @@ static func xi_verified_dribble_pivot_animation(
 		return base
 	var t := clampf(progress, 0.0, 1.0)
 	if mode == "feint":
-		return &"dribble_cut" if has_cut and t >= 0.23 and t <= 0.78 else base
+		return &"dribble_cut" if has_cut and t >= 0.14 and t <= 0.86 else base
 	if mode == "cut":
 		return &"dribble_cut" if has_cut and t >= 0.16 and t <= 0.87 else base
 	if mode == "burst":
@@ -2666,6 +2666,20 @@ static func xi_feint_pivot_mirror(
 	# A clean two-beat counterstep: at the mid-point the shoulder and
 	# support foot commit to the opposite side while the ball follows.
 	return base_flip != (clampf(progress, 0.0, 1.0) >= 0.5)
+
+
+# The real feint lasts only 0.24s: playing all eight painted R2 frames
+# at ~33 FPS skips most of them on a 15-20 FPS Web client. Hold the two
+# actual contact poses instead, so both planted steps are sampled at low
+# frame rate. The countdown remains the ONLY clock; no gameplay slowdown.
+static func xi_feint_r2_contact_pose(frame_count: int, progress: float) -> float:
+	if frame_count < 6:
+		return 0.0
+	var t := clampf(progress, 0.0, 1.0)
+	var fraction := 0.36 if t < 0.5 else 0.72
+	return float(clampi(
+		int(floorf(float(frame_count - 1) * fraction)), 0, frame_count - 1
+	))
 
 
 # An in-place front/diagonal feint must actually change the planted LEG,
@@ -2763,6 +2777,20 @@ func _sync_visible_animation(
 		# Old one-frame fallback holds; new eight-frame R2 idle breathes in place.
 		if count > 1:
 			phase += advance
+	elif (
+		match_node.match_team_size == 11
+		and not is_keeper and player.has_ball
+		and wanted == &"dribble_cut" and player.dribble_mode == "feint"
+		and player.dribble_active()
+		and String(player_run_views.get(key, "side")) in [
+			"front", "back", "front_diagonal", "back_diagonal"
+		]
+	):
+		var planted_progress := 1.0 - clampf(
+			player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
+			0.0, 1.0
+		)
+		phase = xi_feint_r2_contact_pose(count, planted_progress)
 	elif (
 		match_node.match_team_size == 11
 		and not is_keeper
