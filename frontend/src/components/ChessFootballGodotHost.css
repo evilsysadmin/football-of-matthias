@@ -175,3 +175,78 @@
   max-width: 42ch;
   color: rgba(233, 223, 189, .78);
 }
+
+
+/* Quiet, player-initiated art diagnostics. Hidden behind a small summary
+   during actual play; never steal the virtual controls or HUD centre. */
+.chess-football-godot-host__art-details {
+  position: absolute;
+  z-index: 5;
+  top: max(.65rem, env(safe-area-inset-top));
+  right: max(.65rem, env(safe-area-inset-right));
+  max-width: min(23rem, calc(100vw - 1.3rem));
+  color: #f1e7c8;
+  font: 600 .75rem/1.4 system-ui, sans-serif;
+}
+
+.chess-football-godot-host__art-details > summary {
+  display: block;
+  list-style: none;
+  width: max-content;
+  margin-left: auto;
+  min-height: 36px;
+  padding: .45rem .7rem;
+  border: 1px solid rgba(237, 222, 171, .24);
+  border-radius: 999px;
+  background: rgba(5, 11, 7, .74);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  user-select: none;
+}
+
+.chess-football-godot-host__art-details > summary::-webkit-details-marker { display: none; }
+.chess-football-godot-host__art-details > summary:focus-visible {
+  outline: 2px solid #d7c78f;
+  outline-offset: 3px;
+}
+.chess-football-godot-host__art-panel {
+  margin-top: .3rem;
+  padding: .7rem .8rem;
+  border: 1px solid rgba(237, 222, 171, .25);
+  border-radius: 12px;
+  background: rgba(5, 11, 7, .94);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .45);
+}
+.chess-football-godot-host__art-panel p {
+  margin: .3rem 0 .6rem;
+  color: rgba(241, 231, 200, .78);
+  font-weight: 400;
+}
+.chess-football-godot-host__art-panel ul {
+  list-style: none;
+  display: grid;
+  gap: .55rem;
+  margin: 0;
+  padding: 0;
+}
+.chess-football-godot-host__art-panel li {
+  display: grid;
+  gap: .15rem;
+}
+.chess-football-godot-host__art-panel li span {
+  font-size: .69rem;
+  color: rgba(241, 231, 200, .8);
+  font-weight: 400;
+}
+.chess-football-godot-host__art-panel small {
+  display: block;
+  margin-top: .55rem;
+  color: rgba(241, 231, 200, .58);
+  font-size: .67rem;
+}
+@media (pointer: coarse) {
+  .chess-football-godot-host__art-details > summary {
+    min-height: 44px;
+    padding: .7rem .85rem;
+  }
+}
