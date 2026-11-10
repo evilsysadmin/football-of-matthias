@@ -89,6 +89,7 @@ jobs:
             ${{ runner.temp }}/football-run-v3-r2/*.webp
             ${{ runner.temp }}/football-pass-shoot-r2/*.webp
             ${{ runner.temp }}/football-carry-dribble-r2/*.webp
+            ${{ runner.temp }}/football-action-poses-r2/*.webp
           if-no-files-found: error
           retention-days: 2
       - name: Verify dedicated football R2 WebPs when public origin is configured
