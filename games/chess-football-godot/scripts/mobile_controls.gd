@@ -57,7 +57,11 @@ func _process(_delta: float) -> void:
 					else "PENALTI RIVAL · mueve al portero con joystick"
 				)
 			else:
-				match_node.help_label.text = MOBILE_HELP
+				# XI touch feedback reflects real possession; historical 5v5 stays untouched.
+				match_node.help_label.text = (
+					match_node.contextual_help_text(true)
+					if match_node.match_team_size == 11 else MOBILE_HELP
+				)
 
 func _exit_tree() -> void:
 	_release_all_inputs()
