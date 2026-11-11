@@ -19,6 +19,16 @@ func _initialize() -> void:
 	game.kickoff_active = false
 	assert(game.match_pitch == XI)
 	assert(game.debug_team_counts() == [11, 11])
+	# The six candidate motion-v4 WebPs are SHA-pinned but MUST remain
+	# unavailable until the operator verifies the actual public R2 objects.
+	for team_id in range(2):
+		for family in ChessFootballMotionV4R2.FAMILIES:
+			assert(ChessFootballMotionV4R2.sheet_meta(team_id, family).is_empty(),
+				"Unpublished motion v4 must fail closed, preserving existing atlases")
+	assert(ChessFootballMotionV4R2.sheet_meta(0, "invalid").is_empty())
+	assert(ChessFootballMotionV4R2.frames_from_image(
+		Image.create(128, 144, false, Image.FORMAT_RGBA8), "run"
+	).is_empty())
 	var centre := XI.get_center()
 	var right_goal := ChessFootballMath.goal_center(0, XI)
 	var left_goal := ChessFootballMath.goal_center(1, XI)
