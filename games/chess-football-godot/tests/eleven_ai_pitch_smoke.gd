@@ -91,6 +91,64 @@ func _initialize() -> void:
 	var read_lower: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
 	assert(read_lower.y < xi_hard_cover.y - 20.0)
 	assert(read_lower.x > striker.global_position.x)
+
+	# Regression: before this change XI CPU predicted an E/F direction on
+	# the *same physics frame* as input. Verify real Footballer actions, not
+	# a synthetic direction switch: pressing and Hard second-man cover must
+	# read only motion actually observed. Contact is never disabled.
+	striker.velocity = Vector2(210.0, 185.0)
+	assert(game._ai_press_target(xi_cover_player, striker).distance_to(
+		striker.global_position
+	) > 8.0, "Ordinary observed running still permits bounded pursuit lead")
+	for action in ["cut", "burst", "feint"]:
+		striker.dribble_burst_seconds = 0.0
+		striker.dribble_cooldown_seconds = 0.0
+		striker.action_lock_seconds = 0.0
+		assert(striker.start_dribble(Vector2(1.0, 1.0), action))
+		assert(game._ai_xi_observed_carrier_velocity(striker) == Vector2.ZERO)
+		assert(game._ai_press_target(xi_cover_player, striker).is_equal_approx(
+			striker.global_position
+		), "Early XI %s cannot give CPU a psychic pursuit forecast" % action)
+		assert(game._ai_xi_diagonal_cover_lead(
+			xi_cover_player, striker.global_position
+		) == Vector2.ZERO, "Cover must not anticipate the first %s step" % action)
+		# Wait on the existing authoritative action clock, never wall time.
+		striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.40
+		if action == "feint":
+			assert(game._ai_xi_observed_carrier_velocity(striker) == Vector2.ZERO)
+		else:
+			assert(game._ai_xi_observed_carrier_velocity(striker) == striker.velocity)
+			assert(game._ai_press_target(xi_cover_player, striker).distance_to(
+				striker.global_position
+			) > 8.0)
+			assert(game._ai_xi_diagonal_cover_lead(
+				xi_cover_player, striker.global_position
+			).length() > 20.0)
+	# No new immunity: the usual clean physical XI hitbox can still claim
+	# the ball after the defender gets within real tackle reach.
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.85
+	striker.dribble_mode = "cut"
+	var contact_position: Vector2 = xi_cover_player.global_position
+	var contact_velocity: Vector2 = xi_cover_player.velocity
+	xi_cover_player.global_position = striker.global_position + Vector2(31.0, -8.0)
+	xi_cover_player.velocity = Vector2(-175.0, 0.0)
+	assert(game._ai_xi_tackle_commit_ready(xi_cover_player, striker, false))
+	xi_cover_player.global_position = contact_position
+	xi_cover_player.velocity = contact_velocity
+	# Easy and legacy 5v5 retain the previous instantaneous pursuit read.
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_observed_carrier_velocity(striker) == striker.velocity)
+	game._set_quick_difficulty("hard")
+	game.match_team_size = 5
+	assert(game._ai_xi_observed_carrier_velocity(striker) == striker.velocity)
+	game.match_team_size = 11
+	# The reading delay never follows a player after possession is lost.
+	game.ball.release(Vector2.ZERO, 0.0)
+	assert(game._ai_xi_observed_carrier_velocity(striker) == striker.velocity)
+	game.ball.attach_to(striker)
+	striker.dribble_burst_seconds = 0.0
+	striker.dribble_cooldown_seconds = 0.0
+	print("FOOTBALL_XI_DRIBBLE_DEFENDER_READ_OK actions=3 read_delay=1 contact=1")
 	# Neither straight runs nor backwards retreats trigger a fake diagonal.
 	striker.velocity = Vector2(210.0, 0.0)
 	assert(game._ai_xi_diagonal_cover_lead(xi_cover_player, striker.global_position) == Vector2.ZERO)
