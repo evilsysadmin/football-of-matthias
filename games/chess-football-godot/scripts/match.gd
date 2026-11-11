@@ -353,6 +353,9 @@ var desktop_pass_input_active: bool = false
 var pending_tackle_player: Footballer = null
 var pending_tackle_seconds: float = 0.0
 
+# Opt-in only, no per-frame overlay work while hidden.
+var performance_label: Label
+var performance_refresh_seconds: float = 0.0
 var score_label: Label
 var help_label: Label
 var view_label: Label
@@ -401,6 +404,7 @@ func _ai_cpu_intensity(base: float) -> float:
 	return clampf(base * float(quick_difficulty_profile["effort"]), 0.35, 1.0)
 
 func _physics_process(delta: float) -> void:
+	_update_performance_overlay(delta)
 	if ci_web_keyboard_probe and Engine.get_physics_frames() % 6 == 0:
 		_emit_ci_web_keyboard_sample()
 	if pause_menu_open:
@@ -467,9 +471,40 @@ func _emit_ci_web_keyboard_sample() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+	if not event is InputEventKey or not event.pressed or event.echo:
+		return
+	# F2 remains available when Firefox reserves F3 for Find Next.
+	if event.keycode in [KEY_F2, KEY_F3] and match_team_size == 11:
+		_toggle_performance_overlay()
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_ESCAPE:
 		_toggle_pause_menu()
 		get_viewport().set_input_as_handled()
+
+
+# Diagnostic only. This never changes match physics, rendering resolution,
+# AI, clocks or input. Defaults OFF so normal gameplay has no extra labels.
+func _toggle_performance_overlay() -> void:
+	if performance_label == null:
+		return
+	performance_label.visible = not performance_label.visible
+	performance_refresh_seconds = 0.0
+	if performance_label.visible:
+		_update_performance_overlay(0.0)
+
+
+func _update_performance_overlay(delta: float) -> void:
+	if performance_label == null or not performance_label.visible:
+		return
+	performance_refresh_seconds -= maxf(delta, 0.0)
+	if performance_refresh_seconds > 0.0:
+		return
+	performance_refresh_seconds = 0.50
+	var physics_ms: float = float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0
+	var process_ms: float = float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0
+	performance_label.text = "FPS %d  ·  Física %.1f ms  ·  Proceso %.1f ms" % [
+		Engine.get_frames_per_second(), physics_ms, process_ms
+	]
 
 func _create_audio() -> void:
 	audio_fx = FootballAudio.new()
@@ -635,6 +670,24 @@ func _create_hud() -> void:
 	shot_meter.add_theme_stylebox_override("fill", meter_fill)
 	shot_meter.visible = false
 	hud.add_child(shot_meter)
+	# F3-only performance readout: compact, touch-safe, never shown in
+	# baseline screenshots, never disables collisions or changes render scale.
+	performance_label = Label.new()
+	performance_label.name = "MatchPerformanceOverlay"
+	performance_label.visible = false
+	performance_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	performance_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	performance_label.add_theme_font_size_override("font_size", 14)
+	performance_label.add_theme_color_override("font_color", Color(0.94, 0.97, 1.0, 0.96))
+	performance_label.add_theme_color_override("font_shadow_color", Color(0.01, 0.02, 0.04, 0.95))
+	performance_label.add_theme_constant_override("shadow_offset_x", 1)
+	performance_label.add_theme_constant_override("shadow_offset_y", 2)
+	hud.add_child(performance_label)
+	performance_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	performance_label.offset_left = -390.0
+	performance_label.offset_right = -16.0
+	performance_label.offset_top = -46.0
+	performance_label.offset_bottom = -12.0
 	_create_pause_menu(hud)
 
 func _create_pause_menu(hud: CanvasLayer) -> void:

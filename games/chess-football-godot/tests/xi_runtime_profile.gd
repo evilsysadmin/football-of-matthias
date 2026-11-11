@@ -57,6 +57,16 @@ func _initialize() -> void:
 	game.ball.attach_to(game.teams[0][10])
 	assert(game.debug_team_counts() == [11, 11])
 	assert(game.presentation_3d != null)
+	# Readout stays hidden in normal play. F3 toggles it without touching
+	# possession/physics and only samples monitors while explicitly visible.
+	assert(game.performance_label != null and not game.performance_label.visible)
+	var original_holder: Footballer = game.ball.carrier
+	game._toggle_performance_overlay()
+	assert(game.performance_label.visible)
+	assert(game.performance_label.text.begins_with("FPS "))
+	assert(game.ball.carrier == original_holder)
+	game._toggle_performance_overlay()
+	assert(not game.performance_label.visible)
 	# Warm texture/memory caches before measuring steady-state work.
 	for tick in range(60):
 		game._physics_process(STEP)
