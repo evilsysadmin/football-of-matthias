@@ -1233,10 +1233,10 @@ jobs:
                 cp "$shot" "$RUNNER_TEMP/chess-football-review/xi-dribble-planted-$mode-$action.png"
               fi
             done
-            # These are genuine action-time samples at 15 FPS, not four
-            # hand-picked frames. CUT (moving E) is 0.22s; FEINT is 0.24s.
-            # Preserve both evidence strips on failure for real review.
-            for action in feint cut; do
+            # Genuine action-time 15-FPS evidence, NOT hand-picked R2
+            # frames: moving E=0.22s, standing E=0.24s, long F=0.27s.
+            # Preserve all three original-raster strips on failure.
+            for action in feint cut burst; do
               marker="FOOTBALL_XI_${action^^}_PLAYBACK_15FPS_${mode^^}"
               timeline="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
               if [[ -n "$timeline" && -s "$timeline" ]]; then
@@ -1255,6 +1255,7 @@ jobs:
             done
             test -s "$RUNNER_TEMP/chess-football-review/xi-feint-playback-15fps-$mode.png"
             test -s "$RUNNER_TEMP/chess-football-review/xi-cut-playback-15fps-$mode.png"
+            test -s "$RUNNER_TEMP/chess-football-review/xi-burst-playback-15fps-$mode.png"
           done
       - name: Capture actual XI contextual E help on broadcast HUD
         shell: bash
