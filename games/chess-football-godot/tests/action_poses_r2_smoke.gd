@@ -286,8 +286,22 @@ func _initialize() -> void:
 			Vector3(0.0, 0.16, 0.38), Vector3(0.0, 0.16, 0.0),
 			flipped, 0.5
 		)
+		var long_toe := ChessFootball3DPresenter.xi_cut_display_ball_contact(
+			Vector3(0.0, 0.16, 0.38), Vector3(0.0, 0.16, 0.0),
+			flipped, 0.5, 0.68
+		)
+		var sign := -1.0 if flipped else 1.0
 		assert(toe.distance_to(Vector3(0.0, 0.16, 0.0)) < 0.46)
-		assert(toe.x * (-1.0 if flipped else 1.0) > 0.25)
+		assert(toe.x * sign > 0.25)
+		# F's actually extended R2 toe reaches farther than E's cut;
+		# only F receives this stronger world-space visual ball anchor.
+		assert(long_toe.x * sign > 0.57)
+		assert((long_toe.x - toe.x) * sign > 0.25)
+		assert(long_toe.distance_to(Vector3(0.0, 0.16, 0.0)) < 0.72)
+		assert(ChessFootball3DPresenter.xi_cut_display_ball_contact(
+			Vector3(0.0, 0.16, 0.38), Vector3(0.0, 0.16, 0.0),
+			flipped, 0.0, 0.68
+		) == Vector3(0.0, 0.16, 0.38))
 
 	# Real 0.24s 11v11 feint at 15, 20 and 30 Hz: even with the
 	# sampling phase shifted nearly one full frame, both R2 painted foot
