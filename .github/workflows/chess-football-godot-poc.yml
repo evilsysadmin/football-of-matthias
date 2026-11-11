@@ -412,6 +412,46 @@ jobs:
           mkdir -p .artifacts/xi-live-dribble-duels
           grep '^FOOTBALL_XI_LIVE_DRIBBLE_DUELS ' "$log" | sed 's/^FOOTBALL_XI_LIVE_DRIBBLE_DUELS //' > .artifacts/xi-live-dribble-duels/metrics.json
           python3 -m json.tool .artifacts/xi-live-dribble-duels/metrics.json >/dev/null
+      - name: Profile XI runtime · AI versus 3D presentation versus HUD
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-runtime-profile.log"
+          set +e
+          timeout 60s "$godot" --headless --quit-after 2800 --path games/chess-football-godot --script res://tests/xi_runtime_profile.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|ERROR: Failed to load script' "$log"; then
+            echo "::error::XI runtime profile failed to run"
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_CPU_PROFILE_OK' "$log"
+          mkdir -p .artifacts/xi-runtime-profile
+          python3 - "$log" "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, pathlib, sys
+          lines=pathlib.Path(sys.argv[1]).read_text().splitlines()
+          prefix="FOOTBALL_XI_CPU_PROFILE "
+          rows=[json.loads(x[len(prefix):]) for x in lines if x.startswith(prefix)]
+          assert len(rows) == 1
+          result=rows[0]
+          assert result["players"] == 22
+          assert set(result["sections"]) == {"ai","presentation","hud","full"}
+          pathlib.Path(".artifacts/xi-runtime-profile/metrics.json").write_text(json.dumps(result, indent=2)+"\n")
+          with open(sys.argv[2], "a") as f:
+              f.write("\n### XI CPU profile (headless, *not* browser FPS)\n\n")
+              f.write("| Segment | Average us | p95 us |\n|---|---:|---:|\n")
+              for name, metrics in result["sections"].items():
+                  f.write(f"| {name} | {metrics['avg_us']:.1f} | {metrics['p95_us']} |\n")
+          PY
+      - name: Upload XI runtime profile
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xi-runtime-profile
+          path: .artifacts/xi-runtime-profile/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Upload XI real dribble duel metrics
         uses: actions/upload-artifact@v7
         with:
