@@ -1291,14 +1291,44 @@ func _ai_xi_lane_assignment(
 	}
 
 
-# XI's nearest CPU defender runs toward a reachable interception point,
-# not the opponent's previous position. No teleport or artificial tackle.
+# A real XI E/F action changes the carrier's velocity on the SAME
+# physics frame as its input. CPU defenders can observe the carrier's current
+# position immediately, but cannot extrapolate that brand-new direction as
+# though the cut had already been running for several frames. The readable
+# 0.24s feint is never a reliable travel forecast; moving cuts/long touches
+# become readable after about 0.1s of real action, not a random dice roll.
+# This changes only AI positioning, not tackling, collision or player speed.
+func _ai_xi_observed_carrier_velocity(owner: Footballer) -> Vector2:
+	var observed: Vector2 = owner.velocity
+	if (
+		match_team_size != 11
+		or quick_difficulty == "easy"
+		or owner.team_id != 0
+		or ball.carrier != owner
+		or not owner.dribble_active()
+	):
+		return observed
+	if owner.dribble_mode == "feint":
+		return Vector2.ZERO
+	if owner.dribble_mode not in ["cut", "burst"]:
+		return observed
+	var progress: float = 1.0 - clampf(
+		owner.dribble_burst_seconds / maxf(owner.dribble_duration_seconds, 0.001),
+		0.0, 1.0
+	)
+	return Vector2.ZERO if progress < 0.48 else observed
+
+
+# XI's nearest CPU defender runs toward a reachable interception point
+# once motion is observable. It always pursues the carrier's REAL position;
+# no false tackle protection, teleport, frozen player or speed advantage.
 func _ai_press_target(presser: Footballer, owner: Footballer) -> Vector2:
+	var observed_velocity: Vector2 = _ai_xi_observed_carrier_velocity(owner)
 	if (
 		match_team_size != 11
 		or presser.team_id != 1
 		or owner.team_id != 0
-		or owner.velocity.length() < 30.0
+		or observed_velocity.length() < 30.0
 	):
 		return owner.global_position
 	var separation := presser.global_position.distance_to(owner.global_position)
@@ -1307,7 +1337,7 @@ func _ai_press_target(presser: Footballer, owner: Footballer) -> Vector2:
 		0.08,
 		0.40,
 	)
-	var lead: Vector2 = (owner.velocity * horizon).limit_length(130.0)
+	var lead: Vector2 = (observed_velocity * horizon).limit_length(130.0)
 	return ChessFootballMath.clamp_to_pitch(owner.global_position + lead, match_pitch)
 
 
@@ -1470,7 +1500,7 @@ func _ai_xi_diagonal_cover_lead(player: Footballer, threat_position: Vector2) ->
 		or threat_position.distance_to(ball.carrier.global_position) > 1.0
 	):
 		return Vector2.ZERO
-	var carrier_velocity: Vector2 = ball.carrier.velocity
+	var carrier_velocity: Vector2 = _ai_xi_observed_carrier_velocity(ball.carrier)
 	if (
 		carrier_velocity.x < AI_XI_DIAGONAL_COVER_MIN_FORWARD_SPEED
 		or absf(carrier_velocity.y) < AI_XI_DIAGONAL_COVER_MIN_LATERAL_SPEED
