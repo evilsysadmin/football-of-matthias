@@ -2734,7 +2734,7 @@ static func xi_verified_dribble_pivot_animation(
 	if mode == "cut":
 		return &"dribble_cut" if has_cut and t >= 0.16 and t <= 0.87 else base
 	if mode == "burst":
-		return &"dribble_burst" if has_burst and t >= 0.12 and t <= 0.87 else base
+		return &"dribble_burst" if has_burst and t >= 0.12 and t <= 0.94 else base
 	return base
 
 
@@ -2792,17 +2792,18 @@ static func xi_cut_r2_contact_pose(frame_count: int, progress: float) -> float:
 # XI F triggers the authored R2 LONG TOUCH in 0.27s. Its one decisive
 # toe extension (frame 5) used to be exposed for only ~34ms at 8 poses /
 # 0.27 seconds, so a 15-FPS Web viewer could never distinguish a touch
-# from another running step. Hold the two real build-up/contact drawings;
-# gameplay speed, ball release, direction and cooldown stay untouched.
+# from another running step. Hold real preparation, contact AND recovery
+# drawings long enough for each to register at 15 FPS, including late
+# rendering phases; gameplay speed and cooldown remain untouched.
 static func xi_burst_r2_contact_pose(frame_count: int, progress: float) -> float:
 	if frame_count != ChessFootballActionPosesR2.COLUMNS:
 		return 0.0
 	var t := clampf(progress, 0.0, 1.0)
-	if t < 0.12 or t > 0.87:
+	if t < 0.12 or t > 0.94:
 		return 0.0
 	if t < 0.37:
 		return 3.0
-	return 5.0 if t <= 0.75 else 6.0
+	return 5.0 if t <= 0.69 else 6.0
 
 
 # An in-place front/diagonal feint must actually change the planted LEG,
@@ -3246,6 +3247,11 @@ static func xi_cut_display_ball_contact(
 ) -> Vector3:
 	var t := clampf(progress, 0.0, 1.0)
 	var weight := clampf(sin(PI * t) * 0.98, 0.0, 0.92)
+	# F uses the farther authored kicking toe; fade its visual ball
+	# back to the authoritative anchor DURING R2 recovery, not after
+	# the regular runner returns. Moving E keeps its old envelope.
+	if kick_reach > 0.35:
+		weight *= 1.0 - smoothstep(0.69, 0.94, t)
 	if weight <= 0.0:
 		return base_ball
 	var foot_sign := -1.0 if base_flip else 1.0
