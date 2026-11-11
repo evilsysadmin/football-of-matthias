@@ -29,7 +29,7 @@ func _measure(game: Node, section: String) -> Dictionary:
 	return {
 		"count": SAMPLES,
 		"avg_us": snappedf(float(total_usec) / float(SAMPLES), 0.1),
-		"p50_us": measurements[SAMPLES / 2],
+		"p50_us": measurements[int(SAMPLES / 2)],
 		"p95_us": measurements[int(float(SAMPLES) * 0.95)],
 		"worst_us": measurements[SAMPLES - 1],
 	}
