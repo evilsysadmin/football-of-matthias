@@ -158,12 +158,6 @@ const AI_CPU_SECOND_PRESS_ACTIVATION := 240.0
 # defender needs a short observed first-touch reaction before NEW tackles.
 # This never protects against an already active real tackle/contact.
 const AI_XI_NORMAL_FIRST_TOUCH_REACTION := 0.38
-# Normal XI should press with purpose, not sprint full tilt straight into
-# every first touch. Inside the approach zone the nearest CPU defender
-# brakes to contain and jockey; its real tackle reach, momentum and hitbox
-# stay exactly the same. Hard/Expert and human defence are untouched.
-const AI_XI_NORMAL_CONTAIN_RADIUS := 155.0
-const AI_XI_NORMAL_CONTAIN_EFFORT := 0.91
 const AI_XI_SECOND_PRESS_ACTIVATION := 320.0
 # XI Normal+ second defender reads an actual goalward diagonal dribble.
 # Maximum lead is well below one running stride; movement still obeys
@@ -1159,9 +1153,7 @@ func _update_ai(delta: float) -> void:
 			else:
 				if player == presser:
 					target = _ai_press_target(player, ball.carrier)
-					intensity = _ai_xi_normal_contain_effort(
-						player, ball.carrier, _ai_adaptive_intensity(1.0)
-					)
+					intensity = _ai_adaptive_intensity(1.0)
 				elif player == cover:
 					contesting_cover = _ai_cpu_second_press_active(player, ball.carrier.global_position)
 					target = _ai_cover_target(player, ball.carrier.global_position)
@@ -1205,7 +1197,10 @@ func _update_ai(delta: float) -> void:
 				and ball.carrier.team_id != team_id
 			):
 				if player == presser:
-					if _ai_xi_tackle_commit_ready(player, ball.carrier, false):
+					if (
+						_ai_xi_normal_tackle_read_due(ball.carrier, delta)
+						and _ai_xi_tackle_commit_ready(player, ball.carrier, false)
+					):
 						_try_tackle(player)
 				elif (
 					player == cover
@@ -1325,26 +1320,6 @@ func _ai_xi_observed_carrier_velocity(owner: Footballer) -> Vector2:
 		0.0, 1.0
 	)
 	return Vector2.ZERO if progress < 0.48 else observed
-
-
-# Contain in the final approach instead of sprinting forever. This is
-# a movement instruction only: the physical tackle test below remains
-# identical and can still win a clean duel. The human can try to turn
-# away, sprint, or pass; CPU still sprints when genuinely farther away.
-func _ai_xi_normal_contain_effort(
-	presser: Footballer, owner: Footballer, base_effort: float
-) -> float:
-	if (
-		match_team_size != 11
-		or quick_difficulty != "normal"
-		or presser.team_id != 1
-		or owner.team_id != 0
-		or ball.carrier != owner
-	):
-		return base_effort
-	if presser.global_position.distance_to(owner.global_position) > AI_XI_NORMAL_CONTAIN_RADIUS:
-		return base_effort
-	return minf(base_effort, AI_XI_NORMAL_CONTAIN_EFFORT)
 
 
 # XI's nearest CPU defender runs toward a reachable interception point
@@ -2713,6 +2688,28 @@ func _tackle_hitbox(
 func _tackle_attempt_range(tackler: Footballer, aggressive_override: bool = false) -> float:
 	var aggressive := aggressive_override or tackler.tackle_aggressive_active()
 	return TACKLE_ATTEMPT_RANGE + (SLIDE_TACKLE_FORWARD_BONUS if aggressive else 0.0)
+
+
+# On Normal, a defender must choose when to ATTEMPT a tackle instead of
+# exploiting 60 perfect hitbox opportunities per second. Use the current
+# possession's physical clock and the existing AI decision interval: no RNG,
+# new timers or owner-leaking state. A clean contact remains legal between
+# reads if a tackle was already launched. Hard/Expert/Easy, human tackles,
+# loose-ball claims and legacy 5v5 keep their historical timing.
+func _ai_xi_normal_tackle_read_due(victim: Footballer, delta: float) -> bool:
+	if (
+		match_team_size != 11
+		or quick_difficulty != "normal"
+		or victim.team_id != 0
+		or ball.carrier != victim
+	):
+		return true
+	var age: float = ball.possession_seconds
+	if age < AI_XI_NORMAL_FIRST_TOUCH_REACTION:
+		return false
+	var interval: float = maxf(_ai_adaptive_decision_interval(), 0.08)
+	var previous: float = maxf(age - maxf(delta, 0.0), 0.0)
+	return floori(age / interval) > floori(previous / interval)
 
 
 # CPU XI Normal+ should KEEP CONTAINING until the defender has a real legal
