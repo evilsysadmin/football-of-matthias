@@ -473,7 +473,8 @@ func _emit_ci_web_keyboard_sample() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
-	if event.keycode == KEY_F3 and match_team_size == 11:
+	# F2 remains available when Firefox reserves F3 for Find Next.
+	if event.keycode in [KEY_F2, KEY_F3] and match_team_size == 11:
 		_toggle_performance_overlay()
 		get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_ESCAPE:
