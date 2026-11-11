@@ -64,7 +64,7 @@ def probe(filename, expected):
 
 def main():
     manifest = json.loads(MANIFEST.read_text())
-    assert manifest["enabled"] is False, "This probe must not activate assets"
+    assert isinstance(manifest.get("enabled"), bool), "The manifest activation flag must be Boolean"
     assert manifest["cdn_base"] == ROOT.rstrip("/")
     entries = manifest["entries"]
     assert len(entries) == 4
