@@ -145,6 +145,15 @@ func _initialize() -> void:
 					if mode == "broadcast"
 					else stage.perspective_body_scale(stage.camera, stage.player_nodes[key].global_position)
 				)
+				# Fast-path and original camera projection must be numerically
+				# identical for both teams/views/lanes: no size or boot drift.
+				if mode == "broadcast":
+					var cached_reference: float = stage.xi_projected_reference_pixels(stage.camera)
+					assert(cached_reference > 0.0)
+					var cached_depth: float = stage.xi_projected_body_scale(
+						stage.camera, stage.player_nodes[key].global_position, cached_reference
+					)
+					assert(is_equal_approx(expected_depth, cached_depth))
 				assert(is_equal_approx(shadow.scale.x, expected_depth))
 				assert(is_equal_approx(shadow.scale.z, expected_depth))
 				var shadow_world := shadow.global_position
