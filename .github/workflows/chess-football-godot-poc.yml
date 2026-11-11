@@ -1233,13 +1233,16 @@ jobs:
                 cp "$shot" "$RUNNER_TEMP/chess-football-review/xi-dribble-planted-$mode-$action.png"
               fi
             done
-            # Evidence of the genuine 0.24s action sampled at 15 FPS,
-            # not four hand-picked frames. Keep PNGs on assertion failure.
-            marker="FOOTBALL_XI_FEINT_PLAYBACK_15FPS_${mode^^}"
-            timeline="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
-            if [[ -n "$timeline" && -s "$timeline" ]]; then
-              cp "$timeline" "$RUNNER_TEMP/chess-football-review/xi-feint-playback-15fps-$mode.png"
-            fi
+            # These are genuine action-time samples at 15 FPS, not four
+            # hand-picked frames. CUT (moving E) is 0.22s; FEINT is 0.24s.
+            # Preserve both evidence strips on failure for real review.
+            for action in feint cut; do
+              marker="FOOTBALL_XI_${action^^}_PLAYBACK_15FPS_${mode^^}"
+              timeline="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
+              if [[ -n "$timeline" && -s "$timeline" ]]; then
+                cp "$timeline" "$RUNNER_TEMP/chess-football-review/xi-$action-playback-15fps-$mode.png"
+              fi
+            done
           done
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
             echo '::error::Verified XI R2 planted action was not visible in actual match cameras.'
@@ -1251,6 +1254,7 @@ jobs:
               test -s "$RUNNER_TEMP/chess-football-review/xi-dribble-planted-$mode-$action.png"
             done
             test -s "$RUNNER_TEMP/chess-football-review/xi-feint-playback-15fps-$mode.png"
+            test -s "$RUNNER_TEMP/chess-football-review/xi-cut-playback-15fps-$mode.png"
           done
       - name: Real XI carrier side versus diagonal with authoritative ball ahead
         shell: bash

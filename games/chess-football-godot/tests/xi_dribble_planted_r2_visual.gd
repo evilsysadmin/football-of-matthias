@@ -58,12 +58,11 @@ func _initialize() -> void:
 			var sheet := Image.create(CELL.x * PROGRESS.size(), CELL.y * 4,
 				false, Image.FORMAT_RGBA8)
 			sheet.fill(Color("#15392f"))
-			# Unlike the four deliberate pose snapshots, these FIVE samples
-			# follow the actual 0.24-second feint at 15 FPS. Reviewers can
-			# see which real poses the Godot renderer exposes on a slow Web
-			# client, including the final return to directional running.
+			# Beyond deliberate pose snapshots, these FIVE 15-FPS samples
+			# follow the actual FEINT (0.24s) and MOVING CUT (0.22s).
+			# Both must retain their real planted boots when Web drops frames.
 			var playback_sheet: Image = null
-			if action == "feint":
+			if action in ["feint", "cut"]:
 				playback_sheet = Image.create(CELL.x * 5, CELL.y * 4,
 					false, Image.FORMAT_RGBA8)
 				playback_sheet.fill(Color("#15392f"))
@@ -109,18 +108,32 @@ func _initialize() -> void:
 						)
 						assert(sprite.animation == expected,
 							"Actual XI front/diagonal view must pivot only in the planted interval")
-						if action == "feint" and expected == &"dribble_cut":
-							# Actual loaded R2 frame, not just the selected
-							# animation name: source contact silhouettes are
-							# held long enough to survive low-FPS sampling.
-							var expected_contact := int(stage.xi_feint_r2_contact_pose(
-								sprite.sprite_frames.get_frame_count(expected), progress
-							))
-							assert(sprite.frame == expected_contact)
-							if phase_id == 1:
-								assert(sprite.frame == 2)
+						if action in ["feint", "cut"] and expected == &"dribble_cut":
+							# Assert the actual R2 painted index, not just the
+							# animation name. Moving cuts retain the extended
+							# foot at frame 4; stationary feints alternate 2/5.
+							var actual_count := sprite.sprite_frames.get_frame_count(expected)
+							var expected_contact := int(
+								stage.xi_feint_r2_contact_pose(actual_count, progress)
+								if action == "feint"
+								else stage.xi_cut_r2_contact_pose(actual_count, progress)
+							)
+							assert(sprite.frame == expected_contact,
+								"XI contact phase mismatch action=%s mode=%s team=%d view=%s progress=%.4f expected=%d actual=%d" % [
+									action, mode, team_id, view, progress,
+									expected_contact, sprite.frame
+								])
+							if action == "feint":
+								if phase_id == 1:
+									assert(sprite.frame == 2)
+								elif phase_id == 2:
+									assert(sprite.frame == 5)
+							elif phase_id == 1:
+								assert(sprite.frame == 2,
+									"Moving XI cut should retain its planted lead-in")
 							elif phase_id == 2:
-								assert(sprite.frame == 5)
+								assert(sprite.frame == 4,
+									"Moving XI E must show the authored extended boot")
 						assert(match_node.ball.carrier == athlete)
 						assert(athlete.global_position == unchanged_position)
 						assert(match_node.ball.global_position == authoritative_ball)
@@ -162,6 +175,35 @@ func _initialize() -> void:
 							assert(stage.ball_shadow != null and stage.ball_shadow.visible)
 							assert(absf(stage.ball_shadow.position.x - moved_ball.x) < 0.001)
 							assert(absf(stage.ball_shadow.position.z - moved_ball.z) < 0.001)
+						if action == "cut" and phase_id in [1, 2]:
+							# The real single 3D ball must actually follow
+							# the extended R2 cut toe (both clubs, two views,
+							# broadcast + tactical), with its existing ground
+							# shadow. No gameplay ball, 2D anchor or collider
+							# is permitted to move during this visual pass.
+							var base_cut_ball := stage.world_to_stage(
+								authoritative_ball,
+								stage.XI_BALL_VISUAL_RADIUS + stage.BALL_VISUAL_GROUND_CLEARANCE
+							)
+							var natural_cut := stage.xi_dribble_visual_ball_offset(
+								"cut", progress, direction
+							)
+							var cut_foot := stage.world_to_stage(
+								athlete.global_position,
+								stage.XI_BALL_VISUAL_RADIUS + stage.BALL_VISUAL_GROUND_CLEARANCE
+							)
+							var expected_cut := stage.xi_cut_display_ball_contact(
+								base_cut_ball + natural_cut, cut_foot,
+								sprite.flip_h, progress
+							)
+							var actual_cut := stage.ball_node.position
+							assert(actual_cut.distance_to(expected_cut) < 0.001,
+								"XI moving-cut ball must track the actual R2 boot, not the old forward axis")
+							assert(absf(actual_cut.x - cut_foot.x) > 0.16,
+								"Extended R2 cut must take the ball to the planted side")
+							assert(stage.ball_shadow != null and stage.ball_shadow.visible)
+							assert(absf(stage.ball_shadow.position.x - actual_cut.x) < 0.001)
+							assert(absf(stage.ball_shadow.position.z - actual_cut.z) < 0.001)
 						var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 						assert(quad.visible)
 						var material := quad.material_override as StandardMaterial3D
@@ -217,18 +259,22 @@ func _initialize() -> void:
 							var sampled_sprite: AnimatedSprite3D = stage.player_sprites[key]
 							var expected_sample := stage.xi_verified_dribble_pivot_animation(
 								StringName("run_" + view), view, athlete.role,
-								true, athlete.dribble_active(), "feint", sampled_progress,
+								true, athlete.dribble_active(), action, sampled_progress,
 								true, true
 							)
 							assert(sampled_sprite.animation == expected_sample)
 							if expected_sample == &"dribble_cut":
-								var expected_frame := int(stage.xi_feint_r2_contact_pose(
-									sampled_sprite.sprite_frames.get_frame_count(expected_sample),
-									sampled_progress
-								))
+								var sampled_count := sampled_sprite.sprite_frames.get_frame_count(expected_sample)
+								var expected_frame := int(
+									stage.xi_feint_r2_contact_pose(sampled_count, sampled_progress)
+									if action == "feint"
+									else stage.xi_cut_r2_contact_pose(sampled_count, sampled_progress)
+								)
 								assert(sampled_sprite.frame == expected_frame)
 								seen_first = seen_first or expected_frame == 2
-								seen_second = seen_second or expected_frame == 5
+								seen_second = seen_second or expected_frame == (
+									5 if action == "feint" else 4
+								)
 							if tick == 4:
 								assert(not athlete.dribble_active())
 								assert(sampled_sprite.animation == StringName("run_" + view))
@@ -248,7 +294,7 @@ func _initialize() -> void:
 							playback_sheet.blit_rect(crop, Rect2i(Vector2i.ZERO, CELL),
 								Vector2i(tick * CELL.x, row * CELL.y))
 						assert(seen_first and seen_second,
-							"15 FPS XI Web capture must show BOTH painted planted feet")
+							"15 FPS must show both FEINT plants or CUT lead-in and extended R2 boot")
 					match_node.ball.release(Vector2.RIGHT, 0.0)
 					athlete.dribble_burst_seconds = 0.0
 					athlete.global_position = Vector2(-9999, -9999)
@@ -259,10 +305,11 @@ func _initialize() -> void:
 				ProjectSettings.globalize_path(path)
 			])
 			if playback_sheet != null:
-				var timeline_path := "user://xi-feint-playback-15fps-%s.png" % mode
+				var timeline_path := "user://xi-%s-playback-15fps-%s.png" % [action, mode]
 				assert(playback_sheet.save_png(timeline_path) == OK)
-				print("FOOTBALL_XI_FEINT_PLAYBACK_15FPS_%s=%s" % [
-					mode.to_upper(), ProjectSettings.globalize_path(timeline_path)
+				print("FOOTBALL_XI_%s_PLAYBACK_15FPS_%s=%s" % [
+					action.to_upper(), mode.to_upper(),
+					ProjectSettings.globalize_path(timeline_path)
 				])
 	assert(match_node.score == score_before)
 	assert(is_equal_approx(match_node.match_seconds, match_time_before))

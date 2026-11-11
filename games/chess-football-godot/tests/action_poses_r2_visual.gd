@@ -151,11 +151,25 @@ func _capture(game: Node, stage: ChessFootball3DPresenter,
 	stage.outfield_visual_names[key] = expected
 	stage.outfield_visual_phases[key] = float(pose)
 	stage.sync_presentation(0.0, mode)
-	assert(driver.frame == pose, "Native action animation frame mismatch")
+	# The real 0.22-second moving CUT now holds the *approved* R2
+	# extended boot (frame 4) while the authoring matrix requests
+	# phase 3, then displays the original recovery (frame 6).
+	# This test still inspects actual public WebP pixels through
+	# the QuadMesh, not a synthetic or manually forced snapshot.
+	var expected_frame := pose
+	if with_new and action == &"dribble_cut":
+		var action_progress := (float(pose) + 0.20) / 8.0
+		expected_frame = int(stage.xi_cut_r2_contact_pose(
+			driver.sprite_frames.get_frame_count(expected),
+			action_progress
+		))
+		assert(expected_frame == (4 if pose == 3 else 6))
+	assert(driver.frame == expected_frame,
+		"Native R2 action contact frame must follow real XI cut clock")
 	var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 	assert(quad.is_visible_in_tree())
 	assert((quad.material_override as StandardMaterial3D).albedo_texture
-		== driver.sprite_frames.get_frame_texture(expected, pose))
+		== driver.sprite_frames.get_frame_texture(expected, expected_frame))
 	var target := stage.world_to_stage(actor.global_position)
 	if mode == "tactical":
 		stage.camera.position = target + Vector3(0.0, 9.0, 0.1)
