@@ -1256,6 +1256,28 @@ jobs:
             test -s "$RUNNER_TEMP/chess-football-review/xi-feint-playback-15fps-$mode.png"
             test -s "$RUNNER_TEMP/chess-football-review/xi-cut-playback-15fps-$mode.png"
           done
+      - name: Capture actual XI contextual E help on broadcast HUD
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-e-hint-visual.log"
+          set +e
+          timeout 55s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/xi_e_hint_visual.gd > "$log" 2>&1
+          status=$?
+          set -e
+          cat "$log"
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:' "$log"; then
+            echo '::error::Real XI contextual E help screenshot failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_E_HINT_VISUAL_OK native=1280x720 states=2 keyboard=1 gameplay_unchanged=1' "$log"
+          for state in ATTACK DEFENSE; do
+            marker="FOOTBALL_XI_E_HINT_CAPTURE_$state"
+            shot="$(sed -n "s/^$marker=//p" "$log" | tail -1)"
+            test -s "$shot"
+            cp "$shot" "$RUNNER_TEMP/chess-football-review/xi-e-hint-${state,,}-1280x720.png"
+          done
       - name: Real XI carrier side versus diagonal with authoritative ball ahead
         shell: bash
         run: |
