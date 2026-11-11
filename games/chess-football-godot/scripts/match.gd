@@ -1325,7 +1325,43 @@ func _ai_xi_observed_carrier_velocity(owner: Footballer) -> Vector2:
 # XI's nearest CPU defender runs toward a reachable interception point
 # once motion is observable. It always pursues the carrier's REAL position;
 # no false tackle protection, teleport, frozen player or speed advantage.
+# On XI Normal, the first shoulder/boot plant of a stationary E feint is a
+# misleading lateral cue. The primary defender briefly reads that side, then
+# corrects as the second plant becomes visible. It still pursues a real point,
+# moves through normal CharacterBody2D physics and can make a legal tackle.
+# Never fake an observation for Hard/Expert/Easy, 5v5 or an ordinary run/cut.
+func _ai_xi_normal_feint_read_offset(presser: Footballer, owner: Footballer) -> Vector2:
+	if (
+		match_team_size != 11
+		or quick_difficulty != "normal"
+		or presser.team_id != 1
+		or owner.team_id != 0
+		or ball.carrier != owner
+		or not owner.dribble_active()
+		or owner.dribble_mode != "feint"
+		or absf(owner.dribble_direction.y) < 0.20
+	):
+		return Vector2.ZERO
+	var progress: float = 1.0 - clampf(
+		owner.dribble_burst_seconds / maxf(owner.dribble_duration_seconds, 0.001),
+		0.0, 1.0
+	)
+	if progress >= 0.50:
+		return Vector2.ZERO
+	# A short wrong-footed read, not an AI freeze or a tackle miss roll.
+	# The cue fades continuously through the first of the two real plants.
+	var sideways: float = -signf(owner.dribble_direction.y) * (
+		minf(absf(owner.dribble_direction.y) * 95.0, 62.0) * (1.0 - progress * 2.0)
+	)
+	return Vector2(0.0, sideways)
+
+
 func _ai_press_target(presser: Footballer, owner: Footballer) -> Vector2:
+	var feint_offset: Vector2 = _ai_xi_normal_feint_read_offset(presser, owner)
+	if feint_offset.length_squared() > 0.001:
+		return ChessFootballMath.clamp_to_pitch(
+			owner.global_position + feint_offset, match_pitch
+		)
 	var observed_velocity: Vector2 = _ai_xi_observed_carrier_velocity(owner)
 	if (
 		match_team_size != 11
