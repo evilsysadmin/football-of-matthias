@@ -4,10 +4,10 @@ extends SceneTree
 # exact WebP hashes. Synthetic sheets exercise shape gates and atomic swaps
 # WITHOUT downloading assets, changing 2D match authority or faking CORS.
 func _sample_atlas(rows: int) -> Image:
-	var atlas := Image.create(1024, rows * 144, false, Image.FORMAT_RGBA8)
+	var atlas := Image.create(2048, rows * 144, false, Image.FORMAT_RGBA8)
 	atlas.fill(Color.TRANSPARENT)
 	for row in range(rows):
-		for col in range(8):
+		for col in range(16):
 			atlas.fill_rect(Rect2i(col * 128 + 29, row * 144 + 12, 70, 120), Color("#4079bb"))
 	return atlas
 
@@ -41,7 +41,7 @@ func _initialize() -> void:
 	assert(ChessFootballHeroV5R2.frames_from_image(missing, "locomotion").is_empty())
 	var runs := ChessFootballHeroV5R2.frames_from_image(_sample_atlas(3), "locomotion")
 	var actions := ChessFootballHeroV5R2.frames_from_image(_sample_atlas(2), "dribbles")
-	assert(runs.size() == 24 and actions.size() == 16)
+	assert(runs.size() == 48 and actions.size() == 32)
 	assert(ChessFootballHeroV5R2.action_animation("feint", true, true) == &"hero_feint")
 	assert(ChessFootballHeroV5R2.action_animation("cut", true, true) == &"hero_cut")
 	assert(ChessFootballHeroV5R2.action_animation("burst", true, true) == &"hero_cut")
@@ -62,28 +62,28 @@ func _initialize() -> void:
 		assert(not stage._hero_v5_loaded.has("%d:locomotion" % club))
 		stage._apply_hero_v5_locomotion(runs, club)
 		assert(stage._hero_v5_loaded.has("%d:locomotion" % club))
-		assert(sprite.sprite_frames.get_frame_count(&"idle_front") == 8)
+		assert(sprite.sprite_frames.get_frame_count(&"idle_front") == 16)
 		assert(sprite.sprite_frames.get_frame_texture(&"idle_front", 0) == runs[0])
 		for anim in [&"run_front", &"sprint_front"]:
-			assert(sprite.sprite_frames.get_frame_count(anim) == 8)
-			assert(sprite.sprite_frames.get_frame_texture(anim, 0) == runs[8])
+			assert(sprite.sprite_frames.get_frame_count(anim) == 16)
+			assert(sprite.sprite_frames.get_frame_texture(anim, 0) == runs[32])
 		for anim in [&"run_front_diagonal", &"sprint_front_diagonal"]:
-			assert(sprite.sprite_frames.get_frame_count(anim) == 8)
-			assert(sprite.sprite_frames.get_frame_texture(anim, 0) == runs[16])
-		assert(is_equal_approx(sprite.sprite_frames.get_animation_speed(&"run_front"), old_fps))
+			assert(sprite.sprite_frames.get_frame_count(anim) == 16)
+			assert(sprite.sprite_frames.get_frame_texture(anim, 0) == runs[32])
+		assert(is_equal_approx(sprite.sprite_frames.get_animation_speed(&"run_front"), old_fps * 2.0))
 		assert(sprite.sprite_frames.get_frame_texture(&"run", 0) == original_side)
 		assert(sprite.sprite_frames.get_frame_texture(&"run_back", 0) == original_back)
 		assert(keeper_sprite.sprite_frames.get_frame_texture(&"idle_front", 0) == original_keeper)
 		stage._apply_verified_run_v3([], club)
-		assert(sprite.sprite_frames.get_frame_texture(&"run_front", 0) == runs[8])
+		assert(sprite.sprite_frames.get_frame_texture(&"run_front", 0) == runs[32])
 		stage._apply_hero_v5_dribbles([], club)
 		assert(not stage._hero_v5_loaded.has("%d:dribbles" % club))
 		stage._apply_hero_v5_dribbles(actions, club)
 		assert(stage._hero_v5_loaded.has("%d:dribbles" % club))
 		assert(sprite.sprite_frames.get_frame_texture(&"hero_feint", 0) == actions[0])
-		assert(sprite.sprite_frames.get_frame_texture(&"hero_cut", 0) == actions[8])
-		assert(sprite.sprite_frames.get_frame_count(&"hero_feint") == 8)
-		assert(sprite.sprite_frames.get_frame_count(&"hero_cut") == 8)
+		assert(sprite.sprite_frames.get_frame_texture(&"hero_cut", 0) == actions[16])
+		assert(sprite.sprite_frames.get_frame_count(&"hero_feint") == 16)
+		assert(sprite.sprite_frames.get_frame_count(&"hero_cut") == 16)
 		assert(not keeper_sprite.sprite_frames.has_animation(&"hero_feint"))
 	assert(game.ball.carrier == initial_owner)
 	print("FOOTBALL_HERO_V5_SMOKE_OK clubs=2 families=2 frames=80 no_painted_ball=contract fallback=1")
