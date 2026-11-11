@@ -759,6 +759,35 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_HERO_V5_SMOKE_OK' "$log"
+      - name: Real public R2 V5 · SHA, CORS and Godot WebP decode/visual review
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FOOTBALL_V5_ASSET_DIR="$RUNNER_TEMP/football-hero-v5-pinned"
+          export FOOTBALL_V5_CAPTURE_DIR="$GITHUB_WORKSPACE/.artifacts/football-v5-real/"
+          mkdir -p "$FOOTBALL_V5_ASSET_DIR" "$FOOTBALL_V5_CAPTURE_DIR"
+          python3 scripts/verify_football_v5_r2.py
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-hero-v5-real.log"
+          set +e
+          timeout 105s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/hero_v5_real_r2_visual.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|ERROR: Failed to load script' "$log"; then
+            echo "::error::Actual R2 V5 atlas failed real Godot two-camera integration."
+            exit 1
+          fi
+          grep -q 'FOOTBALL_V5_REAL_R2_OK' "$log"
+          test -f "$FOOTBALL_V5_CAPTURE_DIR/football-v5-real-r2-broadcast.png"
+          test -f "$FOOTBALL_V5_CAPTURE_DIR/football-v5-real-r2-tactical.png"
+      - name: Upload SHA-verified V5 real match-camera art
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-v5-real-r2-visual-review
+          path: .artifacts/football-v5-real/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: XI carrier scale and forward ball anchoring (six directions)
         shell: bash
         run: |
