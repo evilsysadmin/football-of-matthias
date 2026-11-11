@@ -7,6 +7,7 @@ known SHA-256 of the already-approved four exact local files.
 import concurrent.futures
 import hashlib
 import json
+import os
 import pathlib
 import sys
 import urllib.error
@@ -55,6 +56,10 @@ def probe(filename, expected):
             "dimensions_expected": [columns * 128, rows * 144],
             "ok": all(checks.values()),
         })
+        if result["ok"] and os.environ.get("FOOTBALL_V5_ASSET_DIR"):
+            directory = pathlib.Path(os.environ["FOOTBALL_V5_ASSET_DIR"])
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / filename).write_bytes(body)
     except urllib.error.HTTPError as error:
         result.update({"status": error.code, "error": "HTTP %d" % error.code})
     except Exception as error:
