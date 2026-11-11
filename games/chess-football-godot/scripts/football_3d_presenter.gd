@@ -855,7 +855,7 @@ func _on_hero_v5_ready(image: Image, team_id: int, family: String) -> void:
 
 func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void:
 	var key := "%d:locomotion" % team_id
-	if team_id not in [0, 1] or match_node.match_team_size != 11 or _hero_v5_loaded.has(key) or textures.size() != 24:
+	if team_id not in [0, 1] or match_node.match_team_size != 11 or _hero_v5_loaded.has(key) or textures.size() != 48:
 		return
 	var targets: Array[AnimatedSprite3D] = []
 	var names: Array[StringName] = [&"idle_front", &"run_front", &"sprint_front", &"run_front_diagonal", &"sprint_front_diagonal"]
@@ -885,9 +885,9 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 			)
 			bank.clear(name)
 			bank.set_animation_loop(name, true)
-			bank.set_animation_speed(name, 7.0 if row == 0 else old_fps * 8.0 / float(old_count))
-			for i in range(8):
-				bank.add_frame(name, textures[row * 8 + i])
+			bank.set_animation_speed(name, 14.0 if row == 0 else old_fps * 16.0 / float(old_count))
+			for i in range(16):
+				bank.add_frame(name, textures[row * 16 + i])
 	for player in match_node.teams[team_id]:
 		if player.role == "keeper":
 			continue
@@ -899,9 +899,9 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 			# Phase is a normalized cycle clock, not a gameplay timer.
 			if driver.animation != &"idle_front":
 				old_count = 24 if _motion_v4_loaded.has("%d:run" % team_id) else (12 if _run_v3_r2_loaded.has(team_id) else 8)
-			var new_phase: float = fposmod(old_phase * 8.0 / float(old_count), 8.0)
+			var new_phase: float = fposmod(old_phase * 16.0 / float(old_count), 16.0)
 			outfield_visual_phases[id] = new_phase
-			driver.frame = clampi(int(floorf(new_phase)), 0, 7)
+			driver.frame = clampi(int(floorf(new_phase)), 0, 15)
 	_hero_v5_loaded[key] = true
 	body_scale_cache.clear()
 	tone_gain_cache.clear()
@@ -909,7 +909,7 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 
 func _apply_hero_v5_dribbles(textures: Array[Texture2D], team_id: int) -> void:
 	var key := "%d:dribbles" % team_id
-	if team_id not in [0, 1] or match_node.match_team_size != 11 or _hero_v5_loaded.has(key) or textures.size() != 16:
+	if team_id not in [0, 1] or match_node.match_team_size != 11 or _hero_v5_loaded.has(key) or textures.size() != 32:
 		return
 	var targets: Array[SpriteFrames] = []
 	for player in match_node.teams[team_id]:
@@ -930,9 +930,9 @@ func _apply_hero_v5_dribbles(textures: Array[Texture2D], team_id: int) -> void:
 			bank.set_animation_loop(name, false)
 			# Real action progress, not a free-running FPS timer, chooses
 			# its rendered frame at the end of sync_presentation().
-			bank.set_animation_speed(name, 32.0)
-			for i in range(8):
-				bank.add_frame(name, textures[row * 8 + i])
+			bank.set_animation_speed(name, 64.0)
+			for i in range(16):
+				bank.add_frame(name, textures[row * 16 + i])
 	_hero_v5_loaded[key] = true
 	body_scale_cache.clear()
 	tone_gain_cache.clear()
@@ -2546,7 +2546,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 							player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
 							0.0, 1.0
 						)
-						sprite.frame = clampi(int(floorf(hero_progress * 8.0)), 0, 7)
+						sprite.frame = clampi(int(floorf(hero_progress * 16.0)), 0, 15)
 				if player.role == "keeper":
 					# The approved front/back keeper atlas does not alternate which
 					# leg leads strongly enough. Mirroring only the second half of
