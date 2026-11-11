@@ -2588,7 +2588,8 @@ func sync_presentation(delta: float, mode: String) -> void:
 				var cut_foot := world_to_stage(feint_carrier.global_position, ground_center_y)
 				var visible_ball := xi_cut_display_ball_contact(
 					ball_at + dribble_ball_offset, cut_foot,
-					cut_driver.flip_h, cut_progress
+					cut_driver.flip_h, cut_progress,
+					0.68 if feint_carrier.dribble_mode == "burst" else 0.35
 				)
 				dribble_ball_offset = visible_ball - ball_at
 		ball_node.position = ball_at + dribble_ball_offset
@@ -3241,14 +3242,14 @@ static func xi_feint_display_foot_contact(
 # script timer, fake sprites, or gameplay change.
 static func xi_cut_display_ball_contact(
 	base_ball: Vector3, carrier_foot: Vector3,
-	base_flip: bool, progress: float
+	base_flip: bool, progress: float, kick_reach: float = 0.35
 ) -> Vector3:
 	var t := clampf(progress, 0.0, 1.0)
 	var weight := clampf(sin(PI * t) * 0.98, 0.0, 0.92)
 	if weight <= 0.0:
 		return base_ball
 	var foot_sign := -1.0 if base_flip else 1.0
-	var target := carrier_foot + Vector3(0.35 * foot_sign, 0.0, 0.04)
+	var target := carrier_foot + Vector3(clampf(kick_reach, 0.0, 0.72) * foot_sign, 0.0, 0.04)
 	return base_ball.lerp(target, weight)
 
 
