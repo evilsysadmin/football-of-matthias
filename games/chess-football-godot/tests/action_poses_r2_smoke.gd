@@ -279,7 +279,7 @@ func _initialize() -> void:
 				var pose := ChessFootball3DPresenter.xi_burst_r2_contact_pose(8, progress)
 				saw_preparation = saw_preparation or pose == 3.0
 				saw_extended_toe = saw_extended_toe or pose == 5.0
-			saw_recovery = saw_recovery or pose == 6.0
+				saw_recovery = saw_recovery or pose == 6.0
 			assert(saw_preparation and saw_extended_toe and saw_recovery,
 				"Real XI F must show preparation, toe and recovery at 15/20/30 FPS")
 	# F reuses the same authenticated outward R2 toe as moving E:
