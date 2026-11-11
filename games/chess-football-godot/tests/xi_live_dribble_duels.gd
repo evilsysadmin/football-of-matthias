@@ -149,6 +149,11 @@ func _initialize() -> void:
 		matrix[key] = row
 	for key in matrix:
 		assert((matrix[key] as Dictionary).size() == ACTIONS.size())
+	# Gameplay regression: the first false plant should buy a real escape in
+	# the fixed near-presser XI duel. Do not count a merely loose ball as a win.
+	var close_normal: Dictionary = matrix["normal/close"]
+	assert(String(close_normal["feint"]) == "retained",
+		"Normal XI close feint must beat one real presser without immunity")
 	print("FOOTBALL_XI_LIVE_DRIBBLE_DUELS " + JSON.stringify({
 		"mode": "isolated_deterministic_60hz_real_godot_physics_not_live_matches",
 		"scenarios": rows.size(),

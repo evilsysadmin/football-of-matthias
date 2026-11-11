@@ -94,6 +94,46 @@ func _initialize() -> void:
 	assert(game._ai_xi_normal_tackle_read_due(striker, 1.0 / 60.0))
 	game.match_team_size = 11
 	game.ball.possession_seconds = original_age
+	# A real XI stationary E feint should briefly wrong-foot *Normal's*
+	# primary defender toward the false first boot plant, then recover.
+	# No speed boost, collision immunity, lucky tackle miss or AI freeze.
+	striker.velocity = Vector2.ZERO
+	striker.dribble_burst_seconds = 0.0
+	striker.dribble_cooldown_seconds = 0.0
+	striker.action_lock_seconds = 0.0
+	assert(striker.start_dribble(Vector2(1.0, 0.75), "feint"))
+	var false_first: Vector2 = game._ai_xi_normal_feint_read_offset(xi_cover_player, striker)
+	assert(false_first.y < -30.0 and false_first.y >= -62.0)
+	assert(game._ai_press_target(xi_cover_player, striker).is_equal_approx(
+		striker.global_position + false_first
+	))
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.76
+	var fading_first: Vector2 = game._ai_xi_normal_feint_read_offset(xi_cover_player, striker)
+	assert(fading_first.y < 0.0 and absf(fading_first.y) < absf(false_first.y))
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.45
+	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	# Preserve existing defensive difficulty and legacy 5v5 behavior.
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds
+	game._set_quick_difficulty("hard")
+	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	game._set_quick_difficulty("expert")
+	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	game._set_quick_difficulty("normal")
+	game.match_team_size = 5
+	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	game.match_team_size = 11
+	striker.dribble_mode = "cut"
+	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	# Mirror direction: a fake left-right cue must not be hard-coded to one wing.
+	striker.dribble_mode = "feint"
+	striker.dribble_direction = Vector2(1.0, -0.75).normalized()
+	var mirrored: Vector2 = game._ai_xi_normal_feint_read_offset(xi_cover_player, striker)
+	assert(mirrored.y > 30.0 and is_equal_approx(mirrored.y, -false_first.y))
+	striker.dribble_burst_seconds = 0.0
+	striker.dribble_cooldown_seconds = 0.0
+	striker.velocity = Vector2.ZERO
 	game._set_quick_difficulty("hard")
 	var xi_hard_cover: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
 	assert(XI.has_point(xi_hard_cover))
