@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "schema": 5,
   "version": 5,
   "quality_contract": "football-generated-hero-v5-8pose",
@@ -49,5 +49,5 @@
       "rows": 2
     }
   ],
-  "notes": "User-approved 8 drawn poses per row + 8 optical-flow in-betweens (source exact at even frames). OFF until four public R2 files are SHA/CORS/Godot/performance checked; fallback V1-V4."
+  "notes": "ACTIVATED after public staging-origin CORS / exact SHA-256 verification of all 4 WebPs (GitHub Actions 43046716845). Each sheet still validated at runtime. A rejected request retains V1-V4 art; 5v5 and keepers untouched."
 }

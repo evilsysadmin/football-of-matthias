@@ -836,17 +836,41 @@ func _request_hero_v5_from_r2() -> void:
 	for team_id in range(2):
 		for family in ChessFootballHeroV5R2.FAMILIES:
 			var meta := ChessFootballHeroV5R2.sheet_meta(team_id, family)
+			if OS.has_feature("web"):
+				JavaScriptBridge.eval(
+					"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) console.log('FOOTBALL_HERO_V5_META_%d_%s:%s');" % [
+						team_id, family, "missing" if meta.is_empty() else "ready"
+					],
+					true
+				)
 			if meta.is_empty():
 				continue
 			var loader := ChessFootballR2AtlasLoader.new()
 			loader.name = "HeroV5_%d_%s" % [team_id, family]
 			add_child(loader)
 			loader.atlas_ready.connect(_on_hero_v5_ready.bind(team_id, family))
-			loader.start(meta, ChessFootballHeroV5R2.TRUSTED_ROOT)
+			loader.atlas_failed.connect(_on_hero_v5_failed.bind(team_id, family))
+			loader.start(meta, ChessFootballHeroV5R2.TRUSTED_ROOT, 30.0)
+
+
+func _on_hero_v5_failed(reason: String, team_id: int, family: String) -> void:
+	# Only the localhost CI probe receives diagnostics; staging stays silent.
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval(
+			"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) console.warn('FOOTBALL_HERO_V5_FAILED_%d_%s:%s');" % [
+				team_id, family, reason
+			], true
+		)
 
 
 func _on_hero_v5_ready(image: Image, team_id: int, family: String) -> void:
 	var frames := ChessFootballHeroV5R2.frames_from_image(image, family)
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval(
+			"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) console.log('FOOTBALL_HERO_V5_FRAMES_%d_%s:%d');" % [
+				team_id, family, frames.size()
+			], true
+		)
 	if family == "locomotion":
 		_apply_hero_v5_locomotion(frames, team_id)
 	elif family == "dribbles":
@@ -903,6 +927,7 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 			outfield_visual_phases[id] = new_phase
 			driver.frame = clampi(int(floorf(new_phase)), 0, 15)
 	_hero_v5_loaded[key] = true
+	_emit_hero_v5_ci_receipt()
 	body_scale_cache.clear()
 	tone_gain_cache.clear()
 
@@ -934,8 +959,35 @@ func _apply_hero_v5_dribbles(textures: Array[Texture2D], team_id: int) -> void:
 			for i in range(16):
 				bank.add_frame(name, textures[row * 16 + i])
 	_hero_v5_loaded[key] = true
+	_emit_hero_v5_ci_receipt()
 	body_scale_cache.clear()
 	tone_gain_cache.clear()
+
+
+# Real-browser install proof, only for CI's localhost WASM smoke.
+# Never send gameplay state or diagnostics to real staging/production.
+func _emit_hero_v5_ci_receipt() -> void:
+	if not OS.has_feature("web") or match_node.match_team_size != 11:
+		return
+	var progress: String = JSON.stringify({
+		"source": "chess-football-godot",
+		"type": "ci-hero-v5-progress", "team_size": 11,
+		"installed": _hero_v5_loaded.keys(),
+	})
+	JavaScriptBridge.eval(
+		"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) window.parent.postMessage(%s, '*');" % progress,
+		true
+	)
+	if _hero_v5_loaded.size() != 4:
+		return
+	for team_id in range(2):
+		for family in ChessFootballHeroV5R2.FAMILIES:
+			if not _hero_v5_loaded.has("%d:%s" % [team_id, family]):
+				return
+	JavaScriptBridge.eval(
+		"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) window.parent.postMessage({source:'chess-football-godot', type:'ci-hero-v5-installed', team_size:11, sheets:4}, '*');",
+		true
+	)
 
 
 # Native R2 v2 eight-pose action pack, independent of the legacy source-

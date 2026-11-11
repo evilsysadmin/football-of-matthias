@@ -4,6 +4,7 @@ extends Node
 # One instance per requested sheet, never one request per player. The browser
 # starts with the approved local assets; R2 is strictly optional.
 signal atlas_ready(image: Image)
+signal atlas_failed(reason: String)
 
 const CDN_ROOT := "https://assets.chess-studio.shadowops.dpdns.org/football/atlases/"
 const REQUEST_TIMEOUT_SECONDS := 8.0
@@ -75,7 +76,7 @@ static func decode_verified_webp(
 	return image
 
 
-func start(meta: Dictionary, allowed_root: String = CDN_ROOT) -> void:
+func start(meta: Dictionary, allowed_root: String = CDN_ROOT, timeout_seconds: float = REQUEST_TIMEOUT_SECONDS) -> void:
 	# Prevent retries or duplicate requests in one presenter lifetime.
 	if _started:
 		return
@@ -84,12 +85,16 @@ func start(meta: Dictionary, allowed_root: String = CDN_ROOT) -> void:
 		return
 	_request_node = HTTPRequest.new()
 	_request_node.name = "AtlasHTTP"
-	_request_node.timeout = REQUEST_TIMEOUT_SECONDS
+	# Long V5 sheets need a bounded allowance under slow software WebGL;
+	# legacy atlases keep their existing 8-second timeout.
+	_request_node.timeout = clampf(timeout_seconds, REQUEST_TIMEOUT_SECONDS, 30.0)
 	add_child(_request_node)
 	_request_node.request_completed.connect(
 		_on_request_completed.bind(meta.duplicate(true), allowed_root)
 	)
-	if _request_node.request(String(meta["url"])) != OK:
+	var request_result := _request_node.request(String(meta["url"]))
+	if request_result != OK:
+		atlas_failed.emit("request_start:%d" % request_result)
 		_request_node.queue_free()
 		_request_node = null
 
@@ -102,7 +107,10 @@ func _on_request_completed(
 		_request_node.queue_free()
 		_request_node = null
 	if result != HTTPRequest.RESULT_SUCCESS or status != 200:
+		atlas_failed.emit("http_result:%d_status:%d" % [result, status])
 		return
 	var image := decode_verified_webp(body, meta, allowed_root)
-	if image != null:
-		atlas_ready.emit(image)
+	if image == null:
+		atlas_failed.emit("integrity_or_decode_rejected")
+		return
+	atlas_ready.emit(image)

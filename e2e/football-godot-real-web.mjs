@@ -422,6 +422,73 @@ async function bridgeVerifiedStagingActionPosesR2(page) {
   if (expected.size) throw new Error('Missing an action R2 sheet');
 }
 
+// CI-only bridge. The actual Cloudflare CORS rule correctly permits staging
+// but NOT http://127.0.0.1:random; never expand that production allowlist.
+// Fetch each exact V5 object with the real staging Origin, verify byte-for-byte
+// its immutable approval SHA and dimensions, then route ONLY those four URLs.
+async function bridgeVerifiedHeroV5R2(page) {
+  if (process.env.CI !== 'true') throw new Error('Hero V5 bridge is CI-only');
+  const meta = JSON.parse(readFileSync('games/chess-football-godot/optional_hero_v5.json', 'utf8'));
+  if (meta.enabled !== true) return;
+  const base = 'https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v5';
+  const origin = 'https://staging.football.shadowops.dpdns.org';
+  const expected = new Map([
+    ['fc_matthias_locomotion_v5.webp', ['332d71b141db33af14ae755c80d00d26fc90eb9e3810e279de2e6a3b05c059e2', 545550, 3]],
+    ['fc_matthias_dribbles_v5.webp', ['0d98a751d53354f77fabf40ddb10fefa848ee70408e05e811cf88f0d409a26ad', 390132, 2]],
+    ['real_enroque_locomotion_v5.webp', ['b551b67dde35cd1a7df7c6e1c67004ab8650ef22b750b610d8e78efc049f1529', 523484, 3]],
+    ['real_enroque_dribbles_v5.webp', ['d8a90faccd102db66afd1f2c19096738974b54a6f8ea3bb32f09136a7f218da3', 400878, 2]]
+  ]);
+  if (meta.schema !== 5 || meta.version !== 5 ||
+      meta.quality_contract !== 'football-generated-hero-v5-8pose' ||
+      meta.bucket !== 'football' || meta.prefix !== 'atlases/v5/' ||
+      meta.cdn_base !== base || meta.columns !== 16 ||
+      meta.cell?.width !== 128 || meta.cell?.height !== 144 ||
+      !Array.isArray(meta.entries) || meta.entries.length !== expected.size) {
+    throw new Error('Refusing unknown V5 public R2 asset contract');
+  }
+  for (const entry of meta.entries) {
+    const record = expected.get(entry.file);
+    if (!record || entry.sha256 !== record[0] || entry.bytes !== record[1] ||
+        entry.columns !== 16 || entry.rows !== record[2] ||
+        entry.file !== entry.team + '_' + entry.family + '_v5.webp') {
+      throw new Error('Untrusted or duplicate V5 asset ' + entry.file);
+    }
+    expected.delete(entry.file);
+    const url = base + '/' + entry.file;
+    const response = await fetch(url, {
+      headers: { Origin: origin, 'User-Agent': 'Football-Hero-V5-Web-CI/1.0' },
+      signal: AbortSignal.timeout(18000)
+    });
+    const cors = response.headers.get('access-control-allow-origin');
+    if (response.status !== 200 || response.url !== url ||
+        !response.headers.get('content-type')?.toLowerCase().startsWith('image/webp') ||
+        (cors !== '*' && cors !== origin)) {
+      throw new Error('V5 public R2 HTTP/CORS failure: ' + url);
+    }
+    const data = Buffer.from(await response.arrayBuffer());
+    if (data.length !== record[1] || data.length > 4194304 ||
+        data.toString('ascii', 0, 4) !== 'RIFF' ||
+        data.toString('ascii', 8, 12) !== 'WEBP' ||
+        data.toString('ascii', 12, 16) !== 'VP8L' || data[20] !== 0x2F ||
+        ((data.readUInt32LE(21) & 0x3FFF) + 1) !== 2048 ||
+        (((data.readUInt32LE(21) >>> 14) & 0x3FFF) + 1) !== 144 * record[2] ||
+        createHash('sha256').update(data).digest('hex') !== record[0]) {
+      throw new Error('V5 byte, SHA or frame layout mismatch: ' + url);
+    }
+    await page.route(url, (route) => {
+      console.log('FOOTBALL_WEB_CI_HERO_V5_REQUESTED', entry.file);
+      return route.fulfill({
+        status: 200, contentType: 'image/webp',
+        headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+        body: data
+      });
+    });
+    console.log('FOOTBALL_WEB_CI_HERO_V5_VERIFIED', entry.file,
+      'bytes=' + data.length, 'sha=' + record[0], 'staging_cors=' + cors);
+  }
+  if (expected.size) throw new Error('Missing V5 hero sheet(s) for one club');
+}
+
 const server = createServer((req, res) => {
   try {
     let path = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
@@ -449,6 +516,7 @@ try {
     await bridgeVerifiedStagingPassShootR2(page);
     await bridgeVerifiedStagingCarryDribbleR2(page);
     await bridgeVerifiedStagingActionPosesR2(page);
+    await bridgeVerifiedHeroV5R2(page);
   }
   await page.addInitScript(() => {
     window.__chessFootballWebReady = false;
@@ -457,11 +525,15 @@ try {
     window.__chessFootballInputProbe = true;
     window.__chessFootballInputSamples = [];
     window.__chessFootballActionPoseReceipts = [];
+    window.__chessFootballHeroV5Receipts = [];
     window.addEventListener('message', (event) => {
       if (event.data?.source !== 'chess-football-godot') return;
       if (event.data.type === 'ready') window.__chessFootballWebReady = true;
       if (event.data.type === 'ci-action-poses-installed') {
         window.__chessFootballActionPoseReceipts.push(event.data);
+      }
+      if (event.data.type === 'ci-hero-v5-installed' || event.data.type === 'ci-hero-v5-progress') {
+        window.__chessFootballHeroV5Receipts.push(event.data);
       }
       if (event.data.type === 'ci-keyboard-sample') {
         window.__chessFootballInputSamples.push(event.data);
@@ -485,6 +557,13 @@ try {
       'https://assets.chess-studio.shadowops.dpdns.org/football/atlases/'
     )) {
       failures.push('OBSOLETE SHARED CDN REQUEST: ' + request.url());
+    }
+  });
+  // Distinguish a successful localhost R2 bridge from a Web/decoder timeout.
+  // Log only the four public V5 URLs; never leak gameplay state or identifiers.
+  page.on('response', (response) => {
+    if (response.url().startsWith('https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v5/')) {
+      console.log('FOOTBALL_WEB_CI_HERO_V5_HTTP', response.status(), response.url().split('/').at(-1));
     }
   });
   page.on('requestfailed', (request) => {
@@ -621,6 +700,20 @@ try {
     null, { timeout: 60000 }
   );
   console.log('FOOTBALL_XI_REAL_WEB_ACTION_POSES_INSTALLED_OK teams=2 actions=4 sheets=8');
+  // HTTP 200 by itself is not enough: actual Godot WASM must install all
+  // four V5 banks into 20 outfield SpriteFrames before continuing.
+  try {
+    await page.waitForFunction(
+      () => window.__chessFootballHeroV5Receipts.some((receipt) =>
+        receipt.team_size === 11 && receipt.sheets === 4),
+      null, { timeout: 60000 }
+    );
+  } catch (error) {
+    console.log('FOOTBALL_WEB_CI_HERO_V5_RECEIPTS',
+      JSON.stringify(await page.evaluate(() => window.__chessFootballHeroV5Receipts)));
+    throw error;
+  }
+  console.log('FOOTBALL_XI_REAL_WEB_HERO_V5_INSTALLED_OK clubs=2 families=2 sheets=4');
   // The first 5v5 boot already exercised Playwright's real canvas.click.
   // After a full WASM reboot in software WebGL, locator.click can hang in
   // actionability/scroll checks during ReadPixels GPU stalls despite a real,

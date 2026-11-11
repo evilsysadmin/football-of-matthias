@@ -1,8 +1,8 @@
 extends SceneTree
 
-# New approved blue/red V5 art is not live until the operator publishes the
-# exact WebP hashes. Synthetic sheets exercise shape gates and atomic swaps
-# WITHOUT downloading assets, changing 2D match authority or faking CORS.
+# Published SHA/CORS-verified V5 art must expose trusted metadata.
+# Synthetic sheets separately test atomic swaps and no changes to the
+# 2D match authority, keepers or unsupported run directions.
 func _sample_atlas(rows: int) -> Image:
 	var atlas := Image.create(2048, rows * 144, false, Image.FORMAT_RGBA8)
 	atlas.fill(Color.TRANSPARENT)
@@ -26,8 +26,13 @@ func _initialize() -> void:
 	assert(stage != null and stage.xi_raster_meshes.size() == 22)
 	for club in range(2):
 		for family in ChessFootballHeroV5R2.FAMILIES:
-			# Must fail CLOSED until the user actually uploads to R2.
-			assert(ChessFootballHeroV5R2.sheet_meta(club, family).is_empty())
+			var verified_meta: Dictionary = ChessFootballHeroV5R2.sheet_meta(club, family)
+			assert(not verified_meta.is_empty(), "Uploaded V5 sheet must be enabled")
+			assert(ChessFootballR2AtlasLoader.valid_metadata(
+				verified_meta, ChessFootballHeroV5R2.TRUSTED_ROOT
+			))
+			assert(verified_meta.url == ChessFootballHeroV5R2.TRUSTED_ROOT
+				+ ChessFootballHeroV5R2.CLUBS[club] + "_" + family + "_v5.webp")
 	assert(ChessFootballHeroV5R2.sheet_meta(-1, "locomotion").is_empty())
 	assert(ChessFootballHeroV5R2.sheet_meta(0, "invalid").is_empty())
 	assert(ChessFootballHeroV5R2.frames_from_image(
