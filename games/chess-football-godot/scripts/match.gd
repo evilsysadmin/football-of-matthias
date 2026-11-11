@@ -755,7 +755,7 @@ func contextual_help_text(touch: bool = false) -> String:
 		return (
 			"ATACAS · compañero: pase · portería: tiro · césped libre: regate"
 			if touch else
-			"ATACAS · Space pase · Enter tiro · E amago/recorte · F toque largo"
+			"ATACAS · Space pase · Enter tiro · E quieto: amago · E en marcha: recorte · F toque largo"
 		)
 	if ball.carrier.team_id == 0:
 		return "ATACAMOS · toca un compañero para controlarlo" if touch else "ATACAMOS · Q/Tab cambia jugador · WASD mueve · Shift sprint"
