@@ -62,8 +62,39 @@ func _initialize() -> void:
 	assert(XI.has_point(xi_normal_cover))
 	assert(xi_normal_cover.is_equal_approx(xi_easy_cover))
 	assert(not game._ai_cpu_second_press_active(xi_cover_player, striker.global_position))
+	# Normal XI tackle attempts use discrete read beats of the existing
+	# tactical clock instead of perfect per-physics-frame timing. Movement
+	# and legal tackle contact remain available at their original speeds.
+	var original_age: float = game.ball.possession_seconds
+	var read_interval: float = game._ai_adaptive_decision_interval() * 0.80
+	game.ball.possession_seconds = 0.40
+	assert(not game._ai_xi_normal_tackle_read_due(striker, 1.0 / 60.0))
+	game.ball.possession_seconds = read_interval * 2.0 + 0.004
+	assert(game._ai_xi_normal_tackle_read_due(striker, 1.0 / 60.0))
+	game.ball.possession_seconds = read_interval * 2.0 + 0.06
+	assert(not game._ai_xi_normal_tackle_read_due(striker, 1.0 / 60.0))
+	# Even when the new read is late, a real clean frontal challenge is
+	# never made illegal or given a smaller hitbox.
+	var defender_saved_pos: Vector2 = xi_cover_player.global_position
+	var defender_saved_velocity: Vector2 = xi_cover_player.velocity
+	xi_cover_player.global_position = striker.global_position + Vector2(31.0, -8.0)
+	xi_cover_player.velocity = Vector2(-175.0, 0.0)
+	assert(bool(game._tackle_hitbox(xi_cover_player, striker.global_position).get("clean", false)))
+	assert(game._ai_xi_tackle_commit_ready(xi_cover_player, striker, false))
+	xi_cover_player.global_position = defender_saved_pos
+	xi_cover_player.velocity = defender_saved_velocity
 	game._set_quick_difficulty("hard")
-	assert(game._ai_cpu_second_press_active(xi_cover_player, striker.global_position))
+	assert(game._ai_xi_normal_tackle_read_due(striker, 1.0 / 60.0))
+	game._set_quick_difficulty("expert")
+	assert(game._ai_xi_normal_tackle_read_due(striker, 1.0 / 60.0))
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_normal_tackle_read_due(striker, 1.0 / 60.0))
+	game._set_quick_difficulty("normal")
+	game.match_team_size = 5
+	assert(game._ai_xi_normal_tackle_read_due(striker, 1.0 / 60.0))
+	game.match_team_size = 11
+	game.ball.possession_seconds = original_age
+	game._set_quick_difficulty("hard")
 	var xi_hard_cover: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
 	assert(XI.has_point(xi_hard_cover))
 	assert(xi_hard_cover.x > striker.global_position.x)

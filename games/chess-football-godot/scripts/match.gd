@@ -1197,7 +1197,10 @@ func _update_ai(delta: float) -> void:
 				and ball.carrier.team_id != team_id
 			):
 				if player == presser:
-					if _ai_xi_tackle_commit_ready(player, ball.carrier, false):
+					if (
+						_ai_xi_normal_tackle_read_due(ball.carrier, delta)
+						and _ai_xi_tackle_commit_ready(player, ball.carrier, false)
+					):
 						_try_tackle(player)
 				elif (
 					player == cover
@@ -2685,6 +2688,30 @@ func _tackle_hitbox(
 func _tackle_attempt_range(tackler: Footballer, aggressive_override: bool = false) -> float:
 	var aggressive := aggressive_override or tackler.tackle_aggressive_active()
 	return TACKLE_ATTEMPT_RANGE + (SLIDE_TACKLE_FORWARD_BONUS if aggressive else 0.0)
+
+
+# On Normal, a defender must choose when to ATTEMPT a tackle instead of
+# exploiting 60 perfect hitbox opportunities per second. Use the current
+# possession's physical clock and the existing AI decision interval: no RNG,
+# new timers or owner-leaking state. A clean contact remains legal between
+# reads if a tackle was already launched. Hard/Expert/Easy, human tackles,
+# loose-ball claims and legacy 5v5 keep their historical timing.
+func _ai_xi_normal_tackle_read_due(victim: Footballer, delta: float) -> bool:
+	if (
+		match_team_size != 11
+		or quick_difficulty != "normal"
+		or victim.team_id != 0
+		or ball.carrier != victim
+	):
+		return true
+	var age: float = ball.possession_seconds
+	if age < AI_XI_NORMAL_FIRST_TOUCH_REACTION:
+		return false
+	# Nearby tackle opportunities close quickly: read at 80% of the
+	# general AI tactical interval, still far slower than a 60 Hz oracle.
+	var interval: float = maxf(_ai_adaptive_decision_interval() * 0.80, 0.08)
+	var previous: float = maxf(age - maxf(delta, 0.0), 0.0)
+	return floori(age / interval) > floori(previous / interval)
 
 
 # CPU XI Normal+ should KEEP CONTAINING until the defender has a real legal

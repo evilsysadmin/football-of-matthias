@@ -119,6 +119,26 @@ func _initialize() -> void:
 	# All three real E/F actions plus a neutral run, in two approach
 	# distances and two difficulty settings; no inferred win percentages.
 	assert(rows.size() == 16)
+	# Guard a useful range for this fixed, isolated XI laboratory only.
+	# Not a claim about match win rates: Normal must leave several real
+	# opportunities to beat a defender AND real consequences for mistakes.
+	var outcome_counts: Dictionary = {
+		"normal": {"retained": 0, "loose": 0, "recovered": 0, "foul": 0},
+		"hard": {"retained": 0, "loose": 0, "recovered": 0, "foul": 0}
+	}
+	for item in rows:
+		var level: String = String(item["difficulty"])
+		var result: String = String(item["result"])
+		var counts: Dictionary = outcome_counts[level]
+		counts[result] = int(counts[result]) + 1
+		outcome_counts[level] = counts
+	var normal: Dictionary = outcome_counts["normal"]
+	assert(int(normal["retained"]) >= 3 and int(normal["retained"]) <= 6,
+		"Normal XI fixed 1v1 matrix must reward some skill without gifting all balls")
+	assert(int(normal["loose"]) + int(normal["recovered"]) >= 2,
+		"Normal XI must still be able to contest a human dribble")
+	assert(int(normal["recovered"]) >= 1,
+		"At least one poorly timed action must remain defensible by the CPU")
 	var matrix: Dictionary = {}
 	for item in rows:
 		var key := String(item["difficulty"]) + "/" + String(item["approach"])
@@ -134,6 +154,7 @@ func _initialize() -> void:
 		"scenarios": rows.size(),
 		"frames_per_scenario": FRAMES,
 		"matrix": matrix,
+		"outcome_counts": outcome_counts,
 		"rows": rows
 	}))
 	print("FOOTBALL_XI_LIVE_DRIBBLE_DUELS_OK")
