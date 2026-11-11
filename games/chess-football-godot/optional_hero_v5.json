@@ -10,44 +10,44 @@
     "width": 128,
     "height": 144
   },
-  "columns": 8,
+  "columns": 16,
   "entries": [
     {
       "team": "fc_matthias",
       "family": "locomotion",
       "file": "fc_matthias_locomotion_v5.webp",
-      "sha256": "d1bdf08c302712ec2f254aa76044be6a78cf2f433bc5fafe1cc6cf100fd5eca3",
-      "bytes": 279160,
-      "columns": 8,
+      "sha256": "332d71b141db33af14ae755c80d00d26fc90eb9e3810e279de2e6a3b05c059e2",
+      "bytes": 545550,
+      "columns": 16,
       "rows": 3
     },
     {
       "team": "fc_matthias",
       "family": "dribbles",
       "file": "fc_matthias_dribbles_v5.webp",
-      "sha256": "2aac04c7204f6072f0e93ce46aa00ee4a31af1f29067868de2ff3a788bc30cb7",
-      "bytes": 203072,
-      "columns": 8,
+      "sha256": "0d98a751d53354f77fabf40ddb10fefa848ee70408e05e811cf88f0d409a26ad",
+      "bytes": 390132,
+      "columns": 16,
       "rows": 2
     },
     {
       "team": "real_enroque",
       "family": "locomotion",
       "file": "real_enroque_locomotion_v5.webp",
-      "sha256": "ebcab048b768c1babf589fa39ba40925b776f08271189c0d774223443731ebe5",
-      "bytes": 272524,
-      "columns": 8,
+      "sha256": "b551b67dde35cd1a7df7c6e1c67004ab8650ef22b750b610d8e78efc049f1529",
+      "bytes": 523484,
+      "columns": 16,
       "rows": 3
     },
     {
       "team": "real_enroque",
       "family": "dribbles",
       "file": "real_enroque_dribbles_v5.webp",
-      "sha256": "4d0a34b2eb6541fccc454c2078cf719d578362c277fd844f0086b116f65e430a",
-      "bytes": 208896,
-      "columns": 8,
+      "sha256": "d8a90faccd102db66afd1f2c19096738974b54a6f8ea3bb32f09136a7f218da3",
+      "bytes": 400878,
+      "columns": 16,
       "rows": 2
     }
   ],
-  "notes": "User approved artwork. OFF until all four public R2 files verified via SHA256/CORS/Godot screenshots. Separate ball art stripped; legacy V1-V4 authoritative fallback."
+  "notes": "User-approved 8 drawn poses per row + 8 optical-flow in-betweens (source exact at even frames). OFF until four public R2 files are SHA/CORS/Godot/performance checked; fallback V1-V4."
 }
