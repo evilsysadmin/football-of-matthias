@@ -836,6 +836,13 @@ func _request_hero_v5_from_r2() -> void:
 	for team_id in range(2):
 		for family in ChessFootballHeroV5R2.FAMILIES:
 			var meta := ChessFootballHeroV5R2.sheet_meta(team_id, family)
+			if OS.has_feature("web"):
+				JavaScriptBridge.eval(
+					"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) console.log('FOOTBALL_HERO_V5_META_%d_%s:%s');" % [
+						team_id, family, "missing" if meta.is_empty() else "ready"
+					],
+					true
+				)
 			if meta.is_empty():
 				continue
 			var loader := ChessFootballR2AtlasLoader.new()
@@ -847,6 +854,12 @@ func _request_hero_v5_from_r2() -> void:
 
 func _on_hero_v5_ready(image: Image, team_id: int, family: String) -> void:
 	var frames := ChessFootballHeroV5R2.frames_from_image(image, family)
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval(
+			"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) console.log('FOOTBALL_HERO_V5_FRAMES_%d_%s:%d');" % [
+				team_id, family, frames.size()
+			], true
+		)
 	if family == "locomotion":
 		_apply_hero_v5_locomotion(frames, team_id)
 	elif family == "dribbles":
@@ -945,6 +958,15 @@ func _apply_hero_v5_dribbles(textures: Array[Texture2D], team_id: int) -> void:
 func _emit_hero_v5_ci_receipt() -> void:
 	if not OS.has_feature("web") or match_node.match_team_size != 11:
 		return
+	var progress: String = JSON.stringify({
+		"source": "chess-football-godot",
+		"type": "ci-hero-v5-progress", "team_size": 11,
+		"installed": _hero_v5_loaded.keys(),
+	})
+	JavaScriptBridge.eval(
+		"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) window.parent.postMessage(%s, '*');" % progress,
+		true
+	)
 	if _hero_v5_loaded.size() != 4:
 		return
 	for team_id in range(2):
