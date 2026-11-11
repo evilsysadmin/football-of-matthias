@@ -1,0 +1,63 @@
+name: Football · V5 R2 public WebP integrity
+
+on:
+  pull_request:
+    paths:
+      - "scripts/verify_football_v5_r2.py"
+      - "games/chess-football-godot/optional_hero_v5.json"
+      - ".github/workflows/football-v5-r2-verify.yml"
+  push:
+    branches:
+      - "ci/verify-public-v5-r2-upload-20261111"
+    paths:
+      - "scripts/verify_football_v5_r2.py"
+      - "games/chess-football-godot/optional_hero_v5.json"
+      - ".github/workflows/football-v5-r2-verify.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-r2-webp:
+    name: Four exact WebPs · HTTP + SHA256 + staging CORS
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify public V5 R2 bytes without credentials
+        run: python3 scripts/verify_football_v5_r2.py
+      - name: Summarize R2 publication
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path(".artifacts/football-v5-r2-check/report.json")
+          if not path.exists():
+              print("No report: manifest validation or runner failed before HTTPS probes.")
+              raise SystemExit(0)
+          data = json.loads(path.read_text())
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("### Football V5 public asset gate: " + data["status"] + "\n\n")
+              f.write("| File | HTTPS | SHA | CORS | Detail |\n|---|---|---|---|---|\n")
+              for item in data["files"]:
+                  checks = item.get("checks", {})
+                  f.write("| %s | %s | %s | %s | %s |\n" % (
+                      item["file"],
+                      "yes" if checks.get("http_200") else "no",
+                      "yes" if checks.get("sha256") else "no",
+                      "yes" if checks.get("cors") else "no",
+                      item.get("error", "verified" if item["ok"] else "mismatch")
+                  ))
+          PY
+      - name: Save read-only validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-v5-r2-public-check
+          path: .artifacts/football-v5-r2-check/
+          if-no-files-found: warn
+          retention-days: 14
