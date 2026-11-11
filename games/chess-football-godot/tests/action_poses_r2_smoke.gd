@@ -255,13 +255,16 @@ func _initialize() -> void:
 	# arbitrary render-frame offsets, without extending the action.
 	assert(ChessFootball3DPresenter.xi_burst_r2_contact_pose(8, 0.26) == 3.0)
 	assert(ChessFootball3DPresenter.xi_burst_r2_contact_pose(8, 0.50) == 5.0)
+	assert(ChessFootball3DPresenter.xi_burst_r2_contact_pose(8, 0.72) == 6.0)
 	assert(ChessFootball3DPresenter.xi_burst_r2_contact_pose(8, 0.83) == 6.0)
+	assert(ChessFootball3DPresenter.xi_burst_r2_contact_pose(8, 0.94) == 6.0)
 	assert(ChessFootball3DPresenter.xi_burst_r2_contact_pose(8, 0.95) == 0.0)
 	assert(ChessFootball3DPresenter.xi_burst_r2_contact_pose(6, 0.50) == 0.0)
 	for fps in [15.0, 20.0, 30.0]:
 		for sample_offset in [0.0, 0.25, 0.5, 0.95]:
 			var saw_preparation := false
 			var saw_extended_toe := false
+			var saw_recovery := false
 			for frame_index in range(10):
 				var elapsed: float = (float(frame_index) + sample_offset) / fps
 				if elapsed >= Footballer.DRIBBLE_LONG_TOUCH_SECONDS:
@@ -276,8 +279,9 @@ func _initialize() -> void:
 				var pose := ChessFootball3DPresenter.xi_burst_r2_contact_pose(8, progress)
 				saw_preparation = saw_preparation or pose == 3.0
 				saw_extended_toe = saw_extended_toe or pose == 5.0
-			assert(saw_preparation and saw_extended_toe,
-				"Real XI F long-touch should show planted R2 preparation and extended toe at 15 FPS")
+			saw_recovery = saw_recovery or pose == 6.0
+			assert(saw_preparation and saw_extended_toe and saw_recovery,
+				"Real XI F must show preparation, toe and recovery at 15/20/30 FPS")
 	# F reuses the same authenticated outward R2 toe as moving E:
 	# at contact the single visible ball is near the actual boot,
 	# and at 0/100% it returns to the unchanged physical ball.
@@ -302,6 +306,12 @@ func _initialize() -> void:
 			Vector3(0.0, 0.16, 0.38), Vector3(0.0, 0.16, 0.0),
 			flipped, 0.0, 0.68
 		) == Vector3(0.0, 0.16, 0.38))
+		for recovered in [0.94, 0.95, 1.0]:
+			assert(ChessFootball3DPresenter.xi_cut_display_ball_contact(
+				Vector3(0.0, 0.16, 0.38), Vector3(0.0, 0.16, 0.0),
+				flipped, recovered, 0.68
+			).distance_to(Vector3(0.0, 0.16, 0.38)) < 0.001,
+				"F visual ball must settle before the R2 runner resumes")
 
 	# Real 0.24s 11v11 feint at 15, 20 and 30 Hz: even with the
 	# sampling phase shifted nearly one full frame, both R2 painted foot
