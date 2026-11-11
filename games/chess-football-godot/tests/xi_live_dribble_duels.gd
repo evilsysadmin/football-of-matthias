@@ -114,6 +114,8 @@ func _initialize() -> void:
 					"attacker_advance": snappedf(carrier.global_position.x - origin.x, 0.1),
 					"attacker_lateral": snappedf(carrier.global_position.y - origin.y, 0.1)
 				})
+				if rows.size() % 4 == 0:
+					print("FOOTBALL_XI_DUEL_LAB_PROGRESS completed=%d/16" % rows.size())
 	# All three real E/F actions plus a neutral run, in two approach
 	# distances and two difficulty settings; no inferred win percentages.
 	assert(rows.size() == 16)
