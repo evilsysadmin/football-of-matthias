@@ -2306,6 +2306,13 @@ func sync_presentation(delta: float, mode: String) -> void:
 	# yesterday's interpolated pose; otherwise footballers visibly pulse.
 	_sync_camera(delta, mode)
 	_sync_goal_ad_panels()
+	# One reference per camera tick, not 22 identical screen projections.
+	# Only XI broadcast uses this scale. Tactical/5v5 keep existing paths.
+	var xi_reference_pixels := (
+		xi_projected_reference_pixels(camera)
+		if match_node.match_team_size == 11 and mode == "broadcast"
+		else -1.0
+	)
 	var holding_keeper: Footballer = match_node.ball.carrier
 	if holding_keeper != null and holding_keeper.role != "keeper":
 		holding_keeper = null
@@ -2444,7 +2451,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 			# camera-forward distance. Match the actual on-screen projected
 			# height, not an approximate depth ratio; keep legacy 5v5/tactical.
 			var depth_scale := (
-				xi_projected_body_scale(camera, proxy.global_position)
+				xi_projected_body_scale(camera, proxy.global_position, xi_reference_pixels)
 				if match_node.match_team_size == 11 and mode == "broadcast"
 				else perspective_body_scale(camera, proxy.global_position)
 			)
@@ -3169,27 +3176,44 @@ static func xi_v3_diagonal_width_trim(
 # Measure a ground-to-head reference segment through the actual camera.
 # Keeping a single projected height across lanes avoids shrinking wingers;
 # fixed-world gameplay coordinates, physical contact and PNGs are untouched.
-static func xi_projected_body_scale(view_camera: Camera3D, stage_position: Vector3) -> float:
+# Reference depends on camera pose, not on the 22 individual actors.
+# In broadcast, compute it once after updating this frame's camera.
+static func xi_projected_reference_pixels(view_camera: Camera3D) -> float:
+	if view_camera == null or view_camera.projection != Camera3D.PROJECTION_PERSPECTIVE:
+		return 0.0
+	var reference := Vector3(view_camera.global_position.x, 0.02, 0.0)
+	var head := reference + Vector3.UP * 1.48
+	if view_camera.is_position_behind(reference) or view_camera.is_position_behind(head):
+		return 0.0
+	return view_camera.unproject_position(reference).distance_to(
+		view_camera.unproject_position(head)
+	)
+
+
+# Optional precomputed reference is an optimization only: two-argument
+# callers (tests, tools) continue returning the exact original scale.
+static func xi_projected_body_scale(
+	view_camera: Camera3D, stage_position: Vector3, reference_pixels: float = -1.0
+) -> float:
 	if view_camera == null or view_camera.projection != Camera3D.PROJECTION_PERSPECTIVE:
 		return 1.0
 	var ground := Vector3(stage_position.x, 0.02, stage_position.z)
 	var head := ground + Vector3.UP * 1.48
-	var reference := Vector3(view_camera.global_position.x, 0.02, 0.0)
-	var reference_head := reference + Vector3.UP * 1.48
 	if view_camera.is_position_behind(ground) or view_camera.is_position_behind(head):
 		return 1.0
-	if view_camera.is_position_behind(reference) or view_camera.is_position_behind(reference_head):
+	var wanted_reference: float = (
+		reference_pixels if reference_pixels >= 0.0
+		else xi_projected_reference_pixels(view_camera)
+	)
+	if wanted_reference < 0.01:
 		return 1.0
 	var projected: float = view_camera.unproject_position(ground).distance_to(
 		view_camera.unproject_position(head)
 	)
-	var reference_pixels: float = view_camera.unproject_position(reference).distance_to(
-		view_camera.unproject_position(reference_head)
-	)
-	if projected < 0.01 or reference_pixels < 0.01:
+	if projected < 0.01:
 		return 1.0
 	return clampf(
-		reference_pixels / projected,
+		wanted_reference / projected,
 		MIN_PERSPECTIVE_BODY_SCALE, MAX_PERSPECTIVE_BODY_SCALE
 	)
 
