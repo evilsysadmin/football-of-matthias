@@ -770,7 +770,7 @@ jobs:
           godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
           log="$RUNNER_TEMP/football-hero-v5-real.log"
           set +e
-          timeout 105s "$godot" --headless --quit-after 3000 --path games/chess-football-godot --script res://tests/hero_v5_real_r2_visual.gd 2>&1 | tee "$log"
+          timeout 110s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/hero_v5_real_r2_visual.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|ERROR: Failed to load script' "$log"; then
