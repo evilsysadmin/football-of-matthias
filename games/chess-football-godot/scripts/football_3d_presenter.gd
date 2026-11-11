@@ -182,6 +182,8 @@ var _animated_idle_r2_loaded: Dictionary = {}
 var _run_v2_r2_loaded: Dictionary = {}
 # V3 supersedes V2 only after its entire 12x5 sheet verifies for each club.
 var _run_v3_r2_loaded: Dictionary = {}
+# Higher-density optical-flow sheets are opt-in only after public R2 QA.
+var _motion_v4_loaded: Dictionary = {}
 # Authored action replacement becomes active per-club only after full verification.
 var _pass_shoot_r2_loaded: Dictionary = {}
 # Verified side-view carrier animations. Never alter the 2D ball or physics.
@@ -369,7 +371,7 @@ func _on_run_v3_ready(image: Image, team_id: int) -> void:
 
 
 func _apply_verified_run_v3(textures: Array[Texture2D], team_id: int) -> void:
-	if team_id not in [0, 1] or _run_v3_r2_loaded.has(team_id):
+	if team_id not in [0, 1] or _run_v3_r2_loaded.has(team_id) or _motion_v4_loaded.has("%d:run" % team_id):
 		return
 	if textures.size() != ChessFootballRunV3R2.ROWS * ChessFootballRunV3R2.COLUMNS:
 		return
@@ -447,7 +449,7 @@ func _on_run_v2_ready(image: Image, team_id: int) -> void:
 
 
 func _apply_verified_run_v2(textures: Array[Texture2D], team_id: int) -> void:
-	if _run_v3_r2_loaded.has(team_id):
+	if _run_v3_r2_loaded.has(team_id) or _motion_v4_loaded.has("%d:run" % team_id):
 		return
 	if team_id not in [0, 1] or textures.size() != ChessFootballRunV2R2.COLUMNS * ChessFootballRunV2R2.ROWS:
 		return
@@ -517,7 +519,7 @@ func _on_lateral_run_atlas_ready(image: Image, team_id: int) -> void:
 func _apply_verified_lateral_run(textures: Array[Texture2D], team_id: int) -> void:
 	# An older v1 request may complete after the v2 atlas. It must not
 	# overwrite the newly validated running frames.
-	if _run_v2_r2_loaded.has(team_id) or _run_v3_r2_loaded.has(team_id):
+	if _run_v2_r2_loaded.has(team_id) or _run_v3_r2_loaded.has(team_id) or _motion_v4_loaded.has("%d:run" % team_id):
 		return
 	# Keep all original run phases, FPS, action indices and facing animations;
 	# switching only the eight side frames cannot change game simulation.
@@ -582,6 +584,8 @@ func _on_pass_shoot_ready(image: Image, team_id: int) -> void:
 
 
 func _apply_verified_pass_shoot_frames(textures: Array[Texture2D], team_id: int) -> void:
+	if _motion_v4_loaded.has("%d:pass_shoot" % team_id):
+		return
 	if team_id not in [0, 1] or textures.size() != 16:
 		return
 	var targets: Array[SpriteFrames] = []
@@ -630,6 +634,8 @@ func _on_carry_dribble_ready(image: Image, team_id: int) -> void:
 
 
 func _apply_verified_carry_dribble_frames(textures: Array[Texture2D], team_id: int) -> void:
+	if _motion_v4_loaded.has("%d:carry_dribble" % team_id):
+		return
 	if team_id not in [0, 1] or textures.size() != 16:
 		return
 	var targets: Array[SpriteFrames] = []
@@ -658,6 +664,158 @@ func _apply_verified_carry_dribble_frames(textures: Array[Texture2D], team_id: i
 	_carry_dribble_r2_loaded[team_id] = true
 	# Carrier source art has its OWN silhouette envelope, independent of v3
 	# side running. Clear any cached reference from before the async swap.
+	body_scale_cache.clear()
+	tone_gain_cache.clear()
+
+
+# Optional v4 animation density. The published manifest remains DISABLED until
+# operator-provided R2 WebPs pass real browser SHA/CORS/visual sign-off.
+# Keep the existing certified v1/v2/v3 animation if one v4 sheet fails.
+func _request_motion_v4_from_r2() -> void:
+	if not OS.has_feature("web") or match_node.match_team_size != 11:
+		return
+	for team_id in range(2):
+		for family in ChessFootballMotionV4R2.FAMILIES:
+			var meta := ChessFootballMotionV4R2.sheet_meta(team_id, family)
+			if meta.is_empty():
+				continue
+			var loader := ChessFootballR2AtlasLoader.new()
+			loader.name = "MotionV4_%d_%s" % [team_id, family]
+			add_child(loader)
+			loader.atlas_ready.connect(_on_motion_v4_ready.bind(team_id, family))
+			loader.start(meta, ChessFootballMotionV4R2.TRUSTED_ROOT)
+
+
+func _on_motion_v4_ready(image: Image, team_id: int, family: String) -> void:
+	var textures := ChessFootballMotionV4R2.frames_from_image(image, family)
+	if family == "run":
+		_apply_motion_v4_run(textures, team_id)
+	elif family == "carry_dribble":
+		_apply_motion_v4_carry_dribble(textures, team_id)
+	elif family == "pass_shoot":
+		_apply_motion_v4_pass_shoot(textures, team_id)
+
+
+func _apply_motion_v4_run(textures: Array[Texture2D], team_id: int) -> void:
+	var key := "%d:run" % team_id
+	if team_id not in [0, 1] or _motion_v4_loaded.has(key) or textures.size() != 120:
+		return
+	var targets: Array[AnimatedSprite3D] = []
+	var previous_count := 0
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null or sprite.sprite_frames == null:
+			return
+		var bank := sprite.sprite_frames
+		for row_name in ChessFootballRunV3R2.ANIMATIONS:
+			for base in ["run", "sprint"]:
+				var name := StringName(row_name.replace("run", base))
+				if not bank.has_animation(name) or bank.get_frame_count(name) not in [8, 12]:
+					return
+		var count: int = bank.get_frame_count(&"run")
+		if previous_count > 0 and count != previous_count:
+			return
+		previous_count = count
+		targets.append(sprite)
+	if targets.size() != match_node.match_team_size - 1:
+		return
+	for sprite in targets:
+		var bank := sprite.sprite_frames
+		for row in range(5):
+			for base in ["run", "sprint"]:
+				var name := StringName(ChessFootballRunV3R2.ANIMATIONS[row].replace("run", base))
+				var old_fps: float = bank.get_animation_speed(name)
+				bank.clear(name)
+				bank.set_animation_speed(name, old_fps * 24.0 / float(previous_count))
+				for i in range(24):
+					bank.add_frame(name, textures[row * 24 + i])
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var id: int = player.get_instance_id()
+		var driver := player_sprites[id] as AnimatedSprite3D
+		if _keeper_locomotion(driver.animation):
+			var old_phase: float = float(outfield_visual_phases.get(id, float(driver.frame)))
+			var new_phase: float = fposmod(old_phase * 24.0 / float(previous_count), 24.0)
+			outfield_visual_phases[id] = new_phase
+			driver.frame = int(floorf(new_phase))
+		var sculpt := xi_actor_models.get(id) as Node3D
+		var quad := xi_raster_meshes.get(id) as MeshInstance3D
+		if sculpt != null and quad != null:
+			sculpt.hide()
+			quad.show()
+	_motion_v4_loaded[key] = true
+	body_scale_cache.clear()
+	tone_gain_cache.clear()
+
+
+func _apply_motion_v4_pass_shoot(textures: Array[Texture2D], team_id: int) -> void:
+	var key := "%d:pass_shoot" % team_id
+	if team_id not in [0, 1] or _motion_v4_loaded.has(key) or textures.size() != 32:
+		return
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null or sprite.sprite_frames == null:
+			return
+		var bank := sprite.sprite_frames
+		for action in ChessFootballPassShootR2.ANIMATIONS:
+			if not bank.has_animation(action) or bank.get_frame_count(action) != 8:
+				return
+		targets.append(bank)
+	if targets.size() != match_node.match_team_size - 1:
+		return
+	for bank in targets:
+		for row in range(2):
+			var name: StringName = ChessFootballPassShootR2.ANIMATIONS[row]
+			var fps: float = bank.get_animation_speed(name)
+			var looping: bool = bank.get_animation_loop(name)
+			bank.clear(name)
+			bank.set_animation_speed(name, fps * 2.0)
+			bank.set_animation_loop(name, looping)
+			for i in range(16):
+				bank.add_frame(name, textures[row * 16 + i])
+	_motion_v4_loaded[key] = true
+	tone_gain_cache.clear()
+
+
+func _apply_motion_v4_carry_dribble(textures: Array[Texture2D], team_id: int) -> void:
+	var key := "%d:carry_dribble" % team_id
+	if team_id not in [0, 1] or _motion_v4_loaded.has(key) or textures.size() != 32:
+		return
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null or sprite.sprite_frames == null:
+			return
+		var bank := sprite.sprite_frames
+		var has_carry: bool = bank.has_animation(&"carry")
+		var has_dribble: bool = bank.has_animation(&"dribble")
+		if has_carry != has_dribble:
+			return
+		if has_carry and (bank.get_frame_count(&"carry") != 8 or bank.get_frame_count(&"dribble") != 8):
+			return
+		targets.append(bank)
+	if targets.size() != match_node.match_team_size - 1:
+		return
+	for bank in targets:
+		for row in range(2):
+			var name: StringName = ChessFootballCarryDribbleR2.ANIMATIONS[row]
+			var old_fps: float = bank.get_animation_speed(name) if bank.has_animation(name) else (12.0 if row == 0 else 36.0)
+			if not bank.has_animation(name):
+				bank.add_animation(name)
+			bank.clear(name)
+			bank.set_animation_speed(name, old_fps * 2.0)
+			bank.set_animation_loop(name, row == 0)
+			for i in range(16):
+				bank.add_frame(name, textures[row * 16 + i])
+	_motion_v4_loaded[key] = true
 	body_scale_cache.clear()
 	tone_gain_cache.clear()
 
@@ -900,6 +1058,7 @@ func setup(p_match: Node) -> void:
 	_request_tackle_atlases_from_r2()
 	_request_action_poses_from_r2()
 	_request_keeper_catch_atlases_from_r2()
+	_request_motion_v4_from_r2()
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
