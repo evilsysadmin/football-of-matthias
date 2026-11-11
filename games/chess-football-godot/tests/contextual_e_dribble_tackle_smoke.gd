@@ -40,6 +40,16 @@ func _initialize() -> void:
 	game._select_player(carrier)
 	game.ball.attach_to(carrier)
 	carrier.velocity = Vector2.ZERO
+	# The actual on-screen hint must explain what E does at the moment
+	# it is pressed. XI stationary E feints, moving E cuts; the previous
+	# generic "amago/recorte" hid this important difference.
+	var desktop_hint := game.contextual_help_text(false)
+	assert(desktop_hint.contains("E quieto: amago"))
+	assert(desktop_hint.contains("E en marcha: recorte"))
+	assert(desktop_hint.contains("F toque largo"))
+	var touch_hint := game.contextual_help_text(true)
+	assert(touch_hint.contains("césped libre: regate"))
+	assert(not touch_hint.contains("E quieto"))
 	var initial_score: Array = game.score.duplicate()
 	var initial_home: Vector2 = carrier.global_position
 
@@ -258,6 +268,8 @@ func _initialize() -> void:
 	assert(is_equal_approx(legacy_actor.dribble_duration_seconds, 0.16))
 	assert(is_equal_approx(legacy_actor.DRIBBLE_FEINT_SPEED, 0.65))
 	assert(historical.ball.carrier == legacy_actor)
+	assert(historical.contextual_help_text(false).contains("E regate/entrada"))
+	assert(not historical.contextual_help_text(false).contains("E quieto"))
 
 	print("FOOTBALL_CONTEXTUAL_E_OK feint_cut_burst=1 technique=1 E_standing=1 repeated_E_no_slide=1 F_slide=1 shift_E_normal=1 physical_contact=1 score_isolated=1")
 	quit(0)
