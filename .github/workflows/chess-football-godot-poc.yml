@@ -401,7 +401,7 @@ jobs:
           godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
           log="$RUNNER_TEMP/football-xi-live-dribble-duels.log"
           set +e
-          timeout 60s "$godot" --headless --quit-after 1250 --path games/chess-football-godot --script res://tests/xi_live_dribble_duels.gd 2>&1 | tee "$log"
+          timeout 60s "$godot" --headless --quit-after 4000 --path games/chess-football-godot --script res://tests/xi_live_dribble_duels.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
