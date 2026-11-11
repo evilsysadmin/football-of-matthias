@@ -20,7 +20,7 @@ var _request_node: HTTPRequest
 static func valid_metadata(meta: Dictionary, allowed_root: String = CDN_ROOT) -> bool:
 	if not allowed_root.begins_with("https://") or not allowed_root.ends_with("/"):
 		return false
-	if allowed_root != CDN_ROOT and not (allowed_root.ends_with("/atlases/v1/") or allowed_root.ends_with("/atlases/v2/") or allowed_root.ends_with("/atlases/v3/")):
+	if allowed_root != CDN_ROOT and not (allowed_root.ends_with("/atlases/v1/") or allowed_root.ends_with("/atlases/v2/") or allowed_root.ends_with("/atlases/v3/") or allowed_root.ends_with("/atlases/v4/")):
 		return false
 	var url := String(meta.get("url", ""))
 	if not url.begins_with(allowed_root):
