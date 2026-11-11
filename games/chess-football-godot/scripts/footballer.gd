@@ -214,11 +214,20 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	# The first E plant still sells the feint. Only after the second boot
 	# commits may the human steer the exit; no instant snap or invulnerability.
 	var xi_feint_exit: float = _xi_feint_exit_ratio()
+	var xi_cut_exit: float = _xi_cut_exit_ratio()
 	var wanted_direction := dribble_direction if dribbling else direction
 	if xi_feint_exit > 0.0 and direction.length_squared() > 0.04:
 		wanted_direction = dribble_direction.lerp(
 			direction.normalized(), xi_feint_exit * 0.80
 		).normalized()
+	elif xi_cut_exit > 0.0 and direction.length_squared() > 0.04:
+		# The cut sells its planted foot first; then the human may guide the
+		# exit by at most 45 degrees. No U-turn, speed bonus or tackle immunity.
+		var turn_angle: float = clampf(
+			dribble_direction.angle_to(direction.normalized()),
+			-deg_to_rad(45.0), deg_to_rad(45.0)
+		)
+		wanted_direction = dribble_direction.rotated(turn_angle * xi_cut_exit)
 	var moving := wanted_direction.length_squared() > 0.001
 	var actual_sprint := _update_stamina(delta, sprinting and not dribbling, moving)
 	last_sprinting = actual_sprint or dribbling
@@ -431,6 +440,24 @@ func _xi_feint_exit_ratio() -> float:
 		0.0, 1.0
 	)
 	return smoothstep(0.55, 0.92, progress)
+
+
+# XI-only directional cut: preserve the opening plant, then gradually allow
+# bounded manual steering at the exit. Physics and tackle windows are unchanged.
+func _xi_cut_exit_ratio() -> float:
+	if (
+		match_pitch != Formation.ELEVEN_PITCH_RECT
+		or role == "keeper"
+		or not has_ball
+		or not dribble_active()
+		or dribble_mode != "cut"
+	):
+		return 0.0
+	var progress: float = 1.0 - clampf(
+		dribble_burst_seconds / maxf(dribble_duration_seconds, 0.001),
+		0.0, 1.0
+	)
+	return smoothstep(0.58, 0.92, progress)
 
 
 func dribble_touch_ratio() -> float:

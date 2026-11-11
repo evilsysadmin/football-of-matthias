@@ -183,6 +183,59 @@ func _initialize() -> void:
 	assert(carrier._xi_feint_exit_ratio() == 0.0,
 		"Feint exit cannot continue without real possession")
 	carrier.has_ball = true
+
+	# A moving XI E cut formerly locked steering until the action expired.
+	# The first boot still commits; the final boot allows a gradual, bounded
+	# exit turn under actual 60 Hz Footballer movement. Never grant a 180 turn.
+	_reset_duel(game, carrier, presser, "normal", "far")
+	carrier.velocity = Vector2.RIGHT * carrier.base_speed
+	assert(carrier.start_dribble(Vector2.RIGHT, "cut"))
+	assert(carrier._xi_cut_exit_ratio() == 0.0)
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.60
+	assert(carrier._xi_cut_exit_ratio() == 0.0)
+	await physics_frame
+	carrier.move_human(DT, Vector2.UP, false)
+	assert(absf(carrier.velocity.y) < 0.001,
+		"First cut plant must remain committed despite opposite input")
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.04
+	assert(carrier._xi_cut_exit_ratio() > 0.99)
+	var cut_velocity_before_exit: Vector2 = carrier.velocity
+	await physics_frame
+	carrier.move_human(DT, Vector2.UP, false)
+	assert(carrier.velocity.y < cut_velocity_before_exit.y - 1.0,
+		"Late XI cut must obey human exit steering")
+	assert(carrier.velocity.x > 0.0,
+		"Late cut cannot teleport or instantly rotate backward")
+	assert(carrier.velocity.length() <= (
+		carrier.base_speed * carrier.DRIBBLE_SPEED_MULTIPLIER *
+		carrier.technique_control_multiplier + 1.0
+	), "Manual cut exit must not grant extra speed")
+	assert(game.ball.carrier == carrier and carrier.contact_stun_seconds == 0.0)
+	# No input must keep the committed cut heading instead of inventing a turn.
+	carrier.velocity = Vector2.RIGHT * 100.0
+	await physics_frame
+	carrier.move_human(DT, Vector2.ZERO, false)
+	assert(absf(carrier.velocity.y) < 0.001)
+	carrier.match_pitch = ChessFootballMath.PITCH_RECT
+	assert(carrier._xi_cut_exit_ratio() == 0.0,
+		"Legacy 5v5 must keep the original locked cut")
+	carrier.match_pitch = XI
+	carrier.role = "keeper"
+	assert(carrier._xi_cut_exit_ratio() == 0.0,
+		"Goalkeepers must retain their old handling")
+	carrier.role = "forward"
+	carrier.dribble_mode = "feint"
+	assert(carrier._xi_cut_exit_ratio() == 0.0)
+	carrier.dribble_mode = "burst"
+	assert(carrier._xi_cut_exit_ratio() == 0.0,
+		"F long touch must remain committed and unchanged")
+	carrier.dribble_mode = "cut"
+	carrier.has_ball = false
+	assert(carrier._xi_cut_exit_ratio() == 0.0,
+		"Steering cannot persist after losing possession")
+	carrier.has_ball = true
+	print("FOOTBALL_XI_CUT_EXIT_STEERING_OK limited_turn=45 first_plant=locked no_speed_buff=1")
+
 	print("FOOTBALL_XI_LIVE_DRIBBLE_DUELS " + JSON.stringify({
 		"mode": "isolated_deterministic_60hz_real_godot_physics_not_live_matches",
 		"scenarios": rows.size(),
