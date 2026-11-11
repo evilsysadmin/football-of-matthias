@@ -1,0 +1,63 @@
+{
+  "enabled": false,
+  "version": 4,
+  "quality_contract": "football-motion-optical-flow-v4-candidates",
+  "bucket": "football",
+  "prefix": "atlases/v4/",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v4",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "entries": [
+    {
+      "team": "fc_matthias",
+      "family": "run",
+      "file": "fc_matthias_run_v4.webp",
+      "sha256": "7ecd05a314c7fe0a1ea2a8425bd2e9b3ed2b9414112946b59fe1ffd6afc1ecef",
+      "columns": 24,
+      "rows": 5
+    },
+    {
+      "team": "fc_matthias",
+      "family": "carry_dribble",
+      "file": "fc_matthias_carry_dribble_v4.webp",
+      "sha256": "3930519b22b9ec4c7a128835a13939f9a1cbe8f6f08d1424ff29151f3ac1875f",
+      "columns": 16,
+      "rows": 2
+    },
+    {
+      "team": "fc_matthias",
+      "family": "pass_shoot",
+      "file": "fc_matthias_pass_shoot_v4.webp",
+      "sha256": "5e63f567c618a94019c60cfc6e2d0f49240f2ccddbc4e17284bfc296e70bd0d2",
+      "columns": 16,
+      "rows": 2
+    },
+    {
+      "team": "real_enroque",
+      "family": "run",
+      "file": "real_enroque_run_v4.webp",
+      "sha256": "13ecba09fb61a26a239b278c4bd3fc0f7a29fac335fed94daf760a8ba46d42ce",
+      "columns": 24,
+      "rows": 5
+    },
+    {
+      "team": "real_enroque",
+      "family": "carry_dribble",
+      "file": "real_enroque_carry_dribble_v4.webp",
+      "sha256": "feec3b22a79299c2366c596bf3cccbf9e6aeb893514aeb0f4363307afb85357f",
+      "columns": 16,
+      "rows": 2
+    },
+    {
+      "team": "real_enroque",
+      "family": "pass_shoot",
+      "file": "real_enroque_pass_shoot_v4.webp",
+      "sha256": "9879aa2a88f06b2f6a1b5c1fee971f178a199361c028cee4a93f843325b1d2d7",
+      "columns": 16,
+      "rows": 2
+    }
+  ],
+  "notes": "Disabled until the exact generated WebP bytes are published, CORS/SHA verified and visually approved in real Godot Web. Existing v1-v3 assets are authoritative."
+}
