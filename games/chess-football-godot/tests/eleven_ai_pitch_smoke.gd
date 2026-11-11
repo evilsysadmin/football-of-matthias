@@ -62,6 +62,49 @@ func _initialize() -> void:
 	assert(XI.has_point(xi_normal_cover))
 	assert(xi_normal_cover.is_equal_approx(xi_easy_cover))
 	assert(not game._ai_cpu_second_press_active(xi_cover_player, striker.global_position))
+	# Normal XI contains instead of sprinting through every first touch.
+	# The same physical player, tackle geometry and speed rules still apply.
+	var saved_contain_pos: Vector2 = xi_cover_player.global_position
+	var saved_contain_velocity: Vector2 = xi_cover_player.velocity
+	var cpu_full_effort: float = game._ai_adaptive_intensity(1.0)
+	xi_cover_player.global_position = striker.global_position + Vector2(110.0, 0.0)
+	var jockey_effort: float = game._ai_xi_normal_contain_effort(
+		xi_cover_player, striker, cpu_full_effort
+	)
+	assert(jockey_effort < xi_cover_player.AI_SPRINT_INTENSITY)
+	assert(jockey_effort >= 0.88)
+	xi_cover_player.velocity = Vector2.ZERO
+	xi_cover_player.move_ai(1.0 / 60.0, striker.global_position, jockey_effort)
+	assert(not xi_cover_player.last_sprinting)
+	xi_cover_player.global_position = striker.global_position + Vector2(31.0, -8.0)
+	xi_cover_player.velocity = Vector2(-175.0, 0.0)
+	assert(bool(game._tackle_hitbox(xi_cover_player, striker.global_position).get("clean", false)),
+		"Containment must never disable a real clean tackle")
+	xi_cover_player.global_position = striker.global_position + Vector2(200.0, 0.0)
+	assert(is_equal_approx(game._ai_xi_normal_contain_effort(
+		xi_cover_player, striker, cpu_full_effort
+	), cpu_full_effort), "Normal must still chase from farther out")
+	game._set_quick_difficulty("hard")
+	xi_cover_player.global_position = striker.global_position + Vector2(110.0, 0.0)
+	assert(is_equal_approx(game._ai_xi_normal_contain_effort(
+		xi_cover_player, striker, cpu_full_effort
+	), cpu_full_effort), "Hard should retain its fast pressure")
+	game._set_quick_difficulty("expert")
+	assert(is_equal_approx(game._ai_xi_normal_contain_effort(
+		xi_cover_player, striker, cpu_full_effort
+	), cpu_full_effort))
+	game._set_quick_difficulty("easy")
+	assert(is_equal_approx(game._ai_xi_normal_contain_effort(
+		xi_cover_player, striker, cpu_full_effort
+	), cpu_full_effort))
+	game._set_quick_difficulty("normal")
+	game.match_team_size = 5
+	assert(is_equal_approx(game._ai_xi_normal_contain_effort(
+		xi_cover_player, striker, cpu_full_effort
+	), cpu_full_effort))
+	game.match_team_size = 11
+	xi_cover_player.global_position = saved_contain_pos
+	xi_cover_player.velocity = saved_contain_velocity
 	game._set_quick_difficulty("hard")
 	assert(game._ai_cpu_second_press_active(xi_cover_player, striker.global_position))
 	var xi_hard_cover: Vector2 = game._ai_cover_target(xi_cover_player, striker.global_position)
