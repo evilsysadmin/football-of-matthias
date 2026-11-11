@@ -33,7 +33,7 @@ jobs:
       - name: Build manager frontend
         run: npm --prefix frontend run build
       - name: Install Chromium for real scouting UI screenshots
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Verify and capture scouting cards in desktop and mobile
         run: node e2e/standalone.mjs
       - name: Upload scouting UI screenshots
@@ -1748,7 +1748,7 @@ jobs:
           node-version: '22'
       - name: Install with pinned npm workspace resolver
         run: npx --yes npm@11.6.1 install --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install chromium
       - name: Boot real WebAssembly in Chromium
         # The Godot Web app runs from 127.0.0.1 with a random test port.
         # The bucket CORS remains restricted to the real staging origin.
