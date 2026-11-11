@@ -2426,10 +2426,14 @@ func sync_presentation(delta: float, mode: String) -> void:
 			var verified_cut := _action_poses_r2_loaded.has(
 				"%d:dribble_cut" % ball_carrier.team_id
 			)
-			var has_authored_foot_contact := verified_cut and (
-				ball_carrier.dribble_mode == "cut"
+			var verified_burst := _action_poses_r2_loaded.has(
+				"%d:dribble_burst" % ball_carrier.team_id
+			)
+			var has_authored_foot_contact := (
+				(verified_cut and ball_carrier.dribble_mode == "cut")
+				or (verified_burst and ball_carrier.dribble_mode == "burst")
 				or (
-					ball_carrier.dribble_mode == "feint"
+					verified_cut and ball_carrier.dribble_mode == "feint"
 					and String(player_run_views.get(
 						ball_carrier.get_instance_id(), "side"
 					)) in ["front", "back", "front_diagonal", "back_diagonal"]
@@ -2556,10 +2560,19 @@ func sync_presentation(delta: float, mode: String) -> void:
 			and match_node.match_team_size == 11
 			and feint_carrier.role != "keeper"
 			and feint_carrier.has_ball and feint_carrier.dribble_active()
-			and feint_carrier.dribble_mode == "cut"
-			and _action_poses_r2_loaded.has("%d:dribble_cut" % feint_carrier.team_id)
+			and feint_carrier.dribble_mode in ["cut", "burst"]
+			and _action_poses_r2_loaded.has(
+				"%d:%s" % [
+					feint_carrier.team_id,
+					"dribble_cut" if feint_carrier.dribble_mode == "cut"
+					else "dribble_burst"
+				]
+			)
 		):
-			# The physical ball, possession, and cut velocity are unchanged.
+			# Both R2 actions share the same real outward kicking toe.
+			# A BURST must read as an intentional long touch, not an
+			# ungrounded forward ball with an unrelated extending boot.
+			# The physical ball, possession, and speed stay authoritative.
 			# Correct only the one visible ball + its existing grass shadow
 			# toward the actual lateral R2 extended toe, including mirrored
 			# side views. This fades out with the 0.22s cut action.
@@ -2575,7 +2588,8 @@ func sync_presentation(delta: float, mode: String) -> void:
 				var cut_foot := world_to_stage(feint_carrier.global_position, ground_center_y)
 				var visible_ball := xi_cut_display_ball_contact(
 					ball_at + dribble_ball_offset, cut_foot,
-					cut_driver.flip_h, cut_progress
+					cut_driver.flip_h, cut_progress,
+					0.68 if feint_carrier.dribble_mode == "burst" else 0.35
 				)
 				dribble_ball_offset = visible_ball - ball_at
 		ball_node.position = ball_at + dribble_ball_offset
@@ -2720,7 +2734,7 @@ static func xi_verified_dribble_pivot_animation(
 	if mode == "cut":
 		return &"dribble_cut" if has_cut and t >= 0.16 and t <= 0.87 else base
 	if mode == "burst":
-		return &"dribble_burst" if has_burst and t >= 0.12 and t <= 0.87 else base
+		return &"dribble_burst" if has_burst and t >= 0.12 and t <= 0.94 else base
 	return base
 
 
@@ -2773,6 +2787,23 @@ static func xi_cut_r2_contact_pose(frame_count: int, progress: float) -> float:
 	if t < 0.36:
 		return 2.0
 	return 4.0 if t <= 0.76 else 6.0
+
+
+# XI F triggers the authored R2 LONG TOUCH in 0.27s. Its one decisive
+# toe extension (frame 5) used to be exposed for only ~34ms at 8 poses /
+# 0.27 seconds, so a 15-FPS Web viewer could never distinguish a touch
+# from another running step. Hold real preparation, contact AND recovery
+# drawings long enough for each to register at 15 FPS, including late
+# rendering phases; gameplay speed and cooldown remain untouched.
+static func xi_burst_r2_contact_pose(frame_count: int, progress: float) -> float:
+	if frame_count != ChessFootballActionPosesR2.COLUMNS:
+		return 0.0
+	var t := clampf(progress, 0.0, 1.0)
+	if t < 0.12 or t > 0.94:
+		return 0.0
+	if t < 0.37:
+		return 3.0
+	return 5.0 if t <= 0.69 else 6.0
 
 
 # An in-place front/diagonal feint must actually change the planted LEG,
@@ -2898,6 +2929,20 @@ func _sync_visible_animation(
 			0.0, 1.0
 		)
 		phase = xi_cut_r2_contact_pose(count, cut_progress)
+	elif (
+		match_node.match_team_size == 11
+		and not is_keeper
+		and player.has_ball and match_node.ball.carrier == player
+		and wanted == &"dribble_burst" and player.dribble_mode == "burst"
+		and player.dribble_active()
+		and _action_poses_r2_loaded.has("%d:dribble_burst" % player.team_id)
+		and count == ChessFootballActionPosesR2.COLUMNS
+	):
+		var burst_progress := 1.0 - clampf(
+			player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
+			0.0, 1.0
+		)
+		phase = xi_burst_r2_contact_pose(count, burst_progress)
 	elif (
 		match_node.match_team_size == 11
 		and not is_keeper
@@ -3198,14 +3243,19 @@ static func xi_feint_display_foot_contact(
 # script timer, fake sprites, or gameplay change.
 static func xi_cut_display_ball_contact(
 	base_ball: Vector3, carrier_foot: Vector3,
-	base_flip: bool, progress: float
+	base_flip: bool, progress: float, kick_reach: float = 0.35
 ) -> Vector3:
 	var t := clampf(progress, 0.0, 1.0)
 	var weight := clampf(sin(PI * t) * 0.98, 0.0, 0.92)
+	# F uses the farther authored kicking toe; fade its visual ball
+	# back to the authoritative anchor DURING R2 recovery, not after
+	# the regular runner returns. Moving E keeps its old envelope.
+	if kick_reach > 0.35:
+		weight *= 1.0 - smoothstep(0.69, 0.94, t)
 	if weight <= 0.0:
 		return base_ball
 	var foot_sign := -1.0 if base_flip else 1.0
-	var target := carrier_foot + Vector3(0.35 * foot_sign, 0.0, 0.04)
+	var target := carrier_foot + Vector3(clampf(kick_reach, 0.0, 0.72) * foot_sign, 0.0, 0.04)
 	return base_ball.lerp(target, weight)
 
 

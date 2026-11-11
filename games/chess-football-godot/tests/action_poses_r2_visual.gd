@@ -157,15 +157,21 @@ func _capture(game: Node, stage: ChessFootball3DPresenter,
 	# This test still inspects actual public WebP pixels through
 	# the QuadMesh, not a synthetic or manually forced snapshot.
 	var expected_frame := pose
-	if with_new and action == &"dribble_cut":
+	if with_new and is_dribble:
 		var action_progress := (float(pose) + 0.20) / 8.0
-		expected_frame = int(stage.xi_cut_r2_contact_pose(
-			driver.sprite_frames.get_frame_count(expected),
-			action_progress
-		))
-		assert(expected_frame == (4 if pose == 3 else 6))
+		var authored_count := driver.sprite_frames.get_frame_count(expected)
+		expected_frame = int(
+			stage.xi_cut_r2_contact_pose(authored_count, action_progress)
+			if action == &"dribble_cut"
+			else stage.xi_burst_r2_contact_pose(authored_count, action_progress)
+		)
+		if action == &"dribble_cut":
+			assert(expected_frame == (4 if pose == 3 else 6))
+		else:
+			assert(expected_frame == (5 if pose == 3 else 6),
+				"Real 0.27s long touch must show extended boot and recovery")
 	assert(driver.frame == expected_frame,
-		"Native R2 action contact frame must follow real XI cut clock")
+		"Native R2 action frame must follow the real XI action clock")
 	var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 	assert(quad.is_visible_in_tree())
 	assert((quad.material_override as StandardMaterial3D).albedo_texture

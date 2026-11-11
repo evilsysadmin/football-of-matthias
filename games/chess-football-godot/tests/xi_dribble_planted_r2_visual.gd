@@ -58,11 +58,11 @@ func _initialize() -> void:
 			var sheet := Image.create(CELL.x * PROGRESS.size(), CELL.y * 4,
 				false, Image.FORMAT_RGBA8)
 			sheet.fill(Color("#15392f"))
-			# Beyond deliberate pose snapshots, these FIVE 15-FPS samples
-			# follow the actual FEINT (0.24s) and MOVING CUT (0.22s).
-			# Both must retain their real planted boots when Web drops frames.
+			# Beyond deliberate snapshots, these FIVE genuine 15-FPS frames
+			# follow FEINT (0.24s), CUT (0.22s), or F LONG TOUCH (0.27s).
+			# Keep preparation and real kicking toe legible even on slow Web.
 			var playback_sheet: Image = null
-			if action in ["feint", "cut"]:
+			if action in ["feint", "cut", "burst"]:
 				playback_sheet = Image.create(CELL.x * 5, CELL.y * 4,
 					false, Image.FORMAT_RGBA8)
 				playback_sheet.fill(Color("#15392f"))
@@ -134,6 +134,19 @@ func _initialize() -> void:
 							elif phase_id == 2:
 								assert(sprite.frame == 4,
 									"Moving XI E must show the authored extended boot")
+						if action == "burst" and expected == &"dribble_burst":
+							var burst_count := sprite.sprite_frames.get_frame_count(expected)
+							var expected_burst_pose := int(stage.xi_burst_r2_contact_pose(
+								burst_count, progress
+							))
+							assert(sprite.frame == expected_burst_pose,
+								"Real R2 F long-touch must follow the authored kick clock")
+							if phase_id == 1:
+								assert(sprite.frame == 3,
+									"F should expose the original long-touch preparation")
+							elif phase_id == 2:
+								assert(sprite.frame == 5,
+									"F should expose the original extended kicking toe")
 						assert(match_node.ball.carrier == athlete)
 						assert(athlete.global_position == unchanged_position)
 						assert(match_node.ball.global_position == authoritative_ball)
@@ -204,6 +217,37 @@ func _initialize() -> void:
 							assert(stage.ball_shadow != null and stage.ball_shadow.visible)
 							assert(absf(stage.ball_shadow.position.x - actual_cut.x) < 0.001)
 							assert(absf(stage.ball_shadow.position.z - actual_cut.z) < 0.001)
+						if action == "burst" and phase_id in [1, 2]:
+							var base_burst_ball := stage.world_to_stage(
+								authoritative_ball,
+								stage.XI_BALL_VISUAL_RADIUS + stage.BALL_VISUAL_GROUND_CLEARANCE
+							)
+							var natural_burst := stage.xi_dribble_visual_ball_offset(
+								"burst", progress, direction
+							)
+							var burst_foot := stage.world_to_stage(
+								athlete.global_position,
+								stage.XI_BALL_VISUAL_RADIUS + stage.BALL_VISUAL_GROUND_CLEARANCE
+							)
+							var expected_render_burst := stage.xi_cut_display_ball_contact(
+								base_burst_ball + natural_burst, burst_foot,
+								sprite.flip_h, progress, 0.68
+							)
+							var actual_burst_ball := stage.ball_node.position
+							assert(actual_burst_ball.distance_to(expected_render_burst) < 0.001,
+								"Long touch F must visually contact its real R2 toe")
+							# F is deliberately longer than moving E: the
+							# physical ball stays ahead, so 3D Euclidean
+							# distance to the support foot is NOT a valid
+							# contact test. Match the kick's lateral toe
+							# position while preserving true forward lead.
+							var toe_sign := -1.0 if sprite.flip_h else 1.0
+							var toe_x := burst_foot.x + 0.68 * toe_sign
+							assert(absf(actual_burst_ball.x - toe_x) < 0.34,
+								"F must align the single rendered ball with extended R2 boot X")
+							assert(stage.ball_shadow != null and stage.ball_shadow.visible)
+							assert(absf(stage.ball_shadow.position.x - actual_burst_ball.x) < 0.001)
+							assert(absf(stage.ball_shadow.position.z - actual_burst_ball.z) < 0.001)
 						var quad: MeshInstance3D = stage.xi_raster_meshes[key]
 						assert(quad.visible)
 						var material := quad.material_override as StandardMaterial3D
@@ -245,6 +289,7 @@ func _initialize() -> void:
 					if playback_sheet != null:
 						var seen_first := false
 						var seen_second := false
+						var seen_recovery := false
 						for tick in range(5):
 							var sampled_elapsed: float = float(tick) / 15.0
 							var sampled_progress := clampf(
@@ -263,20 +308,34 @@ func _initialize() -> void:
 								true, true
 							)
 							assert(sampled_sprite.animation == expected_sample)
-							if expected_sample == &"dribble_cut":
+							if expected_sample in [&"dribble_cut", &"dribble_burst"]:
 								var sampled_count := sampled_sprite.sprite_frames.get_frame_count(expected_sample)
 								var expected_frame := int(
 									stage.xi_feint_r2_contact_pose(sampled_count, sampled_progress)
-									if action == "feint"
-									else stage.xi_cut_r2_contact_pose(sampled_count, sampled_progress)
+									if action == "feint" else
+									stage.xi_cut_r2_contact_pose(sampled_count, sampled_progress)
+									if action == "cut" else
+									stage.xi_burst_r2_contact_pose(sampled_count, sampled_progress)
 								)
-								assert(sampled_sprite.frame == expected_frame)
-								seen_first = seen_first or expected_frame == 2
+								assert(sampled_sprite.frame == expected_frame,
+									"15 FPS XI R2 contact frame must match the action clock")
+								seen_first = seen_first or expected_frame == (
+									3 if action == "burst" else 2
+								)
 								seen_second = seen_second or expected_frame == (
-									5 if action == "feint" else 4
+									5 if action in ["feint", "burst"] else 4
 								)
+								if action == "burst":
+									seen_recovery = seen_recovery or expected_frame == 6
+									if tick == 3:
+										assert(sampled_sprite.frame == 6,
+											"Real F 15 FPS frame 3 must show original R2 recovery")
 							if tick == 4:
-								assert(not athlete.dribble_active())
+								# F has a slightly longer window than CUT/FEINT,
+								# but the R2 pivot already exited to its real
+								# directional runner at >87% progress.
+								if action != "burst":
+									assert(not athlete.dribble_active())
 								assert(sampled_sprite.animation == StringName("run_" + view))
 							assert(athlete.global_position == unchanged_position)
 							assert(match_node.ball.global_position == authoritative_ball)
@@ -293,8 +352,8 @@ func _initialize() -> void:
 							var row: int = team_id * 2 + direction_id
 							playback_sheet.blit_rect(crop, Rect2i(Vector2i.ZERO, CELL),
 								Vector2i(tick * CELL.x, row * CELL.y))
-						assert(seen_first and seen_second,
-							"15 FPS must show both FEINT plants or CUT lead-in and extended R2 boot")
+						assert(seen_first and seen_second and (action != "burst" or seen_recovery),
+							"15 FPS F must show authentic preparation/contact/recovery in both cameras")
 					match_node.ball.release(Vector2.RIGHT, 0.0)
 					athlete.dribble_burst_seconds = 0.0
 					athlete.global_position = Vector2(-9999, -9999)
