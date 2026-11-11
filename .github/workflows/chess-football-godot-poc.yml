@@ -770,14 +770,18 @@ jobs:
           godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
           log="$RUNNER_TEMP/football-hero-v5-real.log"
           set +e
-          timeout 105s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/hero_v5_real_r2_visual.gd 2>&1 | tee "$log"
+          timeout 105s "$godot" --headless --quit-after 3000 --path games/chess-football-godot --script res://tests/hero_v5_real_r2_visual.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|ERROR: Failed to load script' "$log"; then
             echo "::error::Actual R2 V5 atlas failed real Godot two-camera integration."
             exit 1
           fi
-          grep -q 'FOOTBALL_V5_REAL_R2_OK' "$log"
+          if ! grep -q 'FOOTBALL_V5_REAL_R2_OK' "$log"; then
+            echo "::error::V5 real Godot visual script did not complete. Probe markers:"
+            grep 'FOOTBALL_V5_CAPTURE_PROBE' "$log" || true
+            exit 1
+          fi
           test -f "$FOOTBALL_V5_CAPTURE_DIR/football-v5-real-r2-broadcast.png"
           test -f "$FOOTBALL_V5_CAPTURE_DIR/football-v5-real-r2-tactical.png"
       - name: Upload SHA-verified V5 real match-camera art
