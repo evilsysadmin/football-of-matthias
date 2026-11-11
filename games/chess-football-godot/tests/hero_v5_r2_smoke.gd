@@ -66,7 +66,7 @@ func _initialize() -> void:
 		assert(sprite.sprite_frames.get_frame_texture(&"idle_front", 0) == runs[0])
 		for anim in [&"run_front", &"sprint_front"]:
 			assert(sprite.sprite_frames.get_frame_count(anim) == 16)
-			assert(sprite.sprite_frames.get_frame_texture(anim, 0) == runs[32])
+			assert(sprite.sprite_frames.get_frame_texture(anim, 0) == runs[16])
 		for anim in [&"run_front_diagonal", &"sprint_front_diagonal"]:
 			assert(sprite.sprite_frames.get_frame_count(anim) == 16)
 			assert(sprite.sprite_frames.get_frame_texture(anim, 0) == runs[32])
@@ -75,7 +75,7 @@ func _initialize() -> void:
 		assert(sprite.sprite_frames.get_frame_texture(&"run_back", 0) == original_back)
 		assert(keeper_sprite.sprite_frames.get_frame_texture(&"idle_front", 0) == original_keeper)
 		stage._apply_verified_run_v3([], club)
-		assert(sprite.sprite_frames.get_frame_texture(&"run_front", 0) == runs[32])
+		assert(sprite.sprite_frames.get_frame_texture(&"run_front", 0) == runs[16])
 		stage._apply_hero_v5_dribbles([], club)
 		assert(not stage._hero_v5_loaded.has("%d:dribbles" % club))
 		stage._apply_hero_v5_dribbles(actions, club)
