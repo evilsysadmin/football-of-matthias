@@ -2707,7 +2707,9 @@ func _ai_xi_normal_tackle_read_due(victim: Footballer, delta: float) -> bool:
 	var age: float = ball.possession_seconds
 	if age < AI_XI_NORMAL_FIRST_TOUCH_REACTION:
 		return false
-	var interval: float = maxf(_ai_adaptive_decision_interval(), 0.08)
+	# Nearby tackle opportunities close quickly: read at 80% of the
+	# general AI tactical interval, still far slower than a 60 Hz oracle.
+	var interval: float = maxf(_ai_adaptive_decision_interval() * 0.80, 0.08)
 	var previous: float = maxf(age - maxf(delta, 0.0), 0.0)
 	return floori(age / interval) > floori(previous / interval)
 
