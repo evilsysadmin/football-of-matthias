@@ -43,11 +43,11 @@ func _initialize() -> void:
 	# The actual on-screen hint must explain what E does at the moment
 	# it is pressed. XI stationary E feints, moving E cuts; the previous
 	# generic "amago/recorte" hid this important difference.
-	var desktop_hint := game.contextual_help_text(false)
+	var desktop_hint: String = game.contextual_help_text(false)
 	assert(desktop_hint.contains("E quieto: amago"))
 	assert(desktop_hint.contains("E en marcha: recorte"))
 	assert(desktop_hint.contains("F toque largo"))
-	var touch_hint := game.contextual_help_text(true)
+	var touch_hint: String = game.contextual_help_text(true)
 	assert(touch_hint.contains("césped libre: regate"))
 	assert(not touch_hint.contains("E quieto"))
 	var initial_score: Array = game.score.duplicate()
