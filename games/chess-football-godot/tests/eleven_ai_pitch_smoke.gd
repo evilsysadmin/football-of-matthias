@@ -66,7 +66,7 @@ func _initialize() -> void:
 	# tactical clock instead of perfect per-physics-frame timing. Movement
 	# and legal tackle contact remain available at their original speeds.
 	var original_age: float = game.ball.possession_seconds
-	var read_interval: float = game._ai_adaptive_decision_interval()
+	var read_interval: float = game._ai_adaptive_decision_interval() * 0.80
 	game.ball.possession_seconds = 0.40
 	assert(not game._ai_xi_normal_tackle_read_due(striker, 1.0 / 60.0))
 	game.ball.possession_seconds = read_interval * 2.0 + 0.004
