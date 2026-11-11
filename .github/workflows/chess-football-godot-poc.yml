@@ -744,6 +744,21 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_RUN_V3_R2_SMOKE_OK clubs=2 views=5 frames=12' "$log"
+      - name: V5 user-approved hero WebP · disabled R2, shape and atomic swap
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-hero-v5.log"
+          set +e
+          timeout 55s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/hero_v5_r2_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|ERROR: Failed to load script' "$log"; then
+            echo "::error::V5 hero atlas shape/fallback failed."
+            exit 1
+          fi
+          grep -q 'FOOTBALL_HERO_V5_SMOKE_OK' "$log"
       - name: XI carrier scale and forward ball anchoring (six directions)
         shell: bash
         run: |
