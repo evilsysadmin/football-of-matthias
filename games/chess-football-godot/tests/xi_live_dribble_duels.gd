@@ -154,6 +154,35 @@ func _initialize() -> void:
 	var close_normal: Dictionary = matrix["normal/close"]
 	assert(String(close_normal["feint"]) == "retained",
 		"Normal XI close feint must beat one real presser without immunity")
+	# E still needs two visible plants, but after the second plant the human
+	# can drive the exit. Exercise actual Footballer motion rather than
+	# asserting a coefficient in isolation. No extra tackle protection.
+	_reset_duel(game, carrier, presser, "normal", "far")
+	carrier.velocity = Vector2.ZERO
+	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
+	assert(carrier._xi_feint_exit_ratio() == 0.0)
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.60
+	assert(carrier._xi_feint_exit_ratio() == 0.0)
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.08
+	assert(carrier._xi_feint_exit_ratio() > 0.99)
+	var velocity_before_exit: Vector2 = carrier.velocity
+	await physics_frame
+	carrier.move_human(DT, Vector2.UP, false)
+	assert(carrier.velocity.y < velocity_before_exit.y,
+		"Human input after the second feint plant must steer the exit")
+	assert(game.ball.carrier == carrier and carrier.contact_stun_seconds == 0.0)
+	carrier.match_pitch = ChessFootballMath.PITCH_RECT
+	assert(carrier._xi_feint_exit_ratio() == 0.0,
+		"Legacy 5v5 must not receive XI feint exit")
+	carrier.match_pitch = XI
+	carrier.dribble_mode = "burst"
+	assert(carrier._xi_feint_exit_ratio() == 0.0,
+		"XI long touch must retain its historical motion")
+	carrier.dribble_mode = "feint"
+	carrier.has_ball = false
+	assert(carrier._xi_feint_exit_ratio() == 0.0,
+		"Feint exit cannot continue without real possession")
+	carrier.has_ball = true
 	print("FOOTBALL_XI_LIVE_DRIBBLE_DUELS " + JSON.stringify({
 		"mode": "isolated_deterministic_60hz_real_godot_physics_not_live_matches",
 		"scenarios": rows.size(),
