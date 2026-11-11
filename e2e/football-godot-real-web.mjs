@@ -559,6 +559,13 @@ try {
       failures.push('OBSOLETE SHARED CDN REQUEST: ' + request.url());
     }
   });
+  // Distinguish a successful localhost R2 bridge from a Web/decoder timeout.
+  // Log only the four public V5 URLs; never leak gameplay state or identifiers.
+  page.on('response', (response) => {
+    if (response.url().startsWith('https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v5/')) {
+      console.log('FOOTBALL_WEB_CI_HERO_V5_HTTP', response.status(), response.url().split('/').at(-1));
+    }
+  });
   page.on('requestfailed', (request) => {
     const reason = request.failure()?.errorText || '';
     // Chromium may cancel the redundant streaming fetch when Godot has already

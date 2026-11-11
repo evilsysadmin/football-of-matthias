@@ -849,7 +849,18 @@ func _request_hero_v5_from_r2() -> void:
 			loader.name = "HeroV5_%d_%s" % [team_id, family]
 			add_child(loader)
 			loader.atlas_ready.connect(_on_hero_v5_ready.bind(team_id, family))
-			loader.start(meta, ChessFootballHeroV5R2.TRUSTED_ROOT)
+			loader.atlas_failed.connect(_on_hero_v5_failed.bind(team_id, family))
+			loader.start(meta, ChessFootballHeroV5R2.TRUSTED_ROOT, 30.0)
+
+
+func _on_hero_v5_failed(reason: String, team_id: int, family: String) -> void:
+	# Only the localhost CI probe receives diagnostics; staging stays silent.
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval(
+			"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) console.warn('FOOTBALL_HERO_V5_FAILED_%d_%s:%s');" % [
+				team_id, family, reason
+			], true
+		)
 
 
 func _on_hero_v5_ready(image: Image, team_id: int, family: String) -> void:
