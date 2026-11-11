@@ -43,7 +43,7 @@ func _initialize() -> void:
 		for family in ChessFootballHeroV5R2.FAMILIES:
 			var meta := ChessFootballHeroV5R2.sheet_meta(club, family)
 			assert(not meta.is_empty())
-			var filename := ChessFootballHeroV5R2.CLUBS[club] + "_" + family + "_v5.webp"
+			var filename: String = String(ChessFootballHeroV5R2.CLUBS[club]) + "_" + family + "_v5.webp"
 			var file_path := input_dir.path_join(filename)
 			assert(FileAccess.file_exists(file_path), "Missing verified public WebP: " + filename)
 			var img := ChessFootballR2AtlasLoader.decode_verified_webp(
