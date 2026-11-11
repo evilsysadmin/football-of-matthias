@@ -10,6 +10,7 @@ const CELL := Vector2i(300, 290)
 
 
 func _initialize() -> void:
+	print("FOOTBALL_V5_CAPTURE_PROBE_BEGIN")
 	var input_dir := OS.get_environment("FOOTBALL_V5_ASSET_DIR")
 	var output_dir := OS.get_environment("FOOTBALL_V5_CAPTURE_DIR")
 	assert(not input_dir.is_empty() and not output_dir.is_empty())
@@ -35,6 +36,7 @@ func _initialize() -> void:
 			athlete.velocity = Vector2.ZERO
 			athlete.action_lock_seconds = 0.0
 	game.ball.global_position = Vector2(-9999, -9999)
+	print("FOOTBALL_V5_CAPTURE_PROBE_SCENE_READY")
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null and stage.xi_raster_meshes.size() == 22)
 	var original_score: Array = game.score.duplicate()
@@ -54,12 +56,15 @@ func _initialize() -> void:
 			stage._on_hero_v5_ready(img, club, family)
 			assert(stage._hero_v5_loaded.has("%d:%s" % [club, family]))
 	assert(stage._hero_v5_loaded.size() == 4)
+	print("FOOTBALL_V5_CAPTURE_PROBE_ART_VERIFIED")
 
 	for mode in ["broadcast", "tactical"]:
+		print("FOOTBALL_V5_CAPTURE_PROBE_MODE_START " + mode)
 		var sheet := Image.create(CELL.x * FRACTIONS.size(), CELL.y * 4, false, Image.FORMAT_RGBA8)
 		sheet.fill(Color("#15392f"))
 		for club in range(2):
 			for action_index in range(ACTIONS.size()):
+				print("FOOTBALL_V5_CAPTURE_PROBE_ACTION club=%d action=%d mode=%s" % [club, action_index, mode])
 				var action: String = ACTIONS[action_index]
 				var athlete: Footballer = game.teams[club][1]
 				var movement := Vector2.DOWN if action == "feint" else Vector2(1.0, 1.0).normalized()
