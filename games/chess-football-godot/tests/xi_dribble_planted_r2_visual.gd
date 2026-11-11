@@ -289,6 +289,7 @@ func _initialize() -> void:
 					if playback_sheet != null:
 						var seen_first := false
 						var seen_second := false
+						var seen_recovery := false
 						for tick in range(5):
 							var sampled_elapsed: float = float(tick) / 15.0
 							var sampled_progress := clampf(
@@ -324,6 +325,11 @@ func _initialize() -> void:
 								seen_second = seen_second or expected_frame == (
 									5 if action in ["feint", "burst"] else 4
 								)
+								if action == "burst":
+									seen_recovery = seen_recovery or expected_frame == 6
+									if tick == 3:
+										assert(sampled_sprite.frame == 6,
+											"Real F 15 FPS frame 3 must show original R2 recovery")
 							if tick == 4:
 								# F has a slightly longer window than CUT/FEINT,
 								# but the R2 pivot already exited to its real
@@ -346,8 +352,8 @@ func _initialize() -> void:
 							var row: int = team_id * 2 + direction_id
 							playback_sheet.blit_rect(crop, Rect2i(Vector2i.ZERO, CELL),
 								Vector2i(tick * CELL.x, row * CELL.y))
-						assert(seen_first and seen_second,
-							"15 FPS must show both feint plants, cut toe, or F long-touch preparation/contact")
+						assert(seen_first and seen_second and (action != "burst" or seen_recovery),
+							"15 FPS F must show authentic preparation/contact/recovery in both cameras")
 					match_node.ball.release(Vector2.RIGHT, 0.0)
 					athlete.dribble_burst_seconds = 0.0
 					athlete.global_position = Vector2(-9999, -9999)
