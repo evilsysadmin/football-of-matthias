@@ -2801,7 +2801,7 @@ static func xi_burst_r2_contact_pose(frame_count: int, progress: float) -> float
 		return 0.0
 	if t < 0.37:
 		return 3.0
-	return 5.0 if t <= 0.78 else 6.0
+	return 5.0 if t <= 0.75 else 6.0
 
 
 # An in-place front/diagonal feint must actually change the planted LEG,
