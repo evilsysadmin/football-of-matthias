@@ -231,12 +231,13 @@ func _initialize() -> void:
 							)
 							var expected_render_burst := stage.xi_cut_display_ball_contact(
 								base_burst_ball + natural_burst, burst_foot,
-								sprite.flip_h, progress
+								sprite.flip_h, progress, 0.68
 							)
 							var actual_burst_ball := stage.ball_node.position
 							assert(actual_burst_ball.distance_to(expected_render_burst) < 0.001,
 								"Long touch F must visually contact its real R2 toe")
-							assert(actual_burst_ball.distance_to(burst_foot) < 0.55)
+							assert(actual_burst_ball.distance_to(burst_foot) < 0.72,
+								"The long-touch ball must remain by the extended R2 toe")
 							assert(stage.ball_shadow != null and stage.ball_shadow.visible)
 							assert(absf(stage.ball_shadow.position.x - actual_burst_ball.x) < 0.001)
 							assert(absf(stage.ball_shadow.position.z - actual_burst_ball.z) < 0.001)
