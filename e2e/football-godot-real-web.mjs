@@ -475,11 +475,14 @@ async function bridgeVerifiedHeroV5R2(page) {
         createHash('sha256').update(data).digest('hex') !== record[0]) {
       throw new Error('V5 byte, SHA or frame layout mismatch: ' + url);
     }
-    await page.route(url, (route) => route.fulfill({
-      status: 200, contentType: 'image/webp',
-      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
-      body: data
-    }));
+    await page.route(url, (route) => {
+      console.log('FOOTBALL_WEB_CI_HERO_V5_REQUESTED', entry.file);
+      return route.fulfill({
+        status: 200, contentType: 'image/webp',
+        headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+        body: data
+      });
+    });
     console.log('FOOTBALL_WEB_CI_HERO_V5_VERIFIED', entry.file,
       'bytes=' + data.length, 'sha=' + record[0], 'staging_cors=' + cors);
   }
@@ -529,7 +532,7 @@ try {
       if (event.data.type === 'ci-action-poses-installed') {
         window.__chessFootballActionPoseReceipts.push(event.data);
       }
-      if (event.data.type === 'ci-hero-v5-installed') {
+      if (event.data.type === 'ci-hero-v5-installed' || event.data.type === 'ci-hero-v5-progress') {
         window.__chessFootballHeroV5Receipts.push(event.data);
       }
       if (event.data.type === 'ci-keyboard-sample') {
@@ -692,11 +695,17 @@ try {
   console.log('FOOTBALL_XI_REAL_WEB_ACTION_POSES_INSTALLED_OK teams=2 actions=4 sheets=8');
   // HTTP 200 by itself is not enough: actual Godot WASM must install all
   // four V5 banks into 20 outfield SpriteFrames before continuing.
-  await page.waitForFunction(
-    () => window.__chessFootballHeroV5Receipts.some((receipt) =>
-      receipt.team_size === 11 && receipt.sheets === 4),
-    null, { timeout: 60000 }
-  );
+  try {
+    await page.waitForFunction(
+      () => window.__chessFootballHeroV5Receipts.some((receipt) =>
+        receipt.team_size === 11 && receipt.sheets === 4),
+      null, { timeout: 60000 }
+    );
+  } catch (error) {
+    console.log('FOOTBALL_WEB_CI_HERO_V5_RECEIPTS',
+      JSON.stringify(await page.evaluate(() => window.__chessFootballHeroV5Receipts)));
+    throw error;
+  }
   console.log('FOOTBALL_XI_REAL_WEB_HERO_V5_INSTALLED_OK clubs=2 families=2 sheets=4');
   // The first 5v5 boot already exercised Playwright's real canvas.click.
   // After a full WASM reboot in software WebGL, locator.click can hang in
