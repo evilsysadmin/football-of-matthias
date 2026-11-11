@@ -184,6 +184,9 @@ var _run_v2_r2_loaded: Dictionary = {}
 var _run_v3_r2_loaded: Dictionary = {}
 # Higher-density optical-flow sheets are opt-in only after public R2 QA.
 var _motion_v4_loaded: Dictionary = {}
+# Exact two-team V5 art is optional. No GPU work/requests before operator
+# publishes and enables the SHA-pinned manifest.
+var _hero_v5_loaded: Dictionary = {}
 # Authored action replacement becomes active per-club only after full verification.
 var _pass_shoot_r2_loaded: Dictionary = {}
 # Verified side-view carrier animations. Never alter the 2D ball or physics.
@@ -289,6 +292,8 @@ func _apply_animated_idle_frames(
 		)
 		for row in range(ChessFootballIdleR2.IDLE_ANIMATIONS.size()):
 			var name := StringName(ChessFootballIdleR2.IDLE_ANIMATIONS[row])
+			if name == &"idle_front" and _hero_v5_loaded.has("%d:locomotion" % teams[index]):
+				continue
 			bank.clear(name)
 			bank.set_animation_speed(name, 7.0)
 			bank.set_animation_loop(name, true)
@@ -340,7 +345,9 @@ func _apply_idle_front_textures(textures: Array[Texture2D]) -> void:
 			var player_kind := "keeper" if player.role == "keeper" else (
 				"fc_matthias" if player.team_id == 0 else "real_enroque"
 			)
-			if bool(_animated_idle_r2_loaded.get(player_kind, false)):
+			if bool(_animated_idle_r2_loaded.get(player_kind, false)) or (
+				player.role != "keeper" and _hero_v5_loaded.has("%d:locomotion" % player.team_id)
+			):
 				continue
 			var index: int = 2 + int(player.team_id) if player.role == "keeper" else int(player.team_id)
 			frames.set_frame(&"idle_front", 0, textures[index])
@@ -371,7 +378,7 @@ func _on_run_v3_ready(image: Image, team_id: int) -> void:
 
 
 func _apply_verified_run_v3(textures: Array[Texture2D], team_id: int) -> void:
-	if team_id not in [0, 1] or _run_v3_r2_loaded.has(team_id) or _motion_v4_loaded.has("%d:run" % team_id):
+	if team_id not in [0, 1] or _run_v3_r2_loaded.has(team_id) or _motion_v4_loaded.has("%d:run" % team_id) or _hero_v5_loaded.has("%d:locomotion" % team_id):
 		return
 	if textures.size() != ChessFootballRunV3R2.ROWS * ChessFootballRunV3R2.COLUMNS:
 		return
@@ -449,7 +456,7 @@ func _on_run_v2_ready(image: Image, team_id: int) -> void:
 
 
 func _apply_verified_run_v2(textures: Array[Texture2D], team_id: int) -> void:
-	if _run_v3_r2_loaded.has(team_id) or _motion_v4_loaded.has("%d:run" % team_id):
+	if _run_v3_r2_loaded.has(team_id) or _motion_v4_loaded.has("%d:run" % team_id) or _hero_v5_loaded.has("%d:locomotion" % team_id):
 		return
 	if team_id not in [0, 1] or textures.size() != ChessFootballRunV2R2.COLUMNS * ChessFootballRunV2R2.ROWS:
 		return
@@ -519,7 +526,7 @@ func _on_lateral_run_atlas_ready(image: Image, team_id: int) -> void:
 func _apply_verified_lateral_run(textures: Array[Texture2D], team_id: int) -> void:
 	# An older v1 request may complete after the v2 atlas. It must not
 	# overwrite the newly validated running frames.
-	if _run_v2_r2_loaded.has(team_id) or _run_v3_r2_loaded.has(team_id) or _motion_v4_loaded.has("%d:run" % team_id):
+	if _run_v2_r2_loaded.has(team_id) or _run_v3_r2_loaded.has(team_id) or _motion_v4_loaded.has("%d:run" % team_id) or _hero_v5_loaded.has("%d:locomotion" % team_id):
 		return
 	# Keep all original run phases, FPS, action indices and facing animations;
 	# switching only the eight side frames cannot change game simulation.
@@ -698,7 +705,7 @@ func _on_motion_v4_ready(image: Image, team_id: int, family: String) -> void:
 
 func _apply_motion_v4_run(textures: Array[Texture2D], team_id: int) -> void:
 	var key := "%d:run" % team_id
-	if team_id not in [0, 1] or _motion_v4_loaded.has(key) or textures.size() != 120:
+	if team_id not in [0, 1] or _motion_v4_loaded.has(key) or _hero_v5_loaded.has("%d:locomotion" % team_id) or textures.size() != 120:
 		return
 	var targets: Array[AnimatedSprite3D] = []
 	var previous_count := 0
@@ -816,6 +823,117 @@ func _apply_motion_v4_carry_dribble(textures: Array[Texture2D], team_id: int) ->
 			for i in range(16):
 				bank.add_frame(name, textures[row * 16 + i])
 	_motion_v4_loaded[key] = true
+	body_scale_cache.clear()
+	tone_gain_cache.clear()
+
+
+# V5 artwork is an independent per-family/club, SHA-locked candidate.
+# The attached ball remains Godot-authoritative; the WebP masks contain
+# only the player silhouette, never a second rendered football.
+func _request_hero_v5_from_r2() -> void:
+	if not OS.has_feature("web") or match_node.match_team_size != 11:
+		return
+	for team_id in range(2):
+		for family in ChessFootballHeroV5R2.FAMILIES:
+			var meta := ChessFootballHeroV5R2.sheet_meta(team_id, family)
+			if meta.is_empty():
+				continue
+			var loader := ChessFootballR2AtlasLoader.new()
+			loader.name = "HeroV5_%d_%s" % [team_id, family]
+			add_child(loader)
+			loader.atlas_ready.connect(_on_hero_v5_ready.bind(team_id, family))
+			loader.start(meta, ChessFootballHeroV5R2.TRUSTED_ROOT)
+
+
+func _on_hero_v5_ready(image: Image, team_id: int, family: String) -> void:
+	var frames := ChessFootballHeroV5R2.frames_from_image(image, family)
+	if family == "locomotion":
+		_apply_hero_v5_locomotion(frames, team_id)
+	elif family == "dribbles":
+		_apply_hero_v5_dribbles(frames, team_id)
+
+
+func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void:
+	var key := "%d:locomotion" % team_id
+	if team_id not in [0, 1] or match_node.match_team_size != 11 or _hero_v5_loaded.has(key) or textures.size() != 48:
+		return
+	var targets: Array[AnimatedSprite3D] = []
+	var names: Array[StringName] = [&"idle_front", &"run_front", &"sprint_front", &"run_front_diagonal", &"sprint_front_diagonal"]
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null or sprite.sprite_frames == null:
+			return
+		for name in names:
+			if not sprite.sprite_frames.has_animation(name):
+				return
+			if sprite.sprite_frames.get_frame_count(name) not in [1, 8, 12, 24]:
+				return
+		targets.append(sprite)
+	if targets.size() != match_node.match_team_size - 1:
+		return
+	# Preserve real gait cadence, currently playing phase, and all views not
+	# supplied by the new 3-row sheet (side, back, back-diagonal, keepers).
+	for sprite in targets:
+		var bank := sprite.sprite_frames
+		for name in names:
+			var old_count := bank.get_frame_count(name)
+			var old_fps := bank.get_animation_speed(name)
+			var row := 0 if name == &"idle_front" else (
+				2 if name in [&"run_front_diagonal", &"sprint_front_diagonal"] else 1
+			)
+			bank.clear(name)
+			bank.set_animation_loop(name, true)
+			bank.set_animation_speed(name, 14.0 if row == 0 else old_fps * 16.0 / float(old_count))
+			for i in range(16):
+				bank.add_frame(name, textures[row * 16 + i])
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var id: int = player.get_instance_id()
+		var driver := player_sprites[id] as AnimatedSprite3D
+		if driver.animation in names:
+			var old_phase: float = float(outfield_visual_phases.get(id, float(driver.frame)))
+			var old_count: int = 8
+			# Phase is a normalized cycle clock, not a gameplay timer.
+			if driver.animation != &"idle_front":
+				old_count = 24 if _motion_v4_loaded.has("%d:run" % team_id) else (12 if _run_v3_r2_loaded.has(team_id) else 8)
+			var new_phase: float = fposmod(old_phase * 16.0 / float(old_count), 16.0)
+			outfield_visual_phases[id] = new_phase
+			driver.frame = clampi(int(floorf(new_phase)), 0, 15)
+	_hero_v5_loaded[key] = true
+	body_scale_cache.clear()
+	tone_gain_cache.clear()
+
+
+func _apply_hero_v5_dribbles(textures: Array[Texture2D], team_id: int) -> void:
+	var key := "%d:dribbles" % team_id
+	if team_id not in [0, 1] or match_node.match_team_size != 11 or _hero_v5_loaded.has(key) or textures.size() != 32:
+		return
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if sprite == null or sprite.sprite_frames == null:
+			return
+		if sprite.sprite_frames.has_animation(&"hero_feint") or sprite.sprite_frames.has_animation(&"hero_cut"):
+			return
+		targets.append(sprite.sprite_frames)
+	if targets.size() != match_node.match_team_size - 1:
+		return
+	for bank in targets:
+		for row in range(2):
+			var name: StringName = &"hero_feint" if row == 0 else &"hero_cut"
+			bank.add_animation(name)
+			bank.set_animation_loop(name, false)
+			# Real action progress, not a free-running FPS timer, chooses
+			# its rendered frame at the end of sync_presentation().
+			bank.set_animation_speed(name, 64.0)
+			for i in range(16):
+				bank.add_frame(name, textures[row * 16 + i])
+	_hero_v5_loaded[key] = true
 	body_scale_cache.clear()
 	tone_gain_cache.clear()
 
@@ -1059,6 +1177,7 @@ func setup(p_match: Node) -> void:
 	_request_action_poses_from_r2()
 	_request_keeper_catch_atlases_from_r2()
 	_request_motion_v4_from_r2()
+	_request_hero_v5_from_r2()
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -2389,6 +2508,18 @@ func sync_presentation(delta: float, mode: String) -> void:
 					)
 					if sprite.sprite_frames.has_animation(pivot_pose):
 						wanted_animation = pivot_pose
+				# Hero V5 is a foreground-only 3D pose: never change the physical
+				# ball or 2D action. Front/side views absent from the new source
+				# keep their approved action visuals.
+				var hero_name: StringName = ChessFootballHeroV5R2.action_animation(
+					player.dribble_mode, player.has_ball and match_node.ball.carrier == player
+					and player.dribble_active(), _hero_v5_loaded.has("%d:dribbles" % player.team_id)
+				)
+				if hero_name != &"" and (
+					(hero_name == &"hero_feint" and run_view in ["front", "front_diagonal"])
+					or (hero_name == &"hero_cut" and run_view in ["side", "front_diagonal"])
+				) and sprite.sprite_frames.has_animation(hero_name):
+					wanted_animation = hero_name
 				var save_before_catch := xi_keeper_dive_before_catch(
 					match_node.match_team_size, player == holding_keeper,
 					_keeper_catch_r2_loaded.has(int(player.team_id)),
@@ -2410,6 +2541,12 @@ func sync_presentation(delta: float, mode: String) -> void:
 					sprite.frame = clampi(int(floorf(grip_ratio * 7.0)), 0, 7)
 				else:
 					_sync_visible_animation(key, player, sprite, wanted_animation, delta)
+					if wanted_animation in [&"hero_feint", &"hero_cut"]:
+						var hero_progress: float = 1.0 - clampf(
+							player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
+							0.0, 1.0
+						)
+						sprite.frame = clampi(int(floorf(hero_progress * 16.0)), 0, 15)
 				if player.role == "keeper":
 					# The approved front/back keeper atlas does not alternate which
 					# leg leads strongly enough. Mirroring only the second half of
@@ -3331,7 +3468,7 @@ func _canonical_body_scale(sprite: AnimatedSprite3D, role: String = "", team_id:
 	# The ball carrier sometimes uses an older, separately painted 8-pose
 	# carry/dribble atlas instead of the 12-pose v3 running row. Measuring
 	# its height from v3 'run' makes the player pop in size on possession.
-	if current_name in ["carry", "dribble", "dribble_cut", "dribble_burst"]:
+	if current_name in ["carry", "dribble", "dribble_cut", "dribble_burst", "hero_feint", "hero_cut"]:
 		reference_name = StringName(current_name)
 	# Different club sheets and action sources must never share a cached
 	# height; measure only once per family, not once per actor or frame.
@@ -3530,7 +3667,7 @@ func _sync_player_secondary_motion(
 		stretch_x = 1.00
 		stretch_y = 1.01
 		tilt_degrees = -facing_sign * 12.0
-	elif animation_name in ["dribble_cut", "dribble_burst"]:
+	elif animation_name in ["dribble_cut", "dribble_burst", "hero_feint", "hero_cut"]:
 		# The eight source poses supply the actual change of direction/stride.
 		# Avoid a second procedural tilt or bounce that shifts the boots.
 		bob = 0.0
