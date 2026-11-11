@@ -1,0 +1,53 @@
+{
+  "enabled": false,
+  "schema": 5,
+  "version": 5,
+  "quality_contract": "football-generated-hero-v5-8pose",
+  "bucket": "football",
+  "prefix": "atlases/v5/",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v5",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "columns": 8,
+  "entries": [
+    {
+      "team": "fc_matthias",
+      "family": "locomotion",
+      "file": "fc_matthias_locomotion_v5.webp",
+      "sha256": "d1bdf08c302712ec2f254aa76044be6a78cf2f433bc5fafe1cc6cf100fd5eca3",
+      "bytes": 279160,
+      "columns": 8,
+      "rows": 3
+    },
+    {
+      "team": "fc_matthias",
+      "family": "dribbles",
+      "file": "fc_matthias_dribbles_v5.webp",
+      "sha256": "2aac04c7204f6072f0e93ce46aa00ee4a31af1f29067868de2ff3a788bc30cb7",
+      "bytes": 203072,
+      "columns": 8,
+      "rows": 2
+    },
+    {
+      "team": "real_enroque",
+      "family": "locomotion",
+      "file": "real_enroque_locomotion_v5.webp",
+      "sha256": "ebcab048b768c1babf589fa39ba40925b776f08271189c0d774223443731ebe5",
+      "bytes": 272524,
+      "columns": 8,
+      "rows": 3
+    },
+    {
+      "team": "real_enroque",
+      "family": "dribbles",
+      "file": "real_enroque_dribbles_v5.webp",
+      "sha256": "4d0a34b2eb6541fccc454c2078cf719d578362c277fd844f0086b116f65e430a",
+      "bytes": 208896,
+      "columns": 8,
+      "rows": 2
+    }
+  ],
+  "notes": "User approved artwork. OFF until all four public R2 files verified via SHA256/CORS/Godot screenshots. Separate ball art stripped; legacy V1-V4 authoritative fallback."
+}
