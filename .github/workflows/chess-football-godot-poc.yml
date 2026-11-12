@@ -797,7 +797,7 @@ jobs:
           godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
           log="$RUNNER_TEMP/football-hero-v5-real.log"
           set +e
-          timeout 110s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/hero_v5_real_r2_visual.gd 2>&1 | tee "$log"
+          timeout 210s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/hero_v5_real_r2_visual.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|ERROR: Failed to load script' "$log"; then
@@ -811,6 +811,50 @@ jobs:
           fi
           test -f "$FOOTBALL_V5_CAPTURE_DIR/football-v5-real-r2-broadcast.png"
           test -f "$FOOTBALL_V5_CAPTURE_DIR/football-v5-real-r2-tactical.png"
+          grep -q 'FOOTBALL_V5_MOVING_E_VIDEO_OK camera=broadcast frames=28' "$log"
+          grep -q 'FOOTBALL_V5_MOVING_E_VIDEO_OK camera=tactical frames=28' "$log"
+      - name: Encode real 60 Hz XI moving-E review as 20 FPS gameplay video
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ffmpeg >/dev/null
+          command -v ffprobe >/dev/null
+          source_dir="$GITHUB_WORKSPACE/.artifacts/football-v5-real"
+          output_dir="$GITHUB_WORKSPACE/.artifacts/football-e-gameplay-video"
+          mkdir -p "$output_dir"
+          for mode in broadcast tactical; do
+            full="$source_dir/video-frames/$mode/full/frame_%03d.png"
+            detail="$source_dir/video-frames/$mode/detail/frame_%03d.png"
+            for sequence in full detail; do
+              test "$(find "$source_dir/video-frames/$mode/$sequence" -name 'frame_*.png' -type f | wc -l)" -eq 28
+            done
+            # The inset is an enlarged crop of the SAME actual 1280x720 frame,
+            # not a fabricated camera or independent sprite animation.
+            ffmpeg -hide_banner -loglevel error -nostdin -y \
+              -framerate 20 -start_number 0 -i "$full" \
+              -framerate 20 -start_number 0 -i "$detail" \
+              -filter_complex "[1:v]scale=600:450:flags=neighbor[zoom];[0:v][zoom]overlay=W-w-16:H-h-16,format=yuv420p[review]" \
+              -map '[review]' -frames:v 28 -c:v libx264 -crf 22 -preset veryfast \
+              -movflags +faststart "$output_dir/moving-e-$mode-realtime.mp4"
+            ffmpeg -hide_banner -loglevel error -nostdin -y \
+              -i "$output_dir/moving-e-$mode-realtime.mp4" -vf "setpts=2.0*PTS,fps=30" \
+              -an -c:v libx264 -crf 23 -preset veryfast -pix_fmt yuv420p \
+              -movflags +faststart "$output_dir/moving-e-$mode-slow-motion.mp4"
+            cp "$source_dir/moving-e-$mode.csv" "$output_dir/moving-e-$mode.csv"
+            test "$(ffprobe -v error -select_streams v:0 -count_frames \
+              -show_entries stream=nb_read_frames -of default=nw=1:nk=1 \
+              "$output_dir/moving-e-$mode-realtime.mp4")" -eq 28
+            test -s "$output_dir/moving-e-$mode-slow-motion.mp4"
+          done
+          echo 'FOOTBALL_XI_E_REAL_VIDEO_OK cameras=2 frames_per_camera=28 input_physics_hz=60 output_fps=20'
+      - name: Upload real XI moving-E gameplay videos
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-xi-moving-e-video-review
+          path: .artifacts/football-e-gameplay-video/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Upload SHA-verified V5 real match-camera art
         if: always()
         uses: actions/upload-artifact@v7
