@@ -140,6 +140,11 @@ func _run_duel(
 	defender.tackle_aggressive = false
 	defender.action_lock_seconds = 0.0
 	game.ball.attach_to(owner)
+	# Compare identical, legitimate post-read tackle positions in both
+	# decisions. The new Hard first-touch observation is independently
+	# tested at age=0 in the XI dribble lab; these eight static scenarios
+	# instead measure actual reach, frontal cleanliness, foul and containment.
+	game.ball.tick_ball(game.AI_XI_HARD_FIRST_TOUCH_READ + 0.01)
 
 	var is_cover: bool = bool(item["cover"])
 	# Mirror the production secondary defender's 0.72 * attempt range.
