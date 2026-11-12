@@ -514,7 +514,7 @@ func _xi_cut_exit_ratio() -> float:
 	)
 	# Preserve the chosen sidestep through most of the boot contact;
 	# only then hand control back for the deliberate 45-degree exit.
-	return smoothstep(0.83, 0.98, progress)
+	return smoothstep(0.82, 0.95, progress)
 
 
 func dribble_touch_ratio() -> float:
