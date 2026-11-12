@@ -99,7 +99,17 @@ static func frames_from_image(image: Image, family: String) -> Array[Texture2D]:
 			):
 				return []
 			regions.append(crop)
-	for crop in regions:
+	for index in range(regions.size()):
+		# The pinned V5 dribble sources deliberately include ghosted
+		# in-between poses at odd columns (double arms/legs/torso).
+		# Gameplay needs the eight SOLID authored poses instead: repeat
+		# the preceding verified even texture at the odd time slots.
+		# Keep 16 time slots and the original immutable R2 hash intact.
+		# Locomotion is deliberately untouched.
+		if family == "dribbles" and index % 2 == 1:
+			frames.append(frames[index - 1])
+			continue
+		var crop: Image = regions[index]
 		var texture := ImageTexture.create_from_image(crop)
 		ChessFootballSpriteBank._register_frame_bottom(texture, crop)
 		frames.append(texture)

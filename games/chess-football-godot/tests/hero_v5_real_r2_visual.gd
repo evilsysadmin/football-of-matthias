@@ -53,8 +53,26 @@ func _initialize() -> void:
 				meta, ChessFootballHeroV5R2.TRUSTED_ROOT
 			)
 			assert(img != null, "Public WebP SHA/dimensions/decoder mismatch for " + filename)
+			if family == "dribbles":
+				# Forensic source: preserve the verified original decoded RGBA,
+				# including ALL per-pixel alpha, before Godot/QuadMesh draws it.
+				# Comparing this with the live motion MP4 locates any ghosting
+				# at source versus runtime. These are review-only, never assets.
+				var source_png := output_dir.path_join("football-v5-original-%s-dribbles.png" %
+					String(ChessFootballHeroV5R2.CLUBS[club]))
+				assert(img.save_png(source_png) == OK)
+				print("FOOTBALL_V5_SOURCE_SHEET_CAPTURE=" + source_png)
 			stage._on_hero_v5_ready(img, club, family)
 			assert(stage._hero_v5_loaded.has("%d:%s" % [club, family]))
+			if family == "dribbles":
+				var actor: Footballer = game.teams[club][1]
+				var checked_sprite: AnimatedSprite3D = stage.player_sprites[actor.get_instance_id()]
+				for anim in [&"hero_feint", &"hero_cut"]:
+					for odd in range(1, 16, 2):
+						assert(checked_sprite.sprite_frames.get_frame_texture(anim, odd) ==
+							checked_sprite.sprite_frames.get_frame_texture(anim, odd - 1),
+							"Live V5 must not render baked ghost silhouettes in either club")
+				print("FOOTBALL_V5_GHOST_FREE_SOURCE_OK club=%d modes=2 opaque_poses=8" % club)
 	assert(stage._hero_v5_loaded.size() == 4)
 	print("FOOTBALL_V5_CAPTURE_PROBE_ART_VERIFIED")
 
@@ -179,7 +197,118 @@ func _initialize() -> void:
 		game.ball.release(Vector2.RIGHT, 0.0)
 		runner.global_position = Vector2(-9999, -9999)
 		rival.global_position = Vector2(-9999, -9999)
+		# The same verified public V5 banks now drive an uninterrupted
+		# 1.4-second clip at 20 captured FPS (60 Hz authoritative physics).
+		# Full 1280x720 match lens + native pixels from the SAME framebuffer.
+		await _capture_actual_e_video(game, stage, mode, output_dir)
 	assert(game.score == original_score)
 	assert(is_equal_approx(game.match_seconds, original_seconds))
 	print("FOOTBALL_V5_REAL_R2_OK four_sha_verified=1 both_clubs=1 dribbles=2 cameras=2 no_physics_change=1")
 	quit(0)
+
+
+# CI video source. No staged sprite sheet or simulated timeline:
+# render 28 actual frames from a 1.4s 60 Hz movement sequence with a
+# controlled real XI opponent and the rest of the 22-player lineup visible.
+# E is pressed through the same match action handler used in live gameplay.
+# Rival AI is intentionally paused; the separate 48-duel lab tests combat.
+func _capture_actual_e_video(game: Node2D, stage: ChessFootball3DPresenter, mode: String, output_dir: String) -> void:
+	const DT := 1.0 / 60.0
+	const CAPTURE_EVERY := 3
+	const SIM_FRAMES := 84
+	const E_FRAME := 18
+	var full_dir: String = output_dir.path_join("video-frames").path_join(mode).path_join("full")
+	var detail_dir: String = output_dir.path_join("video-frames").path_join(mode).path_join("detail")
+	assert(DirAccess.make_dir_recursive_absolute(full_dir) == OK)
+	assert(DirAccess.make_dir_recursive_absolute(detail_dir) == OK)
+	for team in game.teams:
+		for actor: Footballer in team:
+			actor.global_position = actor.home_position
+			actor.velocity = Vector2.ZERO
+			actor.dribble_burst_seconds = 0.0
+			actor.action_lock_seconds = 0.0
+			actor.contact_stun_seconds = 0.0
+			actor.tackle_recovery_seconds = 0.0
+	var runner: Footballer = game.teams[0][1]
+	var enemy: Footballer = game.teams[1][5]
+	var center: Vector2 = game.match_pitch.get_center()
+	runner.global_position = center
+	runner.velocity = Vector2.RIGHT * runner.base_speed
+	runner.dribble_cooldown_seconds = 0.0
+	enemy.global_position = center + Vector2(140.0, -70.0)
+	game._select_player(runner)
+	game.ball.attach_to(runner)
+	stage.player_run_views[runner.get_instance_id()] = "side"
+	stage.outfield_visual_names.erase(runner.get_instance_id())
+	stage.outfield_visual_phases.erase(runner.get_instance_id())
+	stage._sync_camera(10.0, mode)
+	var data_path: String = output_dir.path_join("moving-e-%s.csv" % mode)
+	var csv: FileAccess = FileAccess.open(data_path, FileAccess.WRITE)
+	assert(csv != null)
+	csv.store_line("sample,time_seconds,pressed_E,animation,atlas_frame,player_x,player_y,ball_x,ball_y,speed,cut_progress")
+	var sample: int = 0
+	var first_lateral: float = runner.global_position.y
+	var visible_cuts: int = 0
+	var visible_runs_before: int = 0
+	var visible_runs_after: int = 0
+	var sampled_frames: Array[int] = []
+	for tick in range(SIM_FRAMES):
+		await physics_frame
+		if tick == E_FRAME:
+			game._handle_contextual_e(Vector2.RIGHT, false)
+			assert(runner.dribble_mode == "cut")
+			assert(runner.dribble_direction.y > 0.35)
+		runner.move_human(DT, Vector2.RIGHT, false)
+		game.ball.tick_ball(DT)
+		stage._sync_camera(DT, mode)
+		stage.sync_presentation(DT, mode)
+		assert(game.ball.carrier == runner and runner.has_ball)
+		assert(runner.velocity.length() <= runner.base_speed *
+			runner.technique_control_multiplier * runner.SPRINT_SPEED_MULTIPLIER + 1.0)
+		assert(absf(stage.ball_shadow.position.x - stage.ball_node.position.x) < 0.001)
+		assert(absf(stage.ball_shadow.position.z - stage.ball_node.position.z) < 0.001)
+		if tick % CAPTURE_EVERY == 0:
+			var sprite: AnimatedSprite3D = stage.player_sprites[runner.get_instance_id()]
+			if sprite.animation == &"hero_cut":
+				visible_cuts += 1
+				sampled_frames.append(sprite.frame)
+			elif tick < E_FRAME:
+				visible_runs_before += 1
+			else:
+				visible_runs_after += 1
+			await process_frame
+			await RenderingServer.frame_post_draw
+			var shot: Image = game.get_viewport().get_texture().get_image()
+			assert(shot != null and shot.get_size() == Vector2i(1280, 720))
+			var camera_px: Vector2 = stage.camera.unproject_position(
+				stage.player_nodes[runner.get_instance_id()].global_position + Vector3.UP * 0.75
+			)
+			assert(Rect2(Vector2.ZERO, Vector2(1280, 720)).has_point(camera_px))
+			var detail_size := Vector2i(400, 300)
+			var left: int = clampi(int(camera_px.x) - detail_size.x / 2, 0, 1280 - detail_size.x)
+			var top: int = clampi(int(camera_px.y) - detail_size.y / 2, 0, 720 - detail_size.y)
+			var native_crop: Image = shot.get_region(Rect2i(left, top, detail_size.x, detail_size.y))
+			assert(shot.save_png(full_dir.path_join("frame_%03d.png" % sample)) == OK)
+			assert(native_crop.save_png(detail_dir.path_join("frame_%03d.png" % sample)) == OK)
+			csv.store_csv_line(PackedStringArray([
+				str(sample), "%.4f" % (float(tick) * DT),
+				"1" if tick >= E_FRAME and runner.dribble_active() else "0",
+				String(sprite.animation), str(sprite.frame),
+				"%.3f" % runner.global_position.x, "%.3f" % runner.global_position.y,
+				"%.3f" % game.ball.global_position.x, "%.3f" % game.ball.global_position.y,
+				"%.3f" % runner.velocity.length(),
+				"%.3f" % (1.0 - runner.dribble_burst_seconds / maxf(runner.dribble_duration_seconds, 0.001))
+			]))
+			sample += 1
+		runner._process(DT)
+	csv.close()
+	assert(sample == 28 and visible_runs_before >= 4 and visible_runs_after >= 8)
+	assert(visible_cuts >= 5 and sampled_frames.size() >= 5)
+	assert(sampled_frames[0] < sampled_frames[2] and sampled_frames[2] < sampled_frames[-1],
+		"The real moving E video must visibly traverse distinct V5 atlas frames")
+	assert(runner.global_position.y > first_lateral + 12.0,
+		"Visible E must cut sideways, not merely run faster")
+	print("FOOTBALL_V5_MOVING_E_VIDEO_OK camera=%s frames=%d cut=%d run_before=%d run_after=%d" % [
+		mode, sample, visible_cuts, visible_runs_before, visible_runs_after
+	])
+	game.ball.release(Vector2.RIGHT, 0.0)
