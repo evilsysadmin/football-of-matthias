@@ -306,8 +306,8 @@ func _capture_actual_e_video(game: Node2D, stage: ChessFootball3DPresenter, mode
 	assert(visible_cuts >= 5 and sampled_frames.size() >= 5)
 	assert(sampled_frames[0] < sampled_frames[2] and sampled_frames[2] < sampled_frames[-1],
 		"The real moving E video must visibly traverse distinct V5 atlas frames")
-	assert(runner.global_position.y > first_lateral + 12.0,
-		"Visible E must cut sideways, not merely run faster")
+	assert(runner.global_position.y > first_lateral + 25.0,
+		"Real filmed E must cross a visible lateral lane (not a cosmetic sprite swap)")
 	print("FOOTBALL_V5_MOVING_E_VIDEO_OK camera=%s frames=%d cut=%d run_before=%d run_after=%d" % [
 		mode, sample, visible_cuts, visible_runs_before, visible_runs_after
 	])

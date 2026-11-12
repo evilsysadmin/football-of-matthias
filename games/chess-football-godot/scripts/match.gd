@@ -2925,7 +2925,9 @@ func _xi_contextual_cut_direction(player: Footballer, requested: Vector2) -> Vec
 	var best := forward
 	var best_score := -INF
 	for side in [-1.0, 1.0]:
-		var candidate: Vector2 = (forward * 0.82 + lateral * side * 0.57).normalized()
+		# About 42 degrees: a football sidestep, not a tiny turn or 90°
+		# teleport. It still uses the same live rival/field clearance.
+		var candidate: Vector2 = (forward * 0.74 + lateral * side * 0.67).normalized()
 		var aim: Vector2 = player.global_position + candidate * 140.0
 		if not match_pitch.has_point(aim):
 			continue
