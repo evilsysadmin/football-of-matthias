@@ -2750,7 +2750,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 				# calibration without moving any 2D player, ball or camera.
 				var fall_turf := proxy.get_node_or_null("FallTurfScuff") as MeshInstance3D
 				if fall_turf != null:
-					var fall_progress := (
+					var fall_progress: float = (
 						1.0 - player.xi_collision_down_ratio()
 						if player.xi_collision_down_seconds > 0.0 else 1.0
 					)
