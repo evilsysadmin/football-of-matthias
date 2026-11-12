@@ -194,6 +194,7 @@ var _carry_dribble_r2_loaded: Dictionary = {}
 # Independent v2 action sheet state: one verified replacement per club/action.
 var _action_poses_r2_loaded: Dictionary = {}
 var _contact_shadow_material: ShaderMaterial
+var _xi_fall_turf_shader_material: ShaderMaterial
 var keeper_catch_carrier_id: int = 0
 var keeper_catch_origin: Vector3 = Vector3.ZERO
 var keeper_catch_elapsed: float = 0.0
@@ -2158,6 +2159,30 @@ void fragment() {
 	return _contact_shadow_material
 
 
+# A subtle turf disturbance at the feet of a genuinely knocked-down XI actor.
+# Ground plane only; shared shader, no new PNG/CDN load and no game authority.
+func _xi_fall_turf_material() -> ShaderMaterial:
+	if _xi_fall_turf_shader_material != null:
+		return _xi_fall_turf_shader_material
+	var shader := Shader.new()
+	shader.code = """shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
+void fragment() {
+	vec2 p = (UV - vec2(0.5)) * 2.0;
+	float ridge = abs(p.y + 0.15 * sin(p.x * 3.4));
+	float rubbed = (1.0 - smoothstep(0.07, 0.33, ridge))
+		* (1.0 - smoothstep(0.62, 0.99, abs(p.x)));
+	float disturbed = (1.0 - smoothstep(0.25, 0.89, length(p))) * 0.17;
+	float grit = 0.77 + 0.23 * sin(21.0 * p.x + 8.0 * p.y) * sin(19.0 * p.y);
+	ALBEDO = vec3(0.35, 0.33, 0.22);
+	ALPHA = clamp((rubbed * 0.50 + disturbed) * grit, 0.0, 0.52);
+}
+"""
+	_xi_fall_turf_shader_material = ShaderMaterial.new()
+	_xi_fall_turf_shader_material.shader = shader
+	return _xi_fall_turf_shader_material
+
+
 func _build_player_proxies() -> void:
 	for team in match_node.teams:
 		for player in team:
@@ -2202,6 +2227,20 @@ func _build_player_proxies() -> void:
 			shadow.material_override = _soft_contact_shadow_material()
 			shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			root.add_child(shadow)
+			# A brief turf rub at the physical fall, underneath the opaque player.
+			# Not a target ring or an enlarged sprite; no 5v5 / keeper instances.
+			if match_node.match_team_size == 11 and player.role != "keeper":
+				var fall_turf := MeshInstance3D.new()
+				fall_turf.name = "FallTurfScuff"
+				var fall_mesh := QuadMesh.new()
+				fall_mesh.size = Vector2(1.80, 1.06)
+				fall_turf.mesh = fall_mesh
+				fall_turf.rotation.x = -PI * 0.5
+				fall_turf.position.y = 0.022
+				fall_turf.material_override = _xi_fall_turf_material()
+				fall_turf.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				fall_turf.visible = false
+				root.add_child(fall_turf)
 
 			var active_disc := MeshInstance3D.new()
 			active_disc.name = "ActiveDisc"
@@ -2489,6 +2528,17 @@ static func xi_collision_fall_display_offset(push: Vector2, progress: float) -> 
 	return Vector3(away.x * distance, 0.0, away.y * distance)
 
 
+# The scrape appears after impact, then disappears while the footballer
+# is still getting up. Invisible during ordinary runs, dribbles and 5v5.
+static func xi_fall_turf_opacity(progress: float) -> float:
+	var t := clampf(progress, 0.0, 1.0)
+	return smoothstep(0.005, 0.10, t) * (1.0 - smoothstep(0.42, 0.70, t))
+
+
+static func xi_fall_turf_size(progress: float) -> float:
+	return 0.88 + 0.25 * smoothstep(0.04, 0.42, clampf(progress, 0.0, 1.0))
+
+
 func sync_presentation(delta: float, mode: String) -> void:
 	# Size compensation must use the camera pose from this same frame, not
 	# yesterday's interpolated pose; otherwise footballers visibly pulse.
@@ -2695,6 +2745,24 @@ func sync_presentation(delta: float, mode: String) -> void:
 				if contact_shadow != null:
 					contact_shadow.scale.x *= depth_scale
 					contact_shadow.scale.z *= depth_scale
+				# Turf cue is an inexpensive shared-shader ground quad, visible only
+				# during a real knockdown. It follows the approved body footprint
+				# calibration without moving any 2D player, ball or camera.
+				var fall_turf := proxy.get_node_or_null("FallTurfScuff") as MeshInstance3D
+				if fall_turf != null:
+					var fall_progress := (
+						1.0 - player.xi_collision_down_ratio()
+						if player.xi_collision_down_seconds > 0.0 else 1.0
+					)
+					var cue_opacity := (
+						xi_fall_turf_opacity(fall_progress)
+						if player.xi_collision_down_seconds > 0.0 else 0.0
+					)
+					fall_turf.visible = cue_opacity > 0.001
+					if fall_turf.visible:
+						fall_turf.transparency = 1.0 - cue_opacity
+						var cue_scale := xi_fall_turf_size(fall_progress) * depth_scale
+						fall_turf.scale = Vector3(cue_scale, 1.0, cue_scale)
 			# A visible XI QuadMesh uses the original animation frame, position,
 			# mirroring and footline. No separate animation or physics authority.
 			var xi_quad: MeshInstance3D = xi_raster_meshes.get(key)
