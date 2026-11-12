@@ -331,12 +331,21 @@ func _initialize() -> void:
 										assert(sampled_sprite.frame == 6,
 											"Real F 15 FPS frame 3 must show original R2 recovery")
 							if tick == 4:
-								# F has a slightly longer window than CUT/FEINT,
-								# but the R2 pivot already exited to its real
-								# directional runner at >87% progress.
-								if action != "burst":
-									assert(not athlete.dribble_active())
-								assert(sampled_sprite.animation == StringName("run_" + view))
+								# The fifth 15-FPS sample is 0.267s after E/F.
+								# FEINT (0.24s) has ended; F (0.27s) is in
+								# recovery, already back to its directional run.
+								# NEW moving CUT (0.34s) is still in the REAL
+								# extended-foot recovery: do not truncate the
+								# planted gesture to the former 0.22s window.
+								if action == "cut":
+									assert(athlete.dribble_active())
+									assert(sampled_sprite.animation == &"dribble_cut")
+									assert(sampled_sprite.frame == 6,
+										"The moving E recovery must remain visible at 15 FPS tick 4")
+								else:
+									if action == "feint":
+										assert(not athlete.dribble_active())
+									assert(sampled_sprite.animation == StringName("run_" + view))
 							assert(athlete.global_position == unchanged_position)
 							assert(match_node.ball.global_position == authoritative_ball)
 							await process_frame
