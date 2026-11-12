@@ -114,6 +114,71 @@ func _initialize() -> void:
 		var image_file := output_dir.path_join("football-v5-real-r2-" + mode + ".png")
 		assert(sheet.save_png(image_file) == OK)
 		print("FOOTBALL_V5_REAL_R2_CAPTURE_" + mode.to_upper() + "=" + image_file)
+
+		# Five REAL moving-E moments, 4 physics frames apart (15 FPS).
+		# Unlike the pose montage above, these frames use the live E
+		# handler, CharacterBody movement and authoritative carried ball.
+		var runner: Footballer = game.teams[0][1]
+		var runner_key: int = runner.get_instance_id()
+		var start_point: Vector2 = game.match_pitch.get_center()
+		runner.global_position = start_point
+		runner.velocity = Vector2.RIGHT * runner.base_speed
+		runner.dribble_burst_seconds = 0.0
+		runner.dribble_cooldown_seconds = 0.0
+		runner.action_lock_seconds = 0.0
+		runner.contact_stun_seconds = 0.0
+		runner.tackle_recovery_seconds = 0.0
+		var rival: Footballer = game.teams[1][5]
+		rival.global_position = start_point + Vector2(140.0, -70.0)
+		game._select_player(runner)
+		game.ball.attach_to(runner)
+		stage.player_run_views[runner_key] = "side"
+		stage.outfield_visual_names.erase(runner_key)
+		stage.outfield_visual_phases.erase(runner_key)
+		game._handle_contextual_e(Vector2.RIGHT, false)
+		assert(runner.dribble_mode == "cut" and runner.dribble_direction.y > 0.35)
+		assert(is_equal_approx(runner.dribble_duration_seconds, runner.XI_DRIBBLE_CUT_SECONDS))
+		var playback := Image.create(CELL.x * 5, CELL.y, false, Image.FORMAT_RGBA8)
+		playback.fill(Color("#15392f"))
+		var selected_frames: Array[int] = []
+		var samples := [2, 6, 10, 14, 18]
+		stage._sync_camera(10.0, mode)
+		for tick_id in range(21):
+			await physics_frame
+			runner.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+			game.ball.tick_ball(1.0 / 60.0)
+			stage.sync_presentation(1.0 / 60.0, mode)
+			if tick_id in samples:
+				var live_sprite: AnimatedSprite3D = stage.player_sprites[runner_key]
+				assert(live_sprite.animation == &"hero_cut",
+					"Live moving E must select the real V5 cut, not a run")
+				selected_frames.append(live_sprite.frame)
+				assert(game.ball.carrier == runner)
+				await process_frame
+				await RenderingServer.frame_post_draw
+				var displayed: Image = game.get_viewport().get_texture().get_image()
+				assert(displayed != null and displayed.get_size() == Vector2i(1280, 720))
+				var pixel_center: Vector2 = stage.camera.unproject_position(live_sprite.global_position)
+				assert(Rect2(Vector2.ZERO, Vector2(1280, 720)).has_point(pixel_center))
+				var x: int = clampi(int(pixel_center.x) - CELL.x / 2, 0, 1280 - CELL.x)
+				var y: int = clampi(int(pixel_center.y) - CELL.y / 2, 0, 720 - CELL.y)
+				playback.blit_rect(
+					displayed.get_region(Rect2i(x, y, CELL.x, CELL.y)),
+					Rect2i(Vector2i.ZERO, CELL),
+					Vector2i(selected_frames.size() - 1, 0) * CELL
+				)
+			runner._process(1.0 / 60.0)
+		assert(selected_frames.size() == 5)
+		assert(selected_frames[0] < selected_frames[2] and selected_frames[2] < selected_frames[4],
+			"Real 15-FPS E samples must progress through V5 cut frames")
+		assert(runner.global_position.y > start_point.y + 10.0,
+			"Actual moving E must cross the lane, not only run forward")
+		var playback_path := output_dir.path_join("football-v5-moving-e-live-" + mode + ".png")
+		assert(playback.save_png(playback_path) == OK)
+		print("FOOTBALL_V5_MOVING_E_LIVE_CAPTURE_" + mode.to_upper() + "=" + playback_path)
+		game.ball.release(Vector2.RIGHT, 0.0)
+		runner.global_position = Vector2(-9999, -9999)
+		rival.global_position = Vector2(-9999, -9999)
 	assert(game.score == original_score)
 	assert(is_equal_approx(game.match_seconds, original_seconds))
 	print("FOOTBALL_V5_REAL_R2_OK four_sha_verified=1 both_clubs=1 dribbles=2 cameras=2 no_physics_change=1")

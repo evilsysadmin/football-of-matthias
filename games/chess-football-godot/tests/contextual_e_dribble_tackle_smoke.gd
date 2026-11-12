@@ -89,6 +89,13 @@ func _initialize() -> void:
 	assert(game.score == initial_score and carrier.global_position == initial_home)
 	_reset_dribble(carrier)
 
+	# One physical clock: disable the actors' automatic processing before
+	# manually stepping the next 21 60 Hz frames.
+	for team in game.teams:
+		for actor: Footballer in team:
+			actor.set_process(false)
+			actor.set_physics_process(false)
+
 	# Exercise MOVING E with real 60 Hz CharacterBody2D movement. A rival
 	# just below the running lane forces a deterministic safe-side cut.
 	# First plant remains forward, middle beat crosses the lane, final beat
