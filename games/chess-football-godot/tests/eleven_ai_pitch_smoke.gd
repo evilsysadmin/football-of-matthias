@@ -1085,6 +1085,13 @@ func _initialize() -> void:
 	var human_cover: Footballer = game.teams[0][3]
 	var cpu_owner: Footballer = game.teams[1][4]
 	var chase_centre: Vector2 = game.match_pitch.get_center()
+	# Explicit isolation: the preceding duel/AI fixtures can leave other
+	# opponents anywhere on the pitch. Do not let an unrelated body absorb
+	# the 11 real momentum-continuity frames during this defensive probe.
+	for athlete: Footballer in game.teams[1]:
+		if athlete != cpu_owner:
+			athlete.global_position = chase_centre + Vector2(1100.0, 750.0)
+			athlete.velocity = Vector2.ZERO
 	for athlete: Footballer in game.teams[0]:
 		if athlete.role != "keeper":
 			athlete.global_position = chase_centre + Vector2(-950.0, 750.0)
@@ -1155,8 +1162,9 @@ func _initialize() -> void:
 		game.match_seconds += 1.0 / 60.0
 		game._handle_human(1.0 / 60.0)
 	var handoff_end: float = human_first.global_position.distance_to(cpu_owner.global_position)
-	print("FOOTBALL_XI_HANDOFF_60HZ_METRICS start=%.2f end=%.2f velocity=%.2f still_chasing=%s q_edge=%s" % [
-		handoff_start, handoff_end, human_first.velocity.length(),
+	print("FOOTBALL_XI_HANDOFF_60HZ_METRICS start=%.2f end=%.2f velocity=%s defender=%s owner=%s still_chasing=%s q_edge=%s" % [
+		handoff_start, handoff_end, str(human_first.velocity),
+		str(human_first.global_position), str(cpu_owner.global_position),
 		str(game.xi_human_handoff_chase_actor == human_first),
 		str(Input.is_action_just_pressed("change_player"))
 	])
