@@ -213,6 +213,11 @@ func _initialize() -> void:
 	var contact_velocity: Vector2 = xi_cover_player.velocity
 	xi_cover_player.global_position = striker.global_position + Vector2(31.0, -8.0)
 	xi_cover_player.velocity = Vector2(-175.0, 0.0)
+	# A legitimate Hard tackle still exists once the first touch is read.
+	# Before that, the CPU must not burn its cooldown on frame 2.
+	game.ball.possession_seconds = 0.0
+	assert(not game._ai_xi_tackle_commit_ready(xi_cover_player, striker, false))
+	game.ball.possession_seconds = game.AI_XI_HARD_FIRST_TOUCH_READ + 0.01
 	assert(game._ai_xi_tackle_commit_ready(xi_cover_player, striker, false))
 	xi_cover_player.global_position = contact_position
 	xi_cover_player.velocity = contact_velocity

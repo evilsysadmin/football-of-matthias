@@ -140,6 +140,10 @@ func _run_duel(
 	defender.tackle_aggressive = false
 	defender.action_lock_seconds = 0.0
 	game.ball.attach_to(owner)
+	# Compare identical post-read decisions without moving the ball from
+	# the fixture's original boot anchor. This is a static contact geometry
+	# test; the live 60 Hz duel lab separately exercises the full clock.
+	game.ball.possession_seconds = game.AI_XI_HARD_FIRST_TOUCH_READ + 0.01
 
 	var is_cover: bool = bool(item["cover"])
 	# Mirror the production secondary defender's 0.72 * attempt range.

@@ -154,6 +154,34 @@ func _initialize() -> void:
 	var close_normal: Dictionary = matrix["normal/close"]
 	assert(String(close_normal["feint"]) == "retained",
 		"Normal XI close feint must beat one real presser without immunity")
+	# XI Hard/Expert should observe a real first boot plant, not poke at
+	# frame 2 then waste their cooldown. The normal legal hitbox is unchanged.
+	_reset_duel(game, carrier, presser, "hard", "close")
+	carrier.global_position = XI.get_center()
+	presser.global_position = carrier.global_position + Vector2(32.0, 0.0)
+	presser.velocity = Vector2.LEFT * presser.base_speed
+	assert(bool(game._tackle_hitbox(presser, carrier.global_position)["clean"]))
+	game.ball.possession_seconds = game.AI_XI_HARD_FIRST_TOUCH_READ - 0.01
+	assert(not game._ai_xi_tackle_commit_ready(presser, carrier, false),
+		"Hard cannot immediately waste a tackle during the first plant")
+	game.ball.possession_seconds = game.AI_XI_HARD_FIRST_TOUCH_READ + 0.01
+	assert(game._ai_xi_tackle_commit_ready(presser, carrier, false),
+		"Hard must still make a legal tackle after observing the touch")
+	# Cover may challenge at legal range too, but must use the same read.
+	game.ball.possession_seconds = 0.02
+	assert(not game._ai_xi_tackle_commit_ready(presser, carrier, true))
+	game._set_quick_difficulty("expert")
+	game.ball.possession_seconds = game.AI_XI_EXPERT_FIRST_TOUCH_READ - 0.01
+	assert(not game._ai_xi_tackle_commit_ready(presser, carrier, false))
+	game.ball.possession_seconds = game.AI_XI_EXPERT_FIRST_TOUCH_READ + 0.01
+	assert(game._ai_xi_tackle_commit_ready(presser, carrier, false),
+		"Expert reads faster than Hard but still cannot act instantly")
+	game._set_quick_difficulty("easy")
+	game.ball.possession_seconds = 0.02
+	assert(game._ai_xi_tackle_commit_ready(presser, carrier, false),
+		"Easy keeps its legacy timing")
+	print("FOOTBALL_XI_HARD_TACKLE_FIRST_TOUCH_READ_OK hard=0.22 expert=0.12")
+
 	# E still needs two visible plants, but after the second plant the human
 	# can drive the exit. Exercise actual Footballer motion rather than
 	# asserting a coefficient in isolation. No extra tackle protection.
