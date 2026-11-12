@@ -53,6 +53,15 @@ func _initialize() -> void:
 				meta, ChessFootballHeroV5R2.TRUSTED_ROOT
 			)
 			assert(img != null, "Public WebP SHA/dimensions/decoder mismatch for " + filename)
+			if family == "dribbles":
+				# Forensic source: preserve the verified original decoded RGBA,
+				# including ALL per-pixel alpha, before Godot/QuadMesh draws it.
+				# Comparing this with the live motion MP4 locates any ghosting
+				# at source versus runtime. These are review-only, never assets.
+				var source_png := output_dir.path_join("football-v5-original-%s-dribbles.png" %
+					String(ChessFootballHeroV5R2.CLUBS[club]))
+				assert(img.save_png(source_png) == OK)
+				print("FOOTBALL_V5_SOURCE_SHEET_CAPTURE=" + source_png)
 			stage._on_hero_v5_ready(img, club, family)
 			assert(stage._hero_v5_loaded.has("%d:%s" % [club, family]))
 	assert(stage._hero_v5_loaded.size() == 4)
