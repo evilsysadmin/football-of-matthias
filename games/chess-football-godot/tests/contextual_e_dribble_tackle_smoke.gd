@@ -372,6 +372,9 @@ func _initialize() -> void:
 	assert(carrier.xi_collision_down_seconds == 0.0 and opponent.xi_collision_down_seconds == 0.0)
 	assert(carrier.xi_collision_down_ratio() == 0.0)
 	# A recovered player is eligible again: no permanent anti-pickup state.
+	# The preceding loose-ball duel may already have a healthy carrier;
+	# explicitly release it before testing a new, independent delayed claim.
+	game.ball.release(Vector2.RIGHT, 0.0)
 	game.ball.global_position = opponent.global_position
 	game.pending_tackle_player = opponent
 	game.pending_tackle_seconds = 0.0
