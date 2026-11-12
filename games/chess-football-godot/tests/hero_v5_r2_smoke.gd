@@ -47,6 +47,20 @@ func _initialize() -> void:
 	var runs := ChessFootballHeroV5R2.frames_from_image(_sample_atlas(3), "locomotion")
 	var actions := ChessFootballHeroV5R2.frames_from_image(_sample_atlas(2), "dribbles")
 	assert(runs.size() == 48 and actions.size() == 32)
+	# Real R2 source has 16 action time slots, but odd source poses carry
+	# translucent ghost silhouettes. Runtime must NEVER show those odd
+	# textures for E, either club, while retaining all 8 clean poses.
+	for row in range(2):
+		for col in range(1, 16, 2):
+			var index: int = row * 16 + col
+			assert(actions[index] == actions[index - 1],
+				"V5 action slot must reuse its clean even pose")
+		for col in range(2, 16, 2):
+			var index: int = row * 16 + col
+			assert(actions[index] != actions[index - 2],
+				"All eight clear poses must remain distinct")
+	# Non-dribble locomotion atlas retains its full 16 frames.
+	assert(runs[0] != runs[1])
 	assert(ChessFootballHeroV5R2.action_animation("feint", true, true) == &"hero_feint")
 	assert(ChessFootballHeroV5R2.action_animation("cut", true, true) == &"hero_cut")
 	assert(ChessFootballHeroV5R2.action_animation("burst", true, true) == &"hero_cut")

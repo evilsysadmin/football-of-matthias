@@ -64,6 +64,15 @@ func _initialize() -> void:
 				print("FOOTBALL_V5_SOURCE_SHEET_CAPTURE=" + source_png)
 			stage._on_hero_v5_ready(img, club, family)
 			assert(stage._hero_v5_loaded.has("%d:%s" % [club, family]))
+			if family == "dribbles":
+				var actor: Footballer = game.teams[club][1]
+				var checked_sprite: AnimatedSprite3D = stage.player_sprites[actor.get_instance_id()]
+				for anim in [&"hero_feint", &"hero_cut"]:
+					for odd in range(1, 16, 2):
+						assert(checked_sprite.sprite_frames.get_frame_texture(anim, odd) ==
+							checked_sprite.sprite_frames.get_frame_texture(anim, odd - 1),
+							"Live V5 must not render baked ghost silhouettes in either club")
+				print("FOOTBALL_V5_GHOST_FREE_SOURCE_OK club=%d modes=2 opaque_poses=8" % club)
 	assert(stage._hero_v5_loaded.size() == 4)
 	print("FOOTBALL_V5_CAPTURE_PROBE_ART_VERIFIED")
 
