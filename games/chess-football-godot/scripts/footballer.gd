@@ -97,6 +97,9 @@ var contact_stun_total: float = 0.0
 var xi_collision_down_seconds: float = 0.0
 var xi_collision_down_total: float = 0.0
 var xi_collision_guard_seconds: float = 0.0
+# Impact vector is stored solely for a bounded visual fall/recovery.
+# It NEVER changes collision position, heading, ball or pickup authority.
+var xi_collision_push_direction: Vector2 = Vector2.ZERO
 var contact_sway_sign: float = 1.0
 var keeper_hold_seconds: float = 0.0
 var keeper_save_seconds: float = 0.0
@@ -603,6 +606,7 @@ func xi_collision_stumble(seconds: float) -> void:
 
 
 func xi_collision_fall(push: Vector2, seconds: float) -> void:
+	xi_collision_push_direction = push.normalized() if push.length_squared() > 0.001 else Vector2.ZERO
 	xi_collision_down_total = maxf(seconds, 0.40)
 	xi_collision_down_seconds = xi_collision_down_total
 	contact_stun_total = xi_collision_down_total
