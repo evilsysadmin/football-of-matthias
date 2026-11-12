@@ -162,6 +162,13 @@ const AI_COVER_DISTANCE := 150.0
 # second supports at genuine challenge distance from the goal side.
 # No movement speed increase or automatic tackle/steal permission.
 const AI_XI_HUMAN_CLOSE_COVER_DISTANCE := 62.0
+# Human XI off-ball press reads only current carrier velocity. A short,
+# bounded lead helps intercept a distant diagonal run; tackle range still
+# targets the actual body. Never alter sprint, acceleration or hitboxes.
+const AI_XI_HUMAN_PRESS_LEAD_START := 140.0
+const AI_XI_HUMAN_PRESS_LEAD_MIN_VELOCITY := 85.0
+const AI_XI_HUMAN_PRESS_LEAD_MAX_SECONDS := 0.24
+const AI_XI_HUMAN_PRESS_LEAD_MAX_DISTANCE := 76.0
 # Only hand over control when a healthy teammate is physically within the
 # usual tackle approach radius and clearly better placed than the current
 # outfielder. Keep the selected defender when already engaged.
@@ -1488,7 +1495,31 @@ func _ai_xi_normal_feint_read_offset(presser: Footballer, owner: Footballer) -> 
 	return Vector2(0.0, sideways)
 
 
+# The first HUMAN teammate anticipates only the real velocity observed
+# this frame, never a predicted input. Inside tackle approach, close on the
+# carrier's real centre; with a loose ball, ordinary pursuit takes over.
+func _ai_xi_human_press_target(presser: Footballer, owner: Footballer) -> Vector2:
+	if (
+		match_team_size != 11
+		or presser.team_id != 0 or owner.team_id != 1
+		or ball.carrier != owner
+	):
+		return owner.global_position
+	var distance: float = presser.global_position.distance_to(owner.global_position)
+	var observed: Vector2 = owner.velocity
+	if distance <= AI_XI_HUMAN_PRESS_LEAD_START or observed.length() < AI_XI_HUMAN_PRESS_LEAD_MIN_VELOCITY:
+		return owner.global_position
+	var horizon: float = lerpf(
+		0.08, AI_XI_HUMAN_PRESS_LEAD_MAX_SECONDS,
+		clampf((distance - AI_XI_HUMAN_PRESS_LEAD_START) / 280.0, 0.0, 1.0)
+	)
+	var lead: Vector2 = (observed * horizon).limit_length(AI_XI_HUMAN_PRESS_LEAD_MAX_DISTANCE)
+	return ChessFootballMath.clamp_to_pitch(owner.global_position + lead, match_pitch)
+
+
 func _ai_press_target(presser: Footballer, owner: Footballer) -> Vector2:
+	if match_team_size == 11 and presser.team_id == 0 and owner.team_id == 1:
+		return _ai_xi_human_press_target(presser, owner)
 	var feint_offset: Vector2 = _ai_xi_normal_feint_read_offset(presser, owner)
 	if feint_offset.length_squared() > 0.001:
 		return ChessFootballMath.clamp_to_pitch(

@@ -1085,6 +1085,13 @@ func _initialize() -> void:
 	var human_cover: Footballer = game.teams[0][3]
 	var cpu_owner: Footballer = game.teams[1][4]
 	var chase_centre: Vector2 = game.match_pitch.get_center()
+	# Explicit isolation: the preceding duel/AI fixtures can leave other
+	# opponents anywhere on the pitch. Do not let an unrelated body absorb
+	# the 11 real momentum-continuity frames during this defensive probe.
+	for athlete: Footballer in game.teams[1]:
+		if athlete != cpu_owner:
+			athlete.global_position = chase_centre + Vector2(1100.0, 750.0)
+			athlete.velocity = Vector2.ZERO
 	for athlete: Footballer in game.teams[0]:
 		if athlete.role != "keeper":
 			athlete.global_position = chase_centre + Vector2(-950.0, 750.0)
@@ -1155,8 +1162,9 @@ func _initialize() -> void:
 		game.match_seconds += 1.0 / 60.0
 		game._handle_human(1.0 / 60.0)
 	var handoff_end: float = human_first.global_position.distance_to(cpu_owner.global_position)
-	print("FOOTBALL_XI_HANDOFF_60HZ_METRICS start=%.2f end=%.2f velocity=%.2f still_chasing=%s q_edge=%s" % [
-		handoff_start, handoff_end, human_first.velocity.length(),
+	print("FOOTBALL_XI_HANDOFF_60HZ_METRICS start=%.2f end=%.2f velocity=%s defender=%s owner=%s still_chasing=%s q_edge=%s" % [
+		handoff_start, handoff_end, str(human_first.velocity),
+		str(human_first.global_position), str(cpu_owner.global_position),
 		str(game.xi_human_handoff_chase_actor == human_first),
 		str(Input.is_action_just_pressed("change_player"))
 	])
@@ -1213,6 +1221,46 @@ func _initialize() -> void:
 	game.match_team_size = 5
 	assert(not game._maybe_auto_select_xi_human_defender(), "Legacy 5v5 control unchanged")
 	game.match_team_size = 11
+	# Real XI human teammate intercepts the CURRENT observed diagonal motion
+	# from a distance, but targets the physical carrier when close.
+	game.ball.attach_to(cpu_owner)
+	cpu_owner.global_position = chase_centre
+	cpu_owner.velocity = Vector2(-240.0, 130.0)
+	human_far.global_position = chase_centre + Vector2(320.0, -175.0)
+	game._select_player(game.teams[0][5])
+	var observed_target: Vector2 = game._ai_press_target(human_far, cpu_owner)
+	var lead: Vector2 = observed_target - cpu_owner.global_position
+	assert(lead.length() > 20.0 and lead.length() <= game.AI_XI_HUMAN_PRESS_LEAD_MAX_DISTANCE + 0.01)
+	assert(lead.dot(cpu_owner.velocity) > 0.0)
+	assert(XI.has_point(observed_target))
+	# Verify the actual team-AI movement path uses the same approach target.
+	for athlete: Footballer in game.teams[0]:
+		if athlete != human_far and athlete.role != "keeper" and athlete != game.controlled:
+			athlete.global_position = chase_centre + Vector2(-850.0, 690.0)
+	game.ai_next_decision[int(cpu_owner.get_instance_id())] = game.match_seconds + 100.0
+	game._update_ai(0.0)
+	assert(human_far.ai_target.distance_to(observed_target) < 0.1,
+		"Live human presser must aim ahead of an observed diagonal CPU carrier")
+	# A real change of carrier direction changes the lead, not the ball physics.
+	cpu_owner.velocity = Vector2(-140.0, -210.0)
+	var changed_target: Vector2 = game._ai_press_target(human_far, cpu_owner)
+	assert(changed_target.y < cpu_owner.global_position.y)
+	assert(changed_target.distance_to(observed_target) > 30.0)
+	cpu_owner.velocity = Vector2.ZERO
+	assert(game._ai_press_target(human_far, cpu_owner) == cpu_owner.global_position)
+	cpu_owner.velocity = Vector2(-220.0, 90.0)
+	human_far.global_position = chase_centre + Vector2(92.0, -12.0)
+	assert(game._ai_press_target(human_far, cpu_owner) == cpu_owner.global_position,
+		"At tackle distance the presser aims at the real body, without extrapolation")
+	human_far.global_position = chase_centre + Vector2(320.0, -175.0)
+	game.ball.release(Vector2.ZERO, 0.0)
+	assert(game._ai_press_target(human_far, cpu_owner) == cpu_owner.global_position)
+	game.ball.attach_to(cpu_owner)
+	game.match_team_size = 5
+	assert(game._ai_press_target(human_far, cpu_owner) == cpu_owner.global_position,
+		"Legacy 5v5 is unchanged")
+	game.match_team_size = 11
+	print("FOOTBALL_XI_HUMAN_INTERCEPT_OK observed=1 diagonal=1 bounded=1 cut_reactive=1 close_tackle=body loose=off 5v5=off")
 	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 tackle_ready_only=1 manual_override=1 no_flicker=1 manual_q=1 fallen=off 5v5=off")
 	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 normal_cover_contains=1 easy_five_unchanged=1")
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
