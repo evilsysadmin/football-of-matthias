@@ -3202,17 +3202,22 @@ func _update_pending_tackle_claim(delta: float) -> void:
 		pending_tackle_player = null
 		pending_tackle_seconds = 0.0
 		return
+	# A pending clean-tackle claim is not guaranteed possession: a player
+	# who falls or is dismissed loses that claim immediately, not only when
+	# its countdown expires. Others may contest the ball on this same tick.
+	if (
+		not is_instance_valid(pending_tackle_player)
+		or pending_tackle_player.sent_off
+		or pending_tackle_player.xi_collision_down_seconds > 0.0
+	):
+		pending_tackle_player = null
+		pending_tackle_seconds = 0.0
+		return
 	pending_tackle_seconds = maxf(0.0, pending_tackle_seconds - delta)
 	if pending_tackle_seconds > 0.0:
 		return
 	var winner := pending_tackle_player
 	pending_tackle_player = null
-	# A previously clean tackle is not a reserved future possession: the
-	# claimant might have fallen or been dismissed before the short delay.
-	# Release the claim so the ordinary live loose-ball duel can continue.
-	if not is_instance_valid(winner) or winner.sent_off or winner.xi_collision_down_seconds > 0.0:
-		pending_tackle_seconds = 0.0
-		return
 	if winner.global_position.distance_to(ball.global_position) <= 72.0:
 		ball.attach_to(winner)
 		if winner.team_id == 0:
