@@ -158,6 +158,11 @@ const AI_CPU_SECOND_PRESS_ACTIVATION := 240.0
 # defender needs a short observed first-touch reaction before NEW tackles.
 # This never protects against an already active real tackle/contact.
 const AI_XI_NORMAL_FIRST_TOUCH_REACTION := 0.38
+# Hard/Expert must watch the *first* part of an actual touch instead of
+# punching the ball loose on frame 2 while the attacker is still planted.
+# Shorter than Normal's first-touch read; no new state or physical buffs.
+const AI_XI_HARD_FIRST_TOUCH_READ := 0.22
+const AI_XI_EXPERT_FIRST_TOUCH_READ := 0.12
 const AI_XI_SECOND_PRESS_ACTIVATION := 320.0
 # XI Normal+ second defender reads an actual goalward diagonal dribble.
 # Maximum lead is well below one running stride; movement still obeys
@@ -2828,6 +2833,18 @@ func _ai_xi_tackle_commit_ready(
 			return false
 	if match_team_size != 11 or tackler.team_id != 1 or quick_difficulty == "easy":
 		return true
+	# Hard used to commit at 2-3 physical frames into the touch; the human
+	# could reclaim the glancing deflection well before a duel was over.
+	# See the dribbler's actual first plant before choosing a real hitbox,
+	# then challenge normally, including the second presser on Hard/Expert.
+	if ball.carrier == victim and victim.team_id == 0:
+		var first_touch_read := (
+			AI_XI_HARD_FIRST_TOUCH_READ if quick_difficulty == "hard"
+			else AI_XI_EXPERT_FIRST_TOUCH_READ if quick_difficulty == "expert"
+			else 0.0
+		)
+		if ball.possession_seconds < first_touch_read:
+			return false
 	if (
 		ball.carrier != victim
 		or victim.team_id != 0
