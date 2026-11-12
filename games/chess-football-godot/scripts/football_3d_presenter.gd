@@ -2472,6 +2472,23 @@ static func xi_keeper_dive_before_catch(
 	return team_size == 11 and is_holding and has_r2_catch and save_active
 
 
+
+# A pair of shoulder-to-shoulder bodies may share a 34-unit 2D centre gap,
+# but their tilted 3D raster bodies are much wider. Show the actual outward
+# impact as a short, easing fall *render offset*, with an exact zero at the
+# first contact and on recovery. This offset is never used for physics,
+# score, camera targets, the authoritative ball or tackle/claim reach.
+static func xi_collision_fall_display_offset(push: Vector2, progress: float) -> Vector3:
+	if push.length_squared() <= 0.001:
+		return Vector3.ZERO
+	var t := clampf(progress, 0.0, 1.0)
+	var move_out := smoothstep(0.05, 0.34, t)
+	var return_to_feet := 1.0 - smoothstep(0.67, 0.97, t)
+	var distance := 0.80 * move_out * return_to_feet
+	var away := push.normalized()
+	return Vector3(away.x * distance, 0.0, away.y * distance)
+
+
 func sync_presentation(delta: float, mode: String) -> void:
 	# Size compensation must use the camera pose from this same frame, not
 	# yesterday's interpolated pose; otherwise footballers visibly pulse.
@@ -2498,6 +2515,13 @@ func sync_presentation(delta: float, mode: String) -> void:
 			if player.sent_off:
 				continue
 			proxy.position = world_to_stage(player.global_position)
+			if match_node.match_team_size == 11 and player.xi_collision_down_seconds > 0.0:
+				var fall_progress: float = 1.0 - player.xi_collision_down_ratio()
+				# Move mesh, contact shadow and selection ring together, but
+				# NEVER shift the Footballer body or its physical ball.
+				proxy.position += xi_collision_fall_display_offset(
+					player.xi_collision_push_direction, fall_progress
+				)
 			if player.visual != null:
 				var wanted_animation := StringName(player.visual.animation)
 				# XI's VISIBLE off-ball raster must reflect physical movement even
@@ -2572,6 +2596,10 @@ func sync_presentation(delta: float, mode: String) -> void:
 					or (hero_name == &"hero_cut" and run_view in ["side", "front_diagonal"])
 				) and sprite.sprite_frames.has_animation(hero_name):
 					wanted_animation = hero_name
+				# Temporary collision art: a single opaque, already approved
+				# idle pose tilts down. Never substitute unapproved ghost frames.
+				if player.xi_collision_down_seconds > 0.0 and player.role != "keeper":
+					wanted_animation = &"idle"
 				var save_before_catch := xi_keeper_dive_before_catch(
 					match_node.match_team_size, player == holding_keeper,
 					_keeper_catch_r2_loaded.has(int(player.team_id)),
@@ -3821,7 +3849,23 @@ func _sync_player_secondary_motion(
 			save_weight,
 		)
 
-	if player.contact_stun_active():
+	if player.xi_collision_down_seconds > 0.0 and match_node.match_team_size == 11:
+		# Real knockdown, visually grounded by the existing contact shadow.
+		# No new textures or collision geometry until the fall atlas is ready.
+		var fall_progress := 1.0 - player.xi_collision_down_ratio()
+		# Three readable beats: impact lean -> prone hold -> rise.
+		# The side-roll returns progressively before the timer ends;
+		# no last-frame snap and no procedural ghost/smear effect.
+		var flat := smoothstep(0.01, 0.26, fall_progress) * (
+			1.0 - smoothstep(0.60, 0.96, fall_progress)
+		)
+		bob = -0.14 * flat
+		lateral_sway = player.contact_sway_sign * 0.08 * flat
+		stretch_x = lerpf(1.0, 1.24, flat)
+		stretch_y = lerpf(1.0, 0.58, flat)
+		tilt_degrees = player.contact_sway_sign * 78.0 * flat
+
+	if player.contact_stun_active() and player.xi_collision_down_seconds <= 0.0:
 		var contact_weight := player.contact_stun_ratio()
 		bob = minf(bob, -0.030 * contact_weight)
 		lateral_sway += player.contact_sway_sign * 0.065 * contact_weight

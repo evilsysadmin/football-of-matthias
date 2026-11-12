@@ -93,6 +93,13 @@ var yellow_cards: int = 0
 var sent_off: bool = false
 var contact_stun_seconds: float = 0.0
 var contact_stun_total: float = 0.0
+# XI contact/down state is owned by the physical player, not a 3D sprite.
+var xi_collision_down_seconds: float = 0.0
+var xi_collision_down_total: float = 0.0
+var xi_collision_guard_seconds: float = 0.0
+# Impact vector is stored solely for a bounded visual fall/recovery.
+# It NEVER changes collision position, heading, ball or pickup authority.
+var xi_collision_push_direction: Vector2 = Vector2.ZERO
 var contact_sway_sign: float = 1.0
 var keeper_hold_seconds: float = 0.0
 var keeper_save_seconds: float = 0.0
@@ -196,6 +203,8 @@ func _process(delta: float) -> void:
 		tackle_launch_speed_ratio = 0.0
 		tackle_aggressive = false
 	contact_stun_seconds = maxf(0.0, contact_stun_seconds - delta)
+	xi_collision_down_seconds = maxf(0.0, xi_collision_down_seconds - delta)
+	xi_collision_guard_seconds = maxf(0.0, xi_collision_guard_seconds - delta)
 	keeper_hold_seconds = maxf(0.0, keeper_hold_seconds - delta)
 	keeper_save_seconds = maxf(0.0, keeper_save_seconds - delta)
 	if action_lock_seconds <= 0.0:
@@ -209,6 +218,9 @@ func set_active(value: bool) -> void:
 	queue_redraw()
 
 func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
+	if xi_collision_down_seconds > 0.0:
+		velocity = Vector2.ZERO
+		return
 	if sent_off:
 		velocity = Vector2.ZERO
 		return
@@ -279,6 +291,9 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	_sync_locomotion(actual_sprint or dribbling)
 
 func move_ai(delta: float, target: Vector2, intensity: float = 1.0) -> void:
+	if xi_collision_down_seconds > 0.0:
+		velocity = Vector2.ZERO
+		return
 	if sent_off:
 		velocity = Vector2.ZERO
 		return
@@ -354,6 +369,7 @@ func play_action(animation_name: String, duration: float = 0.78) -> void:
 func can_tackle() -> bool:
 	return (
 		not sent_off
+		and xi_collision_down_seconds <= 0.0
 		and not has_ball
 		and tackle_cooldown_seconds <= 0.0
 		and action_lock_seconds <= 0.0
@@ -387,6 +403,7 @@ func tackle_momentum_ratio() -> float:
 func can_dribble() -> bool:
 	return (
 		not sent_off
+		and xi_collision_down_seconds <= 0.0
 		and has_ball
 		and dribble_cooldown_seconds <= 0.0
 		and dribble_burst_seconds <= 0.0
@@ -555,6 +572,8 @@ func send_off() -> void:
 	dribble_touch_distance = DRIBBLE_TOUCH_DISTANCE
 	action_lock_seconds = 0.0
 	contact_stun_seconds = 0.0
+	xi_collision_down_seconds = 0.0
+	xi_collision_guard_seconds = 0.0
 	collision_layer = 0
 	collision_mask = 0
 	queue_redraw()
@@ -574,6 +593,35 @@ func receive_tackle_contact(push_direction: Vector2, duration: float = 0.30) -> 
 	# deflection and recovery instead of two sprites merging into one.
 	global_position = ChessFootballMath.clamp_to_pitch(global_position + push * 24.0)
 	velocity = push * base_speed * 0.42
+
+
+# Temporary XI fallback until authored fall/get-up atlases are approved.
+# A fall is a real no-movement, no-pickup state. Both actors retain their
+# ordinary physical colliders and recover automatically on their own clock.
+func xi_collision_stumble(seconds: float) -> void:
+	contact_stun_total = maxf(seconds, 0.08)
+	contact_stun_seconds = maxf(contact_stun_seconds, contact_stun_total)
+	dribble_burst_seconds = 0.0
+	velocity *= 0.42
+
+
+func xi_collision_fall(push: Vector2, seconds: float) -> void:
+	xi_collision_push_direction = push.normalized() if push.length_squared() > 0.001 else Vector2.ZERO
+	xi_collision_down_total = maxf(seconds, 0.40)
+	xi_collision_down_seconds = xi_collision_down_total
+	contact_stun_total = xi_collision_down_total
+	contact_stun_seconds = maxf(contact_stun_seconds, xi_collision_down_total)
+	dribble_burst_seconds = 0.0
+	if push.length_squared() > 0.001:
+		contact_sway_sign = -1.0 if push.x < 0.0 else 1.0
+	velocity = Vector2.ZERO
+
+
+func xi_collision_down_ratio() -> float:
+	if xi_collision_down_total <= 0.0:
+		return 0.0
+	return clampf(xi_collision_down_seconds / xi_collision_down_total, 0.0, 1.0)
+
 
 func contact_stun_active() -> bool:
 	return contact_stun_seconds > 0.0

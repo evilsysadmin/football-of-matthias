@@ -201,6 +201,7 @@ func _initialize() -> void:
 		# 1.4-second clip at 20 captured FPS (60 Hz authoritative physics).
 		# Full 1280x720 match lens + native pixels from the SAME framebuffer.
 		await _capture_actual_e_video(game, stage, mode, output_dir)
+		await _capture_xi_contact_fall(game, stage, mode, output_dir)
 	assert(game.score == original_score)
 	assert(is_equal_approx(game.match_seconds, original_seconds))
 	print("FOOTBALL_V5_REAL_R2_OK four_sha_verified=1 both_clubs=1 dribbles=2 cameras=2 no_physics_change=1")
@@ -312,3 +313,87 @@ func _capture_actual_e_video(game: Node2D, stage: ChessFootball3DPresenter, mode
 		mode, sample, visible_cuts, visible_runs_before, visible_runs_after
 	])
 	game.ball.release(Vector2.RIGHT, 0.0)
+
+
+# The first collision slice intentionally uses existing opaque sprites.
+# This captures an actual pair of knocked-down XI Footballers with the
+# SAME runtime camera/QuadMesh/contact shadow as gameplay, so reviewers
+# can reject a bad fallback before dedicated falling atlases are designed.
+func _capture_xi_contact_fall(game: Node2D, stage: ChessFootball3DPresenter, mode: String, output_dir: String) -> void:
+	for team in game.teams:
+		for athlete: Footballer in team:
+			athlete.global_position = Vector2(-9999.0, -9999.0)
+			athlete.velocity = Vector2.ZERO
+			athlete.dribble_burst_seconds = 0.0
+			athlete.xi_collision_down_seconds = 0.0
+			athlete.xi_collision_guard_seconds = 0.0
+			athlete.tackle_active_seconds = 0.0
+	var runner: Footballer = game.teams[0][1]
+	var rival: Footballer = game.teams[1][5]
+	var center: Vector2 = game.match_pitch.get_center()
+	runner.global_position = center - Vector2(17.0, 0.0)
+	rival.global_position = center + Vector2(17.0, 0.0)
+	runner.velocity = Vector2.RIGHT * 255.0
+	rival.velocity = Vector2.LEFT * 185.0
+	runner.dribble_mode = "cut"
+	runner.dribble_duration_seconds = runner.XI_DRIBBLE_CUT_SECONDS
+	runner.dribble_burst_seconds = runner.XI_DRIBBLE_CUT_SECONDS * 0.52
+	runner.dribble_cooldown_seconds = 0.0
+	game._select_player(runner)
+	game.ball.attach_to(runner)
+	assert(game._update_xi_dribble_body_contacts() == "both_down")
+	assert(game.ball.carrier == null)
+	assert(runner.xi_collision_down_seconds > 0.0 and rival.xi_collision_down_seconds > 0.0)
+	assert(runner.xi_collision_push_direction.dot(rival.xi_collision_push_direction) < -0.99,
+		"Impact direction must push the two visual bodies apart")
+	assert(stage.xi_collision_fall_display_offset(Vector2.LEFT, 0.0) == Vector3.ZERO)
+	assert(stage.xi_collision_fall_display_offset(Vector2.LEFT, 1.0) == Vector3.ZERO)
+	assert(stage.xi_collision_fall_display_offset(Vector2.LEFT, 0.42).x < -0.75)
+	assert(stage.xi_collision_fall_display_offset(Vector2.UP, 0.42).z < -0.75)
+	assert(stage.xi_collision_fall_display_offset(Vector2.ZERO, 0.42) == Vector3.ZERO)
+	var physics_span := runner.global_position.distance_to(rival.global_position) * stage.WORLD_SCALE
+	var fallen_display_span := 0.0
+	var stages := [0.05, 0.42, 0.74, 1.0]
+	var montage := Image.create(1280 * 2, 720 * 2, false, Image.FORMAT_RGBA8)
+	montage.fill(Color("#15392f"))
+	for index in range(stages.size()):
+		var progress: float = stages[index]
+		runner.xi_collision_down_seconds = runner.xi_collision_down_total * (1.0 - progress)
+		rival.xi_collision_down_seconds = rival.xi_collision_down_total * (1.0 - progress)
+		runner.contact_stun_seconds = runner.contact_stun_total * (1.0 - progress)
+		rival.contact_stun_seconds = rival.contact_stun_total * (1.0 - progress)
+		stage._sync_camera(10.0, mode)
+		stage.sync_presentation(0.0, mode)
+		var sprite: AnimatedSprite3D = stage.player_sprites[runner.get_instance_id()]
+		var body_a: Node3D = stage.player_nodes[runner.get_instance_id()]
+		var body_b: Node3D = stage.player_nodes[rival.get_instance_id()]
+		var displayed_span: float = body_a.position.distance_to(body_b.position)
+		if index == 1:
+			fallen_display_span = displayed_span
+			assert(displayed_span >= physics_span + 1.45,
+				"The two grounded XI bodies must no longer overlap at the same 2D contact centre")
+			assert(absf(rad_to_deg(sprite.rotation.z)) >= 65.0,
+				"Fallen actor must clearly lie down in the real XI renderer")
+			assert(sprite.scale.y < 0.80, "Fallen silhouette must shrink vertically")
+		if index == 2:
+			assert(displayed_span < fallen_display_span,
+				"Recovery starts bringing BOTH visual bodies back smoothly")
+			assert(absf(rad_to_deg(sprite.rotation.z)) < 65.0,
+				"Recovery must begin lifting the actor before the final frame")
+		if index == 3:
+			assert(is_equal_approx(displayed_span, physics_span),
+				"Visual recoil MUST vanish at stand-up; physical positions unchanged")
+			assert(absf(sprite.rotation.z) < deg_to_rad(10.0),
+				"Recovered actor must stand up rather than remain a rotating sprite")
+		await process_frame
+		await RenderingServer.frame_post_draw
+		var shot: Image = game.get_viewport().get_texture().get_image()
+		assert(shot != null and shot.get_size() == Vector2i(1280, 720))
+		montage.blit_rect(shot, Rect2i(Vector2i.ZERO, Vector2i(1280, 720)),
+			Vector2i((index % 2) * 1280, (index / 2) * 720))
+	var dest: String = output_dir.path_join("football-xi-real-contact-fall-%s.png" % mode)
+	assert(montage.save_png(dest) == OK)
+	print("FOOTBALL_XI_CONTACT_FALL_VISUAL_OK camera=%s 4_phases=1 2_actors=1 visual_separation=1 smooth_recovery=1 no_physics_change=1" % mode)
+	game.ball.velocity = Vector2.ZERO
+	runner.global_position = Vector2(-9999.0, -9999.0)
+	rival.global_position = Vector2(-9999.0, -9999.0)
