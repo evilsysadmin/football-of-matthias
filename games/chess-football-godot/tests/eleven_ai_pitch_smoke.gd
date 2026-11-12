@@ -1116,6 +1116,10 @@ func _initialize() -> void:
 	assert(game._maybe_auto_select_xi_human_defender())
 	assert(game.controlled == human_first and game.ball.carrier == cpu_owner)
 	assert(not game._maybe_auto_select_xi_human_defender(), "Auto handoff must not flicker each tick")
+	# The earlier Q input test may still have just_pressed=true on this
+	# SceneTree frame. Expire that edge before asserting autonomous continuity;
+	# otherwise the implementation correctly cancels it as a manual override.
+	await process_frame
 	# A real runner arrives at 89 units: _handle_human with no WASD used
 	# to decelerate it immediately, leaving E's physical contact out of reach.
 	# Integrate multiple 60-Hz movement steps after the automated selection.
@@ -1126,6 +1130,11 @@ func _initialize() -> void:
 		game.match_seconds += 1.0 / 60.0
 		game._handle_human(1.0 / 60.0)
 	var handoff_end: float = human_first.global_position.distance_to(cpu_owner.global_position)
+	print("FOOTBALL_XI_HANDOFF_60HZ_METRICS start=%.2f end=%.2f velocity=%.2f still_chasing=%s q_edge=%s" % [
+		handoff_start, handoff_end, human_first.velocity.length(),
+		str(game.xi_human_handoff_chase_actor == human_first),
+		str(Input.is_action_just_pressed("change_player"))
+	])
 	assert(handoff_end < handoff_start - 28.0,
 		"Automatic handoff must keep closing physically, not brake short of the rival")
 	assert(handoff_end <= game.AI_XI_HUMAN_HANDOFF_CHASE_STOP_RADIUS + 18.0,
