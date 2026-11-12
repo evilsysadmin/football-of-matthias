@@ -59,7 +59,7 @@ func _initialize() -> void:
 				false, Image.FORMAT_RGBA8)
 			sheet.fill(Color("#15392f"))
 			# Beyond deliberate snapshots, these FIVE genuine 15-FPS frames
-			# follow FEINT (0.24s), CUT (0.22s), or F LONG TOUCH (0.27s).
+			# follow FEINT (0.24s), XI CUT (0.34s), or F LONG TOUCH (0.27s).
 			# Keep preparation and real kicking toe legible even on slow Web.
 			var playback_sheet: Image = null
 			if action in ["feint", "cut", "burst"]:
@@ -83,7 +83,7 @@ func _initialize() -> void:
 					athlete.dribble_duration_seconds = (
 						athlete.XI_DRIBBLE_FEINT_SECONDS if action == "feint"
 						else athlete.DRIBBLE_LONG_TOUCH_SECONDS if action == "burst"
-						else athlete.DRIBBLE_BURST_SECONDS
+						else athlete.XI_DRIBBLE_CUT_SECONDS
 					)
 					match_node.ball.attach_to(athlete)
 					var key: int = athlete.get_instance_id()
@@ -331,12 +331,21 @@ func _initialize() -> void:
 										assert(sampled_sprite.frame == 6,
 											"Real F 15 FPS frame 3 must show original R2 recovery")
 							if tick == 4:
-								# F has a slightly longer window than CUT/FEINT,
-								# but the R2 pivot already exited to its real
-								# directional runner at >87% progress.
-								if action != "burst":
-									assert(not athlete.dribble_active())
-								assert(sampled_sprite.animation == StringName("run_" + view))
+								# The fifth 15-FPS sample is 0.267s after E/F.
+								# FEINT (0.24s) has ended; F (0.27s) is in
+								# recovery, already back to its directional run.
+								# NEW moving CUT (0.34s) is still in the REAL
+								# extended-foot recovery: do not truncate the
+								# planted gesture to the former 0.22s window.
+								if action == "cut":
+									assert(athlete.dribble_active())
+									assert(sampled_sprite.animation == &"dribble_cut")
+									assert(sampled_sprite.frame == 6,
+										"The moving E recovery must remain visible at 15 FPS tick 4")
+								else:
+									if action == "feint":
+										assert(not athlete.dribble_active())
+									assert(sampled_sprite.animation == StringName("run_" + view))
 							assert(athlete.global_position == unchanged_position)
 							assert(match_node.ball.global_position == authoritative_ball)
 							await process_frame

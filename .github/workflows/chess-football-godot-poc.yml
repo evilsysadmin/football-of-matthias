@@ -1374,7 +1374,7 @@ jobs:
               fi
             done
             # Genuine action-time 15-FPS evidence, NOT hand-picked R2
-            # frames: moving E=0.22s, standing E=0.24s, long F=0.27s.
+            # frames: moving E=0.34s, standing E=0.24s, long F=0.27s.
             # Preserve all three original-raster strips on failure.
             for action in feint cut burst; do
               marker="FOOTBALL_XI_${action^^}_PLAYBACK_15FPS_${mode^^}"

@@ -70,7 +70,11 @@ func _initialize() -> void:
 	game._handle_contextual_e(Vector2.UP, false)
 	assert(game.action_feedback_text == "RECORTE")
 	assert(carrier.dribble_mode == "cut")
-	assert(carrier.dribble_direction.is_equal_approx(Vector2.UP))
+	assert(carrier.dribble_direction.dot(Vector2.UP) > 0.79,
+		"Moving axial E must retain forward agency")
+	assert(absf(carrier.dribble_direction.x) > 0.35,
+		"Moving axial E must actually cut sideways, not run straight")
+	assert(is_equal_approx(carrier.dribble_duration_seconds, carrier.XI_DRIBBLE_CUT_SECONDS))
 	assert(is_equal_approx(carrier.dribble_touch_distance, carrier.DRIBBLE_TOUCH_DISTANCE))
 	_reset_dribble(carrier)
 	game._handle_contextual_e(Vector2.RIGHT, true)
@@ -94,6 +98,68 @@ func _initialize() -> void:
 	Input.action_release("special_move")
 	assert(carrier.dribble_mode == "burst", "F did not reach the real XI player")
 	assert(game.action_feedback_text == "TOQUE LARGO")
+	_reset_dribble(carrier)
+
+	# One physical clock: disable the actors' automatic processing before
+	# manually stepping the next 21 60 Hz frames.
+	for team in game.teams:
+		for actor: Footballer in team:
+			actor.set_process(false)
+			actor.set_physics_process(false)
+
+	# Exercise MOVING E with real 60 Hz CharacterBody2D movement. A rival
+	# just below the running lane forces a deterministic safe-side cut.
+	# First plant remains forward, middle beat crosses the lane, final beat
+	# exits with a pace BELOW the ordinary sprint. No ghost-ball or free steal.
+	carrier.global_position = game.match_pitch.get_center()
+	for rival in game.teams[1]:
+		rival.global_position = game.match_pitch.position + Vector2(60.0, 60.0)
+	var approaching_rival: Footballer = game.teams[1][5]
+	approaching_rival.global_position = carrier.global_position + Vector2(140.0, 70.0)
+	game.ball.attach_to(carrier)
+	_reset_dribble(carrier)
+	carrier.velocity = Vector2.RIGHT * carrier.base_speed
+	game._handle_contextual_e(Vector2.RIGHT, false)
+	assert(carrier.dribble_mode == "cut")
+	assert(carrier.dribble_direction.y < -0.35,
+		"Axial E must step AWAY from the actual oncoming defender")
+	assert(carrier.dribble_entry_direction.dot(Vector2.RIGHT) > 0.99)
+	assert(is_equal_approx(carrier.dribble_duration_seconds, carrier.XI_DRIBBLE_CUT_SECONDS))
+	assert(carrier._xi_cut_speed_multiplier() < 0.9)
+	var cut_origin: Vector2 = carrier.global_position
+	var early_speed := 0.0
+	var middle_speed := 0.0
+	var exit_speed := 0.0
+	var early_lateral := 0.0
+	var middle_lateral := 0.0
+	for frame in range(21):
+		await physics_frame
+		carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+		game.ball.tick_ball(1.0 / 60.0)
+		if frame == 2:
+			early_speed = carrier.velocity.length()
+			early_lateral = absf(carrier.velocity.y)
+		elif frame == 10:
+			middle_speed = carrier.velocity.length()
+			middle_lateral = absf(carrier.velocity.y)
+		elif frame == 18:
+			exit_speed = carrier.velocity.length()
+		assert(carrier.velocity.length() <= carrier.base_speed *
+			carrier.technique_control_multiplier * 1.25 + 1.0,
+			"E cut cannot become the old 1.52x sprint")
+		assert(game.ball.carrier == carrier)
+		carrier._process(1.0 / 60.0)
+	assert(middle_lateral > early_lateral + 20.0,
+		"The real mid-cut must change lateral velocity after the foot plant")
+	assert(middle_speed > early_speed and exit_speed > middle_speed,
+		"Planted step, lateral touch and exit need three distinct physical beats")
+	assert(carrier.global_position.y < cut_origin.y - 10.0,
+		"E must move across the defender, not only gain forward speed")
+	assert(carrier.dribble_burst_seconds <= 0.0)
+	assert(game.score == initial_score)
+	print("FOOTBALL_XI_MOVING_E_THREE_BEATS_OK sideways=1 no_sprint=1 actual_60hz=1")
+	carrier.global_position = initial_home
+	game.ball.attach_to(carrier)
 	_reset_dribble(carrier)
 
 	# Front/diagonal run atlases cannot use a sideways dribble pose.
