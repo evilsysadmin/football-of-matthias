@@ -2516,7 +2516,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 				continue
 			proxy.position = world_to_stage(player.global_position)
 			if match_node.match_team_size == 11 and player.xi_collision_down_seconds > 0.0:
-				var fall_progress := 1.0 - player.xi_collision_down_ratio()
+				var fall_progress: float = 1.0 - player.xi_collision_down_ratio()
 				# Move mesh, contact shadow and selection ring together, but
 				# NEVER shift the Footballer body or its physical ball.
 				proxy.position += xi_collision_fall_display_offset(
