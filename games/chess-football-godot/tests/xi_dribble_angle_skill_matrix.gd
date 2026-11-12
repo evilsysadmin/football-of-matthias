@@ -6,7 +6,7 @@ extends SceneTree
 const Formation = preload("res://scripts/football_match_formation.gd")
 const XI: Rect2 = Formation.ELEVEN_PITCH_RECT
 const DT := 1.0 / 60.0
-const FRAMES := 32
+const FRAMES := 48
 const SKILLS := [45, 95]
 const SIDES := [-1.0, 1.0]
 const DISTANCES := ["close", "far"]
