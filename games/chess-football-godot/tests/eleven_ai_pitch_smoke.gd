@@ -1096,8 +1096,8 @@ func _initialize() -> void:
 	cpu_owner.velocity = Vector2.ZERO
 	game._select_player(human_far)
 	game.ball.attach_to(cpu_owner)
-	var close_cover_target := game._ai_xi_human_close_cover_target(human_cover, cpu_owner)
-	var previous_cover_target := game._ai_cover_target(human_cover, cpu_owner.global_position)
+	var close_cover_target: Vector2 = game._ai_xi_human_close_cover_target(human_cover, cpu_owner)
+	var previous_cover_target: Vector2 = game._ai_cover_target(human_cover, cpu_owner.global_position)
 	assert(close_cover_target.distance_to(cpu_owner.global_position) <= 62.01)
 	assert(close_cover_target.distance_to(cpu_owner.global_position) <
 		previous_cover_target.distance_to(cpu_owner.global_position) - 60.0)
