@@ -170,6 +170,11 @@ const AI_XI_HUMAN_AUTO_SWITCH_MIN_GAIN := 48.0
 const AI_XI_HUMAN_AUTO_SWITCH_KEEP_RADIUS := 78.0
 const AI_XI_HUMAN_AUTO_SWITCH_COOLDOWN := 0.90
 const AI_XI_HUMAN_MANUAL_SWITCH_GRACE := 1.25
+# Once the arriving defender becomes human-controlled, let the SAME real
+# runner finish their approach for a fraction of a second if no input is
+# given. Otherwise the first input-free frame brakes them outside E range.
+const AI_XI_HUMAN_HANDOFF_CHASE_SECONDS := 0.36
+const AI_XI_HUMAN_HANDOFF_CHASE_STOP_RADIUS := 54.0
 # The CPU's second defender contests only on Hard/Expert XI; in Normal
 # it holds goal-side cover. Legacy 5v5 and human teammates stay unchanged.
 const AI_CPU_SECOND_PRESS_ACTIVATION := 240.0
@@ -336,6 +341,8 @@ var ai_xi_defensive_role_owner: Footballer = null
 # Match-clock based to stay paused during overlays and never drift across F5.
 # A manual Q is authoritative for its grace window.
 var xi_human_auto_switch_block_until: float = 0.0
+var xi_human_handoff_chase_actor: Footballer = null
+var xi_human_handoff_chase_until: float = 0.0
 var keeper_distribution_started_at: Dictionary = {}
 var quick_difficulty: String = "normal"
 var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0,"shot_read":0.50,"pass_error":0.24,"pass_error_degrees":9.0,"pass_power_error":0.18,"pass_power_error_ratio":0.16,"pass_second_choice":0.22}
@@ -886,6 +893,33 @@ func _refresh_hud() -> void:
 	goal_label.text = last_goal_text
 	goal_label.visible = not last_goal_text.is_empty()
 
+# Never move the player for them after an intentional button press. This
+# tiny continuation uses ordinary human movement/stamina (not AI buffs)
+# and stops upon tackle range, timeout, a manual movement/Q/E/F input,
+# losing the ball-carrier target or changing the selected actor.
+func _xi_human_handoff_chase_direction(input_direction: Vector2) -> Vector2:
+	if xi_human_handoff_chase_actor == null:
+		return input_direction
+	if (
+		match_team_size != 11
+		or controlled != xi_human_handoff_chase_actor
+		or controlled.sent_off or controlled.xi_collision_down_seconds > 0.0
+		or match_seconds >= xi_human_handoff_chase_until
+		or ball.carrier == null or ball.carrier.team_id != 1
+		or input_direction.length_squared() > 0.01
+		or Input.is_action_just_pressed("change_player")
+		or Input.is_action_just_pressed("tackle")
+		or Input.is_action_just_pressed("special_move")
+	):
+		xi_human_handoff_chase_actor = null
+		return input_direction
+	var to_owner: Vector2 = ball.carrier.global_position - controlled.global_position
+	if to_owner.length() <= AI_XI_HUMAN_HANDOFF_CHASE_STOP_RADIUS:
+		xi_human_handoff_chase_actor = null
+		return input_direction
+	return to_owner.normalized()
+
+
 func _handle_human(delta: float) -> void:
 	if Input.is_action_just_pressed("toggle_view"):
 		_toggle_camera_mode()
@@ -894,7 +928,14 @@ func _handle_human(delta: float) -> void:
 	# to an outfielder: otherwise _update_ai skips the goalkeeper forever.
 	_restore_outfield_control_after_keeper_release()
 	var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	controlled.move_human(delta, direction, Input.is_action_pressed("sprint"))
+	var chase_direction: Vector2 = _xi_human_handoff_chase_direction(direction)
+	var finishing_handoff: bool = xi_human_handoff_chase_actor == controlled
+	# Keep the existing runner's real sprint momentum only during the short
+	# handoff, and stop as soon as the player supplies their own direction.
+	controlled.move_human(
+		delta, chase_direction,
+		Input.is_action_pressed("sprint") or (finishing_handoff and controlled.last_sprinting)
+	)
 
 	if ball.carrier != controlled:
 		_cancel_shot_charge()
@@ -3363,6 +3404,10 @@ func _maybe_auto_select_xi_human_defender() -> bool:
 		return false
 	_select_player(nearest)
 	xi_human_auto_switch_block_until = match_seconds + AI_XI_HUMAN_AUTO_SWITCH_COOLDOWN
+	# Only this automated handoff may inherit the AI approach momentum.
+	# Manual Q, keeper release and ordinary possession never arm the chase.
+	xi_human_handoff_chase_actor = nearest
+	xi_human_handoff_chase_until = match_seconds + AI_XI_HUMAN_HANDOFF_CHASE_SECONDS
 	return true
 
 

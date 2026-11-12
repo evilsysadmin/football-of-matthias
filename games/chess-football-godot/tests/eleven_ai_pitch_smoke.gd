@@ -1116,6 +1116,21 @@ func _initialize() -> void:
 	assert(game._maybe_auto_select_xi_human_defender())
 	assert(game.controlled == human_first and game.ball.carrier == cpu_owner)
 	assert(not game._maybe_auto_select_xi_human_defender(), "Auto handoff must not flicker each tick")
+	# A real runner arrives at 89 units: _handle_human with no WASD used
+	# to decelerate it immediately, leaving E's physical contact out of reach.
+	# Integrate multiple 60-Hz movement steps after the automated selection.
+	var handoff_start: float = human_first.global_position.distance_to(cpu_owner.global_position)
+	human_first.velocity = Vector2.RIGHT * 230.0
+	human_first.last_sprinting = true
+	for step in range(11):
+		game.match_seconds += 1.0 / 60.0
+		game._handle_human(1.0 / 60.0)
+	var handoff_end: float = human_first.global_position.distance_to(cpu_owner.global_position)
+	assert(handoff_end < handoff_start - 28.0,
+		"Automatic handoff must keep closing physically, not brake short of the rival")
+	assert(handoff_end <= game.AI_XI_HUMAN_HANDOFF_CHASE_STOP_RADIUS + 18.0,
+		"AI-approaching defender must reach a real E tackle neighborhood")
+	assert(game.controlled == human_first and game.ball.carrier == cpu_owner)
 	# The previous Q scenario is in this same SceneTree tick; a fresh frame
 	# clears the earlier just_pressed edge before simulating another real Q.
 	await process_frame
@@ -1124,6 +1139,8 @@ func _initialize() -> void:
 	game._handle_human(0.0)
 	Input.action_release("change_player")
 	assert(game.controlled != human_first and game.match_seconds < game.xi_human_auto_switch_block_until)
+	assert(game.xi_human_handoff_chase_actor == null,
+		"Manual Q cancels automatic approach immediately")
 	assert(not game._maybe_auto_select_xi_human_defender(), "Manual Q must not be undone immediately")
 	# If the current human is genuinely near, keep control even when another
 	# teammate stands closer; only a superior reachable challenger may take over.
@@ -1138,13 +1155,19 @@ func _initialize() -> void:
 	human_first.xi_collision_down_seconds = 0.0
 	assert(game._maybe_auto_select_xi_human_defender())
 	assert(game.controlled == human_first)
+	# A human steering input ends the inherited pursuit in this very tick.
+	Input.action_press("move_left")
+	game._handle_human(1.0 / 60.0)
+	Input.action_release("move_left")
+	assert(game.xi_human_handoff_chase_actor == null,
+		"Manual directional input takes control immediately without AI steering")
 	game.ball.attach_to(human_far)
 	assert(not game._maybe_auto_select_xi_human_defender(), "Never hand off when humans have the ball")
 	game.ball.attach_to(cpu_owner)
 	game.match_team_size = 5
 	assert(not game._maybe_auto_select_xi_human_defender(), "Legacy 5v5 control unchanged")
 	game.match_team_size = 11
-	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 no_flicker=1 manual_q=1 fallen=off 5v5=off")
+	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 manual_override=1 no_flicker=1 manual_q=1 fallen=off 5v5=off")
 	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 normal_cover_contains=1 easy_five_unchanged=1")
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
