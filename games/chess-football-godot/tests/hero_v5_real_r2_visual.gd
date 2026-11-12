@@ -351,6 +351,8 @@ func _capture_xi_contact_fall(game: Node2D, stage: ChessFootball3DPresenter, mod
 		var progress: float = stages[index]
 		runner.xi_collision_down_seconds = runner.xi_collision_down_total * (1.0 - progress)
 		rival.xi_collision_down_seconds = rival.xi_collision_down_total * (1.0 - progress)
+		runner.contact_stun_seconds = runner.contact_stun_total * (1.0 - progress)
+		rival.contact_stun_seconds = rival.contact_stun_total * (1.0 - progress)
 		stage._sync_camera(10.0, mode)
 		stage.sync_presentation(0.0, mode)
 		var sprite: AnimatedSprite3D = stage.player_sprites[runner.get_instance_id()]
