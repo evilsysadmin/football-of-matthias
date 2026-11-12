@@ -121,8 +121,8 @@ func _initialize() -> void:
 	carrier.velocity = Vector2.RIGHT * carrier.base_speed
 	game._handle_contextual_e(Vector2.RIGHT, false)
 	assert(carrier.dribble_mode == "cut")
-	assert(carrier.dribble_direction.y < -0.35,
-		"Axial E must step AWAY from the actual oncoming defender")
+	assert(carrier.dribble_direction.y < -0.63,
+		"Axial E must commit to a readable diagonal AWAY from the defender")
 	assert(carrier.dribble_entry_direction.dot(Vector2.RIGHT) > 0.99)
 	assert(is_equal_approx(carrier.dribble_duration_seconds, carrier.XI_DRIBBLE_CUT_SECONDS))
 	assert(carrier._xi_cut_speed_multiplier() < 0.9)
@@ -153,8 +153,8 @@ func _initialize() -> void:
 		"The real mid-cut must change lateral velocity after the foot plant")
 	assert(middle_speed > early_speed and exit_speed > middle_speed,
 		"Planted step, lateral touch and exit need three distinct physical beats")
-	assert(carrier.global_position.y < cut_origin.y - 10.0,
-		"E must move across the defender, not only gain forward speed")
+	assert(carrier.global_position.y < cut_origin.y - 25.0,
+		"E must cross at least a boot-width of real lateral lane, not only accelerate")
 	assert(carrier.dribble_burst_seconds <= 0.0)
 	assert(game.score == initial_score)
 	print("FOOTBALL_XI_MOVING_E_THREE_BEATS_OK sideways=1 no_sprint=1 actual_60hz=1")

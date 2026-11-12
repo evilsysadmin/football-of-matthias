@@ -480,7 +480,9 @@ func _xi_cut_motion_direction() -> Vector2:
 	):
 		return dribble_direction
 	return dribble_entry_direction.lerp(
-		dribble_direction, smoothstep(0.18, 0.68, _xi_cut_progress())
+		# Reach the lateral lane by mid-touch, not only as E finishes:
+		# a sharper planted foot makes the cut visible from match zoom.
+		dribble_direction, smoothstep(0.10, 0.52, _xi_cut_progress())
 	).normalized()
 
 
@@ -510,7 +512,9 @@ func _xi_cut_exit_ratio() -> float:
 		dribble_burst_seconds / maxf(dribble_duration_seconds, 0.001),
 		0.0, 1.0
 	)
-	return smoothstep(0.70, 0.95, progress)
+	# Preserve the chosen sidestep through most of the boot contact;
+	# only then hand control back for the deliberate 45-degree exit.
+	return smoothstep(0.83, 0.98, progress)
 
 
 func dribble_touch_ratio() -> float:
