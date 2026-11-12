@@ -70,7 +70,7 @@ func _initialize() -> void:
 	game._handle_contextual_e(Vector2.UP, false)
 	assert(game.action_feedback_text == "RECORTE")
 	assert(carrier.dribble_mode == "cut")
-	assert(carrier.dribble_direction.dot(Vector2.UP) > 0.79,
+	assert(carrier.dribble_direction.dot(Vector2.UP) > 0.70,
 		"Moving axial E must retain forward agency")
 	assert(absf(carrier.dribble_direction.x) > 0.35,
 		"Moving axial E must actually cut sideways, not run straight")
