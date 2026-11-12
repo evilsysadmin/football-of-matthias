@@ -41,6 +41,9 @@ const KEEPER_AI_ACCELERATION_MULTIPLIER := 1.50
 const TACKLE_ACTIVE_SECONDS := 0.18
 const SLIDE_TACKLE_ACTIVE_SECONDS := 0.24
 const DRIBBLE_BURST_SECONDS := 0.22
+# XI E in motion is a planted SIDE CUT, not a 1.52x sprint.
+# Its longer three-beat window has a similar total travel footprint.
+const XI_DRIBBLE_CUT_SECONDS := 0.34
 const DRIBBLE_COOLDOWN_SECONDS := 0.68
 const DRIBBLE_SPEED_MULTIPLIER := 1.52
 const DRIBBLE_ACCELERATION := 3900.0
@@ -82,6 +85,7 @@ var tackle_aggressive: bool = false
 var dribble_cooldown_seconds: float = 0.0
 var dribble_burst_seconds: float = 0.0
 var dribble_direction: Vector2 = Vector2.RIGHT
+var dribble_entry_direction: Vector2 = Vector2.RIGHT
 var dribble_mode: String = "cut"
 var dribble_duration_seconds: float = DRIBBLE_BURST_SECONDS
 var dribble_touch_distance: float = DRIBBLE_TOUCH_DISTANCE
@@ -216,6 +220,10 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	var xi_feint_exit: float = _xi_feint_exit_ratio()
 	var xi_cut_exit: float = _xi_cut_exit_ratio()
 	var wanted_direction := dribble_direction if dribbling else direction
+	if dribbling and match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper" and dribble_mode == "cut":
+		# First plant follows the actual run, then the ball carrier cuts
+		# across the line before a bounded, steerable exit. No teleport.
+		wanted_direction = _xi_cut_motion_direction()
 	if xi_feint_exit > 0.0 and direction.length_squared() > 0.04:
 		wanted_direction = dribble_direction.lerp(
 			direction.normalized(), xi_feint_exit * 0.80
@@ -240,7 +248,11 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		base_speed * (
 			xi_feint_speed if dribble_mode == "feint"
 			else DRIBBLE_LONG_TOUCH_SPEED if dribble_mode == "burst"
-			else DRIBBLE_SPEED_MULTIPLIER
+			else (
+				_xi_cut_speed_multiplier()
+				if dribble_mode == "cut" and match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
+				else DRIBBLE_SPEED_MULTIPLIER
+			)
 		)
 		if dribbling
 		else base_speed * (SPRINT_SPEED_MULTIPLIER if actual_sprint else 1.0)
@@ -390,7 +402,15 @@ func start_dribble(direction: Vector2, kind: String = "cut") -> bool:
 	if wanted.length_squared() < 0.001:
 		var facing := -1.0 if visual != null and visual.flip_h else 1.0
 		wanted = Vector2(facing, 0.0)
+	var entering_velocity: Vector2 = velocity
 	dribble_direction = wanted.normalized()
+	dribble_entry_direction = dribble_direction
+	if (
+		kind == "cut" and match_pitch == Formation.ELEVEN_PITCH_RECT
+		and role != "keeper" and entering_velocity.length_squared() > 144.0
+		and entering_velocity.normalized().dot(dribble_direction) > 0.20
+	):
+		dribble_entry_direction = entering_velocity.normalized()
 	dribble_mode = kind
 	var feint_window := (
 		XI_DRIBBLE_FEINT_SECONDS
@@ -400,6 +420,7 @@ func start_dribble(direction: Vector2, kind: String = "cut") -> bool:
 	dribble_duration_seconds = (
 		feint_window if kind == "feint"
 		else DRIBBLE_LONG_TOUCH_SECONDS if kind == "burst"
+		else XI_DRIBBLE_CUT_SECONDS if kind == "cut" and match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
 		else DRIBBLE_BURST_SECONDS
 	)
 	dribble_touch_distance = (
@@ -442,8 +463,40 @@ func _xi_feint_exit_ratio() -> float:
 	return smoothstep(0.55, 0.92, progress)
 
 
-# XI-only directional cut: preserve the opening plant, then gradually allow
-# bounded manual steering at the exit. Physics and tackle windows are unchanged.
+# Three genuine physical beats in XI: a brief running-foot plant, a
+# lateral ball touch, and a controlled acceleration into the new lane.
+# Physical possession, tackling, and cooldowns still use their real clocks.
+func _xi_cut_progress() -> float:
+	return clampf(
+		1.0 - dribble_burst_seconds / maxf(dribble_duration_seconds, 0.001),
+		0.0, 1.0
+	)
+
+
+func _xi_cut_motion_direction() -> Vector2:
+	if (
+		match_pitch != Formation.ELEVEN_PITCH_RECT or role == "keeper"
+		or not dribble_active() or dribble_mode != "cut"
+	):
+		return dribble_direction
+	return dribble_entry_direction.lerp(
+		dribble_direction, smoothstep(0.18, 0.68, _xi_cut_progress())
+	).normalized()
+
+
+func _xi_cut_speed_multiplier() -> float:
+	var progress := _xi_cut_progress()
+	if progress < 0.25:
+		return lerpf(0.82, 0.72, smoothstep(0.0, 0.25, progress))
+	if progress < 0.64:
+		return lerpf(0.72, 1.05, smoothstep(0.25, 0.64, progress))
+	# Finishing the cut is quicker than the plant, but NEVER a sprint buff:
+	# 1.24 < ordinary 1.34x sprint; F retains the real long-touch burst.
+	return lerpf(1.05, 1.24, smoothstep(0.64, 1.0, progress))
+
+
+# Only after the planted touch may the human steer the exit by <= 45 deg.
+# 5v5 and keeper motion retain their original code path.
 func _xi_cut_exit_ratio() -> float:
 	if (
 		match_pitch != Formation.ELEVEN_PITCH_RECT
@@ -457,7 +510,7 @@ func _xi_cut_exit_ratio() -> float:
 		dribble_burst_seconds / maxf(dribble_duration_seconds, 0.001),
 		0.0, 1.0
 	)
-	return smoothstep(0.58, 0.92, progress)
+	return smoothstep(0.70, 0.95, progress)
 
 
 func dribble_touch_ratio() -> float:
@@ -559,6 +612,9 @@ func ball_anchor() -> Vector2:
 	# This is the authoritative 2D ball anchor so its shadow, 3D rendering,
 	# possession and release location agree; no visual/physics split.
 	var forward: Vector2 = dribble_direction if dribble_active() else velocity
+	if dribble_active() and dribble_mode == "cut":
+		# Ball and planted body follow the same gradual lane change.
+		forward = _xi_cut_motion_direction()
 	if forward.length_squared() < 0.001:
 		forward = Vector2(facing, 0.0)
 	else:

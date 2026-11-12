@@ -74,7 +74,7 @@ func _initialize() -> void:
 				athlete.dribble_direction = movement
 				athlete.dribble_duration_seconds = (
 					athlete.XI_DRIBBLE_FEINT_SECONDS if action == "feint"
-					else athlete.DRIBBLE_BURST_SECONDS
+					else athlete.XI_DRIBBLE_CUT_SECONDS
 				)
 				game.ball.attach_to(athlete)
 				var initial_position: Vector2 = athlete.global_position

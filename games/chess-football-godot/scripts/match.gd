@@ -2910,6 +2910,38 @@ func _auto_dribble_direction(player: Footballer) -> Vector2:
 			best_direction = candidate
 	return best_direction
 
+
+# A straight E press must have a real SIDE step. A deliberate diagonal
+# preserves the player's chosen line; an axial input selects the safer flank
+# using only CURRENT rival positions and pitch bounds (no predicted AI moves).
+# The actual footballer subsequently runs, pivots and accelerates in physics.
+func _xi_contextual_cut_direction(player: Footballer, requested: Vector2) -> Vector2:
+	if match_team_size != 11 or player.role == "keeper" or requested.length_squared() < 0.01:
+		return requested
+	var forward: Vector2 = requested.normalized()
+	if minf(absf(forward.x), absf(forward.y)) > 0.22:
+		return requested
+	var lateral := Vector2(-forward.y, forward.x)
+	var best := forward
+	var best_score := -INF
+	for side in [-1.0, 1.0]:
+		var candidate: Vector2 = (forward * 0.82 + lateral * side * 0.57).normalized()
+		var aim: Vector2 = player.global_position + candidate * 140.0
+		if not match_pitch.has_point(aim):
+			continue
+		var clearance := 300.0
+		for rival in teams[1 - player.team_id]:
+			if rival.sent_off:
+				continue
+			clearance = minf(clearance, aim.distance_to(rival.global_position))
+		# If both lanes are equally clear, make the natural inward cut.
+		var score: float = clearance - absf(aim.y - match_pitch.get_center().y) * 0.08
+		if score > best_score:
+			best_score = score
+			best = candidate
+	return best
+
+
 func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 	if controlled == null or ball.carrier != controlled:
 		return false
@@ -2923,6 +2955,8 @@ func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 	var wanted := direction
 	if wanted.length_squared() < 0.0324:
 		wanted = _auto_dribble_direction(controlled)
+	if kind == "cut" and match_team_size == 11:
+		wanted = _xi_contextual_cut_direction(controlled, wanted)
 	var started := controlled.start_dribble(wanted, kind)
 	if started and match_team_size == 11:
 		_show_action_feedback(
