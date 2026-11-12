@@ -315,6 +315,64 @@ func _initialize() -> void:
 	assert(not defender.tackle_aggressive)
 	assert(game.score == initial_score)
 
+
+	# Real XI E body contact: only a converging physical pair can fall,
+	# tackle/foul actions retain priority, and nobody steals while grounded.
+	assert(game.xi_dribble_body_outcome(100.0, 500.0, 200.0) == "")
+	assert(game.xi_dribble_body_outcome(30.0, -120.0, 200.0) == "")
+	assert(game.xi_dribble_body_outcome(30.0, 155.0, 0.0) == "stumble")
+	assert(game.xi_dribble_body_outcome(30.0, 290.0, 0.0) == "defender_down")
+	assert(game.xi_dribble_body_outcome(30.0, 450.0, 180.0) == "both_down")
+	carrier = game.teams[0][10]
+	var opponent: Footballer = game.teams[1][5]
+	game._select_player(carrier)
+	for rival in game.teams[1]:
+		rival.global_position = center + Vector2(600.0, 500.0)
+		rival.xi_collision_guard_seconds = 0.0
+		rival.xi_collision_down_seconds = 0.0
+	carrier.global_position = center
+	opponent.global_position = center + Vector2(34.0, 0.0)
+	carrier.xi_collision_down_seconds = 0.0
+	carrier.xi_collision_guard_seconds = 0.0
+	carrier.dribble_burst_seconds = carrier.XI_DRIBBLE_CUT_SECONDS * 0.52
+	carrier.dribble_duration_seconds = carrier.XI_DRIBBLE_CUT_SECONDS
+	carrier.dribble_mode = "cut"
+	carrier.velocity = Vector2.RIGHT * 255.0
+	opponent.velocity = Vector2.LEFT * 185.0
+	game.ball.attach_to(carrier)
+	assert(game._update_xi_dribble_body_contacts() == "both_down")
+	assert(game.ball.carrier == null and not carrier.has_ball)
+	assert(carrier.xi_collision_down_seconds >= 0.80 and opponent.xi_collision_down_seconds >= 0.75)
+	assert(game.action_feedback_text == "BALÓN SUELTO")
+	var stopped_at: Vector2 = carrier.global_position
+	carrier.move_human(1.0 / 60.0, Vector2.RIGHT, true)
+	assert(carrier.global_position == stopped_at and carrier.velocity == Vector2.ZERO)
+	game.ball.global_position = carrier.global_position
+	game._try_claim_loose_ball()
+	assert(game.ball.carrier == null, "Fallen players cannot instantly reclaim the collision")
+	assert(game._update_xi_dribble_body_contacts() == "")
+	carrier._process(1.0)
+	opponent._process(1.0)
+	assert(carrier.xi_collision_down_seconds == 0.0 and opponent.xi_collision_down_seconds == 0.0)
+	assert(carrier.xi_collision_down_ratio() == 0.0)
+	# A stationary opponent can fall without inventing an automatic foul.
+	carrier.xi_collision_guard_seconds = 0.0
+	opponent.xi_collision_guard_seconds = 0.0
+	carrier.global_position = center
+	opponent.global_position = center + Vector2(34.0, 0.0)
+	carrier.dribble_burst_seconds = carrier.XI_DRIBBLE_CUT_SECONDS * 0.52
+	carrier.velocity = Vector2.RIGHT * 270.0
+	opponent.velocity = Vector2.ZERO
+	game.ball.attach_to(carrier)
+	assert(game._update_xi_dribble_body_contacts() == "defender_down")
+	assert(game.ball.carrier == carrier)
+	assert(opponent.xi_collision_down_seconds > 0.0)
+	assert(game.score == initial_score)
+	# Reusing the exact same actors in 5v5 must not invoke this XI feature.
+	game.match_team_size = 5
+	assert(game._update_xi_dribble_body_contacts() == "")
+	game.match_team_size = 11
+
 	# The longer two-beat action is XI-only; the legacy five-a-side feint
 	# retains its exact old window and speed profile.
 	var historical = packed.instantiate()
@@ -337,5 +395,5 @@ func _initialize() -> void:
 	assert(historical.contextual_help_text(false).contains("E regate/entrada"))
 	assert(not historical.contextual_help_text(false).contains("E quieto"))
 
-	print("FOOTBALL_CONTEXTUAL_E_OK feint_cut_burst=1 technique=1 E_standing=1 repeated_E_no_slide=1 F_slide=1 shift_E_normal=1 physical_contact=1 score_isolated=1")
+	print("FOOTBALL_CONTEXTUAL_E_OK feint_cut_burst=1 technique=1 E_standing=1 repeated_E_no_slide=1 F_slide=1 shift_E_normal=1 physical_contact=1 xi_body_falls=1 no_instant_reclaim=1 score_isolated=1")
 	quit(0)

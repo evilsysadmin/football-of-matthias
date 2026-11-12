@@ -2572,6 +2572,10 @@ func sync_presentation(delta: float, mode: String) -> void:
 					or (hero_name == &"hero_cut" and run_view in ["side", "front_diagonal"])
 				) and sprite.sprite_frames.has_animation(hero_name):
 					wanted_animation = hero_name
+				# Temporary collision art: a single opaque, already approved
+				# idle pose tilts down. Never substitute unapproved ghost frames.
+				if player.xi_collision_down_seconds > 0.0 and player.role != "keeper":
+					wanted_animation = &"idle"
 				var save_before_catch := xi_keeper_dive_before_catch(
 					match_node.match_team_size, player == holding_keeper,
 					_keeper_catch_r2_loaded.has(int(player.team_id)),
@@ -3821,7 +3825,18 @@ func _sync_player_secondary_motion(
 			save_weight,
 		)
 
-	if player.contact_stun_active():
+	if player.xi_collision_down_seconds > 0.0 and match_node.match_team_size == 11:
+		# Real knockdown, visually grounded by the existing contact shadow.
+		# No new textures or collision geometry until the fall atlas is ready.
+		var fall_progress := 1.0 - player.xi_collision_down_ratio()
+		var flat := smoothstep(0.0, 0.19, fall_progress) * (1.0 - smoothstep(0.80, 1.0, fall_progress))
+		bob = -0.18 * flat
+		lateral_sway = player.contact_sway_sign * 0.16 * flat
+		stretch_x = lerpf(1.0, 1.32, flat)
+		stretch_y = lerpf(1.0, 0.52, flat)
+		tilt_degrees = player.contact_sway_sign * 66.0 * flat
+
+	if player.contact_stun_active() and player.xi_collision_down_seconds <= 0.0:
 		var contact_weight := player.contact_stun_ratio()
 		bob = minf(bob, -0.030 * contact_weight)
 		lateral_sway += player.contact_sway_sign * 0.065 * contact_weight

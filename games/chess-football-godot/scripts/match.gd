@@ -34,6 +34,13 @@ const TACKLE_LOOSE_POKE_POWER := 310.0
 # A glancing poke leaves a loose ball; neither an instant free steal nor a
 # general post-tackle invulnerability. Every other player can contest it.
 const TACKLE_GLANCING_RECLAIM_DELAY := 0.12
+# XI-only physical E contact: body centre distance, not the ball's anchor.
+# Below normal running separation and outside any tackle-hitbox shortcuts.
+const XI_DRIBBLE_BODY_CONTACT_RADIUS := 48.0
+const XI_DRIBBLE_BODY_MIN_CLOSING_SPEED := 115.0
+const XI_DRIBBLE_BODY_FALL_CLOSING_SPEED := 255.0
+const XI_DRIBBLE_BODY_DOUBLE_FALL_CLOSING_SPEED := 355.0
+const XI_DRIBBLE_BODY_POKE_POWER := 270.0
 const SLIDE_TACKLE_FORWARD_BONUS := 26.0
 const SLIDE_TACKLE_HALF_WIDTH_BONUS := 4.0
 const PENALTY_SHOT_POWER := 930.0
@@ -438,6 +445,7 @@ func _physics_process(delta: float) -> void:
 	_handle_human(delta)
 	_update_ai(delta)
 	_update_active_tackle_contacts()
+	_update_xi_dribble_body_contacts()
 	var previous_ball_position: Vector2 = ball.global_position
 	var previous_ball_height: float = ball.flight_height
 	ball.tick_ball(delta)
@@ -3103,6 +3111,85 @@ func _update_active_tackle_contacts() -> void:
 			if _resolve_tackle_contact(tackler, victim):
 				return
 
+
+# Deterministic contact only when the actively dribbling XI carrier runs
+# INTO a real nearby opponent. Standing players, opposite-way pass-bys,
+# tackles (including their referee path), F, 5v5 and keepers are excluded.
+# No RNG, no expanded hitbox and no scripted defender teleport.
+static func xi_dribble_body_outcome(distance: float, closing: float, rival_speed: float) -> String:
+	if distance > XI_DRIBBLE_BODY_CONTACT_RADIUS or closing < XI_DRIBBLE_BODY_MIN_CLOSING_SPEED:
+		return ""
+	if closing >= XI_DRIBBLE_BODY_DOUBLE_FALL_CLOSING_SPEED and rival_speed >= 115.0:
+		return "both_down"
+	if closing >= XI_DRIBBLE_BODY_FALL_CLOSING_SPEED:
+		return "carrier_down" if rival_speed >= 165.0 else "defender_down"
+	return "stumble"
+
+
+func _update_xi_dribble_body_contacts() -> String:
+	if match_team_size != 11 or ball.carrier == null:
+		return ""
+	var carrier: Footballer = ball.carrier
+	if (
+		carrier.sent_off or carrier.role == "keeper"
+		or not carrier.dribble_active() or carrier.dribble_mode != "cut"
+		or carrier.xi_collision_down_seconds > 0.0
+		or carrier.xi_collision_guard_seconds > 0.0
+	):
+		return ""
+	var progress := 1.0 - carrier.dribble_burst_seconds / maxf(carrier.dribble_duration_seconds, 0.001)
+	if progress < 0.22 or progress > 0.83:
+		return ""
+	# Closest valid human-sized opponent wins the contact, exactly once.
+	var victim: Footballer = null
+	var best_distance := XI_DRIBBLE_BODY_CONTACT_RADIUS + 1.0
+	var outcome := ""
+	for rival in teams[1 - carrier.team_id]:
+		if (
+			rival.sent_off or rival.role == "keeper"
+			or rival.tackle_active() or rival.xi_collision_guard_seconds > 0.0
+			or rival.xi_collision_down_seconds > 0.0
+		):
+			continue
+		var separation: Vector2 = rival.global_position - carrier.global_position
+		var distance: float = separation.length()
+		if distance >= best_distance or distance <= 0.001:
+			continue
+		var closing: float = (carrier.velocity - rival.velocity).dot(separation / distance)
+		var kind := xi_dribble_body_outcome(distance, closing, rival.velocity.length())
+		if kind == "":
+			continue
+		victim = rival
+		best_distance = distance
+		outcome = kind
+	if victim == null:
+		return ""
+	var impact: Vector2 = (victim.global_position - carrier.global_position).normalized()
+	# Both actors pay a contact cooldown, so the overlap cannot farm falls.
+	carrier.xi_collision_guard_seconds = 0.90
+	victim.xi_collision_guard_seconds = 0.90
+	if audio_fx != null:
+		audio_fx.play_tackle(false)
+	if outcome == "stumble":
+		carrier.xi_collision_stumble(0.20)
+		victim.xi_collision_stumble(0.26)
+		_show_action_feedback("CHOQUE")
+	elif outcome == "defender_down":
+		victim.xi_collision_fall(impact, 0.80)
+		carrier.xi_collision_stumble(0.16)
+		_show_action_feedback("¡AL SUELO!")
+	else:
+		if outcome == "both_down":
+			victim.xi_collision_fall(impact, 0.82)
+		else:
+			victim.xi_collision_stumble(0.30)
+		carrier.xi_collision_fall(-impact, 0.88)
+		ball.release(impact.rotated(0.45), XI_DRIBBLE_BODY_POKE_POWER)
+		ball.block_glancing_reclaim(victim, 0.24)
+		_show_action_feedback("BALÓN SUELTO")
+	return outcome
+
+
 func _update_pending_tackle_claim(delta: float) -> void:
 	if pending_tackle_player == null:
 		return
@@ -3137,7 +3224,7 @@ func _try_claim_loose_ball() -> void:
 	var distances: Array[float] = [INF, INF]
 	for team in teams:
 		for player in team:
-			if player.sent_off or ball.reclaim_blocked_for(player):
+			if player.sent_off or player.xi_collision_down_seconds > 0.0 or ball.reclaim_blocked_for(player):
 				continue
 			var distance: float = player.global_position.distance_to(ball.global_position)
 			if distance < _first_touch_reach(player, speed) and distance < distances[player.team_id]:
@@ -3239,7 +3326,7 @@ func _best_switch_candidate() -> Footballer:
 	var next_best: Footballer = null
 	var best_distance := INF
 	for player in teams[0]:
-		if player.sent_off or player.role == "keeper" or player == controlled:
+		if player.sent_off or player.role == "keeper" or player == controlled or player.xi_collision_down_seconds > 0.0:
 			continue
 		var distance: float = player.global_position.distance_squared_to(ball.global_position)
 		if distance < best_distance:
