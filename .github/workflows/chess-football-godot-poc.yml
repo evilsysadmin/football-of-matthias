@@ -412,6 +412,33 @@ jobs:
           mkdir -p .artifacts/xi-live-dribble-duels
           grep '^FOOTBALL_XI_LIVE_DRIBBLE_DUELS ' "$log" | sed 's/^FOOTBALL_XI_LIVE_DRIBBLE_DUELS //' > .artifacts/xi-live-dribble-duels/metrics.json
           python3 -m json.tool .artifacts/xi-live-dribble-duels/metrics.json >/dev/null
+      # Diagnostics are deliberately separate from the original 16-case
+      # contract: 48 paired sides/technique/angles, no invented win-rate gate.
+      - name: XI · E/F dribble physical matrix by flank and technique
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-dribble-angle-skill.log"
+          set +e
+          timeout 65s "$godot" --headless --quit-after 4000 --path games/chess-football-godot --script res://tests/xi_dribble_angle_skill_matrix.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI E/F angle and skill physical duel matrix failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_DRIBBLE_ANGLE_SKILL_MATRIX_OK' "$log"
+          mkdir -p .artifacts/xi-dribble-angle-skill
+          grep '^FOOTBALL_XI_DRIBBLE_ANGLE_SKILL_MATRIX ' "$log" | sed 's/^FOOTBALL_XI_DRIBBLE_ANGLE_SKILL_MATRIX //' > .artifacts/xi-dribble-angle-skill/metrics.json
+          python3 -m json.tool .artifacts/xi-dribble-angle-skill/metrics.json >/dev/null
+      - name: Upload XI E/F angle and technique duel metrics
+        uses: actions/upload-artifact@v7
+        with:
+          name: xi-dribble-angle-skill-matrix
+          path: .artifacts/xi-dribble-angle-skill/metrics.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Profile XI runtime · AI versus 3D presentation versus HUD
         shell: bash
         run: |
