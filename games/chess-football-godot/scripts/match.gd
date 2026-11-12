@@ -3392,8 +3392,10 @@ func _maybe_auto_select_xi_human_defender() -> bool:
 	var nearest_distance := AI_XI_HUMAN_AUTO_SWITCH_RADIUS
 	for candidate in teams[0]:
 		if (
-			candidate == controlled or candidate.sent_off or candidate.role == "keeper"
-			or candidate.xi_collision_down_seconds > 0.0
+			candidate == controlled or candidate.role == "keeper"
+			or not candidate.can_tackle()
+			or candidate.tackle_recovery_seconds > 0.0
+			or candidate.contact_stun_seconds > 0.0
 		):
 			continue
 		var distance: float = candidate.global_position.distance_to(owner.global_position)

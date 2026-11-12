@@ -1098,6 +1098,16 @@ func _initialize() -> void:
 	# This independent live-defence scenario begins after that grace period.
 	game.xi_human_auto_switch_block_until = 0.0
 	human_far.tackle_active_seconds = 0.0
+	# A prior tackle fixture deliberately leaves stale recovery/cooldown.
+	# This scenario represents a live sprinter ready to defend, rather than a
+	# stunned athlete whom the real auto-selector must now reject.
+	human_first.tackle_cooldown_seconds = 0.0
+	human_first.tackle_recovery_seconds = 0.0
+	human_first.contact_stun_seconds = 0.0
+	human_first.action_lock_seconds = 0.0
+	human_first.tackle_active_seconds = 0.0
+	human_first.stamina = human_first.STAMINA_MAX
+	human_first.sprint_exhausted = false
 	game._select_player(human_far)
 	game.ball.attach_to(cpu_owner)
 	var close_cover_target: Vector2 = game._ai_xi_human_close_cover_target(human_cover, cpu_owner)
@@ -1162,6 +1172,18 @@ func _initialize() -> void:
 	assert(not game._maybe_auto_select_xi_human_defender(),
 		"An unavailable fallen player must never inherit user control")
 	human_first.xi_collision_down_seconds = 0.0
+	human_first.tackle_recovery_seconds = 0.30
+	assert(not game._maybe_auto_select_xi_human_defender(),
+		"Do not auto-select a recovering player just because they are closer")
+	human_first.tackle_recovery_seconds = 0.0
+	human_first.contact_stun_seconds = 0.25
+	assert(not game._maybe_auto_select_xi_human_defender(),
+		"Do not auto-select a stunned teammate")
+	human_first.contact_stun_seconds = 0.0
+	human_first.tackle_cooldown_seconds = 0.55
+	assert(not game._maybe_auto_select_xi_human_defender(),
+		"Do not auto-select a defender unable to make a real E tackle")
+	human_first.tackle_cooldown_seconds = 0.0
 	assert(game._maybe_auto_select_xi_human_defender())
 	assert(game.controlled == human_first)
 	# A human steering input ends the inherited pursuit in this very tick.
@@ -1176,7 +1198,7 @@ func _initialize() -> void:
 	game.match_team_size = 5
 	assert(not game._maybe_auto_select_xi_human_defender(), "Legacy 5v5 control unchanged")
 	game.match_team_size = 11
-	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 manual_override=1 no_flicker=1 manual_q=1 fallen=off 5v5=off")
+	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 tackle_ready_only=1 manual_override=1 no_flicker=1 manual_q=1 fallen=off 5v5=off")
 	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 normal_cover_contains=1 easy_five_unchanged=1")
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
