@@ -1123,6 +1123,21 @@ func _initialize() -> void:
 		"The live XI human-team cover must use the close-press target without teammate repulsion")
 	assert(human_first.ai_target.distance_to(cpu_owner.global_position) < 0.1,
 		"The first off-ball defender must pursue the actual carrier")
+	# The AI-positioning assertion above is a separate probe: a prior tackle
+	# may still have acted during the zero-delta AI tick. Set up a fresh,
+	# physically eligible candidate immediately before the control handoff.
+	human_first.tackle_cooldown_seconds = 0.0
+	human_first.tackle_recovery_seconds = 0.0
+	human_first.contact_stun_seconds = 0.0
+	human_first.action_lock_seconds = 0.0
+	human_first.tackle_active_seconds = 0.0
+	print("FOOTBALL_XI_HANDOFF_ELIGIBILITY ready=%s distance=%.2f has_ball=%s down=%.2f sent_off=%s lock=%.2f" % [
+		str(human_first.can_tackle()),
+		human_first.global_position.distance_to(cpu_owner.global_position),
+		str(human_first.has_ball), human_first.xi_collision_down_seconds,
+		str(human_first.sent_off), human_first.action_lock_seconds
+	])
+	assert(human_first.can_tackle(), "Autoselected defender must be physically tackle-ready")
 	assert(game._maybe_auto_select_xi_human_defender())
 	assert(game.controlled == human_first and game.ball.carrier == cpu_owner)
 	assert(not game._maybe_auto_select_xi_human_defender(), "Auto handoff must not flicker each tick")
