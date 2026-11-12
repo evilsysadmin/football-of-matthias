@@ -3187,6 +3187,11 @@ func _update_xi_dribble_body_contacts() -> String:
 		ball.release(impact.rotated(0.45), XI_DRIBBLE_BODY_POKE_POWER)
 		ball.block_glancing_reclaim(victim, 0.24)
 		_show_action_feedback("BALÓN SUELTO")
+		# The fallen human cannot contest this ball for almost a second.
+		# Hand the chase to the nearest available teammate, never to the
+		# prone actor or the opponent, without altering ball physics.
+		if carrier == controlled:
+			_select_player(_best_switch_candidate())
 	return outcome
 
 
@@ -3197,12 +3202,23 @@ func _update_pending_tackle_claim(delta: float) -> void:
 		pending_tackle_player = null
 		pending_tackle_seconds = 0.0
 		return
+	# A pending clean-tackle claim is not guaranteed possession: a player
+	# who falls or is dismissed loses that claim immediately, not only when
+	# its countdown expires. Others may contest the ball on this same tick.
+	if (
+		not is_instance_valid(pending_tackle_player)
+		or pending_tackle_player.sent_off
+		or pending_tackle_player.xi_collision_down_seconds > 0.0
+	):
+		pending_tackle_player = null
+		pending_tackle_seconds = 0.0
+		return
 	pending_tackle_seconds = maxf(0.0, pending_tackle_seconds - delta)
 	if pending_tackle_seconds > 0.0:
 		return
 	var winner := pending_tackle_player
 	pending_tackle_player = null
-	if is_instance_valid(winner) and winner.global_position.distance_to(ball.global_position) <= 72.0:
+	if winner.global_position.distance_to(ball.global_position) <= 72.0:
 		ball.attach_to(winner)
 		if winner.team_id == 0:
 			_select_player(winner)
@@ -3342,7 +3358,7 @@ func _nearest_player_to_ball(team_id: int) -> Footballer:
 	var best: Footballer = null
 	var best_distance := INF
 	for player in teams[team_id]:
-		if player.sent_off:
+		if player.sent_off or player.xi_collision_down_seconds > 0.0:
 			continue
 		var distance: float = player.global_position.distance_squared_to(ball.global_position)
 		if distance < best_distance:
@@ -3351,7 +3367,7 @@ func _nearest_player_to_ball(team_id: int) -> Footballer:
 	return best
 
 func _select_player(player: Footballer) -> void:
-	if player == null or player.sent_off:
+	if player == null or player.sent_off or player.xi_collision_down_seconds > 0.0:
 		return
 	# Explicit/manual or possession-driven selection overrides a queued pass.
 	if pending_human_pass_receiver != null and player != pending_human_pass_receiver:

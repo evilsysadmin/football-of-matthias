@@ -344,6 +344,19 @@ func _initialize() -> void:
 	assert(game.ball.carrier == null and not carrier.has_ball)
 	assert(carrier.xi_collision_down_seconds >= 0.80 and opponent.xi_collision_down_seconds >= 0.75)
 	assert(game.action_feedback_text == "BALÓN SUELTO")
+	# Do not strand the human on an immobile actor while the ball is live.
+	assert(game.controlled != carrier and game.controlled != null)
+	assert(game.controlled.team_id == 0 and game.controlled.xi_collision_down_seconds == 0.0)
+	var healthy_control: Footballer = game.controlled
+	game._select_player(carrier)
+	assert(game.controlled == healthy_control, "Manual/automatic selection cannot target a grounded actor")
+	# Even a previously clean tackle may no longer grant delayed possession
+	# after its claimant is knocked down; the ball stays available to others.
+	game.pending_tackle_player = opponent
+	game.pending_tackle_seconds = 0.03
+	game._update_pending_tackle_claim(1.0 / 60.0)
+	assert(game.pending_tackle_player == null and game.pending_tackle_seconds == 0.0)
+	assert(game.ball.carrier == null, "A fallen delayed-claim winner cannot magnetize a loose ball")
 	var stopped_at: Vector2 = carrier.global_position
 	carrier.move_human(1.0 / 60.0, Vector2.RIGHT, true)
 	assert(carrier.global_position == stopped_at and carrier.velocity == Vector2.ZERO)
@@ -358,6 +371,16 @@ func _initialize() -> void:
 	opponent._process(1.0)
 	assert(carrier.xi_collision_down_seconds == 0.0 and opponent.xi_collision_down_seconds == 0.0)
 	assert(carrier.xi_collision_down_ratio() == 0.0)
+	# A recovered player is eligible again: no permanent anti-pickup state.
+	# The preceding loose-ball duel may already have a healthy carrier;
+	# explicitly release it before testing a new, independent delayed claim.
+	game.ball.release(Vector2.RIGHT, 0.0)
+	game.ball.global_position = opponent.global_position
+	game.pending_tackle_player = opponent
+	game.pending_tackle_seconds = 0.0
+	game._update_pending_tackle_claim(1.0 / 60.0)
+	assert(game.ball.carrier == opponent)
+	assert(game.pending_tackle_player == null)
 	# A stationary opponent can fall without inventing an automatic foul.
 	carrier.xi_collision_guard_seconds = 0.0
 	opponent.xi_collision_guard_seconds = 0.0
@@ -398,5 +421,5 @@ func _initialize() -> void:
 	assert(historical.contextual_help_text(false).contains("E regate/entrada"))
 	assert(not historical.contextual_help_text(false).contains("E quieto"))
 
-	print("FOOTBALL_CONTEXTUAL_E_OK feint_cut_burst=1 technique=1 E_standing=1 repeated_E_no_slide=1 F_slide=1 shift_E_normal=1 physical_contact=1 xi_body_falls=1 no_instant_reclaim=1 score_isolated=1")
+	print("FOOTBALL_CONTEXTUAL_E_OK feint_cut_burst=1 technique=1 E_standing=1 repeated_E_no_slide=1 F_slide=1 shift_E_normal=1 physical_contact=1 xi_body_falls=1 fallen_auto_switch=1 delayed_claim_fall_guard=1 no_instant_reclaim=1 score_isolated=1")
 	quit(0)
