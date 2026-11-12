@@ -351,6 +351,10 @@ func _capture_xi_contact_fall(game: Node2D, stage: ChessFootball3DPresenter, mod
 	assert(stage.xi_collision_fall_display_offset(Vector2.LEFT, 0.42).x < -0.75)
 	assert(stage.xi_collision_fall_display_offset(Vector2.UP, 0.42).z < -0.75)
 	assert(stage.xi_collision_fall_display_offset(Vector2.ZERO, 0.42) == Vector3.ZERO)
+	assert(stage.xi_fall_turf_opacity(0.0) == 0.0)
+	assert(stage.xi_fall_turf_opacity(0.42) > 0.95)
+	assert(stage.xi_fall_turf_opacity(0.74) == 0.0)
+	assert(stage.xi_fall_turf_size(0.42) > stage.xi_fall_turf_size(0.05))
 	var physics_span := runner.global_position.distance_to(rival.global_position) * stage.WORLD_SCALE
 	var fallen_display_span := 0.0
 	var stages := [0.05, 0.42, 0.74, 1.0]
@@ -367,8 +371,18 @@ func _capture_xi_contact_fall(game: Node2D, stage: ChessFootball3DPresenter, mod
 		var sprite: AnimatedSprite3D = stage.player_sprites[runner.get_instance_id()]
 		var body_a: Node3D = stage.player_nodes[runner.get_instance_id()]
 		var body_b: Node3D = stage.player_nodes[rival.get_instance_id()]
+		var turf_a := body_a.get_node_or_null("FallTurfScuff") as MeshInstance3D
+		var turf_b := body_b.get_node_or_null("FallTurfScuff") as MeshInstance3D
+		assert(turf_a != null and turf_b != null, "Both XI outfield actors need a shared-shader turf cue")
+		assert(turf_a.material_override == turf_b.material_override)
+		assert(turf_a.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		assert(turf_a.visible == (index <= 1) and turf_b.visible == (index <= 1),
+			"Scuff is brief and must disappear before stand-up")
 		var displayed_span: float = body_a.position.distance_to(body_b.position)
 		if index == 1:
+			assert(turf_a.transparency < 0.05 and turf_b.transparency < 0.05)
+			assert(turf_a.scale.x <= 1.13 * 1.80,
+				"Turf scuff must not become an oversized gameplay indicator")
 			fallen_display_span = displayed_span
 			assert(displayed_span >= physics_span + 1.45,
 				"The two grounded XI bodies must no longer overlap at the same 2D contact centre")
@@ -393,7 +407,7 @@ func _capture_xi_contact_fall(game: Node2D, stage: ChessFootball3DPresenter, mod
 			Vector2i((index % 2) * 1280, (index / 2) * 720))
 	var dest: String = output_dir.path_join("football-xi-real-contact-fall-%s.png" % mode)
 	assert(montage.save_png(dest) == OK)
-	print("FOOTBALL_XI_CONTACT_FALL_VISUAL_OK camera=%s 4_phases=1 2_actors=1 visual_separation=1 smooth_recovery=1 no_physics_change=1" % mode)
+	print("FOOTBALL_XI_CONTACT_FALL_VISUAL_OK camera=%s 4_phases=1 2_actors=1 fall_turf=1 visual_separation=1 smooth_recovery=1 no_physics_change=1" % mode)
 	game.ball.velocity = Vector2.ZERO
 	runner.global_position = Vector2(-9999.0, -9999.0)
 	rival.global_position = Vector2(-9999.0, -9999.0)
