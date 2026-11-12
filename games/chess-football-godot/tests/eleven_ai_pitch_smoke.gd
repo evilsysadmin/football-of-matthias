@@ -1116,6 +1116,9 @@ func _initialize() -> void:
 	assert(game._maybe_auto_select_xi_human_defender())
 	assert(game.controlled == human_first and game.ball.carrier == cpu_owner)
 	assert(not game._maybe_auto_select_xi_human_defender(), "Auto handoff must not flicker each tick")
+	# The previous Q scenario is in this same SceneTree tick; a fresh frame
+	# clears the earlier just_pressed edge before simulating another real Q.
+	await process_frame
 	# Q chooses a different teammate and holds its priority over automation.
 	Input.action_press("change_player")
 	game._handle_human(0.0)
