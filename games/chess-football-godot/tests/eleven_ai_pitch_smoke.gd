@@ -1094,6 +1094,10 @@ func _initialize() -> void:
 	human_cover.global_position = chase_centre + Vector2(-160.0, 90.0)
 	cpu_owner.global_position = chase_centre
 	cpu_owner.velocity = Vector2.ZERO
+	# The earlier manual-Q tests intentionally leave a short switch lock.
+	# This independent live-defence scenario begins after that grace period.
+	game.xi_human_auto_switch_block_until = 0.0
+	human_far.tackle_active_seconds = 0.0
 	game._select_player(human_far)
 	game.ball.attach_to(cpu_owner)
 	var close_cover_target: Vector2 = game._ai_xi_human_close_cover_target(human_cover, cpu_owner)
