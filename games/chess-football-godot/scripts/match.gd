@@ -158,6 +158,18 @@ const AI_XI_SUPPORT_SWITCH_ADVANTAGE := 45.0
 # clearly closer by more than this bound may replace the incumbent.
 const AI_XI_SUPPORT_ROLE_HOLD_DISTANCE := 55.0
 const AI_COVER_DISTANCE := 150.0
+# XI human-team AI: the first off-ball defender closes directly and the
+# second supports at genuine challenge distance from the goal side.
+# No movement speed increase or automatic tackle/steal permission.
+const AI_XI_HUMAN_CLOSE_COVER_DISTANCE := 62.0
+# Only hand over control when a healthy teammate is physically within the
+# usual tackle approach radius and clearly better placed than the current
+# outfielder. Keep the selected defender when already engaged.
+const AI_XI_HUMAN_AUTO_SWITCH_RADIUS := 92.0
+const AI_XI_HUMAN_AUTO_SWITCH_MIN_GAIN := 48.0
+const AI_XI_HUMAN_AUTO_SWITCH_KEEP_RADIUS := 78.0
+const AI_XI_HUMAN_AUTO_SWITCH_COOLDOWN := 0.90
+const AI_XI_HUMAN_MANUAL_SWITCH_GRACE := 1.25
 # The CPU's second defender contests only on Hard/Expert XI; in Normal
 # it holds goal-side cover. Legacy 5v5 and human teammates stay unchanged.
 const AI_CPU_SECOND_PRESS_ACTIVATION := 240.0
@@ -321,6 +333,9 @@ var ai_secondary_presser_cache: Array = [null, null]
 # Possession-scoped stability applies only to CPU XI Normal+, not the
 # existing loose-ball chase or human/5v5 defensive assignments.
 var ai_xi_defensive_role_owner: Footballer = null
+# Match-clock based to stay paused during overlays and never drift across F5.
+# A manual Q is authoritative for its grace window.
+var xi_human_auto_switch_block_until: float = 0.0
 var keeper_distribution_started_at: Dictionary = {}
 var quick_difficulty: String = "normal"
 var quick_difficulty_profile: Dictionary = {"decision":1.0,"pressure":1.0,"effort":1.0,"shoot":1.0,"shot_read":0.50,"pass_error":0.24,"pass_error_degrees":9.0,"pass_power_error":0.18,"pass_power_error_ratio":0.16,"pass_second_choice":0.22}
@@ -443,6 +458,9 @@ func _physics_process(delta: float) -> void:
 		return
 	_update_ai_adaptation()
 	_handle_human(delta)
+	# The human's Q / E / F input wins this frame. After that, a nearby
+	# AI teammate may inherit control before AI tackle commitments are read.
+	_maybe_auto_select_xi_human_defender()
 	_update_ai(delta)
 	_update_active_tackle_contacts()
 	_update_xi_dribble_body_contacts()
@@ -890,6 +908,8 @@ func _handle_human(delta: float) -> void:
 		_cancel_pass_charge()
 		var previous_controlled: Footballer = controlled
 		_select_player(_best_switch_candidate())
+		if match_team_size == 11:
+			xi_human_auto_switch_block_until = match_seconds + AI_XI_HUMAN_MANUAL_SWITCH_GRACE
 		if controlled != previous_controlled:
 			_show_action_feedback("CAMBIO DE JUGADOR")
 	# F is a deliberate XI special action, independent of Shift (sprint).
@@ -1189,6 +1209,7 @@ func _update_ai(delta: float) -> void:
 			var target: Vector2 = player.home_position
 			var intensity: float = 0.66
 			var contesting_cover := false
+			var human_close_cover := false
 			if ball.carrier == null:
 				if player == pending_human_pass_receiver and player.team_id == 0:
 					# A pass aimed at this teammate should be received by *this*
@@ -1221,12 +1242,16 @@ func _update_ai(delta: float) -> void:
 					target = _ai_press_target(player, ball.carrier)
 					intensity = _ai_adaptive_intensity(1.0)
 				elif player == cover:
+					human_close_cover = match_team_size == 11 and team_id == 0
 					contesting_cover = _ai_cpu_second_press_active(player, ball.carrier.global_position)
-					target = _ai_cover_target(player, ball.carrier.global_position)
-					# Hard/Expert may close a nearby 2v1 at real sprint pace;
-					# Normal and Easy maintain goal-side cover instead.
+					target = (
+						_ai_xi_human_close_cover_target(player, ball.carrier)
+						if human_close_cover else _ai_cover_target(player, ball.carrier.global_position)
+					)
+					# Human XI support is allowed to run to an actual challenge
+					# position; CPU Normal/Easy retain their existing cover rules.
 					intensity = _ai_adaptive_intensity(
-						0.98 if contesting_cover else AI_COVER_INTENSITY
+						0.98 if contesting_cover or human_close_cover else AI_COVER_INTENSITY
 					)
 				elif player == lane_marker:
 					# Intercept a forward pass, not the carrier. No extra sprint,
@@ -1249,7 +1274,7 @@ func _update_ai(delta: float) -> void:
 				ball.carrier != player
 				and player != pending_human_pass_receiver
 				and player != lane_marker
-				and (team_has_ball or (player != presser and not contesting_cover))
+				and (team_has_ball or (player != presser and not contesting_cover and not human_close_cover))
 			):
 				target = _ai_spaced_target(player, target)
 			# Only the opposing team changes effort; human teammates remain unchanged.
@@ -1613,6 +1638,22 @@ func _ai_xi_diagonal_cover_lead(player: Footballer, threat_position: Vector2) ->
 		return Vector2.ZERO
 	return (carrier_velocity * AI_XI_DIAGONAL_COVER_LEAD_SECONDS).limit_length(
 		AI_XI_DIAGONAL_COVER_MAX_LEAD
+	)
+
+
+# Human-side backup defender closes to a real reachable goal-side position.
+# Unlike the CPU's strategic cover, do not drift back toward a distant home
+# lane or get pushed away by teammate separation at the final challenge.
+func _ai_xi_human_close_cover_target(player: Footballer, owner: Footballer) -> Vector2:
+	if match_team_size != 11 or player.team_id != 0 or owner.team_id != 1:
+		return _ai_cover_target(player, owner.global_position)
+	var own_goal: Vector2 = ChessFootballMath.goal_center(1, match_pitch)
+	var goal_side: Vector2 = own_goal - owner.global_position
+	if goal_side.length_squared() <= 1.0:
+		goal_side = Vector2.LEFT
+	return ChessFootballMath.clamp_to_pitch(
+		owner.global_position + goal_side.normalized() * AI_XI_HUMAN_CLOSE_COVER_DISTANCE,
+		match_pitch
 	)
 
 
@@ -3285,6 +3326,44 @@ func _first_touch_reach(player: Footballer, speed: float) -> float:
 		):
 			return FIRST_TOUCH_PRESSURED_RADIUS
 	return FIRST_TOUCH_FAST_RADIUS
+
+
+# Reassign control only when the opponent CARRIES the ball and a healthy
+# off-ball human teammate has truly approached tackle distance. A manual Q,
+# an active tackle and a nearby current selection take priority. Unlike
+# automatic tackles, this grants only input ownership, never possession.
+func _maybe_auto_select_xi_human_defender() -> bool:
+	if (
+		match_team_size != 11
+		or ball.carrier == null or ball.carrier.team_id != 1
+		or controlled == null or controlled.sent_off
+		or controlled.role == "keeper"
+		or controlled.tackle_active()
+		or controlled.xi_collision_down_seconds > 0.0
+		or match_seconds < xi_human_auto_switch_block_until
+	):
+		return false
+	var owner: Footballer = ball.carrier
+	var current_distance: float = controlled.global_position.distance_to(owner.global_position)
+	if current_distance <= AI_XI_HUMAN_AUTO_SWITCH_KEEP_RADIUS:
+		return false
+	var nearest: Footballer = null
+	var nearest_distance := AI_XI_HUMAN_AUTO_SWITCH_RADIUS
+	for candidate in teams[0]:
+		if (
+			candidate == controlled or candidate.sent_off or candidate.role == "keeper"
+			or candidate.xi_collision_down_seconds > 0.0
+		):
+			continue
+		var distance: float = candidate.global_position.distance_to(owner.global_position)
+		if distance < nearest_distance:
+			nearest = candidate
+			nearest_distance = distance
+	if nearest == null or current_distance - nearest_distance < AI_XI_HUMAN_AUTO_SWITCH_MIN_GAIN:
+		return false
+	_select_player(nearest)
+	xi_human_auto_switch_block_until = match_seconds + AI_XI_HUMAN_AUTO_SWITCH_COOLDOWN
+	return true
 
 
 func _maybe_select_pass_receiver() -> void:

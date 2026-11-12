@@ -1077,6 +1077,67 @@ func _initialize() -> void:
 	game.match_team_size = 11
 	game.ball.release(Vector2.ZERO, 0.0)
 	assert(not game._ai_xi_tackle_commit_ready(lane_presser, lane_owner, false))
+	# XI human defense: two teammates must close the ACTUAL carrier rather
+	# than standing 150 units away; automatic control comes only at genuine
+	# challenge distance. A human-selected tackler/Q remains authoritative.
+	var human_far: Footballer = game.teams[0][1]
+	var human_first: Footballer = game.teams[0][2]
+	var human_cover: Footballer = game.teams[0][3]
+	var cpu_owner: Footballer = game.teams[1][4]
+	var chase_centre: Vector2 = game.match_pitch.get_center()
+	for athlete: Footballer in game.teams[0]:
+		if athlete.role != "keeper":
+			athlete.global_position = chase_centre + Vector2(-950.0, 750.0)
+			athlete.xi_collision_down_seconds = 0.0
+	human_far.global_position = chase_centre + Vector2(-360.0, 180.0)
+	human_first.global_position = chase_centre + Vector2(-89.0, -8.0)
+	human_cover.global_position = chase_centre + Vector2(-160.0, 90.0)
+	cpu_owner.global_position = chase_centre
+	cpu_owner.velocity = Vector2.ZERO
+	game._select_player(human_far)
+	game.ball.attach_to(cpu_owner)
+	var close_cover_target := game._ai_xi_human_close_cover_target(human_cover, cpu_owner)
+	var previous_cover_target := game._ai_cover_target(human_cover, cpu_owner.global_position)
+	assert(close_cover_target.distance_to(cpu_owner.global_position) <= 62.01)
+	assert(close_cover_target.distance_to(cpu_owner.global_position) <
+		previous_cover_target.distance_to(cpu_owner.global_position) - 60.0)
+	assert(close_cover_target.x < cpu_owner.global_position.x,
+		"Second human defender must guard the goal-side boot, not hover behind the attacker")
+	game.ai_next_decision[int(cpu_owner.get_instance_id())] = game.match_seconds + 10.0
+	game._update_ai(0.0)
+	assert(human_cover.ai_target.distance_to(close_cover_target) < 0.1,
+		"The live XI human-team cover must use the close-press target without teammate repulsion")
+	assert(human_first.ai_target.distance_to(cpu_owner.global_position) < 0.1,
+		"The first off-ball defender must pursue the actual carrier")
+	assert(game._maybe_auto_select_xi_human_defender())
+	assert(game.controlled == human_first and game.ball.carrier == cpu_owner)
+	assert(not game._maybe_auto_select_xi_human_defender(), "Auto handoff must not flicker each tick")
+	# Q chooses a different teammate and holds its priority over automation.
+	Input.action_press("change_player")
+	game._handle_human(0.0)
+	Input.action_release("change_player")
+	assert(game.controlled != human_first and game.match_seconds < game.xi_human_auto_switch_block_until)
+	assert(not game._maybe_auto_select_xi_human_defender(), "Manual Q must not be undone immediately")
+	# If the current human is genuinely near, keep control even when another
+	# teammate stands closer; only a superior reachable challenger may take over.
+	game.match_seconds = game.xi_human_auto_switch_block_until + 0.02
+	game._select_player(human_far)
+	human_far.global_position = chase_centre + Vector2(-70.0, 0.0)
+	assert(not game._maybe_auto_select_xi_human_defender())
+	human_far.global_position = chase_centre + Vector2(-360.0, 180.0)
+	human_first.xi_collision_down_seconds = 0.7
+	assert(not game._maybe_auto_select_xi_human_defender(),
+		"An unavailable fallen player must never inherit user control")
+	human_first.xi_collision_down_seconds = 0.0
+	assert(game._maybe_auto_select_xi_human_defender())
+	assert(game.controlled == human_first)
+	game.ball.attach_to(human_far)
+	assert(not game._maybe_auto_select_xi_human_defender(), "Never hand off when humans have the ball")
+	game.ball.attach_to(cpu_owner)
+	game.match_team_size = 5
+	assert(not game._maybe_auto_select_xi_human_defender(), "Legacy 5v5 control unchanged")
+	game.match_team_size = 11
+	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 no_flicker=1 manual_q=1 fallen=off 5v5=off")
 	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 normal_cover_contains=1 easy_five_unchanged=1")
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
