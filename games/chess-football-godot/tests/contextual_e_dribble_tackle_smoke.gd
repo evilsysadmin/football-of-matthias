@@ -349,7 +349,10 @@ func _initialize() -> void:
 	assert(carrier.global_position == stopped_at and carrier.velocity == Vector2.ZERO)
 	game.ball.global_position = carrier.global_position
 	game._try_claim_loose_ball()
-	assert(game.ball.carrier == null, "Fallen players cannot instantly reclaim the collision")
+	assert(game.ball.carrier != carrier and game.ball.carrier != opponent,
+		"Fallen players cannot reclaim the collision; healthy teammates may")
+	assert(not carrier.can_tackle() and not opponent.can_tackle(),
+		"Neither actor can start a tackle while lying on the grass")
 	assert(game._update_xi_dribble_body_contacts() == "")
 	carrier._process(1.0)
 	opponent._process(1.0)

@@ -366,6 +366,7 @@ func play_action(animation_name: String, duration: float = 0.78) -> void:
 func can_tackle() -> bool:
 	return (
 		not sent_off
+		and xi_collision_down_seconds <= 0.0
 		and not has_ball
 		and tackle_cooldown_seconds <= 0.0
 		and action_lock_seconds <= 0.0
