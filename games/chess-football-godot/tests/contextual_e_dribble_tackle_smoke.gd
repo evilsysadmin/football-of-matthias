@@ -89,6 +89,17 @@ func _initialize() -> void:
 	assert(game.score == initial_score and carrier.global_position == initial_home)
 	_reset_dribble(carrier)
 
+	# Exercise the actual XI keyboard action through the same human input
+	# path used by Chromium (not just the direct decision helper).
+	game.ball.attach_to(carrier)
+	_reset_dribble(carrier)
+	Input.action_press("special_move")
+	game._handle_human(1.0 / 60.0)
+	Input.action_release("special_move")
+	assert(carrier.dribble_mode == "burst", "F did not reach the real XI player")
+	assert(game.action_feedback_text == "TOQUE LARGO")
+	_reset_dribble(carrier)
+
 	# One physical clock: disable the actors' automatic processing before
 	# manually stepping the next 21 60 Hz frames.
 	for team in game.teams:
@@ -149,17 +160,6 @@ func _initialize() -> void:
 	print("FOOTBALL_XI_MOVING_E_THREE_BEATS_OK sideways=1 no_sprint=1 actual_60hz=1")
 	carrier.global_position = initial_home
 	game.ball.attach_to(carrier)
-	_reset_dribble(carrier)
-
-	# Exercise the actual XI keyboard action through the same human input
-	# path used by Chromium (not just the direct decision helper).
-	game.ball.attach_to(carrier)
-	_reset_dribble(carrier)
-	Input.action_press("special_move")
-	game._handle_human(1.0 / 60.0)
-	Input.action_release("special_move")
-	assert(carrier.dribble_mode == "burst", "F did not reach the real XI player")
-	assert(game.action_feedback_text == "TOQUE LARGO")
 	_reset_dribble(carrier)
 
 	# Front/diagonal run atlases cannot use a sideways dribble pose.
