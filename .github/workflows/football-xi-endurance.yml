@@ -144,6 +144,18 @@ jobs:
           assert [x['difficulty'] for x in report['cases']] == ['normal', 'hard']
           assert all(x['ticks'] == report['ticks_per_trial'] for x in report['cases'])
           assert sum(x['automatic_reassignments'] for x in report['cases']) == report['observed_automatic_reassignments']
+          for case in report['cases']:
+              causes = case['control_change_causes']
+              events = case['control_change_timeline']
+              assert len(events) == case['control_change_frames']
+              assert sum(causes.values()) == case['control_change_frames']
+              assert causes['auto_defense'] == case['automatic_reassignments']
+              assert causes['manual_q'] == case['manual_q_effective']
+              assert case['uncommanded_stable_cpu_switches'] == 0
+              assert causes['uncommanded_stable_cpu'] == 0
+              assert all(e['cause'] in causes and
+                         0 <= e['from'] < 11 and 0 <= e['to'] < 11 and
+                         e['from'] != e['to'] for e in events)
           Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
           print('FOOTBALL_XI_AUTOPLAY_ARTIFACT_OK cases=2')
           PY
