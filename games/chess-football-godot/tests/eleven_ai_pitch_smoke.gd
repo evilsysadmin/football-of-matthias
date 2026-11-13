@@ -1260,6 +1260,40 @@ func _initialize() -> void:
 	assert(game._ai_press_target(human_far, cpu_owner) == cpu_owner.global_position,
 		"Legacy 5v5 is unchanged")
 	game.match_team_size = 11
+	# #187 introduced a discontinuous ~20-30 unit lead at exactly 140
+	# units. Sample a true 60 Hz radial approach across that threshold:
+	# observed velocity is fixed, while only the defensive distance varies.
+	# The intercept offset must converge smoothly to zero (no jitter).
+	game.ball.attach_to(cpu_owner)
+	cpu_owner.global_position = chase_centre
+	cpu_owner.velocity = Vector2(-260.0, 140.0)
+	var old_lead_magnitude: float = 999.0
+	var max_aim_step: float = 0.0
+	for frame in range(45):
+		var separation: float = 185.0 - float(frame) * (60.0 / 44.0)
+		human_far.global_position = chase_centre + Vector2(separation, 0.0)
+		var target: Vector2 = game._ai_press_target(human_far, cpu_owner)
+		var offset: Vector2 = target - cpu_owner.global_position
+		assert(target.distance_to(cpu_owner.global_position) <= game.AI_XI_HUMAN_PRESS_LEAD_MAX_DISTANCE + 0.001)
+		assert(offset.length() <= old_lead_magnitude + 0.001,
+			"Approaching the carrier must not INCREASE an anticipatory aim lead")
+		if frame > 0:
+			max_aim_step = maxf(max_aim_step, old_lead_magnitude - offset.length())
+		old_lead_magnitude = offset.length()
+	assert(max_aim_step < 4.0,
+		"At 60 Hz the intercept aim must not jump abruptly as tackle range approaches")
+	assert(old_lead_magnitude < 0.01,
+		"At legal tackle distance the defender must aim at the physical carrier")
+	# A nearly stopped carrier also fades smoothly into the exact body target.
+	human_far.global_position = chase_centre + Vector2(390.0, 0.0)
+	cpu_owner.velocity = Vector2(87.0, 0.0)
+	assert(game._ai_press_target(human_far, cpu_owner).distance_to(cpu_owner.global_position) < 0.15)
+	cpu_owner.velocity = Vector2(350.0, 0.0)
+	assert(game._ai_press_target(human_far, cpu_owner).distance_to(cpu_owner.global_position) > 50.0)
+	game.match_team_size = 5
+	assert(game._ai_press_target(human_far, cpu_owner) == cpu_owner.global_position)
+	game.match_team_size = 11
+	print("FOOTBALL_XI_INTERCEPT_CONTINUITY_OK approach_60hz=45 aim_jump_lt_4=1 tackle_body=1 startup_fade=1 far_lead=1 5v5=off")
 	print("FOOTBALL_XI_HUMAN_INTERCEPT_OK observed=1 diagonal=1 bounded=1 cut_reactive=1 close_tackle=body loose=off 5v5=off")
 	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 tackle_ready_only=1 manual_override=1 no_flicker=1 manual_q=1 fallen=off 5v5=off")
 	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 normal_cover_contains=1 easy_five_unchanged=1")

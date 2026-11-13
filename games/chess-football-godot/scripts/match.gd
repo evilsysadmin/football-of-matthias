@@ -166,7 +166,12 @@ const AI_XI_HUMAN_CLOSE_COVER_DISTANCE := 62.0
 # bounded lead helps intercept a distant diagonal run; tackle range still
 # targets the actual body. Never alter sprint, acceleration or hitboxes.
 const AI_XI_HUMAN_PRESS_LEAD_START := 140.0
+# Fade the observed lead continuously as the defender reaches E/F range.
+# With a hard cut at 140, the AI target jumps a body-width each time the
+# carrier or defender crosses that radius during a close duel.
+const AI_XI_HUMAN_PRESS_LEAD_BLEND_RANGE := 240.0
 const AI_XI_HUMAN_PRESS_LEAD_MIN_VELOCITY := 85.0
+const AI_XI_HUMAN_PRESS_LEAD_SPEED_BLEND_RANGE := 110.0
 const AI_XI_HUMAN_PRESS_LEAD_MAX_SECONDS := 0.24
 const AI_XI_HUMAN_PRESS_LEAD_MAX_DISTANCE := 76.0
 # Only hand over control when a healthy teammate is physically within the
@@ -1507,13 +1512,24 @@ func _ai_xi_human_press_target(presser: Footballer, owner: Footballer) -> Vector
 		return owner.global_position
 	var distance: float = presser.global_position.distance_to(owner.global_position)
 	var observed: Vector2 = owner.velocity
-	if distance <= AI_XI_HUMAN_PRESS_LEAD_START or observed.length() < AI_XI_HUMAN_PRESS_LEAD_MIN_VELOCITY:
+	if distance <= AI_XI_HUMAN_PRESS_LEAD_START or observed.length() <= AI_XI_HUMAN_PRESS_LEAD_MIN_VELOCITY:
 		return owner.global_position
-	var horizon: float = lerpf(
-		0.08, AI_XI_HUMAN_PRESS_LEAD_MAX_SECONDS,
-		clampf((distance - AI_XI_HUMAN_PRESS_LEAD_START) / 280.0, 0.0, 1.0)
+	# Smoothstep has a zero slope at both limits: no 20–30 unit target snap
+	# on crossing the body-to-body boundary and no twitch as a carrier starts
+	# or stops moving. The far-field ceiling remains unchanged at 0.24 s.
+	var distance_weight: float = smoothstep(
+		AI_XI_HUMAN_PRESS_LEAD_START,
+		AI_XI_HUMAN_PRESS_LEAD_START + AI_XI_HUMAN_PRESS_LEAD_BLEND_RANGE,
+		distance
 	)
-	var lead: Vector2 = (observed * horizon).limit_length(AI_XI_HUMAN_PRESS_LEAD_MAX_DISTANCE)
+	var speed_weight: float = smoothstep(
+		AI_XI_HUMAN_PRESS_LEAD_MIN_VELOCITY,
+		AI_XI_HUMAN_PRESS_LEAD_MIN_VELOCITY + AI_XI_HUMAN_PRESS_LEAD_SPEED_BLEND_RANGE,
+		observed.length()
+	)
+	var lead: Vector2 = (
+		observed * (AI_XI_HUMAN_PRESS_LEAD_MAX_SECONDS * distance_weight * speed_weight)
+	).limit_length(AI_XI_HUMAN_PRESS_LEAD_MAX_DISTANCE)
 	return ChessFootballMath.clamp_to_pitch(owner.global_position + lead, match_pitch)
 
 
