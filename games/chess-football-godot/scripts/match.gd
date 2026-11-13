@@ -365,6 +365,12 @@ var ai_adapt_next_sample: float = AI_ADAPT_SAMPLE_SECONDS
 var ai_adapt_next_eval: float = AI_ADAPT_EVAL_SECONDS
 # Real-browser E2E probe, never active outside local 127.0.0.1 CI.
 var ci_web_keyboard_probe: bool = false
+# Localhost-only Playwright receipts. These never run in the public match or
+# alter any movement, possession, selection or tackle decision.
+var ci_web_keys_q: int = 0
+var ci_web_keys_e: int = 0
+var ci_web_keys_f: int = 0
+var ci_web_keys_pass: int = 0
 var pause_menu_open: bool = false
 var kickoff_team_id: int = 0
 var kickoff_active: bool = false
@@ -451,8 +457,17 @@ func _ai_cpu_intensity(base: float) -> float:
 
 func _physics_process(delta: float) -> void:
 	_update_performance_overlay(delta)
-	if ci_web_keyboard_probe and Engine.get_physics_frames() % 6 == 0:
-		_emit_ci_web_keyboard_sample()
+	if ci_web_keyboard_probe:
+		if Input.is_action_just_pressed("change_player"):
+			ci_web_keys_q += 1
+		if Input.is_action_just_pressed("tackle"):
+			ci_web_keys_e += 1
+		if Input.is_action_just_pressed("special_move"):
+			ci_web_keys_f += 1
+		if Input.is_action_just_pressed("pass_ball"):
+			ci_web_keys_pass += 1
+		if Engine.get_physics_frames() % 6 == 0:
+			_emit_ci_web_keyboard_sample()
 	if pause_menu_open:
 		_update_3d_presentation(0.0)
 		return
@@ -516,6 +531,17 @@ func _emit_ci_web_keyboard_sample() -> void:
 		"team_players": teams[0].size() + teams[1].size(),
 		"pitch_width": match_pitch.size.x,
 		"pitch_height": match_pitch.size.y,
+		# CI-only sample of actual Godot match state and browser key receipts.
+		# Do not add this to session presence, analytics or staging telemetry.
+		"match_clock": match_seconds,
+		"ball_x": ball.global_position.x,
+		"ball_y": ball.global_position.y,
+		"carrier_team": ball.carrier.team_id if ball.carrier != null else -1,
+		"sprinting": Input.is_action_pressed("sprint"),
+		"key_q": ci_web_keys_q,
+		"key_e": ci_web_keys_e,
+		"key_f": ci_web_keys_f,
+		"key_pass": ci_web_keys_pass,
 	}
 	JavaScriptBridge.eval("window.parent.postMessage(%s, '*')" % JSON.stringify(sample))
 

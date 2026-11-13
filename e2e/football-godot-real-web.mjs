@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Exercise exported Godot WASM in Chromium, not a mocked iframe.
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, extname, sep } from 'node:path';
 import { chromium } from 'playwright';
@@ -778,6 +778,138 @@ try {
   await page.screenshot({ path: resolve(output, 'real-web-xi-kickoff.png'), timeout: 4000 })
     .catch((error) => console.warn('Optional XI software-WebGL screenshot unavailable: ' + error.message));
   console.log('FOOTBALL_XI_REAL_WEB_OK players=22 pitch=4000x2600');
+
+  // Real XI browser autoplay: use the exported WASM's own sampled ball and
+  // selected-player coordinates to choose the next keyboard action. This is
+  // deliberately NOT Godot Input.action_press nor mock movement. Only the
+  // loopback-local CI diagnostic reports what the genuine game observed.
+  const lastXi = async () => page.evaluate(() => {
+    // A goal, throw-in or kickoff can become active between Playwright's
+    // waitForFunction and evaluate calls. Preserve the last real PLAYABLE
+    // observation; never mistake a legitimate restart for a null sample.
+    const samples = window.__chessFootballInputSamples || [];
+    for (let i = samples.length - 1; i >= 0; i--) {
+      if (samples[i].team_size === 11 && samples[i].playable) return samples[i];
+    }
+    return null;
+  });
+  const observedInput = async (previousClock, test, label) => {
+    await page.waitForFunction(
+      ({ previousClock, test }) => {
+        const samples = window.__chessFootballInputSamples || [];
+        return samples.some(s => s.team_size === 11 && s.playable &&
+          Number(s.match_clock) > previousClock + 0.04 &&
+          (test.key ? Number(s[test.axis]) * test.sign >= 0.75 :
+            Number(s[test.counter]) > test.before));
+      },
+      { previousClock, test }, { timeout: 30000 }
+    ).catch(error => {
+      throw new Error('XI real-browser bot did not observe ' + label + ': ' + error.message);
+    });
+  };
+  // Drive against the latest observed loose ball / CPU carrier. When our
+  // team carries, move toward the attacking goal instead of a scripted spot.
+  const opening = await lastXi();
+  if (!opening || !Number.isFinite(opening.match_clock)) {
+    throw new Error('XI browser autoplay has no live in-game sample');
+  }
+  const bot = { kind: 'real_chromium_godot_xi_autoplay_not_user_telemetry',
+    start_clock: opening.match_clock, moves: [], actions: [],
+    sampled_control_changes: 0, sampled_carrier_teams: [], saw_sprint: false };
+  let lastPlayer = opening.player_id;
+  for (let step = 0; step < 6; step++) {
+    await page.waitForFunction(() => {
+      const s = window.__chessFootballInputSamples.at(-1);
+      return s?.team_size === 11 && s.playable;
+    }, null, { timeout: 30000 });
+    const before = await lastXi();
+    const targetX = before.carrier_team === 0 ? 3900 : before.ball_x;
+    const targetY = before.carrier_team === 0 ? 1300 : before.ball_y;
+    const diffX = targetX - before.x;
+    const diffY = targetY - before.y;
+    const axis = Math.abs(diffX) >= Math.abs(diffY) ? 'dx' : 'dy';
+    const sign = axis === 'dx' ? Math.sign(diffX) || 1 : Math.sign(diffY) || 1;
+    let key = axis === 'dx' ? (sign > 0 ? 'd' : 'a') : (sign > 0 ? 's' : 'w');
+    // One deliberate counter-steer checks that a fast change of direction
+    // is honored rather than the player continuing on a stale AI path.
+    if (step === 4) key = { a: 'd', d: 'a', s: 'w', w: 's' }[key];
+    const expectedSign = key === 'd' || key === 's' ? 1 : -1;
+    const expectedAxis = key === 'a' || key === 'd' ? 'dx' : 'dy';
+    const sprint = step === 2 || step === 3;
+    if (sprint) await page.keyboard.down('Shift');
+    await page.keyboard.down(key);
+    try {
+      await observedInput(before.match_clock, { key, axis: expectedAxis, sign: expectedSign },
+        'direction ' + key);
+      await page.waitForFunction(
+        start => (window.__chessFootballInputSamples.at(-1)?.match_clock || 0) >= start + 0.16,
+        before.match_clock, { timeout: 30000 }
+      );
+      const now = await lastXi();
+      if (now?.sprinting) bot.saw_sprint = true;
+      bot.moves.push({
+        key, sprint, clock: Number(now?.match_clock || 0), player_id: now?.player_id,
+        ball_team: now?.carrier_team, x: now?.x, y: now?.y,
+        dx: now?.dx, dy: now?.dy,
+      });
+      if (now?.player_id !== lastPlayer) bot.sampled_control_changes++;
+      lastPlayer = now?.player_id;
+      if (!bot.sampled_carrier_teams.includes(now?.carrier_team))
+        bot.sampled_carrier_teams.push(now?.carrier_team);
+    } finally {
+      await page.keyboard.up(key);
+      if (sprint) await page.keyboard.up('Shift');
+    }
+  }
+  // Q/E/F/Space MUST be received by the actual GDScript physics loop,
+  // not just the DOM keydown handler. Holding until a new receipt survives
+  // software-WebGL frame delays without inventing any in-game input.
+  for (const [key, counter] of [
+    ['q', 'key_q'], ['e', 'key_e'], ['f', 'key_f'], ['Space', 'key_pass']
+  ]) {
+    await page.waitForFunction(() => {
+      const s = window.__chessFootballInputSamples.at(-1);
+      return s?.team_size === 11 && s.playable;
+    }, null, { timeout: 30000 });
+    const before = await lastXi();
+    if (!before || !Number.isFinite(before[counter])) {
+      throw new Error('XI bot missing pre-' + key + ' playable action receipt');
+    }
+    await page.keyboard.down(key);
+    try {
+      await observedInput(before.match_clock, { counter, before: before[counter] }, 'action ' + key);
+    } finally {
+      await page.keyboard.up(key);
+    }
+    // The real game may enter a restart immediately after the keypress.
+    // Find the actual Godot receipt, not an unrelated newest non-playable
+    // sample; keep it meaningful even if the next frame starts a set-piece.
+    const after = await page.evaluate(({ counter, before }) => {
+      const samples = window.__chessFootballInputSamples || [];
+      for (let i = samples.length - 1; i >= 0; i--) {
+        if (samples[i].team_size === 11 && samples[i].playable &&
+            Number(samples[i][counter]) > before) return samples[i];
+      }
+      return null;
+    }, { counter, before: before[counter] });
+    if (!after) throw new Error('XI bot lost Godot receipt after ' + key);
+    bot.actions.push({ key, counter, from: before[counter], to: after[counter] });
+  }
+  const ending = await lastXi();
+  bot.end_clock = ending?.match_clock;
+  bot.match_seconds = Number((bot.end_clock - bot.start_clock).toFixed(3));
+  if (bot.moves.length !== 6 || bot.actions.length !== 4 ||
+      !bot.moves.every(m => Number.isFinite(m.clock) &&
+        Number.isFinite(m.x) && Number.isFinite(m.y)) ||
+      bot.match_seconds < 1.2 || !bot.saw_sprint ||
+      bot.actions.some(a => a.to <= a.from) || failures.length) {
+    throw new Error('XI browser autoplay failed real-input continuity: ' + JSON.stringify(bot) +
+      ' failures=' + failures.slice(0, 5).join('; '));
+  }
+  writeFileSync(resolve(output, 'xi-real-browser-autoplay.json'), JSON.stringify(bot, null, 2) + '\n');
+  console.log('FOOTBALL_XI_REAL_BROWSER_AUTOPLAY_OK moves=6 action_receipts=4' +
+    ' game_seconds=' + bot.match_seconds + ' sprint=1');
+
 } catch (error) {
   if (page) await page.screenshot({ path: resolve(output, 'real-web-failure.png'), timeout: 10000 }).catch(() => {});
   console.error('REAL GODOT WEB BOOT FAILURE:', String(error));
