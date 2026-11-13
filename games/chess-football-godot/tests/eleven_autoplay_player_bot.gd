@@ -3,9 +3,9 @@ extends SceneTree
 # Deterministic REAL-input QA bot. Uses Input actions through the same
 # _physics_process that the browser plays; no direct AI/tackle shortcuts.
 # Two seed-matched 24-second open-play sessions, not 90-minute telemetry.
-# Real motion is stepped on SceneTree.physics_frame. Do NOT run
-# move_and_slide in render process_frame: render scheduling depends on
-# runner/GPU load and is not the game's 60 Hz physics clock.
+# The bot uses the established real Godot Input edge path. A separate
+# physics_frame experiment broke Q action edges; compare same-seed replays
+# first, before changing how browser-equivalent controls reach the engine.
 const Formation = preload("res://scripts/football_match_formation.gd")
 const XI := Formation.ELEVEN_PITCH_RECT
 const STEP := 1.0 / 60.0
@@ -480,9 +480,9 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 				"ball_y": snappedf(game.ball.global_position.y, 0.1),
 				"score": [int(game.score[0]), int(game.score[1])],
 			})
-		# Allow the next genuine fixed 60 Hz physics tick before changing
-		# synthetic keys, not a variable-rate render/process frame.
-		await physics_frame
+		# Keep action just_pressed/just_released edges on the existing proven
+		# input path. Match physics advances explicitly by STEP = 1/60.
+		await process_frame
 
 	if not active_pressure_gap.is_empty():
 		_finish_pressure_gap(pressure_gap_episodes, active_pressure_gap, TICKS, "simulation_end")
