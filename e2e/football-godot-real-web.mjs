@@ -775,8 +775,10 @@ try {
   await expectRealMovement('ArrowRight', 'x', 1);
   console.log('FOOTBALL_XI_REAL_WEB_1500X788_OK canvas=fills_browser keyboard=1 resized_in_place=1');
   if (failures.length) throw new Error('XI Web runtime errors: ' + failures.slice(0, 8).join('\\n'));
-  await page.screenshot({ path: resolve(output, 'real-web-xi-kickoff.png'), timeout: 4000 })
-    .catch((error) => console.warn('Optional XI software-WebGL screenshot unavailable: ' + error.message));
+  // Chromium software-WebGL can stall ReadPixels for many seconds. Do NOT
+  // request an optional screenshot before the real-key autoplay: a GPU
+  // readback stall can strand keyboard focus or leave a stale gameplay
+  // receipt exactly when the next Q/E/F key is delivered.
   console.log('FOOTBALL_XI_REAL_WEB_OK players=22 pitch=4000x2600');
 
   // Real XI browser autoplay: use the exported WASM's own sampled ball and
@@ -803,8 +805,16 @@ try {
             Number(s[test.counter]) > test.before));
       },
       { previousClock, test }, { timeout: 30000 }
-    ).catch(error => {
-      throw new Error('XI real-browser bot did not observe ' + label + ': ' + error.message);
+    ).catch(async error => {
+      const context = await page.evaluate(() => ({
+        focus: document.activeElement?.tagName,
+        last: (window.__chessFootballInputSamples || []).slice(-6).map(s => ({
+          playable: s.playable, clock: s.match_clock,
+          q: s.key_q, e: s.key_e, f: s.key_f, pass: s.key_pass
+        }))
+      })).catch(() => null);
+      throw new Error('XI real-browser bot did not observe ' + label + ': ' +
+        error.message + ' context=' + JSON.stringify(context));
     });
   };
   // Drive against the latest observed loose ball / CPU carrier. When our
@@ -867,10 +877,22 @@ try {
   for (const [key, counter] of [
     ['q', 'key_q'], ['e', 'key_e'], ['f', 'key_f'], ['Space', 'key_pass']
   ]) {
-    await page.waitForFunction(() => {
+    // A restart can begin between the last move and the action. Require a
+    // NEW playable physics observation, not an old sample left in the ring
+    // by a stalled software renderer. The key must still be received in the
+    // actual Godot GDScript loop; this does not simulate or acknowledge it.
+    const priorClock = await page.evaluate(() =>
+      Number(window.__chessFootballInputSamples.at(-1)?.match_clock || 0));
+    await page.waitForFunction(start => {
       const s = window.__chessFootballInputSamples.at(-1);
-      return s?.team_size === 11 && s.playable;
-    }, null, { timeout: 30000 });
+      return s?.team_size === 11 && s.playable &&
+        Number(s.match_clock) > start + 0.05;
+    }, priorClock, { timeout: 45000 });
+    if (await page.evaluate(() => document.activeElement?.tagName !== 'CANVAS')) {
+      await page.mouse.click(500, 370);
+      await page.waitForFunction(() =>
+        document.activeElement?.tagName === 'CANVAS', null, { timeout: 10000 });
+    }
     const before = await lastXi();
     if (!before || !Number.isFinite(before[counter])) {
       throw new Error('XI bot missing pre-' + key + ' playable action receipt');
@@ -909,6 +931,10 @@ try {
   writeFileSync(resolve(output, 'xi-real-browser-autoplay.json'), JSON.stringify(bot, null, 2) + '\n');
   console.log('FOOTBALL_XI_REAL_BROWSER_AUTOPLAY_OK moves=6 action_receipts=4' +
     ' game_seconds=' + bot.match_seconds + ' sprint=1');
+  // Only AFTER the gameplay gate: an optional ReadPixels screenshot must
+  // never block or invalidate the real input assertions.
+  await page.screenshot({ path: resolve(output, 'real-web-xi-kickoff.png'), timeout: 4000 })
+    .catch((error) => console.warn('Optional XI software-WebGL screenshot unavailable: ' + error.message));
 
 } catch (error) {
   if (page) await page.screenshot({ path: resolve(output, 'real-web-failure.png'), timeout: 10000 }).catch(() => {});
