@@ -1222,6 +1222,42 @@ func _initialize() -> void:
 	Input.action_release("move_left")
 	assert(game.xi_human_handoff_chase_actor == null,
 		"Manual directional input takes control immediately without AI steering")
+	assert(game.xi_human_handoff_chase_owner == null,
+		"Manual direction also clears the identity of the old rival")
+	# A quick CPU-to-CPU pass during the inherited 0.36 s chase must NOT
+	# steer the newly selected human across the field to the receiver.
+	# Use ordinary 60-Hz human movement, not a new physics shortcut.
+	await process_frame
+	game.ball.attach_to(cpu_owner)
+	game.match_seconds = game.xi_human_auto_switch_block_until + 0.02
+	game._select_player(human_far)
+	human_far.global_position = chase_centre + Vector2(-360.0, 180.0)
+	human_first.global_position = chase_centre + Vector2(-89.0, -8.0)
+	human_first.velocity = Vector2.RIGHT * 230.0
+	human_first.last_sprinting = true
+	human_first.tackle_cooldown_seconds = 0.0
+	human_first.tackle_recovery_seconds = 0.0
+	human_first.tackle_active_seconds = 0.0
+	human_first.action_lock_seconds = 0.0
+	human_first.contact_stun_seconds = 0.0
+	assert(human_first.can_tackle())
+	assert(game._maybe_auto_select_xi_human_defender())
+	assert(game.xi_human_handoff_chase_actor == human_first)
+	assert(game.xi_human_handoff_chase_owner == cpu_owner)
+	var cpu_receiver: Footballer = game.teams[1][6]
+	cpu_receiver.global_position = chase_centre + Vector2(260.0, -190.0)
+	game.ball.attach_to(cpu_receiver)
+	var transfer_speed_before: float = human_first.velocity.length()
+	for handoff_tick in range(3):
+		game.match_seconds += 1.0 / 60.0
+		game._handle_human(1.0 / 60.0)
+		assert(game.controlled == human_first,
+			"CPU pass must not unexpectedly change the selected human")
+		assert(game.xi_human_handoff_chase_actor == null and game.xi_human_handoff_chase_owner == null,
+			"Inherited chase must stop when the exact opponent loses possession")
+	assert(human_first.velocity.length() < transfer_speed_before - 25.0,
+		"After a CPU pass an idle human must brake, not auto-chase a new receiver")
+	print("FOOTBALL_XI_HANDOFF_OWNER_TRANSFER_OK cpu_pass=stop selected=kept 60hz=3")
 	game.ball.attach_to(human_far)
 	assert(not game._maybe_auto_select_xi_human_defender(), "Never hand off when humans have the ball")
 	game.ball.attach_to(cpu_owner)
@@ -1302,7 +1338,7 @@ func _initialize() -> void:
 	game.match_team_size = 11
 	print("FOOTBALL_XI_INTERCEPT_CONTINUITY_OK approach_60hz=45 aim_jump_lt_4=1 tackle_body=1 startup_fade=1 far_lead=1 5v5=off")
 	print("FOOTBALL_XI_HUMAN_INTERCEPT_OK observed=1 diagonal=1 bounded=1 cut_reactive=1 close_tackle=body loose=off 5v5=off")
-	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 e_hitbox_contact=1 tackle_ready_only=1 manual_override=1 no_flicker=1 manual_q=1 fallen=off 5v5=off")
+	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 e_hitbox_contact=1 tackle_ready_only=1 manual_override=1 owner_transfer=stop no_flicker=1 manual_q=1 fallen=off 5v5=off")
 	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 normal_cover_contains=1 easy_five_unchanged=1")
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
