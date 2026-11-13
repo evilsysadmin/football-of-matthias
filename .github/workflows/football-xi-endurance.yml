@@ -141,6 +141,8 @@ jobs:
           assert len(reports) == 1, 'Expected one real-input autoplay report'
           report = reports[0]
           assert report['kind'] == 'seeded_24s_real_godot_input_bot_not_live_players'
+          assert report['replay_verified'] is True
+          assert report['replay_seed'] == 65113 and report['replay_fields_compared'] >= 12
           assert [x['difficulty'] for x in report['cases']] == ['normal', 'hard']
           assert all(x['ticks'] == report['ticks_per_trial'] for x in report['cases'])
           assert sum(x['automatic_reassignments'] for x in report['cases']) == report['observed_automatic_reassignments']

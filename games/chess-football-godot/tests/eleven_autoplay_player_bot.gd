@@ -3,6 +3,9 @@ extends SceneTree
 # Deterministic REAL-input QA bot. Uses Input actions through the same
 # _physics_process that the browser plays; no direct AI/tackle shortcuts.
 # Two seed-matched 24-second open-play sessions, not 90-minute telemetry.
+# Real motion is stepped on SceneTree.physics_frame. Do NOT run
+# move_and_slide in render process_frame: render scheduling depends on
+# runner/GPU load and is not the game's 60 Hz physics clock.
 const Formation = preload("res://scripts/football_match_formation.gd")
 const XI := Formation.ELEVEN_PITCH_RECT
 const STEP := 1.0 / 60.0
@@ -23,8 +26,33 @@ func _initialize() -> void:
 	var runs: Array[Dictionary] = []
 	for spec in SCENARIOS:
 		runs.append(await _play(int(spec["seed"]), String(spec["difficulty"])))
+	# Replay the exact SAME scenario after a different difficulty has been
+	# instantiated/played and released. It must not inherit RNG, cooldowns,
+	# a stale input edge, player identities or asynchronous scene activity.
+	var replay: Dictionary = await _play(int(SCENARIOS[0]["seed"]), String(SCENARIOS[0]["difficulty"]))
 	_release_keys()
 	assert(runs.size() == 2)
+	var replay_fields: Array[String] = [
+		"cpu_possession_frames", "human_possession_frames", "loose_ball_frames",
+		"control_change_timeline", "control_change_causes", "manual_q_inputs",
+		"manual_q_effective", "automatic_reassignments", "tackles_launched",
+		"shot_inputs", "shot_releases", "strict_gap_frames_240",
+		"pressure_gap_episodes", "score", "physics_checkpoints",
+	]
+	var replay_mismatches: Array[String] = []
+	for field in replay_fields:
+		if runs[0][field] != replay[field]:
+			replay_mismatches.append(field)
+	print("FOOTBALL_XI_REPLAY_AUDIT " + JSON.stringify({
+		"seed": int(SCENARIOS[0]["seed"]),
+		"difficulty": String(SCENARIOS[0]["difficulty"]),
+		"fields_compared": replay_fields.size(),
+		"mismatches": replay_mismatches,
+		"baseline_checkpoints": runs[0]["physics_checkpoints"],
+		"replay_checkpoints": replay["physics_checkpoints"],
+	}))
+	assert(replay_mismatches.is_empty(),
+		"Same seed at real 60 Hz must reproduce possession, controls and pressure episodes")
 	var all_auto := 0
 	for run in runs:
 		assert(int(run["ticks"]) == TICKS)
@@ -80,9 +108,12 @@ func _initialize() -> void:
 		"ticks_per_trial": TICKS,
 		"cases": runs,
 		"observed_automatic_reassignments": all_auto,
+		"replay_verified": true,
+		"replay_seed": int(SCENARIOS[0]["seed"]),
+		"replay_fields_compared": replay_fields.size(),
 	}
 	print("FOOTBALL_XI_AUTOPLAY_METRICS " + JSON.stringify(report))
-	print("FOOTBALL_XI_AUTOPLAY_OK cases=2 input=real xi=22 manual_q=effective grace=no_auto control_audit=clean pressure_gaps=episodes")
+	print("FOOTBALL_XI_AUTOPLAY_OK cases=2 input=real xi=22 manual_q=effective grace=no_auto control_audit=clean pressure_gaps=episodes physics_replay=identical")
 	quit(0)
 
 
@@ -221,6 +252,7 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	var shooting_frames := 0
 	var last_shot_attempt_at: float = -100.0
 	var shot_attempted_owner: Footballer = null
+	var physics_checkpoints: Array[Dictionary] = []
 
 	for tick in range(TICKS):
 		var playing: bool = not (game.kickoff_active or game.goal_restart_active or game.set_piece_active)
@@ -437,8 +469,20 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		previous_e = press_e
 		if tick % 60 == 0:
 			_validate_real_match(game)
-		# Let input just_pressed edges expire between simulated 60-Hz ticks.
-		await process_frame
+			# Stable roster indices and quantized positions: no instance IDs,
+			# timing/performance statistics or visual state in the replay.
+			physics_checkpoints.append({
+				"tick": tick,
+				"carrier_team": game.ball.carrier.team_id if game.ball.carrier != null else -1,
+				"carrier_index": game.teams[game.ball.carrier.team_id].find(game.ball.carrier) if game.ball.carrier != null else -1,
+				"controlled_index": game.teams[0].find(game.controlled),
+				"ball_x": snappedf(game.ball.global_position.x, 0.1),
+				"ball_y": snappedf(game.ball.global_position.y, 0.1),
+				"score": [int(game.score[0]), int(game.score[1])],
+			})
+		# Allow the next genuine fixed 60 Hz physics tick before changing
+		# synthetic keys, not a variable-rate render/process frame.
+		await physics_frame
 
 	if not active_pressure_gap.is_empty():
 		_finish_pressure_gap(pressure_gap_episodes, active_pressure_gap, TICKS, "simulation_end")
@@ -466,6 +510,7 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		"min_defender_distance": snappedf(min_defender_distance, 0.1) if defending_frames > 0 else -1.0,
 		"automatic_reassignments": auto_reassignments,
 		"control_change_frames": all_control_changes,
+		"physics_checkpoints": physics_checkpoints,
 		"control_change_causes": control_change_causes,
 		"control_change_timeline": control_change_timeline,
 		"uncommanded_stable_cpu_switches": uncommanded_stable_cpu_switches,
