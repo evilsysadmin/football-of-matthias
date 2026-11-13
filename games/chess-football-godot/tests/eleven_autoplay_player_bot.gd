@@ -29,6 +29,9 @@ func _initialize() -> void:
 		assert(int(run["cpu_possession_frames"]) > 0)
 		assert(int(run["defensive_samples"]) > 0)
 		assert(int(run["illegal_auto_handoffs"]) == 0)
+		assert(int(run["shot_inputs"]) <= 12,
+			"Autoplay bot must not spam shoot every few game frames")
+		assert(int(run["shot_releases"]) <= int(run["shot_inputs"]))
 		assert(int(run["control_change_frames"]) <= 120,
 			"Runaway XI auto-switch loop: excessive control changes")
 		all_auto += int(run["automatic_reassignments"])
@@ -132,9 +135,11 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	var actual_tackles := 0
 	var manual_q_inputs := 0
 	var shot_inputs := 0
+	var shot_releases := 0
 	var previous_e := false
-	var previous_q := false
 	var shooting_frames := 0
+	var last_shot_attempt_at: float = -100.0
+	var shot_attempted_owner: Footballer = null
 
 	for tick in range(TICKS):
 		var playing: bool = not (game.kickoff_active or game.goal_restart_active or game.set_piece_active)
@@ -165,9 +170,22 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 			playing and tick in [300, 825]
 			and carrier != null and carrier.team_id == 1 and not press_e
 		)
-		if carrier != null and carrier == current and current.team_id == 0 and playing:
-			if shooting_frames == 0 and current.global_position.x >= XI.get_center().x + 480.0:
-				shooting_frames = 7
+		# Do not machine-gun fresh charges while a single possession still
+		# belongs to the same shooter. Respect real loss/regain of possession
+		# and a two-second tactical decision interval between shot attempts.
+		if carrier != shot_attempted_owner:
+			shot_attempted_owner = null
+		if carrier == null or carrier != current:
+			shooting_frames = 0
+		elif (
+			current.team_id == 0 and playing
+			and shooting_frames == 0 and shot_attempted_owner == null
+			and game.match_seconds - last_shot_attempt_at >= 2.0
+			and current.global_position.x >= XI.get_center().x + 480.0
+		):
+			shooting_frames = 7
+			shot_attempted_owner = current
+			last_shot_attempt_at = game.match_seconds
 		var press_shot: bool = shooting_frames > 0 and playing and carrier == current
 		if shooting_frames > 0:
 			shooting_frames -= 1
@@ -182,8 +200,13 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		if press_shot and shooting_frames == 6:
 			shot_inputs += 1
 		var before_tackle: float = current.tackle_cooldown_seconds
+		var before_shot_charge: bool = game.shot_charging
 		var before_control: Footballer = current
 		game._physics_process(STEP)
+		# Only a real Godot shot charge followed by ball release counts as
+		# a completed bot shot; issuing the key alone is not success.
+		if before_shot_charge and not game.shot_charging and game.ball.carrier != current and game.ball.last_touch_team_id == 0:
+			shot_releases += 1
 		for team in game.teams:
 			for player: Footballer in team:
 				player._process(STEP)
@@ -217,7 +240,6 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 				if closest > 240.0:
 					unattended_240_frames += 1
 		previous_e = press_e
-		previous_q = press_q
 		if tick % 60 == 0:
 			_validate_real_match(game)
 		# Let input just_pressed edges expire between simulated 60-Hz ticks.
@@ -246,6 +268,7 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		"e_inputs": tackle_inputs,
 		"tackles_launched": actual_tackles,
 		"shot_inputs": shot_inputs,
+		"shot_releases": shot_releases,
 		"score": [int(game.score[0]), int(game.score[1])],
 	}
 	root.remove_child(game)
