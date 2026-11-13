@@ -56,8 +56,8 @@ func _initialize() -> void:
 			observed_max = maxi(observed_max, int(episode["frames"]))
 		assert(episode_frames == int(run["strict_gap_frames_240"]),
 			"Sum every consecutive same-carrier pressure gap exactly once")
-		assert(int(run["strict_gap_frames_240"]) <= int(run["unattended_frames_240"]),
-			"Same-carrier uninterrupted gaps must be a subset of legacy distance samples")
+		assert(int(run["strict_gap_frames_240"]) <= int(run["defensive_samples"]),
+			"Every strict pressure gap must be part of observed live CPU possession")
 		assert(observed_max == int(run["max_pressure_gap_frames"]),
 			"Reported longest defensive gap must match measured episodes")
 		assert(int(run["control_change_frames"]) == run["control_change_timeline"].size(),
