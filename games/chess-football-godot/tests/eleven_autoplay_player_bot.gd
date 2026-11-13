@@ -29,6 +29,16 @@ func _initialize() -> void:
 		assert(int(run["cpu_possession_frames"]) > 0)
 		assert(int(run["defensive_samples"]) > 0)
 		assert(int(run["illegal_auto_handoffs"]) == 0)
+		assert(int(run["manual_q_inputs"]) >= 1,
+			"Each live XI trial must actually press Q after an automatic handoff")
+		assert(int(run["manual_q_effective"]) == int(run["manual_q_inputs"]),
+			"Manual Q must select another eligible defender when CPU carries")
+		assert(int(run["manual_q_chase_cancelled"]) == int(run["manual_q_inputs"]),
+			"Q must cancel the inherited AI pursuit on the same physics tick")
+		assert(int(run["manual_q_grace_frames"]) >= 30,
+			"Exercise at least half a second of live play under manual-Q priority")
+		assert(int(run["manual_q_grace_auto_handoffs"]) == 0,
+			"Never autoselect during the real 1.25-second Q grace window")
 		assert(int(run["shot_inputs"]) <= 12,
 			"Autoplay bot must not spam shoot every few game frames")
 		assert(int(run["shot_releases"]) <= int(run["shot_inputs"]))
@@ -43,7 +53,7 @@ func _initialize() -> void:
 		"observed_automatic_reassignments": all_auto,
 	}
 	print("FOOTBALL_XI_AUTOPLAY_METRICS " + JSON.stringify(report))
-	print("FOOTBALL_XI_AUTOPLAY_OK cases=2 input=real xi=22")
+	print("FOOTBALL_XI_AUTOPLAY_OK cases=2 input=real xi=22 manual_q=effective grace=no_auto")
 	quit(0)
 
 
@@ -134,6 +144,12 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	var tackle_inputs := 0
 	var actual_tackles := 0
 	var manual_q_inputs := 0
+	var manual_q_effective := 0
+	var manual_q_chase_cancelled := 0
+	var manual_q_grace_frames := 0
+	var manual_q_grace_auto_handoffs := 0
+	var pending_manual_q := false
+	var manual_q_grace_until: float = 0.0
 	var shot_inputs := 0
 	var shot_releases := 0
 	var previous_e := false
@@ -164,12 +180,17 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 			var hitbox: Dictionary = game._tackle_hitbox(current, carrier.global_position)
 			can_e = bool(hitbox.get("inside", false)) and not bool(hitbox.get("foul", true))
 		var press_e: bool = can_e and not previous_e
-		# The bot occasionally requests a real manual Q while defending.
-		# No direct _select_player call is used once the scenario begins.
+		# Follow the FIRST naturally observed autonomous handoff with
+		# an explicit Q on a live CPU possession. Fixed frame-number Q
+		# probes sometimes pressed nothing at all, giving false confidence.
+		# Keep the real player movement/input path; no direct selection.
 		var press_q: bool = (
-			playing and tick in [300, 825]
-			and carrier != null and carrier.team_id == 1 and not press_e
+			playing and pending_manual_q and manual_q_inputs == 0
+			and carrier != null and carrier.team_id == 1
 		)
+		if press_q:
+			press_e = false
+			pending_manual_q = false
 		# Do not machine-gun fresh charges while a single possession still
 		# belongs to the same shooter. Respect real loss/regain of possession
 		# and a two-second tactical decision interval between shot attempts.
@@ -213,14 +234,38 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		if press_e and before_tackle <= 0.0 and current.tackle_cooldown_seconds > 0.0:
 			actual_tackles += 1
 
+		# Distinguish true automatic handoffs from Q and from ordinary
+		# possession-driven changes. Keep measuring while the clock runs
+		# through collisions, turnovers, and legally restarted play.
+		var auto_switched: bool = (
+			game.controlled != before_control
+			and game.xi_human_handoff_chase_actor == game.controlled
+		)
 		if game.controlled != before_control:
 			all_control_changes += 1
-			if game.xi_human_handoff_chase_actor == game.controlled:
-				auto_reassignments += 1
-				var switch_distance: float = game.controlled.global_position.distance_to(destination)
-				max_control_gap = maxf(max_control_gap, switch_distance)
-				if not playing or carrier == null or carrier.team_id != 1 or switch_distance > 135.0:
-					illegal_auto_handoffs += 1
+		if auto_switched:
+			auto_reassignments += 1
+			var switch_distance: float = game.controlled.global_position.distance_to(destination)
+			max_control_gap = maxf(max_control_gap, switch_distance)
+			if not playing or carrier == null or carrier.team_id != 1 or switch_distance > 135.0:
+				illegal_auto_handoffs += 1
+			if manual_q_inputs == 0:
+				pending_manual_q = true
+			if game.match_seconds < manual_q_grace_until:
+				manual_q_grace_auto_handoffs += 1
+		if press_q:
+			# Q was pressed while the CPU carried the ball. Its real Godot
+			# handling must reassign the selected outfielder, clear inherited
+			# movement, and extend the grace beyond the automatic 0.9 s.
+			if game.controlled != before_control and game.controlled.team_id == 0:
+				manual_q_effective += 1
+			if game.xi_human_handoff_chase_actor == null and game.xi_human_handoff_chase_owner == null:
+				manual_q_chase_cancelled += 1
+			manual_q_grace_until = game.xi_human_auto_switch_block_until
+			assert(manual_q_grace_until - game.match_seconds > 1.20,
+				"Q must override the automatic 0.9s cooldown with 1.25s manual priority")
+		if manual_q_grace_until > game.match_seconds:
+			manual_q_grace_frames += 1
 		if playing:
 			if carrier == null:
 				loose_frames += 1
@@ -265,6 +310,10 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		"illegal_auto_handoffs": illegal_auto_handoffs,
 		"max_auto_handoff_distance": snappedf(max_control_gap, 0.1),
 		"manual_q_inputs": manual_q_inputs,
+		"manual_q_effective": manual_q_effective,
+		"manual_q_chase_cancelled": manual_q_chase_cancelled,
+		"manual_q_grace_frames": manual_q_grace_frames,
+		"manual_q_grace_auto_handoffs": manual_q_grace_auto_handoffs,
 		"e_inputs": tackle_inputs,
 		"tackles_launched": actual_tackles,
 		"shot_inputs": shot_inputs,
