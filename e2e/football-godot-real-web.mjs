@@ -784,8 +784,14 @@ try {
   // deliberately NOT Godot Input.action_press nor mock movement. Only the
   // loopback-local CI diagnostic reports what the genuine game observed.
   const lastXi = async () => page.evaluate(() => {
-    const s = window.__chessFootballInputSamples.at(-1);
-    return s && s.team_size === 11 && s.playable ? s : null;
+    // A goal, throw-in or kickoff can become active between Playwright's
+    // waitForFunction and evaluate calls. Preserve the last real PLAYABLE
+    // observation; never mistake a legitimate restart for a null sample.
+    const samples = window.__chessFootballInputSamples || [];
+    for (let i = samples.length - 1; i >= 0; i--) {
+      if (samples[i].team_size === 11 && samples[i].playable) return samples[i];
+    }
+    return null;
   });
   const observedInput = async (previousClock, test, label) => {
     await page.waitForFunction(
@@ -866,13 +872,27 @@ try {
       return s?.team_size === 11 && s.playable;
     }, null, { timeout: 30000 });
     const before = await lastXi();
+    if (!before || !Number.isFinite(before[counter])) {
+      throw new Error('XI bot missing pre-' + key + ' playable action receipt');
+    }
     await page.keyboard.down(key);
     try {
       await observedInput(before.match_clock, { counter, before: before[counter] }, 'action ' + key);
     } finally {
       await page.keyboard.up(key);
     }
-    const after = await lastXi();
+    // The real game may enter a restart immediately after the keypress.
+    // Find the actual Godot receipt, not an unrelated newest non-playable
+    // sample; keep it meaningful even if the next frame starts a set-piece.
+    const after = await page.evaluate(({ counter, before }) => {
+      const samples = window.__chessFootballInputSamples || [];
+      for (let i = samples.length - 1; i >= 0; i--) {
+        if (samples[i].team_size === 11 && samples[i].playable &&
+            Number(samples[i][counter]) > before) return samples[i];
+      }
+      return null;
+    }, { counter, before: before[counter] });
+    if (!after) throw new Error('XI bot lost Godot receipt after ' + key);
     bot.actions.push({ key, counter, from: before[counter], to: after[counter] });
   }
   const ending = await lastXi();
