@@ -7,6 +7,10 @@ const Formation = preload("res://scripts/football_match_formation.gd")
 const XI := Formation.ELEVEN_PITCH_RECT
 const STEP := 1.0 / 60.0
 const TICKS := 1440
+# This is a separation monitor, NOT a new tackle radius or AI difficulty.
+# Only contiguous live possession by the SAME CPU actor counts as an
+# exposed defensive gap. Brief passes, set pieces and loose balls split it.
+const PRESSURE_GAP_DISTANCE := 240.0
 const SCENARIOS := [
 	{"seed": 65113, "difficulty": "normal"},
 	{"seed": 65117, "difficulty": "hard"},
@@ -41,6 +45,21 @@ func _initialize() -> void:
 			"Never autoselect during the real 1.25-second Q grace window")
 		assert(int(run["uncommanded_stable_cpu_switches"]) == 0,
 			"Do not steal human control while the SAME CPU player still carries")
+		var episode_frames := 0
+		var observed_max := 0
+		for episode in run["pressure_gap_episodes"]:
+			assert(int(episode["frames"]) > 0 and int(episode["end_tick"]) <= TICKS)
+			assert(float(episode["max_distance"]) >= PRESSURE_GAP_DISTANCE)
+			assert(String(episode["ended_by"]) in ["closed_to_240", "possession_changed", "restart", "simulation_end"])
+			assert(int(episode["closing_frames"]) <= int(episode["frames"]))
+			episode_frames += int(episode["frames"])
+			observed_max = maxi(observed_max, int(episode["frames"]))
+		assert(episode_frames == int(run["strict_gap_frames_240"]),
+			"Sum every consecutive same-carrier pressure gap exactly once")
+		assert(int(run["strict_gap_frames_240"]) <= int(run["unattended_frames_240"]),
+			"Same-carrier uninterrupted gaps must be a subset of legacy distance samples")
+		assert(observed_max == int(run["max_pressure_gap_frames"]),
+			"Reported longest defensive gap must match measured episodes")
 		assert(int(run["control_change_frames"]) == run["control_change_timeline"].size(),
 			"Record the reason for EVERY change of player")
 		var classified_total := 0
@@ -63,7 +82,7 @@ func _initialize() -> void:
 		"observed_automatic_reassignments": all_auto,
 	}
 	print("FOOTBALL_XI_AUTOPLAY_METRICS " + JSON.stringify(report))
-	print("FOOTBALL_XI_AUTOPLAY_OK cases=2 input=real xi=22 manual_q=effective grace=no_auto control_audit=clean")
+	print("FOOTBALL_XI_AUTOPLAY_OK cases=2 input=real xi=22 manual_q=effective grace=no_auto control_audit=clean pressure_gaps=episodes")
 	quit(0)
 
 
@@ -88,6 +107,30 @@ func _act(direction: Vector2, sprint: bool, tackle: bool, change: bool, shoot: b
 	_hold("tackle", tackle)
 	_hold("change_player", change)
 	_hold("shoot_ball", shoot)
+
+
+# Close a strictly observed gap. Keep the entire episode and its ending
+# reason in the CI artifact rather than reporting a misleading aggregate.
+func _finish_pressure_gap(episodes: Array[Dictionary], gap: Dictionary, end_tick: int, reason: String) -> void:
+	if gap.is_empty():
+		return
+	var frames: int = end_tick - int(gap["start_tick"])
+	assert(frames > 0)
+	episodes.append({
+		"carrier_index": int(gap["carrier_index"]),
+		"nearest_defender_index": int(gap["nearest_defender_index"]),
+		"nearest_was_controlled": bool(gap["nearest_was_controlled"]),
+		"start_tick": int(gap["start_tick"]),
+		"end_tick": end_tick,
+		"frames": frames,
+		"seconds": snappedf(float(frames) * STEP, 0.001),
+		"start_distance": snappedf(float(gap["start_distance"]), 0.1),
+		"end_distance": snappedf(float(gap["last_distance"]), 0.1),
+		"max_distance": snappedf(float(gap["max_distance"]), 0.1),
+		"closing_frames": int(gap["closing_frames"]),
+		"carrier_path": snappedf(float(gap["carrier_path"]), 0.1),
+		"ended_by": reason,
+	})
 
 
 func _validate_real_match(game: Node2D) -> void:
@@ -146,6 +189,9 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	var defending_frames := 0
 	var within_120_frames := 0
 	var unattended_240_frames := 0
+	var strict_gap_frames_240 := 0
+	var pressure_gap_episodes: Array[Dictionary] = []
+	var active_pressure_gap: Dictionary = {}
 	var auto_reassignments := 0
 	var all_control_changes := 0
 	var illegal_auto_handoffs := 0
@@ -315,6 +361,61 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 				"Q must override the automatic 0.9s cooldown with 1.25s manual priority")
 		if manual_q_grace_until > game.match_seconds:
 			manual_q_grace_frames += 1
+		# Track episodes with a stable live CPU carrier. The legacy metric
+		# above/below remains untouched for comparison; the strict version
+		# excludes transfers, restarts and a carrier lost during physics.
+		var same_live_cpu_carrier: bool = (
+			playing and carrier != null and carrier.team_id == 1
+			and game.ball.carrier == carrier
+			and not game.kickoff_active and not game.goal_restart_active
+			and not game.set_piece_active
+		)
+		var nearest_eligible: Footballer = null
+		var nearest_eligible_distance := INF
+		if same_live_cpu_carrier:
+			for defender: Footballer in game.teams[0]:
+				if defender.role == "keeper" or defender.sent_off or defender.xi_collision_down_seconds > 0.0:
+					continue
+				var separation: float = defender.global_position.distance_to(carrier.global_position)
+				if separation < nearest_eligible_distance:
+					nearest_eligible_distance = separation
+					nearest_eligible = defender
+			assert(nearest_eligible != null)
+		if not active_pressure_gap.is_empty():
+			var original_carrier: Footballer = active_pressure_gap["carrier"]
+			if not same_live_cpu_carrier or carrier != original_carrier or nearest_eligible_distance <= PRESSURE_GAP_DISTANCE:
+				var reason := "possession_changed"
+				if game.kickoff_active or game.goal_restart_active or game.set_piece_active or not playing:
+					reason = "restart"
+				elif same_live_cpu_carrier and carrier == original_carrier:
+					reason = "closed_to_240"
+				_finish_pressure_gap(pressure_gap_episodes, active_pressure_gap, tick, reason)
+				active_pressure_gap.clear()
+		if same_live_cpu_carrier and nearest_eligible_distance > PRESSURE_GAP_DISTANCE:
+			strict_gap_frames_240 += 1
+			if active_pressure_gap.is_empty():
+				active_pressure_gap = {
+					"carrier": carrier,
+					"carrier_index": game.teams[1].find(carrier),
+					"nearest_defender_index": game.teams[0].find(nearest_eligible),
+					"nearest_was_controlled": nearest_eligible == game.controlled,
+					"start_tick": tick,
+					"start_distance": nearest_eligible_distance,
+					"last_distance": nearest_eligible_distance,
+					"max_distance": nearest_eligible_distance,
+					"last_carrier_position": carrier.global_position,
+					"carrier_path": 0.0,
+					"closing_frames": 0,
+				}
+			else:
+				if nearest_eligible_distance < float(active_pressure_gap["last_distance"]) - 1.0:
+					active_pressure_gap["closing_frames"] = int(active_pressure_gap["closing_frames"]) + 1
+				active_pressure_gap["carrier_path"] = float(active_pressure_gap["carrier_path"]) + (
+					carrier.global_position.distance_to(active_pressure_gap["last_carrier_position"])
+				)
+				active_pressure_gap["last_carrier_position"] = carrier.global_position
+				active_pressure_gap["last_distance"] = nearest_eligible_distance
+				active_pressure_gap["max_distance"] = maxf(float(active_pressure_gap["max_distance"]), nearest_eligible_distance)
 		if playing:
 			if carrier == null:
 				loose_frames += 1
@@ -339,6 +440,12 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		# Let input just_pressed edges expire between simulated 60-Hz ticks.
 		await process_frame
 
+	if not active_pressure_gap.is_empty():
+		_finish_pressure_gap(pressure_gap_episodes, active_pressure_gap, TICKS, "simulation_end")
+		active_pressure_gap.clear()
+	var max_pressure_gap_frames := 0
+	for episode in pressure_gap_episodes:
+		max_pressure_gap_frames = maxi(max_pressure_gap_frames, int(episode["frames"]))
 	_release_keys()
 	assert(game.match_seconds >= float(TICKS) * STEP - STEP)
 	_validate_real_match(game)
@@ -353,6 +460,9 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		"defensive_samples": defending_frames,
 		"close_pressure_frames_120": within_120_frames,
 		"unattended_frames_240": unattended_240_frames,
+		"strict_gap_frames_240": strict_gap_frames_240,
+		"max_pressure_gap_frames": max_pressure_gap_frames,
+		"pressure_gap_episodes": pressure_gap_episodes,
 		"min_defender_distance": snappedf(min_defender_distance, 0.1) if defending_frames > 0 else -1.0,
 		"automatic_reassignments": auto_reassignments,
 		"control_change_frames": all_control_changes,
