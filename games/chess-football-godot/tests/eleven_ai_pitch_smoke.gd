@@ -1168,10 +1168,17 @@ func _initialize() -> void:
 		str(game.xi_human_handoff_chase_actor == human_first),
 		str(Input.is_action_just_pressed("change_player"))
 	])
-	assert(handoff_end < handoff_start - 28.0,
-		"Automatic handoff must keep closing physically, not brake short of the rival")
-	assert(handoff_end <= game.AI_XI_HUMAN_HANDOFF_CHASE_STOP_RADIUS + 18.0,
-		"AI-approaching defender must reach a real E tackle neighborhood")
+	# A moving defender can legally be blocked by the rival body before
+	# covering an arbitrarily fixed 28 units. Check physics-relevant results:
+	# still accelerating rather than braking, meaningful actual approach and
+	# a real legal E contact hitbox (not merely a nearby target coordinate).
+	assert(handoff_start - handoff_end > 12.0,
+		"Auto handoff must continue physical approach toward the opponent")
+	assert(human_first.velocity.length() > 180.0,
+		"Auto handoff must not brake the defender before an E opportunity")
+	var handoff_hitbox: Dictionary = game._tackle_hitbox(human_first, cpu_owner.global_position)
+	assert(bool(handoff_hitbox.get("contact", false)) and not bool(handoff_hitbox.get("foul", true)),
+		"Defender must reach a genuine legal E tackle contact, not an artificial distance cutoff")
 	assert(game.controlled == human_first and game.ball.carrier == cpu_owner)
 	# The previous Q scenario is in this same SceneTree tick; a fresh frame
 	# clears the earlier just_pressed edge before simulating another real Q.
@@ -1295,7 +1302,7 @@ func _initialize() -> void:
 	game.match_team_size = 11
 	print("FOOTBALL_XI_INTERCEPT_CONTINUITY_OK approach_60hz=45 aim_jump_lt_4=1 tackle_body=1 startup_fade=1 far_lead=1 5v5=off")
 	print("FOOTBALL_XI_HUMAN_INTERCEPT_OK observed=1 diagonal=1 bounded=1 cut_reactive=1 close_tackle=body loose=off 5v5=off")
-	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 tackle_ready_only=1 manual_override=1 no_flicker=1 manual_q=1 fallen=off 5v5=off")
+	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 e_hitbox_contact=1 tackle_ready_only=1 manual_override=1 no_flicker=1 manual_q=1 fallen=off 5v5=off")
 	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 normal_cover_contains=1 easy_five_unchanged=1")
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
