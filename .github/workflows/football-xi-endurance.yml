@@ -114,3 +114,44 @@ jobs:
           path: ${{ runner.temp }}/football-xi-pass-pace.json
           retention-days: 7
           if-no-files-found: warn
+
+      - name: Autoplay XI · real input bot, pressure and handoff telemetry
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-autoplay.log"
+          set +e
+          timeout 140s "$godot" --headless --quit-after 16000 --path games/chess-football-godot --script res://tests/eleven_autoplay_player_bot.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Real-input XI autoplay bot failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_AUTOPLAY_OK' "$log"
+          python3 - "$log" "$RUNNER_TEMP/football-xi-autoplay.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          lines = Path(sys.argv[1]).read_text().splitlines()
+          prefix = 'FOOTBALL_XI_AUTOPLAY_METRICS '
+          reports = [json.loads(x.removeprefix(prefix)) for x in lines if x.startswith(prefix)]
+          assert len(reports) == 1, 'Expected one real-input autoplay report'
+          report = reports[0]
+          assert report['kind'] == 'seeded_24s_real_godot_input_bot_not_live_players'
+          assert [x['difficulty'] for x in report['cases']] == ['normal', 'hard']
+          assert all(x['ticks'] == report['ticks_per_trial'] for x in report['cases'])
+          assert sum(x['automatic_reassignments'] for x in report['cases']) == report['observed_automatic_reassignments']
+          Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
+          print('FOOTBALL_XI_AUTOPLAY_ARTIFACT_OK cases=2')
+          PY
+      - name: Upload XI real-input autoplay report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-xi-autoplay
+          path: ${{ runner.temp }}/football-xi-autoplay.json
+          retention-days: 7
+          if-no-files-found: warn
