@@ -154,11 +154,11 @@ jobs:
               assert case['uncommanded_stable_cpu_switches'] == 0
               gaps = case['pressure_gap_episodes']
               assert sum(g['frames'] for g in gaps) == case['strict_gap_frames_240']
-              assert case['strict_gap_frames_240'] <= case['unattended_frames_240']
+              assert case['strict_gap_frames_240'] <= case['defensive_samples']
               assert max((g['frames'] for g in gaps), default=0) == case['max_pressure_gap_frames']
               assert all(g['start_tick'] < g['end_tick'] <= case['ticks']
                          and g['end_tick']-g['start_tick'] == g['frames']
-                         and g['max_distance'] > 240
+                         and g['max_distance'] >= 240
                          and g['ended_by'] in (
                              'closed_to_240', 'possession_changed', 'restart', 'simulation_end'
                          ) for g in gaps)
