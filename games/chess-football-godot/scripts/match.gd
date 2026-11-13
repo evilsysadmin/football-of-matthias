@@ -354,6 +354,9 @@ var ai_xi_defensive_role_owner: Footballer = null
 # A manual Q is authoritative for its grace window.
 var xi_human_auto_switch_block_until: float = 0.0
 var xi_human_handoff_chase_actor: Footballer = null
+# The handoff belongs to the exact CPU carrier who triggered it. Do not
+# retarget an already-selected human to a DIFFERENT rival after a CPU pass.
+var xi_human_handoff_chase_owner: Footballer = null
 var xi_human_handoff_chase_until: float = 0.0
 var keeper_distribution_started_at: Dictionary = {}
 var quick_difficulty: String = "normal"
@@ -934,7 +937,7 @@ func _refresh_hud() -> void:
 # Never move the player for them after an intentional button press. This
 # tiny continuation uses ordinary human movement/stamina (not AI buffs)
 # and stops upon tackle range, timeout, a manual movement/Q/E/F input,
-# losing the ball-carrier target or changing the selected actor.
+# loss or TRANSFER of the original ball-carrier, or a changed selected actor.
 func _xi_human_handoff_chase_direction(input_direction: Vector2) -> Vector2:
 	if xi_human_handoff_chase_actor == null:
 		return input_direction
@@ -943,6 +946,7 @@ func _xi_human_handoff_chase_direction(input_direction: Vector2) -> Vector2:
 		or controlled != xi_human_handoff_chase_actor
 		or controlled.sent_off or controlled.xi_collision_down_seconds > 0.0
 		or match_seconds >= xi_human_handoff_chase_until
+		or ball.carrier != xi_human_handoff_chase_owner
 		or ball.carrier == null or ball.carrier.team_id != 1
 		or input_direction.length_squared() > 0.01
 		or Input.is_action_just_pressed("change_player")
@@ -950,10 +954,12 @@ func _xi_human_handoff_chase_direction(input_direction: Vector2) -> Vector2:
 		or Input.is_action_just_pressed("special_move")
 	):
 		xi_human_handoff_chase_actor = null
+		xi_human_handoff_chase_owner = null
 		return input_direction
 	var to_owner: Vector2 = ball.carrier.global_position - controlled.global_position
 	if to_owner.length() <= AI_XI_HUMAN_HANDOFF_CHASE_STOP_RADIUS:
 		xi_human_handoff_chase_actor = null
+		xi_human_handoff_chase_owner = null
 		return input_direction
 	return to_owner.normalized()
 
@@ -3482,6 +3488,7 @@ func _maybe_auto_select_xi_human_defender() -> bool:
 	# Only this automated handoff may inherit the AI approach momentum.
 	# Manual Q, keeper release and ordinary possession never arm the chase.
 	xi_human_handoff_chase_actor = nearest
+	xi_human_handoff_chase_owner = owner
 	xi_human_handoff_chase_until = match_seconds + AI_XI_HUMAN_HANDOFF_CHASE_SECONDS
 	return true
 
