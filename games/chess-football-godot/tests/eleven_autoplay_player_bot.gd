@@ -39,6 +39,16 @@ func _initialize() -> void:
 			"Exercise at least half a second of live play under manual-Q priority")
 		assert(int(run["manual_q_grace_auto_handoffs"]) == 0,
 			"Never autoselect during the real 1.25-second Q grace window")
+		assert(int(run["uncommanded_stable_cpu_switches"]) == 0,
+			"Do not steal human control while the SAME CPU player still carries")
+		assert(int(run["control_change_frames"]) == run["control_change_timeline"].size(),
+			"Record the reason for EVERY change of player")
+		var classified_total := 0
+		for classification in run["control_change_causes"]:
+			classified_total += int(run["control_change_causes"][classification])
+		assert(classified_total == int(run["control_change_frames"]))
+		assert(int(run["control_change_causes"]["auto_defense"]) == int(run["automatic_reassignments"]))
+		assert(int(run["control_change_causes"]["manual_q"]) == int(run["manual_q_effective"]))
 		assert(int(run["shot_inputs"]) <= 12,
 			"Autoplay bot must not spam shoot every few game frames")
 		assert(int(run["shot_releases"]) <= int(run["shot_inputs"]))
@@ -53,7 +63,7 @@ func _initialize() -> void:
 		"observed_automatic_reassignments": all_auto,
 	}
 	print("FOOTBALL_XI_AUTOPLAY_METRICS " + JSON.stringify(report))
-	print("FOOTBALL_XI_AUTOPLAY_OK cases=2 input=real xi=22 manual_q=effective grace=no_auto")
+	print("FOOTBALL_XI_AUTOPLAY_OK cases=2 input=real xi=22 manual_q=effective grace=no_auto control_audit=clean")
 	quit(0)
 
 
@@ -139,6 +149,15 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	var auto_reassignments := 0
 	var all_control_changes := 0
 	var illegal_auto_handoffs := 0
+	var uncommanded_stable_cpu_switches := 0
+	var control_change_causes := {
+		"auto_defense": 0,
+		"manual_q": 0,
+		"forced_unavailable": 0,
+		"possession_or_restart": 0,
+		"uncommanded_stable_cpu": 0,
+	}
+	var control_change_timeline: Array[Dictionary] = []
 	var max_control_gap := 0.0
 	var min_defender_distance := INF
 	var tackle_inputs := 0
@@ -243,6 +262,36 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		)
 		if game.controlled != before_control:
 			all_control_changes += 1
+			# Classify from actual before/after owners and real input edges,
+			# never inferred from the mere identity of the new selected actor.
+			# A CPU-to-CPU pass has a different owner and is NOT stable.
+			var same_cpu_owner: bool = (
+				playing and carrier != null and carrier.team_id == 1
+				and game.ball.carrier == carrier
+				and not game.kickoff_active and not game.goal_restart_active
+				and not game.set_piece_active
+			)
+			var cause: String = "possession_or_restart"
+			if auto_switched:
+				cause = "auto_defense"
+			elif press_q:
+				cause = "manual_q"
+			elif same_cpu_owner:
+				if before_control.sent_off or before_control.xi_collision_down_seconds > 0.0 or before_control.role == "keeper":
+					cause = "forced_unavailable"
+				else:
+					cause = "uncommanded_stable_cpu"
+					uncommanded_stable_cpu_switches += 1
+			control_change_causes[cause] = int(control_change_causes[cause]) + 1
+			control_change_timeline.append({
+				"tick": tick,
+				"clock": snappedf(game.match_seconds, 0.01),
+				"cause": cause,
+				"from": game.teams[0].find(before_control),
+				"to": game.teams[0].find(game.controlled),
+				"carrier_before": carrier.team_id if carrier != null else -1,
+				"carrier_after": game.ball.carrier.team_id if game.ball.carrier != null else -1,
+			})
 		if auto_switched:
 			auto_reassignments += 1
 			var switch_distance: float = game.controlled.global_position.distance_to(destination)
@@ -307,6 +356,9 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		"min_defender_distance": snappedf(min_defender_distance, 0.1) if defending_frames > 0 else -1.0,
 		"automatic_reassignments": auto_reassignments,
 		"control_change_frames": all_control_changes,
+		"control_change_causes": control_change_causes,
+		"control_change_timeline": control_change_timeline,
+		"uncommanded_stable_cpu_switches": uncommanded_stable_cpu_switches,
 		"illegal_auto_handoffs": illegal_auto_handoffs,
 		"max_auto_handoff_distance": snappedf(max_control_gap, 0.1),
 		"manual_q_inputs": manual_q_inputs,
