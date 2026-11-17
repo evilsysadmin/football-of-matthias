@@ -107,7 +107,9 @@ func _initialize() -> void:
 	assert(human_tackler.tackle_cooldown_seconds > 0.0)
 	assert(game.ball.carrier == null,
 		"Only an actual physical hitbox may poke the ball loose")
-	assert(game.pending_tackle_player == human_tackler)
+	# Both a clean poke and a glancing loose-ball duel count as a real
+	# executed contact; neither grants instant ownership to the tackler.
+	assert(game.ball.carrier == null and human_tackler.tackle_active())
 
 	# A retreating press must NOT buffer an automatic self-aiming tackle.
 	game.pending_tackle_player = null
@@ -163,6 +165,7 @@ func _initialize() -> void:
 	# Existing five-a-side has no buffered E and a live heading after a
 	# tackle is launched: do not silently change legacy physics.
 	game.match_team_size = 5
+	human_tackler.match_pitch = ChessFootballMath.PITCH_RECT
 	human_tackler.tackle_cooldown_seconds = 0.0
 	human_tackler.tackle_active_seconds = 0.0
 	human_tackler.action_lock_seconds = 0.0
