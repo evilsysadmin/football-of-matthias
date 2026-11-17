@@ -34,6 +34,12 @@ const TACKLE_LOOSE_POKE_POWER := 310.0
 # A glancing poke leaves a loose ball; neither an instant free steal nor a
 # general post-tackle invulnerability. Every other player can contest it.
 const TACKLE_GLANCING_RECLAIM_DELAY := 0.12
+# A slightly early E/F press while closing is remembered briefly. The
+# actual tackle still requires the ORIGINAL range and a live legal hitbox.
+# No magnetic pursuit, extended reach, extra speed or hidden auto-steal.
+const XI_HUMAN_TACKLE_BUFFER_SECONDS := 0.16
+const XI_HUMAN_TACKLE_BUFFER_EXTRA_RANGE := 42.0
+const XI_HUMAN_TACKLE_BUFFER_APPROACH_DOT := 0.50
 # XI-only physical E contact: body centre distance, not the ball's anchor.
 # Below normal running separation and outside any tackle-hitbox shortcuts.
 const XI_DRIBBLE_BODY_CONTACT_RADIUS := 48.0
@@ -389,6 +395,10 @@ var ai_xi_defensive_role_owner: Footballer = null
 # Match-clock based to stay paused during overlays and never drift across F5.
 # A manual Q is authoritative for its grace window.
 var xi_human_auto_switch_block_until: float = 0.0
+var xi_buffered_tackle_actor: Footballer = null
+var xi_buffered_tackle_victim: Footballer = null
+var xi_buffered_tackle_until: float = 0.0
+var xi_buffered_tackle_aggressive: bool = false
 var xi_human_handoff_chase_actor: Footballer = null
 # The handoff belongs to the exact CPU carrier who triggered it. Do not
 # retarget an already-selected human to a DIFFERENT rival after a CPU pass.
@@ -545,6 +555,7 @@ func _physics_process(delta: float) -> void:
 	# The human's Q / E / F input wins this frame. After that, a nearby
 	# AI teammate may inherit control before AI tackle commitments are read.
 	_maybe_auto_select_xi_human_defender()
+	_update_xi_human_tackle_buffer()
 	_update_ai(delta)
 	_update_active_tackle_contacts()
 	_update_xi_dribble_body_contacts()
@@ -1043,6 +1054,7 @@ func _handle_human(delta: float) -> void:
 		_cancel_shot_charge()
 		_cancel_pass_charge()
 		_clear_one_two()
+		_clear_xi_human_tackle_buffer()
 		var previous_controlled: Footballer = controlled
 		_select_player(_best_switch_candidate())
 		if match_team_size == 11:
@@ -3227,6 +3239,14 @@ func _best_teammate_ahead(player: Footballer) -> Footballer:
 	return _best_pass_target(player, direction)
 
 func _tackle_forward(tackler: Footballer) -> Vector2:
+	# Once an XI boot commits, its active hitbox keeps that real launch
+	# heading. Otherwise a defender's AI velocity can curve the contact
+	# cone behind an attacker who has already cut to the other side.
+	if (
+		match_team_size == 11 and tackler.tackle_active()
+		and tackler.xi_tackle_launch_heading.length_squared() > 0.5
+	):
+		return tackler.xi_tackle_launch_heading
 	if tackler.velocity.length_squared() > 64.0:
 		return tackler.velocity.normalized()
 	var facing_x := -1.0 if tackler.visual != null and tackler.visual.flip_h else 1.0
@@ -3491,26 +3511,99 @@ func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 	return started
 
 
+func _clear_xi_human_tackle_buffer() -> void:
+	xi_buffered_tackle_actor = null
+	xi_buffered_tackle_victim = null
+	xi_buffered_tackle_until = 0.0
+	xi_buffered_tackle_aggressive = false
+
+
+func _queue_xi_human_tackle(
+	tackler: Footballer, direction: Vector2, aggressive: bool
+) -> bool:
+	if (
+		match_team_size != 11 or tackler != controlled
+		or tackler.role == "keeper" or not tackler.can_tackle()
+		or ball.carrier == null or ball.carrier.team_id == tackler.team_id
+		or kickoff_active or goal_restart_active or set_piece_active
+	):
+		return false
+	var offset: Vector2 = ball.carrier.global_position - tackler.global_position
+	var distance: float = offset.length()
+	var reach: float = _tackle_attempt_range(tackler, aggressive)
+	# Only a genuinely EARLY button at the edge of a closing duel qualifies.
+	# The original inside/contact hitbox is unchanged on execution.
+	if distance <= reach or distance > reach + XI_HUMAN_TACKLE_BUFFER_EXTRA_RANGE:
+		return false
+	var intent: Vector2 = (
+		direction if direction.length_squared() > 0.04 else tackler.velocity
+	)
+	if (
+		intent.length_squared() < 0.04
+		or intent.normalized().dot(offset / distance)
+			< XI_HUMAN_TACKLE_BUFFER_APPROACH_DOT
+	):
+		return false
+	xi_buffered_tackle_actor = tackler
+	xi_buffered_tackle_victim = ball.carrier
+	xi_buffered_tackle_until = match_seconds + XI_HUMAN_TACKLE_BUFFER_SECONDS
+	xi_buffered_tackle_aggressive = aggressive
+	return true
+
+
+func _update_xi_human_tackle_buffer() -> void:
+	var tackler: Footballer = xi_buffered_tackle_actor
+	if tackler == null:
+		return
+	var victim: Footballer = xi_buffered_tackle_victim
+	if (
+		match_team_size != 11 or not is_instance_valid(tackler)
+		or victim == null or not is_instance_valid(victim)
+		or controlled != tackler or ball.carrier != victim
+		or tackler.sent_off or victim.sent_off or not tackler.can_tackle()
+		or kickoff_active or goal_restart_active or set_piece_active
+		or match_seconds > xi_buffered_tackle_until
+	):
+		_clear_xi_human_tackle_buffer()
+		return
+	var aggressive: bool = xi_buffered_tackle_aggressive
+	var distance: float = tackler.global_position.distance_to(victim.global_position)
+	if distance > _tackle_attempt_range(tackler, aggressive):
+		return
+	# No queued tackle is allowed to consume a cooldown from a physically
+	# impossible sideways contact. Once the real hitbox reaches, commit
+	# using the EXACT same foul/clean/loose-ball logic as pressing E now.
+	var hit: Dictionary = _tackle_hitbox(tackler, victim.global_position, aggressive)
+	if not bool(hit.get("contact", false)):
+		return
+	_clear_xi_human_tackle_buffer()
+	_try_tackle(tackler, aggressive)
+
+
 # XI: E is the ordinary contextual action even while Shift is held.
 # Legacy 5v5 keeps its historical sprint+E behavior for test parity.
 func _handle_contextual_e(direction: Vector2, sprinting: bool) -> void:
 	if controlled == null or controlled.sent_off:
 		return
 	var special := sprinting and match_team_size != 11
+	_clear_xi_human_tackle_buffer()
 	if controlled.has_ball:
 		_try_dribble(direction, special)
 	else:
-		_try_tackle(controlled, special)
+		if not _try_tackle(controlled, special):
+			_queue_xi_human_tackle(controlled, direction, special)
 
 
 # XI: F alone triggers the deliberate special, whether sprinting or not.
 func _handle_contextual_special(direction: Vector2) -> void:
 	if match_team_size != 11 or controlled == null or controlled.sent_off:
 		return
+	_clear_xi_human_tackle_buffer()
 	if controlled.has_ball:
 		_try_dribble(direction, true)
 	else:
-		_try_tackle(controlled, true)
+		if not _try_tackle(controlled, true):
+			_queue_xi_human_tackle(controlled, direction, true)
 
 
 func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
