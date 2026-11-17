@@ -26,6 +26,10 @@ var movement_multiplier: float = 1.0
 var stamina_drain_multiplier: float = 1.0
 const MOVE_ACCELERATION := 1650.0
 const MOVE_DECELERATION := 2150.0
+# XI human ball control: faster first steps and pivots, never a higher top speed.
+# Off-ball actors, CPU players and 5v5 retain their original kinematics.
+const XI_CARRY_ACCELERATION := 2250.0
+const XI_CARRY_TURN_ACCELERATION := 2950.0
 const SPRINT_SPEED_MULTIPLIER := 1.34
 const STAMINA_MAX := 100.0
 const STAMINA_DRAIN_PER_SECOND := 45.0
@@ -282,6 +286,20 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		if dribbling
 		else (MOVE_ACCELERATION if desired.length_squared() > 0.001 else MOVE_DECELERATION)
 	)
+	if (
+		has_ball and not dribbling and moving
+		and match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
+	):
+		# Quick footwork when carrying, especially on counter-steering.
+		# Keeping the same desired speed prevents an unintended sprint buff.
+		var alignment := (
+			velocity.normalized().dot(desired.normalized())
+			if velocity.length_squared() > 1.0 else 1.0
+		)
+		acceleration = (
+			XI_CARRY_TURN_ACCELERATION if alignment < 0.55
+			else XI_CARRY_ACCELERATION
+		)
 	velocity = velocity.move_toward(desired, acceleration * delta)
 	if velocity.length() < 1.0:
 		velocity = Vector2.ZERO
@@ -454,7 +472,13 @@ func start_dribble(direction: Vector2, kind: String = "cut") -> bool:
 	dribble_cooldown_seconds = base_cooldown * clampf(
 		1.0 - float(scouting_technique - 75) * 0.004, 0.90, 1.18
 	)
-	velocity = dribble_direction * base_speed * (0.20 if kind == "feint" else 0.72)
+	# XI E plants the foot from the ACTUAL incoming momentum. Replacing
+	# velocity with the cut direction caused a visible, input-hostile snap.
+	# F still has its intentional long-touch launch; legacy 5v5 is untouched.
+	if match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper" and kind != "burst":
+		velocity = entering_velocity.limit_length(base_speed * 1.10)
+	else:
+		velocity = dribble_direction * base_speed * (0.20 if kind == "feint" else 0.72)
 	return true
 
 func dribble_active() -> bool:
