@@ -85,6 +85,9 @@ var tackle_cooldown_seconds: float = 0.0
 var tackle_recovery_seconds: float = 0.0
 var tackle_active_seconds: float = 0.0
 var tackle_launch_speed_ratio: float = 0.0
+# XI tackles commit to the actual approach heading at launch. The active
+# contact hitbox cannot swivel in pursuit of a successful late E cut.
+var xi_tackle_launch_heading: Vector2 = Vector2.ZERO
 var tackle_aggressive: bool = false
 var dribble_cooldown_seconds: float = 0.0
 var dribble_burst_seconds: float = 0.0
@@ -206,6 +209,7 @@ func _process(delta: float) -> void:
 	if tackle_active_seconds <= 0.0:
 		tackle_launch_speed_ratio = 0.0
 		tackle_aggressive = false
+		xi_tackle_launch_heading = Vector2.ZERO
 	contact_stun_seconds = maxf(0.0, contact_stun_seconds - delta)
 	xi_collision_down_seconds = maxf(0.0, xi_collision_down_seconds - delta)
 	xi_collision_guard_seconds = maxf(0.0, xi_collision_guard_seconds - delta)
@@ -396,6 +400,19 @@ func can_tackle() -> bool:
 func start_tackle(aggressive: bool = false) -> bool:
 	if not can_tackle():
 		return false
+	# Sample BEFORE the tackle launch reduces the current velocity. This
+	# uses the same approach/facing as the existing first-frame hitbox.
+	# The 5v5 contract keeps its historical live heading updates.
+	var approach_heading: Vector2 = (
+		velocity.normalized() if velocity.length_squared() > 64.0
+		else Vector2(
+			-1.0 if visual != null and visual.flip_h else 1.0, 0.0
+		)
+	)
+	xi_tackle_launch_heading = (
+		approach_heading if match_pitch == Formation.ELEVEN_PITCH_RECT
+		else Vector2.ZERO
+	)
 	tackle_aggressive = aggressive
 	tackle_cooldown_seconds = 1.45 if aggressive else 1.10
 	tackle_recovery_seconds = 0.68 if aggressive else 0.38
@@ -588,6 +605,7 @@ func send_off() -> void:
 	tackle_active_seconds = 0.0
 	tackle_launch_speed_ratio = 0.0
 	tackle_aggressive = false
+	xi_tackle_launch_heading = Vector2.ZERO
 	dribble_cooldown_seconds = 0.0
 	dribble_burst_seconds = 0.0
 	dribble_direction = Vector2.RIGHT
