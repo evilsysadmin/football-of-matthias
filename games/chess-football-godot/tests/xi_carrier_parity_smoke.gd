@@ -216,6 +216,49 @@ func _initialize() -> void:
 	assert(game._human_pass_aim_point(
 		agile_carrier, moving_receiver, 680.0
 	).is_equal_approx(moving_receiver.global_position))
+	# In XI, a short Space tap chooses a near teammate, a deliberately
+	# charged Space targets a farther run. Small score fluctuations must not
+	# bounce the receiver between every physics frame.
+	agile_carrier.global_position = game.match_pitch.get_center()
+	for teammate: Footballer in game.teams[0]:
+		if teammate != agile_carrier:
+			teammate.global_position = game.match_pitch.position + Vector2(
+				140.0, 130.0 + float(teammate.squad_index) * 165.0
+			)
+	var short_receiver: Footballer = game.teams[0][5]
+	var long_receiver: Footballer = game.teams[0][7]
+	var upper_receiver: Footballer = game.teams[0][8]
+	short_receiver.global_position = agile_carrier.global_position + Vector2(320.0, 35.0)
+	long_receiver.global_position = agile_carrier.global_position + Vector2(780.0, -25.0)
+	upper_receiver.global_position = agile_carrier.global_position + Vector2(330.0, -180.0)
+	game._select_player(agile_carrier)
+	game.ball.attach_to(agile_carrier)
+	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
+	assert(game.pass_target == short_receiver,
+		"Quick XI Space must prefer the nearby outlet over a distant run")
+	Input.action_press("move_right")
+	game.pass_charge_seconds = game.PASS_CHARGE_SECONDS * 0.50
+	game._handle_human(1.0 / 60.0)
+	assert(game.pass_target == short_receiver,
+		"XI recipient must stay stable when a rival becomes only marginally better")
+	game.pass_charge_seconds = game.PASS_CHARGE_SECONDS * 0.96
+	game._handle_human(1.0 / 60.0)
+	assert(game.pass_target == long_receiver,
+		"Holding XI Space must select the farther teammate in the aimed lane")
+	Input.action_release("move_right")
+	# A real release uses that receiver's physical position; no instant
+	# handoff or fake completed pass is allowed.
+	var expected_long_aim: Vector2 = (
+		long_receiver.global_position - agile_carrier.global_position
+	).normalized()
+	assert(game._release_charged_pass())
+	assert(game.ball.carrier == null)
+	assert(game.controlled == agile_carrier)
+	assert(game.ball.velocity.normalized().dot(expected_long_aim) > 0.999)
+	# An explicit change of direction must discard an out-of-cone incumbent.
+	assert(game._best_directional_pass_target(
+		agile_carrier, Vector2.UP, 0.2, long_receiver
+	) == upper_receiver, "Receiver hysteresis may not override the aiming cone")
 	# 5v5 is a historical test fixture: preserve its old physics/ball anchor.
 	var small = scene.instantiate()
 	small.match_team_size = 5
@@ -229,5 +272,19 @@ func _initialize() -> void:
 		small.teams[0][1], small_receiver, 680.0
 	).is_equal_approx(small_receiver.global_position),
 		"5v5 must not inherit XI pass leading")
+	# Even with a charge ratio passed by a caller, the old 5v5 selection
+	# must stay independent of the new XI target-distance preference.
+	var five_passer: Footballer = small.teams[0][3]
+	five_passer.global_position = small.match_pitch.get_center()
+	for teammate: Footballer in small.teams[0]:
+		if teammate != five_passer:
+			teammate.global_position = five_passer.global_position + Vector2(-450.0, 0.0)
+	var five_near: Footballer = small.teams[0][1]
+	var five_far: Footballer = small.teams[0][4]
+	five_near.global_position = five_passer.global_position + Vector2(320.0, 0.0)
+	five_far.global_position = five_passer.global_position + Vector2(780.0, 0.0)
+	assert(small._best_directional_pass_target(
+		five_passer, Vector2.RIGHT, 1.0
+	) == five_near, "5v5 must retain its historical closest aligned target")
 	print("FOOTBALL_XI_CARRIER_PARITY_OK teams=2 animations=5 directions=6 touch_variance=true cpu_sprint=true intercept=true fallback_5v5=unchanged")
 	quit(0)
