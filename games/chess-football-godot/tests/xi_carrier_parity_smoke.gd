@@ -231,6 +231,11 @@ func _initialize() -> void:
 	short_receiver.global_position = agile_carrier.global_position + Vector2(320.0, 35.0)
 	long_receiver.global_position = agile_carrier.global_position + Vector2(780.0, -25.0)
 	upper_receiver.global_position = agile_carrier.global_position + Vector2(330.0, -180.0)
+	# Neutral receiving runs make the target-choice test independent from
+	# unrelated earlier velocity fixtures and the new pass-leading feature.
+	short_receiver.velocity = Vector2.ZERO
+	long_receiver.velocity = Vector2.ZERO
+	upper_receiver.velocity = Vector2.ZERO
 	game._select_player(agile_carrier)
 	game.ball.attach_to(agile_carrier)
 	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
