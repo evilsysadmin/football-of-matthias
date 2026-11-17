@@ -929,6 +929,21 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_XI_EARNED_BREAKAWAY_OK real_cut=true physical_outplay=true two_roles=true normal_sprint=true real_pass=true empty_grass=false feint=false lost_ball=false blocked_lane=false legacy_5v5=true' "$log"
+      - name: XI · real byline cutback, penalty spot arrival and defensive coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-byline-cutback.log"
+          set +e
+          timeout 70s "$godot" --headless --quit-after 1000 --path games/chess-football-godot --script res://tests/xi_byline_cutback_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|ERROR: Failed to load script' "$log"; then
+            echo '::error::XI byline runner and physical cutback lane contract failed'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_BYLINE_CUTBACK_OK two_runners=true stamina_sprint=true real_defensive_lane=true manual_ground_pass=true no_instant_catch=true non_byline=false cpu=false legacy_5v5=false' "$log"
       - name: XI · human attacking triangles with real open lanes
         shell: bash
         run: |
