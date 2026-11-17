@@ -292,6 +292,11 @@ const LOOSE_BALL_DUEL_SCORE_TIE_EPSILON := 0.01
 # ball; do not snap across the pitch as soon as Space is released.
 const PASS_RECEIVER_HANDOFF_RADIUS := 120.0
 const PASS_RECEIVER_LEAD_SECONDS := 0.12
+# Conservative XI-only human passing lead: moving teammates receive into
+# their run, without magnetism, automatic catches or altered CPU passes.
+const XI_HUMAN_PASS_LEAD_SECONDS := 0.30
+const XI_HUMAN_PASS_LEAD_DISTANCE := 72.0
+const XI_HUMAN_PASS_LEAD_MIN_SPEED := 80.0
 const PASS_MIN_POWER := 560.0
 const PASS_MAX_POWER := 1180.0
 const PASS_SHORT_MAX_RATIO := 0.24
@@ -1164,7 +1169,7 @@ func _release_charged_pass() -> bool:
 			and aim_direction.normalized().dot(offset.normalized()) >= PASS_MIN_TARGET_ALIGNMENT
 		)
 	if valid_target:
-		release_direction = target.global_position - passer.global_position
+		release_direction = _human_pass_aim_point(passer, target, power) - passer.global_position
 	if release_direction.length_squared() < 0.001:
 		release_direction = Vector2.RIGHT if passer.team_id == 0 else Vector2.LEFT
 	passer.play_action("pass", lerpf(0.58, 0.80, ratio))
@@ -2823,6 +2828,25 @@ func _pass_from(player: Footballer, input_direction: Vector2) -> void:
 		ball.release(fallback, 470.0 * player.pass_power_multiplier())
 		return
 	ball.release(target.global_position - player.global_position, 540.0 * player.pass_power_multiplier())
+
+func _human_pass_aim_point(passer: Footballer, receiver: Footballer, power: float) -> Vector2:
+	var destination: Vector2 = receiver.global_position
+	if (
+		match_team_size != 11 or receiver.role == "keeper"
+		or receiver.velocity.length_squared() < XI_HUMAN_PASS_LEAD_MIN_SPEED * XI_HUMAN_PASS_LEAD_MIN_SPEED
+	):
+		return destination
+	var distance: float = passer.global_position.distance_to(destination)
+	# A bounded fraction of travel time, not a magical intercept. The ball
+	# still travels, can be intercepted and can miss its intended recipient.
+	var lookahead: float = minf(
+		XI_HUMAN_PASS_LEAD_SECONDS, distance / maxf(power, 1.0) * 0.55
+	)
+	var lead: Vector2 = (receiver.velocity * lookahead).limit_length(
+		XI_HUMAN_PASS_LEAD_DISTANCE
+	)
+	return ChessFootballMath.clamp_to_pitch(destination + lead, match_pitch)
+
 
 func _best_directional_pass_target(player: Footballer, input_direction: Vector2) -> Footballer:
 	# Never curve a manually aimed pass toward a teammate outside the cone.
