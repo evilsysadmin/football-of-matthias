@@ -1521,8 +1521,13 @@ func _update_ai(delta: float) -> void:
 					target = _ai_support_target(player)
 					intensity = (
 						1.0 if match_team_size == 11 and team_id == 0
-						and player == xi_breakaway_runner
-						and ball.carrier == xi_breakaway_owner
+						and (
+							(player == xi_breakaway_runner and ball.carrier == xi_breakaway_owner)
+							or (
+								_xi_human_byline_attack()
+								and player in ai_xi_human_support_slots
+							)
+						)
 						else _ai_adaptive_intensity(0.83)
 					)
 			else:
@@ -2390,7 +2395,7 @@ func _ai_xi_human_support_rank(player: Footballer) -> int:
 				if slot == 0 and teammate.role == "forward":
 					score -= 570.0
 				elif slot == 1 and teammate.role == "midfielder":
-					score -= 210.0
+					score -= 650.0
 			if (
 				best == null or score < best_score - 0.01
 				or (
