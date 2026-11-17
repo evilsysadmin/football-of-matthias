@@ -305,6 +305,12 @@ const PASS_RECEIVER_LEAD_SECONDS := 0.12
 const XI_HUMAN_PASS_LEAD_SECONDS := 0.30
 const XI_HUMAN_PASS_LEAD_DISTANCE := 72.0
 const XI_HUMAN_PASS_LEAD_MIN_SPEED := 80.0
+# Deliberate XI one-two: a second Space AFTER release requests a return.
+# The pass must be physically caught first and remains interceptable both ways.
+const XI_ONE_TWO_REQUEST_SECONDS := 0.90
+const XI_ONE_TWO_FINISH_SECONDS := 3.20
+const XI_ONE_TWO_RETURN_MAX_DISTANCE := 900.0
+const XI_ONE_TWO_RETURN_POWER := 670.0
 const PASS_MIN_POWER := 560.0
 const PASS_MAX_POWER := 1180.0
 const PASS_SHORT_MAX_RATIO := 0.24
@@ -418,6 +424,11 @@ var pass_directional_charge: bool = false
 var pass_select_receiver_on_release: bool = true
 var pending_human_pass_receiver: Footballer = null
 var desktop_pass_input_active: bool = false
+var xi_one_two_passer: Footballer = null
+var xi_one_two_receiver: Footballer = null
+var xi_one_two_request_until: float = 0.0
+var xi_one_two_finish_until: float = 0.0
+var xi_one_two_armed: bool = false
 var pending_tackle_player: Footballer = null
 var pending_tackle_seconds: float = 0.0
 
@@ -488,6 +499,12 @@ func _physics_process(delta: float) -> void:
 		_update_3d_presentation(0.0)
 		return
 	match_seconds += delta
+	if xi_one_two_passer != null and (
+		match_seconds > xi_one_two_finish_until
+		or kickoff_active or goal_restart_active or set_piece_active
+		or (ball.carrier != null and ball.carrier != xi_one_two_receiver)
+	):
+		_clear_one_two()
 	camera_hint_seconds = maxf(0.0, camera_hint_seconds - delta)
 	action_feedback_seconds = maxf(0.0, action_feedback_seconds - delta)
 	if goal_restart_active:
@@ -895,6 +912,10 @@ func contextual_help_text(touch: bool = false) -> String:
 	if kickoff_active or goal_restart_active:
 		return "REANUDACIÓN · espera al saque" if touch else "REANUDACIÓN · espera al saque · V vista · ESC menú"
 	if ball == null or ball.carrier == null:
+		if not touch and xi_one_two_armed:
+			return "PARED PEDIDA · corre al hueco · la devolución puede ser interceptada"
+		if not touch and _one_two_can_request():
+			return "PASE EN VUELO · pulsa Space otra vez para pedir pared"
 		return "BALÓN SUELTO · joystick persigue · toca compañero para cambiar" if touch else "BALÓN SUELTO · WASD persigue · Shift sprint · Q/Tab cambia jugador"
 	if ball.carrier == controlled:
 		return (
@@ -1004,6 +1025,7 @@ func _handle_human(delta: float) -> void:
 		pending_human_pass_receiver = null
 		_cancel_shot_charge()
 		_cancel_pass_charge()
+		_clear_one_two()
 		var previous_controlled: Footballer = controlled
 		_select_player(_best_switch_candidate())
 		if match_team_size == 11:
@@ -1021,6 +1043,8 @@ func _handle_human(delta: float) -> void:
 		desktop_pass_input_active = true
 		if ball.carrier == controlled:
 			_begin_directional_pass_charge(direction)
+		else:
+			_try_arm_one_two()
 	elif not pass_pressed and desktop_pass_input_active:
 		desktop_pass_input_active = false
 		if pass_charging and pass_directional_charge:
@@ -1132,6 +1156,77 @@ func _cancel_pass_charge() -> void:
 	pass_directional_charge = false
 	pass_select_receiver_on_release = true
 
+func _clear_one_two() -> void:
+	xi_one_two_passer = null
+	xi_one_two_receiver = null
+	xi_one_two_request_until = 0.0
+	xi_one_two_finish_until = 0.0
+	xi_one_two_armed = false
+
+
+func _one_two_can_request() -> bool:
+	return (
+		match_team_size == 11
+		and not xi_one_two_armed
+		and xi_one_two_passer != null
+		and is_instance_valid(xi_one_two_passer)
+		and xi_one_two_receiver != null
+		and is_instance_valid(xi_one_two_receiver)
+		and controlled == xi_one_two_passer
+		and not xi_one_two_receiver.sent_off
+		and ball != null and ball.carrier == null
+		and not kickoff_active and not goal_restart_active and not set_piece_active
+		and match_seconds <= xi_one_two_request_until
+	)
+
+
+func _try_arm_one_two() -> bool:
+	if not _one_two_can_request():
+		return false
+	xi_one_two_armed = true
+	_show_action_feedback("PARED PEDIDA")
+	return true
+
+
+func _maybe_complete_one_two(receiver: Footballer) -> bool:
+	# Only a real first touch by the intended teammate triggers a return.
+	# Interceptions, changed control, invalid players, dead balls, or a
+	# failed pickup all retain the original physical possession rules.
+	var passer: Footballer = xi_one_two_passer
+	var valid := (
+		xi_one_two_armed
+		and match_team_size == 11
+		and passer != null and is_instance_valid(passer)
+		and receiver == xi_one_two_receiver
+		and controlled == passer and passer != receiver
+		and not passer.sent_off and not receiver.sent_off
+		and not kickoff_active and not goal_restart_active and not set_piece_active
+		and match_seconds <= xi_one_two_finish_until
+		and passer.global_position.distance_to(receiver.global_position)
+			<= XI_ONE_TWO_RETURN_MAX_DISTANCE
+	)
+	if not valid:
+		_clear_one_two()
+		return false
+	var return_point: Vector2 = _human_pass_aim_point(
+		receiver, passer, XI_ONE_TWO_RETURN_POWER
+	)
+	var direction: Vector2 = return_point - receiver.global_position
+	if direction.length_squared() < 1.0:
+		_clear_one_two()
+		return false
+	_clear_one_two()
+	receiver.play_action("pass", 0.58)
+	if audio_fx != null:
+		audio_fx.play_pass()
+	# A second ordinary, interceptable ground pass; no instant possession,
+	# fake catch, teleport, extra speed, or changes to the other team's AI.
+	ball.release(direction, XI_ONE_TWO_RETURN_POWER * receiver.pass_power_multiplier())
+	pending_human_pass_receiver = passer
+	_show_action_feedback("PARED")
+	return true
+
+
 func _pass_charge_ratio() -> float:
 	if not pass_charging:
 		return 0.0
@@ -1162,6 +1257,7 @@ func _release_charged_pass() -> bool:
 	_cancel_pass_charge()
 	if passer == null or ball.carrier != passer:
 		return false
+	_clear_one_two()
 	var release_direction := aim_direction
 	var valid_target := (
 		target != null
@@ -1193,6 +1289,14 @@ func _release_charged_pass() -> bool:
 	pending_human_pass_receiver = (
 		target if directional and valid_target and passer.team_id == 0 else null
 	)
+	if (
+		match_team_size == 11 and directional and valid_target
+		and passer.team_id == 0 and target.role != "keeper"
+	):
+		xi_one_two_passer = passer
+		xi_one_two_receiver = target
+		xi_one_two_request_until = match_seconds + XI_ONE_TWO_REQUEST_SECONDS
+		xi_one_two_finish_until = match_seconds + XI_ONE_TWO_FINISH_SECONDS
 	if select_receiver and valid_target:
 		_select_player(target)
 	return true
@@ -3440,7 +3544,10 @@ func _update_pending_tackle_claim(delta: float) -> void:
 	if winner.global_position.distance_to(ball.global_position) <= 72.0:
 		ball.attach_to(winner)
 		if winner.team_id == 0:
-			_select_player(winner)
+			if not _maybe_complete_one_two(winner):
+				_select_player(winner)
+		else:
+			_clear_one_two()
 
 func _try_claim_loose_ball() -> void:
 	if pending_tackle_player != null or ball.carrier != null:
@@ -3479,7 +3586,10 @@ func _try_claim_loose_ball() -> void:
 	if best != null:
 		ball.attach_to(best)
 		if best.team_id == 0:
-			_select_player(best)
+			if not _maybe_complete_one_two(best):
+				_select_player(best)
+		else:
+			_clear_one_two()
 
 func _loose_ball_approach(player: Footballer) -> float:
 	var to_ball: Vector2 = ball.global_position - player.global_position
