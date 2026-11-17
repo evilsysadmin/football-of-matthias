@@ -2395,7 +2395,7 @@ func _ai_xi_human_support_rank(player: Footballer) -> int:
 				if slot == 0 and teammate.role == "forward":
 					score -= 570.0
 				elif slot == 1 and teammate.role == "midfielder":
-					score -= 650.0
+					score -= 760.0
 			if (
 				best == null or score < best_score - 0.01
 				or (
