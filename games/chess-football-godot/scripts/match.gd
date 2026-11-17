@@ -175,6 +175,17 @@ const AI_XI_HUMAN_LANE_SAFE := 110.0
 const AI_XI_HUMAN_LANE_GAIN := 38.0
 const AI_XI_HUMAN_LANE_HOLD := 98.0
 const AI_XI_HUMAN_LANE_SWITCH := 36.0
+# XI human byline attacks: one existing outlet attacks the penalty spot,
+# the second offers a genuine cutback at the edge of the area. Both must
+# RUN into place with real stamina; no auto pass, catch or scoring boost.
+const XI_BYLINE_ATTACK_DEPTH := 720.0
+const XI_BYLINE_ATTACK_WIDE := 540.0
+const XI_BYLINE_SUPPORT_REACH := 1060.0
+const XI_BYLINE_SPOT_DEPTH := 500.0
+const XI_BYLINE_EDGE_DEPTH := 760.0
+const XI_BYLINE_SPOT_CENTRE_OFFSET := 90.0
+const XI_BYLINE_EDGE_CENTRE_OFFSET := 150.0
+const XI_BYLINE_PASS_MAX_DISTANCE := 1080.0
 # Only a physically won XI E cut can unlock a timed forward run. The
 # defender must have been directly ahead at the plant AND be passed later
 # with real lateral separation, while the same human still has the ball.
@@ -1337,7 +1348,16 @@ func _release_charged_pass() -> bool:
 	if audio_fx != null:
 		audio_fx.play_pass()
 	ball.release(release_direction, power * passer.pass_power_multiplier())
-	_show_action_feedback("PASE")
+	var is_cutback_pass: bool = (
+		valid_target and match_team_size == 11 and directional
+		and passer.team_id == 0
+		and passer.global_position.x >= match_pitch.end.x - XI_BYLINE_ATTACK_DEPTH
+		and absf(passer.global_position.y - match_pitch.get_center().y)
+			>= XI_BYLINE_ATTACK_WIDE
+		and target.global_position.x < passer.global_position.x - 75.0
+		and absf(target.global_position.y - match_pitch.get_center().y) < 430.0
+	)
+	_show_action_feedback("PASE ATRÁS" if is_cutback_pass else "PASE")
 	# Desktop directional passes retain the passer at release. The intended
 	# receiver moves toward the flight path and inherits control near arrival.
 	# Explicit touch-target passes keep their existing immediate selection.
@@ -1601,7 +1621,16 @@ func _ai_xi_lane_assignment(
 		):
 			continue
 		var offset: Vector2 = receiver.global_position - owner.global_position
-		if (
+		# A wide attacker at the byline may pass BACK toward the penalty
+		# spot. Read that actual receiver/corridor too, instead of letting
+		# all defenders ignore a perfectly visible dangerous cutback.
+		var cutback_lane: bool = (
+			_xi_human_byline_attack()
+			and receiver.global_position.x < owner.global_position.x - 75.0
+			and absf(receiver.global_position.y - match_pitch.get_center().y) < 430.0
+			and offset.length() <= XI_BYLINE_PASS_MAX_DISTANCE
+		)
+		if not cutback_lane and (
 			offset.x < AI_XI_LANE_MIN_FORWARD
 			or offset.length() > AI_XI_LANE_MAX_PASS_LENGTH
 		):
@@ -2287,6 +2316,25 @@ func _ai_xi_open_lane_support_target(player: Footballer, base_target: Vector2) -
 	return base_target
 
 
+# A genuine wide run close to the opponent's byline changes the value of
+# the existing two outlets. No activation in midfield, on the CPU side,
+# during a saved breakaway, or without actual human possession.
+func _xi_human_byline_attack() -> bool:
+	if (
+		match_team_size != 11 or ball == null
+		or ball.carrier == null or ball.carrier.team_id != 0
+		or controlled != ball.carrier
+		or xi_breakaway_runner != null
+		or kickoff_active or goal_restart_active or set_piece_active
+	):
+		return false
+	return (
+		ball.carrier.global_position.x >= match_pitch.end.x - XI_BYLINE_ATTACK_DEPTH
+		and absf(ball.carrier.global_position.y - match_pitch.get_center().y)
+			>= XI_BYLINE_ATTACK_WIDE
+	)
+
+
 # Human XI: choose only TWO nearby, healthy attacking outfielders. The
 # stable role hold avoids an entire 4-3-3 swapping lanes every frame.
 # No one is teleported, no player with the ball is selected as support.
@@ -2302,6 +2350,7 @@ func _ai_xi_human_support_rank(player: Footballer) -> int:
 		ai_xi_human_support_slots = [null, null]
 		ai_xi_human_lane_memory.clear()
 	var selected: Array = []
+	var byline: bool = _xi_human_byline_attack()
 	for slot in range(2):
 		# A genuine breakaway retains the lead outlet instead of silently
 		# recruiting a THIRD attacker from the unchanged 4-3-3.
@@ -2328,12 +2377,20 @@ func _ai_xi_human_support_rank(player: Footballer) -> int:
 			var distance: float = teammate.global_position.distance_to(
 				ball.carrier.global_position
 			)
-			if distance > AI_XI_HUMAN_SUPPORT_REACH:
+			if distance > (XI_BYLINE_SUPPORT_REACH if byline else AI_XI_HUMAN_SUPPORT_REACH):
 				continue
 			var score: float = (
 				distance - AI_XI_HUMAN_SUPPORT_ROLE_HOLD
 				if teammate == incumbent else distance
 			)
+			# In the final third, a real striker is more useful entering
+			# the central receiving area than the closest recycling winger.
+			# The second outlet prefers a midfielder behind the ball.
+			if byline:
+				if slot == 0 and teammate.role == "forward":
+					score -= 570.0
+				elif slot == 1 and teammate.role == "midfielder":
+					score -= 210.0
 			if (
 				best == null or score < best_score - 0.01
 				or (
@@ -2453,6 +2510,24 @@ func _ai_support_target(player: Footballer):
 		if human_rank >= 0:
 			if player == xi_breakaway_runner and ball.carrier == xi_breakaway_owner:
 				return xi_breakaway_target
+			if _xi_human_byline_attack():
+				var flank: float = (
+					1.0 if ball.carrier.global_position.y >= match_pitch.get_center().y
+					else -1.0
+				)
+				var cutback: Vector2 = Vector2(
+					match_pitch.end.x - (
+						XI_BYLINE_SPOT_DEPTH if human_rank == 0 else XI_BYLINE_EDGE_DEPTH
+					),
+					match_pitch.get_center().y + flank * (
+						XI_BYLINE_SPOT_CENTRE_OFFSET if human_rank == 0
+						else -XI_BYLINE_EDGE_CENTRE_OFFSET
+					)
+				)
+				return (
+					_ai_xi_human_open_support_target(player, cutback)
+					if human_rank == 0 else cutback
+				)
 			var lead_outlet: Footballer = ai_xi_human_support_slots[0]
 			var lead_home_y: float = (
 				lead_outlet.home_position.y if lead_outlet != null
