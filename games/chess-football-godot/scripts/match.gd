@@ -157,6 +157,18 @@ const AI_XI_SUPPORT_SWITCH_ADVANTAGE := 45.0
 # Nearby XI support ranks persist through small distance changes. A runner
 # clearly closer by more than this bound may replace the incumbent.
 const AI_XI_SUPPORT_ROLE_HOLD_DISTANCE := 55.0
+# The human XI receives two nearby moving outlets without dragging the
+# distant 4-3-3 toward the carrier. No extra pace or automatic first touch.
+const AI_XI_HUMAN_SUPPORT_REACH := 700.0
+const AI_XI_HUMAN_SUPPORT_ROLE_HOLD := 55.0
+const AI_XI_HUMAN_SUPPORT_FORWARD := 195.0
+const AI_XI_HUMAN_SUPPORT_RECYCLE := 150.0
+const AI_XI_HUMAN_SUPPORT_WIDTH := 185.0
+const AI_XI_HUMAN_LANE_MARKED := 145.0
+const AI_XI_HUMAN_LANE_SAFE := 110.0
+const AI_XI_HUMAN_LANE_GAIN := 38.0
+const AI_XI_HUMAN_LANE_HOLD := 98.0
+const AI_XI_HUMAN_LANE_SWITCH := 36.0
 const AI_COVER_DISTANCE := 150.0
 # XI human-team AI: the first off-ball defender closes directly and the
 # second supports at genuine challenge distance from the goal side.
@@ -363,6 +375,11 @@ var ai_xi_support_lane_memory: Dictionary = {}
 # ties and never grants speed or permanent ownership of a passing lane.
 var ai_xi_support_rank_owner: Footballer = null
 var ai_xi_support_rank_slots: Array = [null, null]
+# Separate from CPU triangle memory: human off-ball runners offer deliberate
+# passing lanes with short hysteresis, valid only for the current carrier.
+var ai_xi_human_support_owner: Footballer = null
+var ai_xi_human_support_slots: Array = [null, null]
+var ai_xi_human_lane_memory: Dictionary = {}
 # Cached only while the ball is loose; possession resets the assignments.
 var ai_primary_presser_cache: Array = [null, null]
 var ai_secondary_presser_cache: Array = [null, null]
@@ -1390,6 +1407,10 @@ func _update_ai(delta: float) -> void:
 		ai_xi_support_lane_memory.clear()
 		ai_xi_support_rank_owner = null
 		ai_xi_support_rank_slots = [null, null]
+	if match_team_size != 11 or ball.carrier == null or ball.carrier.team_id != 0:
+		ai_xi_human_support_owner = null
+		ai_xi_human_support_slots = [null, null]
+		ai_xi_human_lane_memory.clear()
 	for team_id in range(2):
 		var team_has_ball: bool = ball.carrier != null and ball.carrier.team_id == team_id
 		var loose_target: Vector2 = _ai_loose_ball_pursuit_point()
@@ -2223,10 +2244,182 @@ func _ai_xi_open_lane_support_target(player: Footballer, base_target: Vector2) -
 	return base_target
 
 
-func _ai_support_target(player: Footballer) -> Vector2:
+# Human XI: choose only TWO nearby, healthy attacking outfielders. The
+# stable role hold avoids an entire 4-3-3 swapping lanes every frame.
+# No one is teleported, no player with the ball is selected as support.
+func _ai_xi_human_support_rank(player: Footballer) -> int:
+	if (
+		match_team_size != 11
+		or player.team_id != 0
+		or ball.carrier == null or ball.carrier.team_id != 0
+	):
+		return -1
+	if ai_xi_human_support_owner != ball.carrier:
+		ai_xi_human_support_owner = ball.carrier
+		ai_xi_human_support_slots = [null, null]
+		ai_xi_human_lane_memory.clear()
+	var selected: Array = []
+	for slot in range(2):
+		var incumbent: Footballer = ai_xi_human_support_slots[slot]
+		var best: Footballer = null
+		var best_score: float = INF
+		for teammate in teams[0]:
+			if (
+				teammate == ball.carrier or teammate == controlled
+				or teammate.sent_off or teammate.xi_collision_down_seconds > 0.0
+				or not (teammate.role in ["midfielder", "wing", "forward"])
+				or teammate in selected
+			):
+				continue
+			var distance: float = teammate.global_position.distance_to(
+				ball.carrier.global_position
+			)
+			if distance > AI_XI_HUMAN_SUPPORT_REACH:
+				continue
+			var score: float = (
+				distance - AI_XI_HUMAN_SUPPORT_ROLE_HOLD
+				if teammate == incumbent else distance
+			)
+			if (
+				best == null or score < best_score - 0.01
+				or (
+					absf(score - best_score) <= 0.01
+					and teammate.squad_index < best.squad_index
+				)
+			):
+				best = teammate
+				best_score = score
+		if best != null:
+			selected.append(best)
+	ai_xi_human_support_slots = [selected[0] if selected.size() > 0 else null,
+		selected[1] if selected.size() > 1 else null]
+	# Retired first outlets cannot resurrect an old side-run when they
+	# become the recycle runner later in the same possession.
+	for stored_key in ai_xi_human_lane_memory.keys():
+		if (
+			ai_xi_human_support_slots[0] == null
+			or int(ai_xi_human_support_slots[0].get_instance_id()) != int(stored_key)
+		):
+			ai_xi_human_lane_memory.erase(stored_key)
+	for slot in range(2):
+		if ai_xi_human_support_slots[slot] == player:
+			return slot
+	return -1
+
+
+# Score both space at the receiving boot and the ACTUAL passing corridor.
+# A clear receiver behind a defender is not a free, safe triangle.
+func _ai_xi_human_lane_clearance(destination: Vector2) -> float:
+	var origin: Vector2 = ball.carrier.global_position
+	var corridor: Vector2 = destination - origin
+	var length_sq: float = corridor.length_squared()
+	var clearance: float = 500.0
+	for rival in teams[1]:
+		if rival.sent_off:
+			continue
+		var endpoint: float = rival.global_position.distance_to(destination)
+		clearance = minf(clearance, endpoint)
+		if length_sq < 1.0:
+			continue
+		var progress: float = clampf(
+			(rival.global_position - origin).dot(corridor) / length_sq,
+			0.0, 1.0
+		)
+		# A defender pressing the carrier is not blocking every receiving
+		# corridor. From 16% onward, however, the lane is truly contested.
+		if progress <= 0.16:
+			continue
+		var corridor_gap: float = rival.global_position.distance_to(
+			origin + corridor * progress
+		)
+		clearance = minf(clearance, corridor_gap)
+	return clearance
+
+
+func _ai_xi_human_open_support_target(
+	player: Footballer, base_target: Vector2
+) -> Vector2:
+	var key: int = int(player.get_instance_id())
+	var remembered: Dictionary = ai_xi_human_lane_memory.get(key, {})
+	var owner_id: int = int(ball.carrier.get_instance_id())
+	var has_lane: bool = int(remembered.get("owner", -1)) == owner_id
+	var baseline: float = _ai_xi_human_lane_clearance(base_target)
+	if baseline >= AI_XI_HUMAN_LANE_MARKED:
+		ai_xi_human_lane_memory.erase(key)
+		return base_target
+	var best: Vector2 = base_target
+	var best_score: float = -INF
+	var best_side: float = 0.0
+	var retained: Vector2 = base_target
+	var retained_score: float = -INF
+	for side in [-1.0, 1.0]:
+		var candidate: Vector2 = base_target + Vector2(
+			AI_XI_SUPPORT_DIAGONAL_FORWARD,
+			side * AI_XI_SUPPORT_DIAGONAL_WIDTH
+		)
+		if not match_pitch.has_point(candidate):
+			continue
+		var clearance: float = _ai_xi_human_lane_clearance(candidate)
+		var score: float = clearance - absf(
+			candidate.y - player.home_position.y
+		) * 0.035
+		if (
+			has_lane and is_equal_approx(side, float(remembered.get("side", 0.0)))
+			and clearance >= AI_XI_HUMAN_LANE_HOLD
+		):
+			retained = candidate
+			retained_score = score
+		if (
+			clearance < AI_XI_HUMAN_LANE_SAFE
+			or clearance - baseline < AI_XI_HUMAN_LANE_GAIN
+		):
+			continue
+		if score > best_score:
+			best = candidate
+			best_score = score
+			best_side = side
+	if (
+		retained_score > -INF
+		and (best_side == 0.0 or best_score <= retained_score + AI_XI_HUMAN_LANE_SWITCH)
+	):
+		return retained
+	if best_side != 0.0:
+		ai_xi_human_lane_memory[key] = {"owner": owner_id, "side": best_side}
+		return best
+	ai_xi_human_lane_memory.erase(key)
+	return base_target
+
+
+func _ai_support_target(player: Footballer):
 	if ball.carrier == null:
 		return player.home_position
 	var forward: float = 1.0 if player.team_id == 0 else -1.0
+	if match_team_size == 11 and player.team_id == 0:
+		var human_rank: int = _ai_xi_human_support_rank(player)
+		if human_rank >= 0:
+			var lead_outlet: Footballer = ai_xi_human_support_slots[0]
+			var lead_home_y: float = (
+				lead_outlet.home_position.y if lead_outlet != null
+				else player.home_position.y
+			)
+			var lead_side: float = (
+				1.0 if lead_home_y >= ball.carrier.global_position.y else -1.0
+			)
+			var side: float = lead_side if human_rank == 0 else -lead_side
+			var triangle: Vector2 = ChessFootballMath.clamp_to_pitch(
+				ball.carrier.global_position + Vector2(
+					AI_XI_HUMAN_SUPPORT_FORWARD if human_rank == 0
+					else -AI_XI_HUMAN_SUPPORT_RECYCLE,
+					side * AI_XI_HUMAN_SUPPORT_WIDTH
+				),
+				match_pitch
+			)
+			# The lead runner seeks a passable open channel; the second
+			# provides the safe recycle. Other teammates keep their lanes.
+			return (
+				_ai_xi_human_open_support_target(player, triangle)
+				if human_rank == 0 else triangle
+			)
 	# Exactly two nearby XI CPU teammates create actual short passing
 	# triangles (one ahead and one recycling behind). Everyone else keeps
 	# the existing 4-3-3 lanes; they must run, never teleport, into support.
