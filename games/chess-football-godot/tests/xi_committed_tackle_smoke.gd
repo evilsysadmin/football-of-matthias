@@ -110,6 +110,11 @@ func _initialize() -> void:
 	# Both a clean poke and a glancing loose-ball duel count as a real
 	# executed contact; neither grants instant ownership to the tackler.
 	assert(game.ball.carrier == null and human_tackler.tackle_active())
+	# The REAL previous tackle pushes its victim 24 units. A fresh scenario
+	# must restore the starting position, not silently ask the input buffer
+	# to chase a rival now 139 units away (outside its 136-unit gate).
+	assert(cpu_owner.global_position.distance_to(point) >= 20.0)
+	cpu_owner.global_position = point
 
 	# A retreating press must NOT buffer an automatic self-aiming tackle.
 	game.pending_tackle_player = null
