@@ -899,6 +899,21 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_XI_ONE_TWO_OK real_pass=true deliberate_input=true physical_return=true normal_pass=true interceptable=true cancel=true' "$log"
+      - name: XI · human attacking triangles with real open lanes
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-human-support.log"
+          set +e
+          timeout 55s "$godot" --headless --quit-after 650 --path games/chess-football-godot --script res://tests/xi_human_support_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|ERROR: Failed to load script' "$log"; then
+            echo '::error::XI human support lane and 4-3-3 physical-movement contract failed'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_HUMAN_SUPPORT_OK two_outlets=true open_lane=true stable_roles=true real_movement=true loss_reset=true legacy_5v5=true cpu_unchanged=true' "$log"
       - name: XI directional frame and grounded boots at both camera pitches
         shell: bash
         run: |
