@@ -136,7 +136,13 @@ func _initialize() -> void:
 	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
 	assert(game._release_charged_pass())
 	assert(game._one_two_can_request())
+	# As in eleven_ai_pitch_smoke: a fresh process frame separates this
+	# key edge from the preceding pass. Otherwise Godot's just_pressed
+	# cache can reuse the same tick and a real Q is never presented.
+	await process_frame
 	Input.action_press("change_player")
+	assert(Input.is_action_just_pressed("change_player"),
+		"Test fixture must present a genuine Q edge")
 	game._handle_human(STEP)
 	Input.action_release("change_player")
 	assert(not game._one_two_can_request() and not game.xi_one_two_armed,
