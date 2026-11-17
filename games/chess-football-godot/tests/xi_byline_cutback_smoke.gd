@@ -91,6 +91,11 @@ func _initialize() -> void:
 	presser.global_position = carrier.global_position + Vector2(-65.0, -25.0)
 	cover.global_position = carrier.global_position + Vector2(-90.0, 80.0)
 	central.global_position = Vector2(goal_x - 790.0, mid.y - 300.0)
+	# This actor has spent 24 real AI frames sprinting from the isolated
+	# background. Reset that previous scenario's momentum when placing the
+	# central into a NEW physical lane, rather than expecting an instant
+	# velocity reversal on the very next 1/60 s tick.
+	central.velocity = Vector2.ZERO
 	var predicted: Dictionary = game._ai_xi_lane_assignment(presser, cover)
 	assert(not predicted.is_empty(), "Normal XI must consider a real backwards cutback lane")
 	assert(predicted["marker"] == central)
