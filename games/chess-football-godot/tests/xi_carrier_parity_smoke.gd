@@ -173,6 +173,49 @@ func _initialize() -> void:
 		stage._sync_ball_visual_roll(0.10)
 		assert(stage.ball_node.rotation == Vector3.ZERO,
 			"Keeper-held balls must not rotate")
+	# XI human responsiveness: test the real movement and kick paths, not just
+	# tuning constants. A carrier pivots more promptly, without a speed buff.
+	var agile_carrier: Footballer = game.teams[0][3]
+	var no_ball_runner: Footballer = game.teams[0][4]
+	for runner in [agile_carrier, no_ball_runner]:
+		runner.global_position = game.match_pitch.get_center()
+		runner.velocity = Vector2.RIGHT * 250.0
+		runner.base_speed = 250.0
+		runner.debug_set_stamina(100.0)
+		runner.dribble_burst_seconds = 0.0
+		runner.dribble_cooldown_seconds = 0.0
+	game.ball.attach_to(agile_carrier)
+	agile_carrier.move_human(1.0 / 60.0, Vector2.LEFT, false)
+	no_ball_runner.move_human(1.0 / 60.0, Vector2.LEFT, false)
+	assert(agile_carrier.velocity.x < no_ball_runner.velocity.x - 12.0,
+		"XI carrier must pivot more responsively than an off-ball runner")
+	assert(agile_carrier.velocity.length() <= 250.01,
+		"XI carrying must not gain free sprint speed")
+	# E is a physical plant, not a teleport in the requested cut direction.
+	agile_carrier.velocity = Vector2.RIGHT * 250.0
+	assert(agile_carrier.start_dribble(Vector2.UP, "cut"))
+	assert(agile_carrier.velocity.x > 245.0)
+	assert(absf(agile_carrier.velocity.y) < 0.01)
+	agile_carrier.dribble_burst_seconds = 0.0
+	agile_carrier.dribble_cooldown_seconds = 0.0
+	var moving_receiver: Footballer = game.teams[0][6]
+	moving_receiver.global_position = agile_carrier.global_position + Vector2(360.0, 0.0)
+	moving_receiver.velocity = Vector2.UP * 240.0
+	var lead_aim: Vector2 = game._human_pass_aim_point(agile_carrier, moving_receiver, 680.0)
+	assert(lead_aim.y < moving_receiver.global_position.y - 30.0)
+	assert(lead_aim.distance_to(moving_receiver.global_position) <= 72.01)
+	game._select_player(agile_carrier)
+	assert(game._begin_pass_charge(moving_receiver))
+	game.pass_charge_seconds = 0.25
+	assert(game._release_charged_pass())
+	assert(game.ball.carrier == null)
+	assert(game.ball.velocity.normalized().dot(
+		(lead_aim - agile_carrier.global_position).normalized()
+	) > 0.999, "XI real pass must use the moving receiver lead")
+	moving_receiver.velocity = Vector2.ZERO
+	assert(game._human_pass_aim_point(
+		agile_carrier, moving_receiver, 680.0
+	).is_equal_approx(moving_receiver.global_position))
 	# 5v5 is a historical test fixture: preserve its old physics/ball anchor.
 	var small = scene.instantiate()
 	small.match_team_size = 5
@@ -180,5 +223,11 @@ func _initialize() -> void:
 	await process_frame
 	await process_frame
 	assert(small.teams[0][1].ball_anchor().is_equal_approx(Vector2(18.0, -5.0)))
+	var small_receiver: Footballer = small.teams[0][2]
+	small_receiver.velocity = Vector2.UP * 240.0
+	assert(small._human_pass_aim_point(
+		small.teams[0][1], small_receiver, 680.0
+	).is_equal_approx(small_receiver.global_position),
+		"5v5 must not inherit XI pass leading")
 	print("FOOTBALL_XI_CARRIER_PARITY_OK teams=2 animations=5 directions=6 touch_variance=true cpu_sprint=true intercept=true fallback_5v5=unchanged")
 	quit(0)
