@@ -2293,6 +2293,14 @@ func _ai_xi_human_support_rank(player: Footballer) -> int:
 			selected.append(best)
 	ai_xi_human_support_slots = [selected[0] if selected.size() > 0 else null,
 		selected[1] if selected.size() > 1 else null]
+	# Retired first outlets cannot resurrect an old side-run when they
+	# become the recycle runner later in the same possession.
+	for stored_key in ai_xi_human_lane_memory.keys():
+		if (
+			ai_xi_human_support_slots[0] == null
+			or int(ai_xi_human_support_slots[0].get_instance_id()) != int(stored_key)
+		):
+			ai_xi_human_lane_memory.erase(stored_key)
 	for slot in range(2):
 		if ai_xi_human_support_slots[slot] == player:
 			return slot
@@ -2389,11 +2397,15 @@ func _ai_support_target(player: Footballer):
 	if match_team_size == 11 and player.team_id == 0:
 		var human_rank: int = _ai_xi_human_support_rank(player)
 		if human_rank >= 0:
-			var flank: float = (
-				1.0 if player.home_position.y >= ball.carrier.global_position.y
-				else -1.0
+			var lead_outlet: Footballer = ai_xi_human_support_slots[0]
+			var lead_home_y: float = (
+				lead_outlet.home_position.y if lead_outlet != null
+				else player.home_position.y
 			)
-			var side: float = flank if human_rank == 0 else -flank
+			var lead_side: float = (
+				1.0 if lead_home_y >= ball.carrier.global_position.y else -1.0
+			)
+			var side: float = lead_side if human_rank == 0 else -lead_side
 			var triangle: Vector2 = ChessFootballMath.clamp_to_pitch(
 				ball.carrier.global_position + Vector2(
 					AI_XI_HUMAN_SUPPORT_FORWARD if human_rank == 0
