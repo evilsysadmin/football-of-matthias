@@ -78,9 +78,16 @@ func _initialize() -> void:
 		if game.xi_breakaway_runner != null:
 			won = true
 			break
+	print("FOOTBALL_XI_CUT_DUEL_TRACE won=%s elapsed=%.2f advance=%.1f beyond=%.1f lateral=%.1f candidate=%s runner=%s" % [
+		str(won), game.match_seconds,
+		carrier.global_position.x - start.x,
+		carrier.global_position.x - marker.global_position.x,
+		absf(carrier.global_position.y - marker.global_position.y),
+		str(game.xi_cut_duel_owner != null), str(game.xi_breakaway_runner != null)
+	])
 	assert(won, "Real lateral cut must move past the actual defender before followthrough")
-	assert(carrier.global_position.x > marker.global_position.x + 20.0)
-	assert(absf(carrier.global_position.y - marker.global_position.y) > 58.0)
+	assert(carrier.global_position.x > marker.global_position.x + game.XI_CUT_WIN_BEYOND_DEFENDER)
+	assert(absf(carrier.global_position.y - marker.global_position.y) > game.XI_CUT_WIN_LATERAL_CLEARANCE)
 	assert(carrier.global_position.x - start.x > 85.0)
 	assert(game.xi_breakaway_runner == lead)
 	assert(game.xi_breakaway_owner == carrier)
