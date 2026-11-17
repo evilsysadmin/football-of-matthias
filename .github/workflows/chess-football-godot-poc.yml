@@ -914,6 +914,21 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_XI_COMMITTED_TACKLE_OK locked_heading=true real_buffered_e=true legal_front_contact=true expires=true cancel_q=true cancel_possession=true buffered_f=true legacy_5v5=true' "$log"
+      - name: XI · earned 1v1 win into physical breakout and ground pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-earned-breakaway.log"
+          set +e
+          timeout 70s "$godot" --headless --quit-after 1000 --path games/chess-football-godot --script res://tests/xi_earned_breakaway_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|ERROR: Failed to load script' "$log"; then
+            echo '::error::Real won duel -> one physical runner / ground pass contract failed'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_EARNED_BREAKAWAY_OK real_cut=true physical_outplay=true two_roles=true normal_sprint=true real_pass=true empty_grass=false feint=false lost_ball=false blocked_lane=false legacy_5v5=true' "$log"
       - name: XI · human attacking triangles with real open lanes
         shell: bash
         run: |

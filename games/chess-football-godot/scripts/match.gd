@@ -175,6 +175,20 @@ const AI_XI_HUMAN_LANE_SAFE := 110.0
 const AI_XI_HUMAN_LANE_GAIN := 38.0
 const AI_XI_HUMAN_LANE_HOLD := 98.0
 const AI_XI_HUMAN_LANE_SWITCH := 36.0
+# Only a physically won XI E cut can unlock a timed forward run. The
+# defender must have been directly ahead at the plant AND be passed later
+# with real lateral separation, while the same human still has the ball.
+const XI_CUT_DUEL_FORWARD_MIN := 32.0
+const XI_CUT_DUEL_FORWARD_MAX := 165.0
+const XI_CUT_DUEL_LATERAL_MAX := 112.0
+const XI_CUT_WIN_FORWARD_GAIN := 85.0
+const XI_CUT_WIN_BEYOND_DEFENDER := 42.0
+const XI_CUT_WIN_LATERAL_CLEARANCE := 32.0
+const XI_CUT_WIN_MAX_SECONDS := 1.25
+const XI_CUT_BREAKAWAY_RUN_SECONDS := 2.20
+const XI_CUT_BREAKAWAY_FORWARD := 325.0
+const XI_CUT_BREAKAWAY_WIDTH := 190.0
+const XI_CUT_BREAKAWAY_CLEARANCE := 108.0
 const AI_COVER_DISTANCE := 150.0
 # XI human-team AI: the first off-ball defender closes directly and the
 # second supports at genuine challenge distance from the goal side.
@@ -386,6 +400,17 @@ var ai_xi_support_rank_slots: Array = [null, null]
 var ai_xi_human_support_owner: Footballer = null
 var ai_xi_human_support_slots: Array = [null, null]
 var ai_xi_human_lane_memory: Dictionary = {}
+# Real cut -> physical outplay -> one forward runner, possession-scoped.
+# Never a speed/ball buff: its target is fixed from real pitch geometry,
+# and the runner uses the ordinary stamina-draining AI sprint.
+var xi_cut_duel_owner: Footballer = null
+var xi_cut_duel_defender: Footballer = null
+var xi_cut_duel_origin: Vector2 = Vector2.ZERO
+var xi_cut_duel_started_at: float = 0.0
+var xi_breakaway_owner: Footballer = null
+var xi_breakaway_runner: Footballer = null
+var xi_breakaway_target: Vector2 = Vector2.ZERO
+var xi_breakaway_until: float = 0.0
 # Cached only while the ball is loose; possession resets the assignments.
 var ai_primary_presser_cache: Array = [null, null]
 var ai_secondary_presser_cache: Array = [null, null]
@@ -559,6 +584,7 @@ func _physics_process(delta: float) -> void:
 	_update_ai(delta)
 	_update_active_tackle_contacts()
 	_update_xi_dribble_body_contacts()
+	_update_xi_cut_duel_followthrough()
 	var previous_ball_position: Vector2 = ball.global_position
 	var previous_ball_height: float = ball.flight_height
 	ball.tick_ball(delta)
@@ -1473,7 +1499,12 @@ func _update_ai(delta: float) -> void:
 					intensity = _ai_adaptive_intensity(0.98)
 				else:
 					target = _ai_support_target(player)
-					intensity = _ai_adaptive_intensity(0.83)
+					intensity = (
+						1.0 if match_team_size == 11 and team_id == 0
+						and player == xi_breakaway_runner
+						and ball.carrier == xi_breakaway_owner
+						else _ai_adaptive_intensity(0.83)
+					)
 			else:
 				if player == presser:
 					target = _ai_press_target(player, ball.carrier)
@@ -2272,6 +2303,17 @@ func _ai_xi_human_support_rank(player: Footballer) -> int:
 		ai_xi_human_lane_memory.clear()
 	var selected: Array = []
 	for slot in range(2):
+		# A genuine breakaway retains the lead outlet instead of silently
+		# recruiting a THIRD attacker from the unchanged 4-3-3.
+		if (
+			slot == 0 and xi_breakaway_runner != null
+			and xi_breakaway_owner == ball.carrier
+			and not xi_breakaway_runner.sent_off
+			and xi_breakaway_runner.xi_collision_down_seconds <= 0.0
+			and xi_breakaway_runner != controlled
+		):
+			selected.append(xi_breakaway_runner)
+			continue
 		var incumbent: Footballer = ai_xi_human_support_slots[slot]
 		var best: Footballer = null
 		var best_score: float = INF
@@ -2409,6 +2451,8 @@ func _ai_support_target(player: Footballer):
 	if match_team_size == 11 and player.team_id == 0:
 		var human_rank: int = _ai_xi_human_support_rank(player)
 		if human_rank >= 0:
+			if player == xi_breakaway_runner and ball.carrier == xi_breakaway_owner:
+				return xi_breakaway_target
 			var lead_outlet: Footballer = ai_xi_human_support_slots[0]
 			var lead_home_y: float = (
 				lead_outlet.home_position.y if lead_outlet != null
@@ -3488,6 +3532,126 @@ func _xi_contextual_cut_direction(player: Footballer, requested: Vector2) -> Vec
 	return best
 
 
+# Recognize a real duel at the first planted E, not a scripted successful
+# dribble. A defender ahead within one challenge distance is the witness.
+func _arm_xi_cut_duel(owner: Footballer) -> void:
+	xi_cut_duel_owner = null
+	xi_cut_duel_defender = null
+	if (
+		match_team_size != 11 or owner.team_id != 0
+		or ball.carrier != owner or owner.dribble_mode != "cut"
+		or owner.dribble_direction.x <= 0.25
+		or xi_breakaway_runner != null
+	):
+		return
+	var closest: Footballer = null
+	var closest_distance: float = INF
+	for defender in teams[1]:
+		if defender.sent_off or defender.role == "keeper":
+			continue
+		var relative: Vector2 = defender.global_position - owner.global_position
+		if (
+			relative.x < XI_CUT_DUEL_FORWARD_MIN
+			or relative.x > XI_CUT_DUEL_FORWARD_MAX
+			or absf(relative.y) > XI_CUT_DUEL_LATERAL_MAX
+		):
+			continue
+		var distance: float = relative.length()
+		if distance < closest_distance:
+			closest = defender
+			closest_distance = distance
+	if closest == null:
+		return
+	xi_cut_duel_owner = owner
+	xi_cut_duel_defender = closest
+	xi_cut_duel_origin = owner.global_position
+	xi_cut_duel_started_at = match_seconds
+
+
+func _clear_xi_cut_duel() -> void:
+	xi_cut_duel_owner = null
+	xi_cut_duel_defender = null
+
+
+func _clear_xi_breakaway() -> void:
+	xi_breakaway_owner = null
+	xi_breakaway_runner = null
+	xi_breakaway_target = Vector2.ZERO
+	xi_breakaway_until = 0.0
+
+
+func _update_xi_cut_duel_followthrough() -> void:
+	if xi_breakaway_runner != null and (
+		match_team_size != 11 or ball.carrier != xi_breakaway_owner
+		or controlled != xi_breakaway_owner
+		or xi_breakaway_runner.sent_off
+		or xi_breakaway_runner.xi_collision_down_seconds > 0.0
+		or match_seconds > xi_breakaway_until
+		or kickoff_active or goal_restart_active or set_piece_active
+	):
+		_clear_xi_breakaway()
+	var owner: Footballer = xi_cut_duel_owner
+	var defender: Footballer = xi_cut_duel_defender
+	if owner == null:
+		return
+	if (
+		match_team_size != 11 or defender == null
+		or ball.carrier != owner or controlled != owner
+		or owner.sent_off or defender.sent_off
+		or owner.contact_stun_seconds > 0.0
+		or owner.xi_collision_down_seconds > 0.0
+		or match_seconds - xi_cut_duel_started_at > XI_CUT_WIN_MAX_SECONDS
+		or kickoff_active or goal_restart_active or set_piece_active
+	):
+		_clear_xi_cut_duel()
+		return
+	var advanced: float = owner.global_position.x - xi_cut_duel_origin.x
+	var passed: float = owner.global_position.x - defender.global_position.x
+	var gap: float = absf(owner.global_position.y - defender.global_position.y)
+	if (
+		advanced < XI_CUT_WIN_FORWARD_GAIN
+		or passed < XI_CUT_WIN_BEYOND_DEFENDER
+		or gap < XI_CUT_WIN_LATERAL_CLEARANCE
+	):
+		return
+	_clear_xi_cut_duel()
+	# Only the CURRENT lead outlet can convert a won duel into an overlap.
+	# If no reachable teammate or safe passing corridor exists, no prize.
+	var lead: Footballer = null
+	if _ai_xi_human_support_rank(owner) == -1:
+		lead = ai_xi_human_support_slots[0]
+	if (
+		lead == null or lead.sent_off or lead == owner
+		or lead.xi_collision_down_seconds > 0.0
+	):
+		return
+	var selected: Vector2 = Vector2.ZERO
+	var best_score: float = -INF
+	var preferred_side: float = (
+		1.0 if lead.home_position.y >= owner.global_position.y else -1.0
+	)
+	for side in [preferred_side, -preferred_side]:
+		var candidate: Vector2 = owner.global_position + Vector2(
+			XI_CUT_BREAKAWAY_FORWARD, side * XI_CUT_BREAKAWAY_WIDTH
+		)
+		if not match_pitch.has_point(candidate):
+			continue
+		var clearance: float = _ai_xi_human_lane_clearance(candidate)
+		if clearance < XI_CUT_BREAKAWAY_CLEARANCE:
+			continue
+		var score: float = clearance - lead.global_position.distance_to(candidate) * 0.13
+		if score > best_score:
+			best_score = score
+			selected = candidate
+	if best_score == -INF:
+		return
+	xi_breakaway_owner = owner
+	xi_breakaway_runner = lead
+	xi_breakaway_target = selected
+	xi_breakaway_until = match_seconds + XI_CUT_BREAKAWAY_RUN_SECONDS
+	_show_action_feedback("¡REGATE GANADO! · DESMARQUE")
+
+
 func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 	if controlled == null or ball.carrier != controlled:
 		return false
@@ -3505,6 +3669,7 @@ func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 		wanted = _xi_contextual_cut_direction(controlled, wanted)
 	var started := controlled.start_dribble(wanted, kind)
 	if started and match_team_size == 11:
+		_arm_xi_cut_duel(controlled)
 		_show_action_feedback(
 			"AMAGO" if kind == "feint" else "TOQUE LARGO" if kind == "burst" else "RECORTE"
 		)
