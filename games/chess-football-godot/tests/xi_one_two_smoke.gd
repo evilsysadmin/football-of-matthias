@@ -136,8 +136,11 @@ func _initialize() -> void:
 	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
 	assert(game._release_charged_pass())
 	assert(game._one_two_can_request())
-	game._clear_one_two()
-	assert(not game._one_two_can_request())
+	Input.action_press("change_player")
+	game._handle_human(STEP)
+	Input.action_release("change_player")
+	assert(not game._one_two_can_request() and not game.xi_one_two_armed,
+		"Manual Q must immediately cancel the planned return")
 
 	print("FOOTBALL_XI_ONE_TWO_OK real_pass=true deliberate_input=true physical_return=true normal_pass=true interceptable=true cancel=true")
 	quit(0)
