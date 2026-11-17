@@ -270,6 +270,14 @@ const GOAL_CROSSBAR_DROP_SPEED := 125.0
 const PASS_CHARGE_SECONDS := 0.90
 # Aiming assist only locks onto teammates in the intended forward cone.
 const PASS_MIN_TARGET_ALIGNMENT := 0.35
+# XI desktop passing: short taps prefer nearby runs; held passes look farther
+# down the aimed corridor. Hysteresis stops the receiver flickering on charge.
+# These tune TARGET CHOICE only; ball physics, passing power and the release
+# cone remain authoritative, without homing or auto-catches.
+const XI_HUMAN_PASS_SHORT_TARGET_DISTANCE := 260.0
+const XI_HUMAN_PASS_LONG_TARGET_DISTANCE := 860.0
+const XI_HUMAN_PASS_DISTANCE_WEIGHT := 0.42
+const XI_HUMAN_PASS_SWITCH_MARGIN := 85.0
 # Normal control stays forgiving. A rapid *ground* pass can be trapped only
 # with closer foot contact; driven/lofted shots still pass through.
 const FIRST_TOUCH_SLOW_MAX_SPEED := 560.0
@@ -1034,7 +1042,9 @@ func _handle_human(delta: float) -> void:
 		else:
 			if pass_directional_charge and direction.length_squared() > 0.0324:
 				pass_aim_direction = direction.normalized()
-				pass_target = _best_directional_pass_target(controlled, direction)
+				pass_target = _best_directional_pass_target(
+					controlled, direction, _pass_charge_ratio(), pass_target
+				)
 			if (
 				pass_target != null
 				and (not is_instance_valid(pass_target) or pass_target.sent_off)
@@ -1109,7 +1119,7 @@ func _begin_directional_pass_charge(input_direction: Vector2) -> bool:
 	pass_charging = true
 	pass_charge_seconds = 0.0
 	pass_aim_direction = wanted.normalized()
-	pass_target = _best_directional_pass_target(controlled, pass_aim_direction)
+	pass_target = _best_directional_pass_target(controlled, pass_aim_direction, 0.0)
 	pass_directional_charge = true
 	pass_select_receiver_on_release = false
 	return true
@@ -2848,14 +2858,25 @@ func _human_pass_aim_point(passer: Footballer, receiver: Footballer, power: floa
 	return ChessFootballMath.clamp_to_pitch(destination + lead, match_pitch)
 
 
-func _best_directional_pass_target(player: Footballer, input_direction: Vector2) -> Footballer:
+func _best_directional_pass_target(
+	player: Footballer, input_direction: Vector2,
+	charge_ratio: float = -1.0, current_target: Footballer = null
+) -> Footballer:
 	# Never curve a manually aimed pass toward a teammate outside the cone.
-	# Keep the original best-target helper for AI and explicit touch targeting.
+	# The legacy path is exact for 5v5, restarts and callers without a human
+	# XI charge; only a deliberate XI Space charge gets distance intent.
 	var wanted := input_direction.normalized()
 	if wanted.length_squared() < 0.001:
 		wanted = Vector2.RIGHT if player.team_id == 0 else Vector2.LEFT
+	var xi_charged := match_team_size == 11 and charge_ratio >= 0.0
+	var preferred_distance := lerpf(
+		XI_HUMAN_PASS_SHORT_TARGET_DISTANCE,
+		XI_HUMAN_PASS_LONG_TARGET_DISTANCE,
+		clampf(charge_ratio, 0.0, 1.0)
+	)
 	var best: Footballer = null
 	var best_score := -INF
+	var incumbent_score := -INF
 	for teammate in teams[player.team_id]:
 		if teammate.sent_off or teammate == player:
 			continue
@@ -2867,9 +2888,22 @@ func _best_directional_pass_target(player: Footballer, input_direction: Vector2)
 		if alignment < PASS_MIN_TARGET_ALIGNMENT:
 			continue
 		var score_value := alignment * 800.0 - distance * 0.35
+		if xi_charged:
+			score_value = (
+				alignment * 800.0
+				- absf(distance - preferred_distance) * XI_HUMAN_PASS_DISTANCE_WEIGHT
+			)
+		if teammate == current_target:
+			incumbent_score = score_value
 		if score_value > best_score:
 			best_score = score_value
 			best = teammate
+	# Preserve the player's choice under small positional jitter. A decisive
+	# charge/aim change still switches; a target outside the cone never sticks.
+	if xi_charged and incumbent_score > -INF and (
+		best_score - incumbent_score < XI_HUMAN_PASS_SWITCH_MARGIN
+	):
+		return current_target
 	return best
 
 
