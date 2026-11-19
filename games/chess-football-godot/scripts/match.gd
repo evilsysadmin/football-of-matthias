@@ -246,14 +246,6 @@ const AI_XI_EXPERT_FIRST_TOUCH_READ := 0.12
 # This is CPU decision latency, not immunity: already-launched tackle
 # hitboxes and physical collisions still resolve on every physics frame.
 const AI_XI_CUT_READ_NORMAL := 0.32
-# XI Normal should not become more clairvoyant than Hard after reading E.
-# After the first plant, react to the real current feet rather than
-# projecting the freshly changed velocity a full defender stride ahead.
-const AI_XI_NORMAL_CUT_PRESS_LEAD_SCALE := 0.40
-# A normal defender cannot reset its feet instantly when the 0.34s planted
-# E ends; it takes a short physical recovery during the real exit stride.
-# This is pursuit direction only. Legal contact remains fully authoritative.
-const AI_XI_NORMAL_CUT_RECOVERY_SECONDS := 0.58
 # Normal must not commit a precisely timed tackle on the same 0.45s frame
 # in every diagonal cut. Previously launched tackles remain physical.
 const AI_XI_CUT_TACKLE_READ_NORMAL := 0.50
@@ -1748,20 +1740,12 @@ func _ai_xi_cut_read_target(presser: Footballer, owner: Footballer) -> Vector2:
 	if (
 		match_team_size != 11 or quick_difficulty == "easy"
 		or presser.team_id != 1 or owner.team_id != 0
-		or ball.carrier != owner or owner.dribble_mode != "cut"
-		or (not owner.dribble_active() and owner.xi_cut_exit_run_seconds <= 0.0)
+		or ball.carrier != owner or not owner.dribble_active()
+		or owner.dribble_mode != "cut"
 	):
 		return Vector2.ZERO
-	var window: float = (
-		AI_XI_NORMAL_CUT_RECOVERY_SECONDS if quick_difficulty == "normal"
-		else _ai_xi_cut_read_seconds()
-	)
-	var elapsed: float = (
-		owner.dribble_duration_seconds + owner.XI_CUT_EXIT_RUN_SECONDS
-		- owner.xi_cut_exit_run_seconds
-		if owner.xi_cut_exit_run_seconds > 0.0
-		else owner.dribble_duration_seconds - owner.dribble_burst_seconds
-	)
+	var window: float = _ai_xi_cut_read_seconds()
+	var elapsed: float = owner.dribble_duration_seconds - owner.dribble_burst_seconds
 	if elapsed >= window:
 		return Vector2.ZERO
 	var original_line: Vector2 = owner.dribble_entry_direction.normalized()
@@ -1897,16 +1881,6 @@ func _ai_press_target(presser: Footballer, owner: Footballer) -> Vector2:
 		0.40,
 	)
 	var lead: Vector2 = (observed_velocity * horizon).limit_length(130.0)
-	if (
-		quick_difficulty == "normal"
-		and owner.dribble_mode == "cut"
-		and owner.xi_cut_exit_run_seconds > 0.0
-	):
-		# The defender has read the planted E, but is still correcting the
-		# real direction change. Its feet and legal tackle reach do not change.
-		# This dampens only forward prediction, never slows the CPU, blocks
-		# a pre-committed tackle or gifts the attacker a loose ball.
-		lead *= AI_XI_NORMAL_CUT_PRESS_LEAD_SCALE
 	return ChessFootballMath.clamp_to_pitch(owner.global_position + lead, match_pitch)
 
 
@@ -3478,6 +3452,23 @@ func _tackle_forward(tackler: Footballer) -> Vector2:
 	var facing_x := -1.0 if tackler.visual != null and tackler.visual.flip_h else 1.0
 	return Vector2(facing_x, 0.0)
 
+# During an XI E cut, the live ball is physically ahead/on the outside
+# foot (FootballBall.tick_ball and Footballer.ball_anchor). An entry into the
+# player's torso is not automatically a winning poke through the ball.
+# Use the ACTUAL carried ball location while that cut/exit remains active.
+# Body collisions and fouls retain their separate physical handling.
+# No generated aim point, enlarged radius, free possession or 5v5 change.
+func _tackle_contact_target(victim: Footballer) -> Vector2:
+	if (
+		match_team_size == 11 and ball.carrier == victim
+		and victim.match_pitch == Formation.ELEVEN_PITCH_RECT
+		and victim.role != "keeper" and victim.dribble_mode == "cut"
+		and (victim.dribble_active() or victim.xi_cut_exit_run_seconds > 0.0)
+	):
+		return ball.global_position
+	return victim.global_position
+
+
 func _tackle_hitbox(
 	tackler: Footballer,
 	target_position: Vector2,
@@ -3626,7 +3617,7 @@ func _ai_xi_tackle_commit_ready(
 			> _tackle_attempt_range(tackler)
 	):
 		return false
-	var hitbox: Dictionary = _tackle_hitbox(tackler, victim.global_position)
+	var hitbox: Dictionary = _tackle_hitbox(tackler, _tackle_contact_target(victim))
 	return (
 		bool(hitbox.get("inside", false))
 		and not bool(hitbox.get("foul", false))
@@ -3966,7 +3957,7 @@ func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
 	if offset.length() > _tackle_attempt_range(tackler, aggressive):
 		return false
 
-	var hitbox := _tackle_hitbox(tackler, victim.global_position, aggressive)
+	var hitbox := _tackle_hitbox(tackler, _tackle_contact_target(victim), aggressive)
 	if not tackler.start_tackle(aggressive):
 		return false
 	if tackler == controlled and match_team_size == 11:
@@ -3988,7 +3979,7 @@ func _resolve_tackle_contact(
 	var offset: Vector2 = victim.global_position - tackler.global_position
 	if offset.length() > _tackle_attempt_range(tackler):
 		return false
-	var resolved_hitbox := hitbox if not hitbox.is_empty() else _tackle_hitbox(tackler, victim.global_position)
+	var resolved_hitbox := hitbox if not hitbox.is_empty() else _tackle_hitbox(tackler, _tackle_contact_target(victim))
 	if not bool(resolved_hitbox.get("contact", resolved_hitbox.get("inside", false))):
 		return false
 
