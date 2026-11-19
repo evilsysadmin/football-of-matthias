@@ -141,7 +141,8 @@ func _play(spec: Dictionary) -> Dictionary:
 				input_direction = Vector2.ZERO
 		elif (
 			playing and holding and pending.is_empty()
-			and tick >= next_e_tick and current.can_dribble()
+			and tick >= next_e_tick and tick <= TICKS - RESULT_AFTER_FRAMES
+			and current.can_dribble()
 			and distance < 190.0 and distance > 42.0 and not prior_e
 		):
 			press_e = true
