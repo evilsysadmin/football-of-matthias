@@ -27,11 +27,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # No workspace lockfile is committed. Cache npm tarballs only;
+      # the pinned resolver continues to install/validate every dependency.
+      - name: Restore manager npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: football-manager-npm-${{ runner.os }}-${{ runner.arch }}-npm11.6.1-${{ hashFiles('package.json', 'frontend/package.json') }}
       - name: Install with pinned npm workspace resolver
         run: npx --yes npm@11.6.1 install --no-audit --no-fund
       - run: npm --prefix frontend test
       - name: Build manager frontend
         run: npm --prefix frontend run build
+      # frontend/package.json pins Playwright to 1.64.1. On a cache miss
+      # Playwright installs the exact required browser as before.
+      - name: Restore manager Chromium browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: football-manager-chromium-${{ runner.os }}-${{ runner.arch }}-playwright-1.64.1
       - name: Install Chromium for real scouting UI screenshots
         run: npx playwright install chromium
       - name: Verify and capture scouting cards in desktop and mobile
@@ -53,7 +67,9 @@ jobs:
       - run: python3 -m unittest discover -s scripts -p 'test_migration_provenance.py'
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    # Real Godot V5 visual captures + lossless review uploads can exceed 8 min
+    # on slower GitHub runners; keep a bounded 15-minute safety limit.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -817,11 +833,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # GitHub's minimal CI image does not guarantee FFmpeg is present.
-          # Install the distro package only when needed; no binary in Git.
+          # Some runner images omit FFmpeg, while apt-get update may hang
+          # silently for >15 min. Try existing package indexes first; fail
+          # visibly and within a bounded time if the mirror is unhealthy.
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq ffmpeg
+            echo 'FOOTBALL_FFMPEG_INSTALL_PRELOADED_INDEX'
+            apt-cache policy ffmpeg || true
+            if ! sudo timeout -k 10s 90s apt-get install -y -qq \
+              --no-install-recommends -o DPkg::Lock::Timeout=30 ffmpeg; then
+              echo '::warning::Cached FFmpeg package index unavailable; bounded APT refresh required.'
+              sudo timeout -k 10s 90s apt-get update -qq \
+                -o Acquire::Retries=1 \
+                -o Acquire::http::Timeout=20 \
+                -o Acquire::https::Timeout=20
+              sudo timeout -k 10s 120s apt-get install -y -qq \
+                --no-install-recommends -o DPkg::Lock::Timeout=30 ffmpeg
+            fi
           fi
           command -v ffmpeg
           command -v ffprobe
