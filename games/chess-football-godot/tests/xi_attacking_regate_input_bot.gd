@@ -1,6 +1,6 @@
 extends SceneTree
 
-# Attack-side companion to eleven_autoplay_player_bot.gd. Eight PAIRS of
+# Attack-side companion to eleven_autoplay_player_bot.gd. Twelve PAIRS of
 # real 12-second 22-player open-play windows: same initial seed and defender,
 # one E action arm versus a directional-movement-only control arm.
 # The E arm presses the SAME XI E/movement keys
@@ -22,6 +22,12 @@ const SPECS := [
 	{"seed": 67119, "difficulty": "hard", "opening": "cut", "side": 1.0, "approach": "early", "rival_offset": 225.0},
 	{"seed": 67123, "difficulty": "hard", "opening": "feint", "side": -1.0, "approach": "late", "rival_offset": 148.0},
 	{"seed": 67123, "difficulty": "hard", "opening": "feint", "side": -1.0, "approach": "early", "rival_offset": 225.0},
+	# The 149/226 extremes both lose possession by 1.2s. Test the
+	# physically plausible middle timing, with matched no-E controls.
+	{"seed": 67113, "difficulty": "normal", "opening": "cut", "side": -1.0, "approach": "middle", "rival_offset": 185.0},
+	{"seed": 67117, "difficulty": "normal", "opening": "feint", "side": 1.0, "approach": "middle", "rival_offset": 185.0},
+	{"seed": 67119, "difficulty": "hard", "opening": "cut", "side": 1.0, "approach": "middle", "rival_offset": 185.0},
+	{"seed": 67123, "difficulty": "hard", "opening": "feint", "side": -1.0, "approach": "middle", "rival_offset": 185.0},
 ]
 const KEYS := ["move_left", "move_right", "move_up", "move_down",
 	"sprint", "tackle", "special_move", "change_player", "shoot_ball", "pass_ball"]
@@ -364,7 +370,7 @@ func _initialize() -> void:
 			var outcome: String = String(event["outcome_at_0_8s"])
 			assert(actual_outcomes.has(outcome))
 			actual_outcomes[outcome] = int(actual_outcomes[outcome]) + 1
-	assert(reports.size() == 16 and total_events >= 8)
+	assert(reports.size() == 24 and total_events >= 12)
 	assert(total_events == (
 		int(actual_outcomes["retained"]) + int(actual_outcomes["loose"]) +
 		int(actual_outcomes["teammate"]) + int(actual_outcomes["cpu_stolen"]) +
@@ -401,8 +407,8 @@ func _initialize() -> void:
 			"e_stamina_spent": e["opening_stamina_spent"],
 			"run_stamina_spent": control["opening_stamina_spent"],
 		})
-	assert(pairs.size() == 8)
-	# A repeat AFTER 16 other runs checks how much the complete, seeded
+	assert(pairs.size() == 12)
+	# A repeat AFTER 24 other runs checks how much the complete, seeded
 	# match startup/AI drifts over time. Hard/cut/early previously flipped
 	# its 48-frame outcome across CI runs despite no cut-rule changes.
 	# Report discrepancies rather than hiding them or claiming bitwise
@@ -460,5 +466,5 @@ func _initialize() -> void:
 		"cpu_tackles": real_tackles,
 	}
 	print("FOOTBALL_XI_ATTACK_REGATE_INPUT " + JSON.stringify(payload))
-	print("FOOTBALL_XI_ATTACK_REGATE_INPUT_OK cases=16 pairs=8 input=keyboard ai=full xi=22")
+	print("FOOTBALL_XI_ATTACK_REGATE_INPUT_OK cases=24 pairs=12 input=keyboard ai=full xi=22")
 	quit(0)
