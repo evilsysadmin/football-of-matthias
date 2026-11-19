@@ -230,6 +230,65 @@ func _initialize() -> void:
 	carrier.action_lock_seconds = 0.0
 	assert(carrier.start_dribble(Vector2.RIGHT, "cut"))
 	assert(game._tackle_contact_target(carrier) == carrier.global_position)
+	# A stationary XI E feint also moves the physical ball outside the
+	# support leg. A CPU cannot rob through the torso when that real foot
+	# has moved, but a boot ON the ball still gets a valid clean tackle.
+	game.match_team_size = 11
+	carrier.match_pitch = game.match_pitch
+	carrier.global_position = centre
+	carrier.velocity = Vector2.ZERO
+	carrier.contact_stun_seconds = 0.0
+	carrier.tackle_recovery_seconds = 0.0
+	carrier.action_lock_seconds = 0.0
+	carrier.dribble_burst_seconds = 0.0
+	carrier.dribble_cooldown_seconds = 0.0
+	presser.tackle_cooldown_seconds = 0.0
+	presser.tackle_recovery_seconds = 0.0
+	presser.tackle_active_seconds = 0.0
+	presser.action_lock_seconds = 0.0
+	game.ball.attach_to(carrier)
+	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.2
+	game.ball.tick_ball(0.0)
+	var feint_ball: Vector2 = game.ball.global_position
+	assert(feint_ball.distance_to(centre) > 30.0,
+		"Standing E feint must really carry the ball to the planted foot")
+	presser.global_position = centre + Vector2(31.0, -25.0)
+	presser.velocity = Vector2.LEFT * presser.base_speed
+	assert(bool(game._tackle_hitbox(presser, centre)["contact"]))
+	assert(not bool(game._tackle_hitbox(presser, feint_ball)["contact"]),
+		"A planted outside foot must remain beyond this old torso tackle")
+	assert(game._tackle_contact_target(carrier) == feint_ball)
+	assert(not game._try_tackle(presser),
+		"A tackle into the standing feint's torso cannot rob the real outside foot")
+	assert(game.ball.carrier == carrier)
+	# The SAME physically valid tackle still dislodges the ball.
+	presser.tackle_active_seconds = 0.0
+	presser.tackle_cooldown_seconds = 0.0
+	presser.tackle_recovery_seconds = 0.0
+	presser.action_lock_seconds = 0.0
+	presser.global_position = feint_ball + Vector2(12.0, 0.0)
+	presser.velocity = Vector2.LEFT * presser.base_speed
+	assert(presser.global_position.distance_to(centre) < game.TACKLE_ATTEMPT_RANGE)
+	assert(bool(game._tackle_hitbox(presser, feint_ball)["clean"]))
+	assert(game._try_tackle(presser))
+	assert(game.ball.carrier == null)
+	# There is no post-feint protection or F long-touch buff.
+	game.ball.attach_to(carrier)
+	carrier.contact_stun_seconds = 0.0
+	carrier.tackle_recovery_seconds = 0.0
+	carrier.action_lock_seconds = 0.0
+	carrier.dribble_burst_seconds = 0.0
+	carrier.dribble_cooldown_seconds = 0.0
+	assert(carrier.start_dribble(Vector2(1.0, 0.76), "burst"))
+	assert(game._tackle_contact_target(carrier) == carrier.global_position)
+	carrier.dribble_burst_seconds = 0.0
+	carrier.dribble_cooldown_seconds = 0.0
+	carrier.action_lock_seconds = 0.0
+	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
+	carrier.dribble_burst_seconds = 0.0
+	assert(game._tackle_contact_target(carrier) == carrier.global_position)
+	print("FOOTBALL_XI_REAL_FEINT_BALL_CONTACT_OK torso_is_not_ball=1 clean_ball_tackle=1 burst_unchanged=1 expires=1")
 	print("FOOTBALL_XI_REAL_CUT_BALL_CONTACT_OK torso_is_not_ball=1 clean_ball_tackle=1 legacy_unchanged=1")
 	print("FOOTBALL_XI_CUT_SPRINT_EXIT_OK stamina_paid=1 capped=1 no_immunity=1 legacy_unchanged=1")
 	print("FOOTBALL_XI_MID_POSSESSION_DRIBBLE_READ_OK")
