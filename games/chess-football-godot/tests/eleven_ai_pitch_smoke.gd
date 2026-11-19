@@ -126,14 +126,36 @@ func _initialize() -> void:
 	striker.dribble_burst_seconds = striker.dribble_duration_seconds
 	game._set_quick_difficulty("hard")
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	# Hard close primary contains the visible planted-foot cue rather
+	# than accelerating blindly at full sprint through both steps.
+	# No damage to Expert, Normal, 5v5 or ordinary running.
+	assert(is_equal_approx(game._ai_xi_hard_feint_containment_intensity(
+		xi_cover_player, striker, 1.0
+	), 0.90))
+	striker.xi_feint_exit_run_seconds = 0.02
+	assert(is_equal_approx(game._ai_xi_hard_feint_containment_intensity(
+		xi_cover_player, striker, 1.0
+	), 1.0), "Hard resumes full speed when the feint has expired")
+	striker.xi_feint_exit_run_seconds = striker.dribble_duration_seconds + striker.XI_FEINT_EXIT_RUN_SECONDS
 	game._set_quick_difficulty("expert")
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	assert(is_equal_approx(game._ai_xi_hard_feint_containment_intensity(
+		xi_cover_player, striker, 1.0
+	), 1.0), "Expert never inherits the Hard containment tradeoff")
 	game._set_quick_difficulty("easy")
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
 	game._set_quick_difficulty("normal")
+	assert(is_equal_approx(game._ai_xi_hard_feint_containment_intensity(
+		xi_cover_player, striker, 1.0
+	), 1.0), "Normal keeps its own reaction model")
 	game.match_team_size = 5
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	game._set_quick_difficulty("hard")
+	assert(is_equal_approx(game._ai_xi_hard_feint_containment_intensity(
+		xi_cover_player, striker, 1.0
+	), 1.0), "5v5 retains its historical AI movement")
 	game.match_team_size = 11
+	game._set_quick_difficulty("normal")
 	striker.dribble_mode = "cut"
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
 	# Mirror direction: a fake left-right cue must not be hard-coded to one wing.
