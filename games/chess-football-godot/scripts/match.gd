@@ -1796,6 +1796,36 @@ func _ai_xi_dribble_tackle_read_ready(victim: Footballer) -> bool:
 	)
 
 
+# Even a skilled defender can bite briefly on a VISIBLE planted-foot cue.
+# Hard/Expert use the actual XI ball anchor at the current instant, never
+# a secret queued input, future velocity, forced miss or random coin flip.
+# The target is only a tactical movement suggestion; ordinary physics,
+# stamina and the exact same legal tackle/contact hitboxes remain intact.
+# Hard has a shorter, softer misread than Normal; Expert corrects sooner.
+func _ai_xi_skilled_feint_read_offset(presser: Footballer, owner: Footballer) -> Vector2:
+	if (
+		match_team_size != 11 or quick_difficulty not in ["hard", "expert"]
+		or presser.team_id != 1 or owner.team_id != 0
+		or presser.sent_off or owner.sent_off or owner.role == "keeper"
+		or ball.carrier != owner or not owner.dribble_active()
+		or owner.dribble_mode != "feint"
+		or presser.global_position.distance_to(owner.global_position) > 270.0
+	):
+		return Vector2.ZERO
+	var foot: Vector2 = owner.ball_anchor()
+	if absf(foot.y) < 12.0:
+		return Vector2.ZERO
+	var elapsed: float = owner.dribble_duration_seconds - owner.dribble_burst_seconds
+	var window: float = 0.115 if quick_difficulty == "hard" else 0.065
+	if elapsed < 0.0 or elapsed >= window:
+		return Vector2.ZERO
+	var maximum: float = 54.0 if quick_difficulty == "hard" else 26.0
+	var strength: float = 1.8 if quick_difficulty == "hard" else 1.0
+	var wrong_foot: float = -signf(foot.y) * minf(absf(foot.y) * strength, maximum)
+	var fading: float = 1.0 - smoothstep(window * 0.25, window, elapsed)
+	return Vector2(0.0, wrong_foot * fading)
+
+
 func _ai_xi_normal_feint_read_offset(presser: Footballer, owner: Footballer) -> Vector2:
 	if (
 		match_team_size != 11
@@ -1865,6 +1895,11 @@ func _ai_press_target(presser: Footballer, owner: Footballer) -> Vector2:
 	if feint_offset.length_squared() > 0.001:
 		return ChessFootballMath.clamp_to_pitch(
 			owner.global_position + feint_offset, match_pitch
+		)
+	var skilled_feint_offset: Vector2 = _ai_xi_skilled_feint_read_offset(presser, owner)
+	if skilled_feint_offset.length_squared() > 0.001:
+		return ChessFootballMath.clamp_to_pitch(
+			owner.global_position + skilled_feint_offset, match_pitch
 		)
 	var observed_velocity: Vector2 = _ai_xi_observed_carrier_velocity(owner)
 	if (
