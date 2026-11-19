@@ -1592,6 +1592,7 @@ func _update_ai(delta: float) -> void:
 				if player == presser:
 					if (
 						_ai_xi_normal_tackle_read_due(ball.carrier, delta)
+						and _ai_xi_skilled_tackle_decision_due(ball.carrier, delta)
 						and _ai_xi_tackle_commit_ready(player, ball.carrier, false)
 					):
 						_try_tackle(player)
@@ -3560,6 +3561,25 @@ func _tackle_attempt_range(tackler: Footballer, aggressive_override: bool = fals
 # new timers or owner-leaking state. A clean contact remains legal between
 # reads if a tackle was already launched. Hard/Expert/Easy, human tackles,
 # loose-ball claims and legacy 5v5 keep their historical timing.
+# A CPU cannot re-evaluate the exact instant to launch a tackle 60 times
+# each second. Hard/Expert still react substantially faster than Normal, but
+# choose a new tackle COMMITMENT only at real possession-clock decision beats.
+# Already launched boots keep their full physical collision/hitbox legality.
+# No miss-roll, speed nerf, cooldown extension or animation immunity.
+func _ai_xi_skilled_tackle_decision_due(victim: Footballer, delta: float) -> bool:
+	if (
+		match_team_size != 11
+		or quick_difficulty not in ["hard", "expert"]
+		or victim.team_id != 0
+		or ball.carrier != victim
+	):
+		return true
+	var interval: float = 0.12 if quick_difficulty == "hard" else 0.075
+	var age: float = ball.possession_seconds
+	var previous: float = maxf(age - maxf(delta, 0.0), 0.0)
+	return floori(age / interval) > floori(previous / interval)
+
+
 func _ai_xi_normal_tackle_read_due(victim: Footballer, delta: float) -> bool:
 	if (
 		match_team_size != 11
