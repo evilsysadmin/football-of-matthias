@@ -11,6 +11,15 @@ const SKILLS := [45, 95]
 const SIDES := [-1.0, 1.0]
 const DISTANCES := ["close", "far"]
 const ACTIONS := ["feint", "cut", "burst"]
+# Conservative floors from the last green, reproducible #207 physical matrix:
+# Normal cut 7/8, feint 3/8; Hard cut 3/8, feint 3/8.
+# These are safety nets for this SAME fixture, not real-match win rates.
+const XI_E_RETAINED_FLOORS := {
+	"normal/cut": 5,
+	"normal/feint": 2,
+	"hard/cut": 2,
+	"hard/feint": 2,
+}
 
 func _initialize() -> void:
 	var packed := load("res://main.tscn") as PackedScene
@@ -121,8 +130,10 @@ func _initialize() -> void:
 						if rows.size() % 12 == 0:
 							print("FOOTBALL_XI_DRIBBLE_MATRIX_PROGRESS completed=%d/48" % rows.size())
 
-	# No arbitrary target percentages: this fixture is for repeatable *data*.
-	# But it must exercise a real duel rather than silently disable AI contact.
+	# Keep raw measurements, but also reject a return to decorative E:
+	# merely moving a sprite sideways must never be enough for green CI.
+	# Floors are BELOW last green #207 fixed-physics outcomes, not arbitrary
+	# match win percentages. Real CPU tackles and both cut flanks must remain.
 	assert(rows.size() == 48)
 	assert(outcomes.size() == 4)
 	for group in outcomes:
@@ -130,6 +141,26 @@ func _initialize() -> void:
 		assert(int(counts["retained"]) + int(counts["loose"]) +
 			int(counts["recovered"]) + int(counts["foul"]) == 12)
 	assert(actual_tackle_attempts > 0, "Duel matrix must exercise real CPU tackles")
+	var playability_errors: Array[String] = _xi_regate_playability_errors(rows)
+	assert(playability_errors.is_empty(),
+		"XI E physical-playability regression: " + JSON.stringify(playability_errors))
+	# Prove the gate detects deliberately broken gameplay, not just valid JSON.
+	var never_tackles_rows: Array[Dictionary] = []
+	var cut_always_loses_rows: Array[Dictionary] = []
+	for original in rows:
+		var no_tackle: Dictionary = original.duplicate()
+		no_tackle["tackle_attempts"] = 0
+		never_tackles_rows.append(no_tackle)
+		var fake_loss: Dictionary = original.duplicate()
+		if fake_loss["difficulty"] == "normal" and fake_loss["action"] == "cut":
+			fake_loss["result"] = "recovered"
+		cut_always_loses_rows.append(fake_loss)
+	assert(not _xi_regate_playability_errors(never_tackles_rows).is_empty(),
+		"An unplugged CPU must never pass the XI regate gate")
+	assert(not _xi_regate_playability_errors(cut_always_loses_rows).is_empty(),
+		"A cosmetic-only E cut must never pass the XI regate gate")
+	print("FOOTBALL_XI_REGATE_PLAYABILITY_OK physical=48 real_tackles=1 " +
+		"normal_cut_floor=5 normal_feint_floor=2 hard_cut_floor=2 hard_feint_floor=2")
 	print("FOOTBALL_XI_DRIBBLE_ANGLE_SKILL_MATRIX " + JSON.stringify({
 		"mode": "isolated_deterministic_60hz_real_godot_physics_not_live_matches",
 		"scenarios": rows.size(),
@@ -140,6 +171,74 @@ func _initialize() -> void:
 	}))
 	print("FOOTBALL_XI_DRIBBLE_ANGLE_SKILL_MATRIX_OK")
 	quit(0)
+
+
+# Checks how much the actual in-engine XI E earns against a real CPU.
+# A bad human E still loses; no unit tests may claim a fixed league win rate.
+# Grouping by action, BOTH flanks and skill prevents one lucky direction or
+# a disabled tackle system from faking progress.
+func _xi_regate_playability_errors(duels: Array[Dictionary]) -> Array[String]:
+	var errors: Array[String] = []
+	var summary: Dictionary = {}
+	var flank_wins: Dictionary = {}
+	var skill_wins: Dictionary = {}
+	for duel in duels:
+		var key: String = "%s/%s" % [String(duel["difficulty"]), String(duel["action"])]
+		if not summary.has(key):
+			summary[key] = {"total": 0, "retained": 0, "attempts": 0}
+		var item: Dictionary = summary[key]
+		item["total"] = int(item["total"]) + 1
+		item["attempts"] = int(item["attempts"]) + int(duel["tackle_attempts"])
+		if duel["result"] == "retained":
+			item["retained"] = int(item["retained"]) + 1
+			var flank: String = "%s/%s" % [key, String(duel["side"])]
+			flank_wins[flank] = int(flank_wins.get(flank, 0)) + 1
+			var skill: String = "%s/%d" % [key, int(duel["technique"])]
+			skill_wins[skill] = int(skill_wins.get(skill, 0)) + 1
+		summary[key] = item
+	for difficulty in ["normal", "hard"]:
+		for action in ACTIONS:
+			var key: String = "%s/%s" % [difficulty, action]
+			if not summary.has(key):
+				errors.append("%s missing from 48 actual physical duels" % key)
+				continue
+			var item: Dictionary = summary[key]
+			if int(item["total"]) != 8:
+				errors.append("%s covers %d/8 duels" % [key, int(item["total"])])
+			if int(item["attempts"]) < 1:
+				errors.append("%s CPU never attempts a real tackle" % key)
+		for action in ["cut", "feint"]:
+			var key: String = "%s/%s" % [difficulty, action]
+			if not summary.has(key):
+				continue
+			var retained: int = int((summary[key] as Dictionary)["retained"])
+			var floor_value: int = int(XI_E_RETAINED_FLOORS[key])
+			if retained < floor_value:
+				errors.append("%s retains %d/8; verified regression floor is %d" %
+					[key, retained, floor_value])
+			for side in ["up", "down"]:
+				if int(flank_wins.get("%s/%s" % [key, side], 0)) < 1:
+					errors.append("%s no earned retention on %s flank" % [key, side])
+			# In the green #207 baseline Normal cut/feint and Hard cut
+			# improve with technique; Hard feint is an actual counterexample
+			# (low=2/4, high=1/4) due to collision geometry, so NEVER fake
+			# a global monotonic-skill contract that the physics does not obey.
+			if key != "hard/feint" and (
+				int(skill_wins.get(key + "/95", 0)) <
+				int(skill_wins.get(key + "/45", 0))
+			):
+				errors.append("%s lost its measured high-technique advantage" % key)
+	if summary.has("normal/cut") and summary.has("normal/burst"):
+		if int((summary["normal/cut"] as Dictionary)["retained"]) < (
+			int((summary["normal/burst"] as Dictionary)["retained"]) + 2
+		):
+			errors.append("Normal E cut must outperform the risky straight F touch")
+	if summary.has("hard/cut") and summary.has("hard/burst"):
+		if int((summary["hard/cut"] as Dictionary)["retained"]) <= (
+			int((summary["hard/burst"] as Dictionary)["retained"])
+		):
+			errors.append("Hard E cut must remain useful versus the straight F touch")
+	return errors
 
 
 func _reset_duel(
