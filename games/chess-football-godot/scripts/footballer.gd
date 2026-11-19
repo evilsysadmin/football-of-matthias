@@ -60,7 +60,7 @@ const DRIBBLE_LONG_TOUCH_SECONDS := 0.27
 const DRIBBLE_FEINT_SPEED := 0.65
 const XI_DRIBBLE_FEINT_SPEED := 0.44
 # Real powered second step is below the ordinary 1.34x sprint cap.
-const XI_DRIBBLE_FEINT_SECOND_STEP_SPEED := 1.16
+const XI_DRIBBLE_FEINT_SECOND_STEP_SPEED := 1.32
 const DRIBBLE_LONG_TOUCH_SPEED := 1.56
 const DRIBBLE_FEINT_TOUCH := 8.0
 const DRIBBLE_LONG_TOUCH := 32.0
@@ -579,7 +579,7 @@ func _xi_feint_exit_ratio() -> float:
 		dribble_burst_seconds / maxf(dribble_duration_seconds, 0.001),
 		0.0, 1.0
 	)
-	return smoothstep(0.20, 0.74, progress)
+	return smoothstep(0.16, 0.60, progress)
 
 
 # Maintain the first planted boot, then accelerate sideways with normal
@@ -591,7 +591,7 @@ func _xi_feint_plant_speed_multiplier() -> float:
 	)
 	return lerpf(
 		XI_DRIBBLE_FEINT_SPEED, XI_DRIBBLE_FEINT_SECOND_STEP_SPEED,
-		smoothstep(0.12, 0.68, progress)
+		smoothstep(0.08, 0.52, progress)
 	)
 
 
