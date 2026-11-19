@@ -140,7 +140,7 @@ jobs:
           godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
           log="$RUNNER_TEMP/football-xi-attacking-e.log"
           set +e
-          timeout 130s "$godot" --headless --quit-after 11000 --path games/chess-football-godot --script res://tests/xi_attacking_regate_input_bot.gd 2>&1 | tee "$log"
+          timeout 175s "$godot" --headless --quit-after 14000 --path games/chess-football-godot --script res://tests/xi_attacking_regate_input_bot.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
@@ -161,9 +161,15 @@ jobs:
           report = reports[0]
           assert report['kind'] == 'seeded_real_input_xi_open_play_12s_windows_not_full_matches'
           assert report['frames_per_trial'] == 720 and report['result_after_frames'] == 48
-          assert [(x['difficulty'], x['opening']) for x in report['cases']] == [
-              ('normal', 'cut'), ('normal', 'feint'), ('hard', 'cut'), ('hard', 'feint')
+          assert [(x['difficulty'], x['opening'], x['approach']) for x in report['cases']] == [
+              ('normal', 'cut', 'late'), ('normal', 'cut', 'early'),
+              ('normal', 'feint', 'late'), ('normal', 'feint', 'early'),
+              ('hard', 'cut', 'late'), ('hard', 'cut', 'early'),
+              ('hard', 'feint', 'late'), ('hard', 'feint', 'early'),
           ]
+          assert all(x['staged_rival_distance'] == (
+              148.0 if x['approach'] == 'late' else 225.0
+          ) for x in report['cases'])
           assert report['e_events'] == sum(x['e_executed'] for x in report['cases'])
           assert all(x['e_pressed'] == x['e_executed'] >= 1
                      and x['pressured_e'] >= 1
@@ -176,7 +182,7 @@ jobs:
                      and e['nearest_rival_at_e'] > 0
                      for case in report['cases'] for e in case['events'])
           Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
-          print('FOOTBALL_XI_ATTACK_REGATE_ARTIFACT_OK cases=4 real_input=1')
+          print('FOOTBALL_XI_ATTACK_REGATE_ARTIFACT_OK cases=8 real_input=1 early_vs_late=1')
           PY
       - name: Upload XI open-play attacking E bot telemetry
         if: always()
