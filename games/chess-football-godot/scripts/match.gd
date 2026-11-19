@@ -1461,6 +1461,34 @@ func _release_charged_shot() -> void:
 	ball.release(target - controlled.global_position, power, lift, true)
 	_show_action_feedback("TIRO")
 
+# A close Hard primary defender CONTAINS a planted XI feint instead of
+# running at a full blind sprint while the attacker makes two actual steps.
+# This changes only real Footballer.move_ai intensity for that single
+# pressor, for a bounded 0.48s read: normal accel, real stamina, same
+# hitbox/tackle decisions and no frozen actor or invulnerable human.
+# The second cover still closes at full Hard speed. No effect on ordinary
+# carrying/running, cut/F, Easy/Normal/Expert, keeper or 5v5.
+func _ai_xi_hard_feint_containment_intensity(
+	presser: Footballer, owner: Footballer, base_intensity: float
+) -> float:
+	if (
+		match_team_size != 11 or quick_difficulty != "hard"
+		or presser.team_id != 1 or owner.team_id != 0
+		or presser.sent_off or owner.sent_off
+		or ball.carrier != owner or owner.dribble_mode != "feint"
+		or owner.xi_feint_exit_run_seconds <= 0.0
+		or presser.global_position.distance_to(owner.global_position) > 230.0
+	):
+		return base_intensity
+	var elapsed: float = (
+		owner.dribble_duration_seconds + owner.XI_FEINT_EXIT_RUN_SECONDS
+		- owner.xi_feint_exit_run_seconds
+	)
+	if elapsed < 0.0 or elapsed > 0.48:
+		return base_intensity
+	return minf(base_intensity, 0.90)
+
+
 func _update_ai(delta: float) -> void:
 	if (
 		match_team_size != 11
@@ -1582,6 +1610,13 @@ func _update_ai(delta: float) -> void:
 			# Only the opposing team changes effort; human teammates remain unchanged.
 			if team_id == 1:
 				intensity = _ai_cpu_intensity(intensity)
+				if (
+					player == presser and ball.carrier != null
+					and ball.carrier.team_id == 0
+				):
+					intensity = _ai_xi_hard_feint_containment_intensity(
+						player, ball.carrier, intensity
+					)
 			player.move_ai(delta, target, intensity)
 
 			if (
