@@ -295,6 +295,10 @@ const AI_ADAPT_SUPPORT_STEP := 22.0
 const AI_ADAPT_PASS_GAIN_STEP := 18.0
 
 const DRIBBLE_AUTO_EVADE_RADIUS := 190.0
+# A stationary XI E must anticipate an ONCOMING presser a fraction of a
+# second before he enters the narrow contact radius. This is a current
+# position read, not future AI input, speed bonus or guaranteed evade.
+const XI_FEINT_AUTO_EVADE_RADIUS := 285.0
 const DRIBBLE_AUTO_LOOKAHEAD := 132.0
 const DRIBBLE_AUTO_SIDELINE_WEIGHT := 0.34
 
@@ -3636,20 +3640,33 @@ func _ai_xi_tackle_commit_ready(
 
 func _auto_dribble_direction(player: Footballer) -> Vector2:
 	var forward := Vector2.RIGHT if player.team_id == 0 else Vector2.LEFT
+	# Only the STATIONARY XI E (the no-direction E input path) earns
+	# a longer visual scouting radius. At 225 units the old 190-unit
+	# gate returned straight forward, so E was identical to running
+	# into the defender instead of actually making a side cut.
+	var xi_feint: bool = (
+		match_team_size == 11 and player.team_id == 0
+		and player.role != "keeper" and ball.carrier == player
+	)
+	var pressure_radius: float = (
+		XI_FEINT_AUTO_EVADE_RADIUS if xi_feint else DRIBBLE_AUTO_EVADE_RADIUS
+	)
 	var pressure_nearby := false
 	for opponent in teams[1 - player.team_id]:
 		if opponent.sent_off:
 			continue
-		if opponent.global_position.distance_to(player.global_position) <= DRIBBLE_AUTO_EVADE_RADIUS:
+		if opponent.global_position.distance_to(player.global_position) <= pressure_radius:
 			pressure_nearby = true
 			break
 	if not pressure_nearby:
 		return forward
 
 	var pitch := match_pitch
+	var forward_weight: float = 0.54 if xi_feint else 0.72
+	var lateral_weight: float = 0.84 if xi_feint else 0.69
 	var candidates: Array[Vector2] = [
-		(forward * 0.72 + Vector2.UP * 0.69).normalized(),
-		(forward * 0.72 + Vector2.DOWN * 0.69).normalized(),
+		(forward * forward_weight + Vector2.UP * lateral_weight).normalized(),
+		(forward * forward_weight + Vector2.DOWN * lateral_weight).normalized(),
 	]
 	var best_direction := forward
 	var best_score := -INF
