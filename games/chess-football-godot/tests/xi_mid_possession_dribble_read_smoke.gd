@@ -170,6 +170,40 @@ func _initialize() -> void:
 	carrier.match_pitch = ChessFootballMath.PITCH_RECT
 	assert(carrier.start_dribble(Vector2.RIGHT, "cut"))
 	assert(carrier.xi_cut_exit_run_seconds == 0.0)
+	# Normal XI should chase a real planted E instead of projecting its
+	# changed direction a full stride. Hard retains ordinary forward lead.
+	# Neither the defender's real speed nor the physical hitbox is changed.
+	carrier.match_pitch = game.match_pitch
+	carrier.global_position = centre
+	carrier.velocity = Vector2(220.0, 110.0)
+	carrier.dribble_burst_seconds = 0.0
+	carrier.dribble_cooldown_seconds = 0.0
+	carrier.action_lock_seconds = 0.0
+	game.ball.attach_to(carrier)
+	assert(carrier.start_dribble(Vector2(1.0, 0.76), "cut"))
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.2
+	carrier.xi_cut_exit_run_seconds = carrier.dribble_burst_seconds + carrier.XI_CUT_EXIT_RUN_SECONDS
+	presser.global_position = centre + Vector2(160.0, -75.0)
+	presser.velocity = Vector2.LEFT * presser.base_speed
+	game._set_quick_difficulty("normal")
+	var normal_target: Vector2 = game._ai_press_target(presser, carrier)
+	game._set_quick_difficulty("hard")
+	var hard_target: Vector2 = game._ai_press_target(presser, carrier)
+	assert(normal_target.distance_to(centre) > 1.0,
+		"Normal must continue pursuing observed real movement")
+	assert(normal_target.distance_to(centre) < hard_target.distance_to(centre) * 0.55,
+		"Normal must not predict a fresh E exit farther ahead than Hard")
+	game._set_quick_difficulty("normal")
+	carrier.xi_cut_exit_run_seconds = 0.0
+	var full_target: Vector2 = game._ai_press_target(presser, carrier)
+	assert(full_target.distance_to(hard_target) < 0.01,
+		"Only a current E exit should damp prediction, not general defence")
+	carrier.xi_cut_exit_run_seconds = 0.3
+	game.match_team_size = 5
+	assert(game._ai_press_target(presser, carrier).is_equal_approx(centre),
+		"Legacy 5v5 must never receive an XI pursuit forecast")
+	game.match_team_size = 11
+	print("FOOTBALL_XI_NORMAL_CUT_PRESS_LEAD_OK reduced_foresight=1 hard_unchanged=1 five_unchanged=1")
 	print("FOOTBALL_XI_CUT_SPRINT_EXIT_OK stamina_paid=1 capped=1 no_immunity=1 legacy_unchanged=1")
 	print("FOOTBALL_XI_MID_POSSESSION_DRIBBLE_READ_OK")
 	quit(0)
