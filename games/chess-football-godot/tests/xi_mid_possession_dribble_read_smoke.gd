@@ -181,7 +181,9 @@ func _initialize() -> void:
 	carrier.action_lock_seconds = 0.0
 	game.ball.attach_to(carrier)
 	assert(carrier.start_dribble(Vector2(1.0, 0.76), "cut"))
-	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.2
+	# Observe the late planted foot, AFTER Normal’s 0.32s old-lane cue.
+	# The XI moving E lasts only 0.34s; at 80% progress that cue is still on.
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.02
 	carrier.xi_cut_exit_run_seconds = carrier.dribble_burst_seconds + carrier.XI_CUT_EXIT_RUN_SECONDS
 	presser.global_position = centre + Vector2(160.0, -75.0)
 	presser.velocity = Vector2.LEFT * presser.base_speed
