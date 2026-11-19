@@ -3662,8 +3662,11 @@ func _auto_dribble_direction(player: Footballer) -> Vector2:
 		return forward
 
 	var pitch := match_pitch
-	var forward_weight: float = 0.54 if xi_feint else 0.72
-	var lateral_weight: float = 0.84 if xi_feint else 0.69
+	# The planted feint moves the actual body sideways, not just the
+	# artwork. Start at a ~69-degree lane to evade a front-on tackle;
+	# movement still uses normal acceleration, pitch bounds and stamina.
+	var forward_weight: float = 0.36 if xi_feint else 0.72
+	var lateral_weight: float = 0.94 if xi_feint else 0.69
 	var candidates: Array[Vector2] = [
 		(forward * forward_weight + Vector2.UP * lateral_weight).normalized(),
 		(forward * forward_weight + Vector2.DOWN * lateral_weight).normalized(),
