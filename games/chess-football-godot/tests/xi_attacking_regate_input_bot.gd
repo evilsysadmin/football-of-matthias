@@ -177,11 +177,37 @@ func _play(spec: Dictionary) -> Dictionary:
 				"tick": tick, "mode": mode,
 				"nearest_rival_at_e": snappedf(distance, 0.1),
 				"carrier": current, "lost_during_window": false,
+				"first_loss": {},
 			}
 		if not pending.is_empty():
 			var original: Footballer = pending["carrier"]
 			if game.ball.carrier != original:
 				pending["lost_during_window"] = true
+				if (pending["first_loss"] as Dictionary).is_empty():
+					var source: String = "other_ball_event"
+					if game.pending_tackle_player != null:
+						source = "clean_tackle_pending_claim"
+					elif original.xi_collision_guard_seconds > 0.0:
+						source = (
+							"body_collision_fall" if original.xi_collision_down_seconds > 0.0
+							else "body_collision_stumble"
+						)
+					elif original.contact_stun_seconds > 0.0:
+						source = "tackle_or_contact_stun"
+					var rivals_tackling := 0
+					for rival: Footballer in game.teams[1]:
+						if rival.tackle_active():
+							rivals_tackling += 1
+					var nearest_at_loss: Dictionary = _nearest_rival(game, original)
+					pending["first_loss"] = {
+						"frame": tick - int(pending["tick"]),
+						"cause_hint": source,
+						"nearest_rival": snappedf(float(nearest_at_loss["distance"]), 0.1),
+						"active_cpu_tackles": rivals_tackling,
+						"carrier_down": original.xi_collision_down_seconds > 0.0,
+						"stun_seconds": snappedf(original.contact_stun_seconds, 0.01),
+						"feedback": game.action_feedback_text,
+					}
 			if tick - int(pending["tick"]) + 1 >= RESULT_AFTER_FRAMES:
 				var result: String = _outcome(game, original)
 				events.append({
@@ -190,6 +216,7 @@ func _play(spec: Dictionary) -> Dictionary:
 					"nearest_rival_at_e": pending["nearest_rival_at_e"],
 					"outcome_at_0_8s": result,
 					"lost_possession_at_any_point": bool(pending["lost_during_window"]),
+					"first_loss": pending["first_loss"],
 					"advance": snappedf(original.global_position.x - origin.x, 0.1),
 				})
 				pending.clear()
