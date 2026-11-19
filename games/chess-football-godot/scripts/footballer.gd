@@ -300,6 +300,10 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	# Technique affects dribbling/carrying only, never off-ball sprints.
 	if has_ball and role != "keeper":
 		speed *= technique_control_multiplier
+	if cut_exit_sprint:
+		# Technique already improves control; a free E follow-through must
+		# NEVER exceed the player's ordinary 1.34x sprint ceiling.
+		speed = minf(speed, base_speed * SPRINT_SPEED_MULTIPLIER)
 	if tackle_recovery_seconds > 0.0:
 		speed *= 0.42
 	if contact_stun_seconds > 0.0:
