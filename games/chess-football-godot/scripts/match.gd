@@ -3584,6 +3584,48 @@ func _ai_xi_normal_tackle_read_due(victim: Footballer, delta: float) -> bool:
 # 0.38s recovery and 1.1s cooldown without touching the attacker.
 # Only the second cover insists on a clean poke: its job is to stay goal-side.
 # Easy, 5v5 and manual tackles keep their established controls/rules.
+# Hard's first presser can COMMIT to an observed feint before contact
+# is guaranteed. At the outer edge of the normal 94-unit challenge radius,
+# a closing runner may launch a real boot at the visible current ball lane.
+# If that lane is already empty, start_tackle() still pays its normal 1.10s
+# cooldown and physical 0.18s active contact. No scripted success or miss:
+# a legal ball within the fixed hitbox at any later frame can still be won.
+# No effect on ordinary runs, Normal/Expert, cover, F, cut or 5v5.
+func _ai_xi_hard_feint_anticipation_ready(
+	tackler: Footballer, victim: Footballer, is_cover: bool,
+	hitbox: Dictionary
+) -> bool:
+	if (
+		match_team_size != 11 or quick_difficulty != "hard"
+		or is_cover or tackler.team_id != 1 or victim.team_id != 0
+		or tackler.sent_off or victim.sent_off
+		or ball.carrier != victim or victim.dribble_mode != "feint"
+		or victim.xi_feint_exit_run_seconds <= 0.0
+		or bool(hitbox.get("contact", false))
+		or tackler.velocity.length() < 125.0
+	):
+		return false
+	var elapsed: float = (
+		victim.dribble_duration_seconds + victim.XI_FEINT_EXIT_RUN_SECONDS
+		- victim.xi_feint_exit_run_seconds
+	)
+	if elapsed < 0.14 or elapsed > 0.42:
+		return false
+	var observed_ball: Vector2 = _tackle_contact_target(victim)
+	var aim: Vector2 = observed_ball - tackler.global_position
+	if aim.length_squared() <= 1.0:
+		return false
+	var heading: Vector2 = _tackle_forward(tackler)
+	var forward: float = aim.dot(heading)
+	var sideways: float = absf(aim.cross(heading))
+	return (
+		forward >= 18.0
+		and forward <= _tackle_attempt_range(tackler)
+		and sideways <= TACKLE_FOUL_HALF_WIDTH + 28.0
+		and tackler.velocity.normalized().dot(aim.normalized()) >= 0.40
+	)
+
+
 func _ai_xi_tackle_commit_ready(
 	tackler: Footballer, victim: Footballer, is_cover: bool
 ) -> bool:
@@ -3627,11 +3669,9 @@ func _ai_xi_tackle_commit_ready(
 	):
 		return false
 	var hitbox: Dictionary = _tackle_hitbox(tackler, _tackle_contact_target(victim))
-	return (
-		bool(hitbox.get("inside", false))
-		and not bool(hitbox.get("foul", false))
-		and (not is_cover or bool(hitbox.get("clean", false)))
-	)
+	if bool(hitbox.get("inside", false)) and not bool(hitbox.get("foul", false)):
+		return not is_cover or bool(hitbox.get("clean", false))
+	return _ai_xi_hard_feint_anticipation_ready(tackler, victim, is_cover, hitbox)
 
 
 func _auto_dribble_direction(player: Footballer) -> Vector2:
