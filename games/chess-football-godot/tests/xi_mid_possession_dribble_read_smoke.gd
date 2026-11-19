@@ -287,6 +287,29 @@ func _initialize() -> void:
 	carrier.action_lock_seconds = 0.0
 	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
 	assert(carrier.xi_feint_exit_run_seconds > carrier.dribble_duration_seconds)
+	# The first plant is still slow, then a physical second step gains
+	# lateral space without ever exceeding normal sprint. It costs stamina
+	# ONLY while the player steers during the real active E.
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds
+	assert(is_equal_approx(carrier._xi_feint_plant_speed_multiplier(),
+		carrier.XI_DRIBBLE_FEINT_SPEED))
+	assert(carrier._xi_feint_exit_ratio() == 0.0)
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.62
+	assert(carrier._xi_feint_exit_ratio() > 0.15)
+	assert(carrier._xi_feint_plant_speed_multiplier() > 0.65)
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.22
+	assert(carrier._xi_feint_exit_ratio() > 0.99)
+	assert(carrier._xi_feint_plant_speed_multiplier() >= 1.15)
+	carrier.stamina = carrier.STAMINA_MAX
+	carrier.sprint_exhausted = false
+	carrier.velocity = Vector2.ZERO
+	await physics_frame
+	carrier.move_human(1.0 / 60.0, Vector2(1.0, -0.60), false)
+	assert(carrier.stamina < carrier.STAMINA_MAX,
+		"Powered second E plant must pay real stamina while steering")
+	assert(carrier.velocity.length() <= carrier.base_speed *
+		carrier.SPRINT_SPEED_MULTIPLIER + 1.0,
+		"Powered physical E cannot outrun normal sprint")
 	carrier.dribble_burst_seconds = 0.0
 	carrier.xi_feint_exit_run_seconds = 0.24
 	game.ball.tick_ball(0.0)
