@@ -3452,18 +3452,27 @@ func _tackle_forward(tackler: Footballer) -> Vector2:
 	var facing_x := -1.0 if tackler.visual != null and tackler.visual.flip_h else 1.0
 	return Vector2(facing_x, 0.0)
 
-# During an XI E cut, the live ball is physically ahead/on the outside
-# foot (FootballBall.tick_ball and Footballer.ball_anchor). An entry into the
-# player's torso is not automatically a winning poke through the ball.
-# Use the ACTUAL carried ball location while that cut/exit remains active.
-# Body collisions and fouls retain their separate physical handling.
-# No generated aim point, enlarged radius, free possession or 5v5 change.
+# The live XI ball is physically at the foot, not at the torso.
+# The moving E cut (and real sprint exit) already use that authoritative
+# point. A planted E feint also moves the actual ball across the planted
+# boot, so a CPU poke THROUGH the stationary torso must not teleport it.
+# Keep F's risky long touch, keeper hands, running and legacy 5v5 unchanged.
+# Normal body contacts/fouls and legitimate tackles still resolve normally.
 func _tackle_contact_target(victim: Footballer) -> Vector2:
 	if (
 		match_team_size == 11 and ball.carrier == victim
 		and victim.match_pitch == Formation.ELEVEN_PITCH_RECT
-		and victim.role != "keeper" and victim.dribble_mode == "cut"
-		and (victim.dribble_active() or victim.xi_cut_exit_run_seconds > 0.0)
+		and victim.role != "keeper"
+		and (
+			(
+				victim.dribble_mode == "cut"
+				and (victim.dribble_active() or victim.xi_cut_exit_run_seconds > 0.0)
+			)
+			or (
+				victim.dribble_mode == "feint"
+				and (victim.dribble_active() or victim.xi_feint_exit_run_seconds > 0.0)
+			)
+		)
 	):
 		return ball.global_position
 	return victim.global_position
