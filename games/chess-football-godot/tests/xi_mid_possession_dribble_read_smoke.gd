@@ -286,8 +286,44 @@ func _initialize() -> void:
 	carrier.dribble_cooldown_seconds = 0.0
 	carrier.action_lock_seconds = 0.0
 	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
+	assert(carrier.xi_feint_exit_run_seconds > carrier.dribble_duration_seconds)
 	carrier.dribble_burst_seconds = 0.0
+	carrier.xi_feint_exit_run_seconds = 0.24
+	game.ball.tick_ball(0.0)
+	assert(game._tackle_contact_target(carrier) == game.ball.global_position,
+		"The real ball remains authoritative through the standing feint exit")
+	carrier.stamina = carrier.STAMINA_MAX
+	carrier.sprint_exhausted = false
+	carrier.velocity = Vector2.ZERO
+	var feint_stamina_before: float = carrier.stamina
+	await physics_frame
+	carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+	assert(carrier.last_sprinting,
+		"Player-directed feint exit must use real sprint acceleration")
+	assert(carrier.stamina < feint_stamina_before,
+		"Feint exit must spend the same stamina as ordinary sprint")
+	for step in range(12):
+		await physics_frame
+		carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+		assert(carrier.velocity.length() <= carrier.base_speed * carrier.SPRINT_SPEED_MULTIPLIER + 1.0,
+			"Feint may not exceed existing sprint ceiling")
+		carrier._process(1.0 / 60.0)
+	carrier.xi_feint_exit_run_seconds = 0.0
+	await physics_frame
+	carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+	assert(not carrier.last_sprinting,
+		"The brief exit ends cleanly; no persistent acceleration buff")
 	assert(game._tackle_contact_target(carrier) == carrier.global_position)
+	# A stationary player receives no free dash merely by releasing E.
+	carrier.xi_feint_exit_run_seconds = 0.20
+	await physics_frame
+	carrier.move_human(1.0 / 60.0, Vector2.ZERO, false)
+	assert(not carrier.last_sprinting, "Feint exit needs actual movement input")
+	# Losing possession immediately cancels the remaining opportunity.
+	game.ball.release(Vector2.RIGHT, 40.0)
+	carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+	assert(carrier.xi_feint_exit_run_seconds == 0.0)
+	print("FOOTBALL_XI_FEINT_STAMINA_EXIT_OK real_sprint=1 capped=1 needs_input=1 lost_ball_cancels=1")
 	print("FOOTBALL_XI_REAL_FEINT_BALL_CONTACT_OK torso_is_not_ball=1 clean_ball_tackle=1 burst_unchanged=1 expires=1")
 	print("FOOTBALL_XI_REAL_CUT_BALL_CONTACT_OK torso_is_not_ball=1 clean_ball_tackle=1 legacy_unchanged=1")
 	print("FOOTBALL_XI_CUT_SPRINT_EXIT_OK stamina_paid=1 capped=1 no_immunity=1 legacy_unchanged=1")
