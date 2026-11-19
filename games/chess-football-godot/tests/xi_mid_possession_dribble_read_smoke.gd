@@ -181,11 +181,17 @@ func _initialize() -> void:
 	carrier.action_lock_seconds = 0.0
 	game.ball.attach_to(carrier)
 	assert(carrier.start_dribble(Vector2(1.0, 0.76), "cut"))
-	# Observe the late planted foot, AFTER Normal’s 0.32s old-lane cue.
-	# The XI moving E lasts only 0.34s; at 80% progress that cue is still on.
-	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.02
-	carrier.xi_cut_exit_run_seconds = carrier.dribble_burst_seconds + carrier.XI_CUT_EXIT_RUN_SECONDS
+	# After the 0.34s E animation ends, Normal still needs to reset
+	# its planted foot through part of the authentic 0.42s exit stride.
+	carrier.dribble_burst_seconds = 0.0
+	carrier.xi_cut_exit_run_seconds = 0.38
 	presser.global_position = centre + Vector2(160.0, -75.0)
+	game._set_quick_difficulty("normal")
+	assert(game._ai_xi_cut_read_target(presser, carrier) != Vector2.ZERO,
+		"Normal must not instantly forget the mistaken lane when E animation ends")
+	# After real recovery the defender keeps chasing with a bounded lead,
+	# rather than remaining artificially fooled or frozen forever.
+	carrier.xi_cut_exit_run_seconds = 0.12
 	presser.velocity = Vector2.LEFT * presser.base_speed
 	game._set_quick_difficulty("normal")
 	var normal_target: Vector2 = game._ai_press_target(presser, carrier)
