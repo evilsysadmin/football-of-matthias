@@ -58,7 +58,13 @@ const DRIBBLE_FEINT_SECONDS := 0.16
 const XI_DRIBBLE_FEINT_SECONDS := 0.24
 const DRIBBLE_LONG_TOUCH_SECONDS := 0.27
 const DRIBBLE_FEINT_SPEED := 0.65
-const XI_DRIBBLE_FEINT_SPEED := 0.44
+# A planted XI E needs enough REAL lateral travel to clear a defender.
+# At 0.44x the attacker moved less sideways than an ordinary run and
+# Hard still reached the ball after the first tackle-read window.
+# The plant now begins at 0.82x, still BELOW normal running pace and well
+# below the existing 1.34x stamina-paid sprint ceiling. Animation duration,
+# ball anchor, exact tackle hitboxes, 5v5 and keepers do not change.
+const XI_DRIBBLE_FEINT_SPEED := 0.82
 const DRIBBLE_LONG_TOUCH_SPEED := 1.56
 const DRIBBLE_FEINT_TOUCH := 8.0
 const DRIBBLE_LONG_TOUCH := 32.0
