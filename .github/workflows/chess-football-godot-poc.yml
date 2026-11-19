@@ -833,34 +833,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Some runner images omit FFmpeg, while apt-get update may hang
-          # silently for >15 min. Try existing package indexes first; fail
-          # visibly and within a bounded time if the mirror is unhealthy.
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            echo 'FOOTBALL_FFMPEG_INSTALL_PRELOADED_INDEX'
-            apt-cache policy ffmpeg || true
-            if ! sudo timeout -k 10s 90s apt-get install -y -qq \
-              --no-install-recommends -o DPkg::Lock::Timeout=30 ffmpeg; then
-              echo '::warning::Cached FFmpeg package index unavailable; bounded APT refresh required.'
-              sudo timeout -k 10s 90s apt-get update -qq \
-                -o Acquire::Retries=1 \
-                -o Acquire::http::Timeout=20 \
-                -o Acquire::https::Timeout=20
-              sudo timeout -k 10s 120s apt-get install -y -qq \
-                --no-install-recommends -o DPkg::Lock::Timeout=30 ffmpeg
-            fi
-          fi
-          command -v ffmpeg
-          command -v ffprobe
+          # The actual game rendered the two 28-frame 1280x720 sequences
+          # in the required preceding step. Validate the physical source
+          # frames even if this OPTIONAL MP4 encode cannot run on the host.
           source_dir="$GITHUB_WORKSPACE/.artifacts/football-v5-real"
           output_dir="$GITHUB_WORKSPACE/.artifacts/football-e-gameplay-video"
           mkdir -p "$output_dir"
           for mode in broadcast tactical; do
-            full="$source_dir/video-frames/$mode/full/frame_%03d.png"
-            detail="$source_dir/video-frames/$mode/detail/frame_%03d.png"
             for sequence in full detail; do
               test "$(find "$source_dir/video-frames/$mode/$sequence" -name 'frame_*.png' -type f | wc -l)" -eq 28
             done
+          done
+          # GitHub-hosted runners may omit FFmpeg and their APT mirror can
+          # stall for minutes. Never let an optional MP4 hold the required
+          # Godot scene/screenshot/browser gates hostage.
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            echo 'FOOTBALL_FFMPEG_INSTALL_PRELOADED_INDEX'
+            if ! sudo timeout -k 5s 35s apt-get install -y -qq \
+              --no-install-recommends -o DPkg::Lock::Timeout=10 ffmpeg; then
+              echo '::warning::FOOTBALL_XI_E_VIDEO_SKIPPED_MISSING_FFMPEG: APT unavailable; real rendered frames validated, optional MP4 skipped.'
+              exit 0
+            fi
+          fi
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            echo '::warning::FOOTBALL_XI_E_VIDEO_SKIPPED_MISSING_FFMPEG: encoder missing after install; source frames validated.'
+            exit 0
+          fi
+          for mode in broadcast tactical; do
+            full="$source_dir/video-frames/$mode/full/frame_%03d.png"
+            detail="$source_dir/video-frames/$mode/detail/frame_%03d.png"
             # The inset is an enlarged crop of the SAME actual 1280x720 frame,
             # not a fabricated camera or independent sprite animation.
             ffmpeg -hide_banner -loglevel error -nostdin -y \

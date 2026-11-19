@@ -3452,6 +3452,23 @@ func _tackle_forward(tackler: Footballer) -> Vector2:
 	var facing_x := -1.0 if tackler.visual != null and tackler.visual.flip_h else 1.0
 	return Vector2(facing_x, 0.0)
 
+# During an XI E cut, the live ball is physically ahead/on the outside
+# foot (FootballBall.tick_ball and Footballer.ball_anchor). An entry into the
+# player's torso is not automatically a winning poke through the ball.
+# Use the ACTUAL carried ball location while that cut/exit remains active.
+# Body collisions and fouls retain their separate physical handling.
+# No generated aim point, enlarged radius, free possession or 5v5 change.
+func _tackle_contact_target(victim: Footballer) -> Vector2:
+	if (
+		match_team_size == 11 and ball.carrier == victim
+		and victim.match_pitch == Formation.ELEVEN_PITCH_RECT
+		and victim.role != "keeper" and victim.dribble_mode == "cut"
+		and (victim.dribble_active() or victim.xi_cut_exit_run_seconds > 0.0)
+	):
+		return ball.global_position
+	return victim.global_position
+
+
 func _tackle_hitbox(
 	tackler: Footballer,
 	target_position: Vector2,
@@ -3600,7 +3617,7 @@ func _ai_xi_tackle_commit_ready(
 			> _tackle_attempt_range(tackler)
 	):
 		return false
-	var hitbox: Dictionary = _tackle_hitbox(tackler, victim.global_position)
+	var hitbox: Dictionary = _tackle_hitbox(tackler, _tackle_contact_target(victim))
 	return (
 		bool(hitbox.get("inside", false))
 		and not bool(hitbox.get("foul", false))
@@ -3940,7 +3957,7 @@ func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
 	if offset.length() > _tackle_attempt_range(tackler, aggressive):
 		return false
 
-	var hitbox := _tackle_hitbox(tackler, victim.global_position, aggressive)
+	var hitbox := _tackle_hitbox(tackler, _tackle_contact_target(victim), aggressive)
 	if not tackler.start_tackle(aggressive):
 		return false
 	if tackler == controlled and match_team_size == 11:
@@ -3962,7 +3979,7 @@ func _resolve_tackle_contact(
 	var offset: Vector2 = victim.global_position - tackler.global_position
 	if offset.length() > _tackle_attempt_range(tackler):
 		return false
-	var resolved_hitbox := hitbox if not hitbox.is_empty() else _tackle_hitbox(tackler, victim.global_position)
+	var resolved_hitbox := hitbox if not hitbox.is_empty() else _tackle_hitbox(tackler, _tackle_contact_target(victim))
 	if not bool(resolved_hitbox.get("contact", resolved_hitbox.get("inside", false))):
 		return false
 
