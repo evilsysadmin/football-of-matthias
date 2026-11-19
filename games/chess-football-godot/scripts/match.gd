@@ -246,6 +246,10 @@ const AI_XI_EXPERT_FIRST_TOUCH_READ := 0.12
 # This is CPU decision latency, not immunity: already-launched tackle
 # hitboxes and physical collisions still resolve on every physics frame.
 const AI_XI_CUT_READ_NORMAL := 0.32
+# XI Normal should not become more clairvoyant than Hard after reading E.
+# After the first plant, react to the real current feet rather than
+# projecting the freshly changed velocity a full defender stride ahead.
+const AI_XI_NORMAL_CUT_PRESS_LEAD_SCALE := 0.40
 # Normal must not commit a precisely timed tackle on the same 0.45s frame
 # in every diagonal cut. Previously launched tackles remain physical.
 const AI_XI_CUT_TACKLE_READ_NORMAL := 0.50
@@ -1881,6 +1885,16 @@ func _ai_press_target(presser: Footballer, owner: Footballer) -> Vector2:
 		0.40,
 	)
 	var lead: Vector2 = (observed_velocity * horizon).limit_length(130.0)
+	if (
+		quick_difficulty == "normal"
+		and owner.dribble_mode == "cut"
+		and owner.xi_cut_exit_run_seconds > 0.0
+	):
+		# The defender has read the planted E, but is still correcting the
+		# real direction change. Its feet and legal tackle reach do not change.
+		# This dampens only forward prediction, never slows the CPU, blocks
+		# a pre-committed tackle or gifts the attacker a loose ball.
+		lead *= AI_XI_NORMAL_CUT_PRESS_LEAD_SCALE
 	return ChessFootballMath.clamp_to_pitch(owner.global_position + lead, match_pitch)
 
 
