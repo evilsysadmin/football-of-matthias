@@ -1,6 +1,6 @@
 extends SceneTree
 
-# Attack-side companion to eleven_autoplay_player_bot.gd. Four real 12-second
+# Attack-side companion to eleven_autoplay_player_bot.gd. Eight real 12-second
 # 22-player open-play windows; the bot presses the SAME XI E/movement keys
 # used by a human and the match executes its normal _physics_process.
 # Only the starting possession and one approaching defender are staged.
@@ -12,10 +12,14 @@ const STEP := 1.0 / 60.0
 const TICKS := 720
 const RESULT_AFTER_FRAMES := 48
 const SPECS := [
-	{"seed": 67113, "difficulty": "normal", "opening": "cut", "side": -1.0},
-	{"seed": 67117, "difficulty": "normal", "opening": "feint", "side": 1.0},
-	{"seed": 67119, "difficulty": "hard", "opening": "cut", "side": 1.0},
-	{"seed": 67123, "difficulty": "hard", "opening": "feint", "side": -1.0},
+	{"seed": 67113, "difficulty": "normal", "opening": "cut", "side": -1.0, "approach": "late", "rival_offset": 148.0},
+	{"seed": 67113, "difficulty": "normal", "opening": "cut", "side": -1.0, "approach": "early", "rival_offset": 225.0},
+	{"seed": 67117, "difficulty": "normal", "opening": "feint", "side": 1.0, "approach": "late", "rival_offset": 148.0},
+	{"seed": 67117, "difficulty": "normal", "opening": "feint", "side": 1.0, "approach": "early", "rival_offset": 225.0},
+	{"seed": 67119, "difficulty": "hard", "opening": "cut", "side": 1.0, "approach": "late", "rival_offset": 148.0},
+	{"seed": 67119, "difficulty": "hard", "opening": "cut", "side": 1.0, "approach": "early", "rival_offset": 225.0},
+	{"seed": 67123, "difficulty": "hard", "opening": "feint", "side": -1.0, "approach": "late", "rival_offset": 148.0},
+	{"seed": 67123, "difficulty": "hard", "opening": "feint", "side": -1.0, "approach": "early", "rival_offset": 225.0},
 ]
 const KEYS := ["move_left", "move_right", "move_up", "move_down",
 	"sprint", "tackle", "special_move", "change_player", "shoot_ball", "pass_ball"]
@@ -92,7 +96,7 @@ func _play(spec: Dictionary) -> Dictionary:
 	# The 20 other footballers remain in the real formation throughout.
 	player.global_position = center + Vector2(-220.0, float(spec["side"]) * 95.0)
 	player.velocity = Vector2.RIGHT * 170.0 if spec["opening"] == "cut" else Vector2.ZERO
-	opponent.global_position = player.global_position + Vector2(148.0, 18.0)
+	opponent.global_position = player.global_position + Vector2(float(spec["rival_offset"]), 18.0)
 	opponent.velocity = Vector2.LEFT * 125.0
 	game._select_player(player)
 	game.ball.attach_to(player)
@@ -150,7 +154,7 @@ func _play(spec: Dictionary) -> Dictionary:
 		if press_e:
 			attempted += 1
 			next_e_tick = tick + 110
-			if distance <= 190.0:
+			if distance <= 260.0:
 				pressured_attempts += 1
 		var before_tackles: Array[float] = []
 		for rival: Footballer in game.teams[1]:
@@ -249,6 +253,8 @@ func _play(spec: Dictionary) -> Dictionary:
 		"seed": int(spec["seed"]),
 		"difficulty": String(spec["difficulty"]),
 		"opening": String(spec["opening"]),
+		"approach": String(spec["approach"]),
+		"staged_rival_distance": float(spec["rival_offset"]),
 		"ticks": TICKS,
 		"e_pressed": attempted,
 		"e_executed": accepted,
@@ -282,7 +288,7 @@ func _initialize() -> void:
 			var outcome: String = String(event["outcome_at_0_8s"])
 			assert(actual_outcomes.has(outcome))
 			actual_outcomes[outcome] = int(actual_outcomes[outcome]) + 1
-	assert(reports.size() == 4 and total_events >= 4)
+	assert(reports.size() == 8 and total_events >= 8)
 	assert(total_events == (
 		int(actual_outcomes["retained"]) + int(actual_outcomes["loose"]) +
 		int(actual_outcomes["teammate"]) + int(actual_outcomes["cpu_stolen"]) +
@@ -300,5 +306,5 @@ func _initialize() -> void:
 		"cpu_tackles": real_tackles,
 	}
 	print("FOOTBALL_XI_ATTACK_REGATE_INPUT " + JSON.stringify(payload))
-	print("FOOTBALL_XI_ATTACK_REGATE_INPUT_OK cases=4 input=keyboard ai=full xi=22")
+	print("FOOTBALL_XI_ATTACK_REGATE_INPUT_OK cases=8 input=keyboard ai=full xi=22")
 	quit(0)
