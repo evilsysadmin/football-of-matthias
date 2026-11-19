@@ -67,7 +67,9 @@ jobs:
       - run: python3 -m unittest discover -s scripts -p 'test_migration_provenance.py'
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    # Real Godot V5 visual captures + lossless review uploads can exceed 8 min
+    # on slower GitHub runners; keep a bounded 15-minute safety limit.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
