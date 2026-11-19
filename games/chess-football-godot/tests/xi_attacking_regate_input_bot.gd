@@ -80,13 +80,18 @@ func _play(spec: Dictionary) -> Dictionary:
 	var game: Node2D = scene.instantiate()
 	game.match_team_size = 11
 	root.add_child(game)
-	await process_frame
-	await process_frame
+	# _ready() has completed synchronously after add_child. Stop native
+	# match/player ticks BEFORE yielding the two initialization frames:
+	# otherwise startup may contain unaccounted physics/AI updates that
+	# depend on the runner timing, despite the later seeded 1/60s loop.
 	game.set_process(false)
 	game.set_physics_process(false)
 	for team in game.teams:
 		for actor: Footballer in team:
 			actor.set_process(false)
+			actor.set_physics_process(false)
+	await process_frame
+	await process_frame
 	game._set_quick_difficulty(String(spec["difficulty"]))
 	game.kickoff_active = false
 	game.goal_restart_active = false
@@ -374,6 +379,50 @@ func _initialize() -> void:
 			"run_stamina_spent": control["opening_stamina_spent"],
 		})
 	assert(pairs.size() == 8)
+	# A repeat AFTER 16 other runs checks how much the complete, seeded
+	# match startup/AI drifts over time. Hard/cut/early previously flipped
+	# its 48-frame outcome across CI runs despite no cut-rule changes.
+	# Report discrepancies rather than hiding them or claiming bitwise
+	# determinism where the engine has not yet established it.
+	var replay_audit: Array[Dictionary] = []
+	for use_e in [true, false]:
+		var spec: Dictionary = SPECS[5].duplicate()
+		spec["use_e"] = use_e
+		var repeat: Dictionary = await _play(spec)
+		var original: Dictionary = reports[10 + (0 if use_e else 1)]
+		assert(original["seed"] == repeat["seed"]
+			and original["variant"] == repeat["variant"]
+			and absf(float(original["nearest_rival_at_start"])
+				- float(repeat["nearest_rival_at_start"])) < 1.0)
+		var mismatched: Array[String] = []
+		var fields: Array[String] = [
+			"opening_outcome", "opening_first_loss_frame",
+			"opening_first_loss_cause_hint", "opening_forward_gain",
+			"opening_lateral_gain", "opening_stamina_spent",
+			"cpu_tackles", "possession_frames", "e_executed",
+		]
+		for field in fields:
+			if original[field] != repeat[field]:
+				mismatched.append(field)
+		replay_audit.append({
+			"seed": repeat["seed"],
+			"variant": repeat["variant"],
+			"difficulty": repeat["difficulty"],
+			"opening": repeat["opening"],
+			"approach": repeat["approach"],
+			"identical": mismatched.is_empty(),
+			"mismatched_fields": mismatched,
+			"first_outcome": original["opening_outcome"],
+			"repeat_outcome": repeat["opening_outcome"],
+			"first_loss_frame": original["opening_first_loss_frame"],
+			"repeat_loss_frame": repeat["opening_first_loss_frame"],
+			"opening_forward_drift": snappedf(
+				absf(float(original["opening_forward_gain"]) -
+					float(repeat["opening_forward_gain"])), 0.1
+			),
+		})
+	assert(replay_audit.size() == 2)
+	print("FOOTBALL_XI_ATTACK_REPLAY_AUDIT " + JSON.stringify(replay_audit))
 	# Baseline only: the isolated #208 matrix has robust floors; the
 	# live full XI A/B bot currently reports, it does not fake a pass rate.
 	var payload := {
@@ -382,6 +431,7 @@ func _initialize() -> void:
 		"result_after_frames": RESULT_AFTER_FRAMES,
 		"cases": reports,
 		"pairs": pairs,
+		"replay_audit": replay_audit,
 		"outcomes": actual_outcomes,
 		"e_events": total_events,
 		"cpu_tackles": real_tackles,
