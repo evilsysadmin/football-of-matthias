@@ -13,7 +13,7 @@ jobs:
   xi-endurance:
     name: XI · 60s live match and restart recovery
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 12
     env:
       GODOT_VERSION: '4.7.2'
       GODOT_RELEASE: '4.7.2-stable'
@@ -140,7 +140,7 @@ jobs:
           godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
           log="$RUNNER_TEMP/football-xi-attacking-e.log"
           set +e
-          timeout 175s "$godot" --headless --quit-after 14000 --path games/chess-football-godot --script res://tests/xi_attacking_regate_input_bot.gd 2>&1 | tee "$log"
+          timeout 260s "$godot" --headless --quit-after 24000 --path games/chess-football-godot --script res://tests/xi_attacking_regate_input_bot.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
@@ -159,30 +159,50 @@ jobs:
                      if line.startswith(prefix)]
           assert len(reports) == 1, 'Expected one whole-XI attacking bot report'
           report = reports[0]
-          assert report['kind'] == 'seeded_real_input_xi_open_play_12s_windows_not_full_matches'
+          assert report['kind'] == 'seeded_paired_real_input_xi_open_play_12s_not_full_matches'
           assert report['frames_per_trial'] == 720 and report['result_after_frames'] == 48
-          assert [(x['difficulty'], x['opening'], x['approach']) for x in report['cases']] == [
+          expected = [
               ('normal', 'cut', 'late'), ('normal', 'cut', 'early'),
               ('normal', 'feint', 'late'), ('normal', 'feint', 'early'),
               ('hard', 'cut', 'late'), ('hard', 'cut', 'early'),
               ('hard', 'feint', 'late'), ('hard', 'feint', 'early'),
           ]
+          assert [(x['difficulty'], x['opening'], x['approach'])
+                  for x in report['cases'][::2]] == expected
+          assert [(x['difficulty'], x['opening'], x['approach'])
+                  for x in report['cases'][1::2]] == expected
+          assert [x['variant'] for x in report['cases']] == [
+              variant for _ in expected for variant in ('e', 'run_without_e')
+          ]
+          assert len(report['pairs']) == 8
+          assert [(p['difficulty'], p['opening'], p['approach'])
+                  for p in report['pairs']] == expected
+          assert all((p['e_outcome'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+                      and p['run_outcome'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+                      and p['e_first_loss_frame'] >= -1
+                      and p['run_first_loss_frame'] >= -1)
+                     for p in report['pairs'])
           assert all(x['staged_rival_distance'] == (
               148.0 if x['approach'] == 'late' else 225.0
           ) for x in report['cases'])
           assert report['e_events'] == sum(x['e_executed'] for x in report['cases'])
-          assert all(x['e_pressed'] == x['e_executed'] >= 1
-                     and x['pressured_e'] >= 1
-                     and len(x['events']) == x['e_executed']
-                     and sum(x['possession_frames'].values()) == x['ticks'] == 720
-                     for x in report['cases'])
+          assert all(
+              x['e_pressed'] == x['e_executed']
+              and ((x['e_executed'] >= 1 and x['pressured_e'] >= 1)
+                   if x['variant'] == 'e'
+                   else (x['e_executed'] == 0 and x['pressured_e'] == 0))
+              and len(x['events']) == x['e_executed']
+              and sum(x['possession_frames'].values()) == x['ticks'] == 720
+              and x['opening_outcome'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+              for x in report['cases']
+          )
           assert sum(report['outcomes'].values()) == report['e_events']
           assert all(e['outcome_at_0_8s'] in report['outcomes']
                      and e['mode'] in ('cut', 'feint')
                      and e['nearest_rival_at_e'] > 0
                      for case in report['cases'] for e in case['events'])
           Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
-          print('FOOTBALL_XI_ATTACK_REGATE_ARTIFACT_OK cases=8 real_input=1 early_vs_late=1')
+          print('FOOTBALL_XI_ATTACK_REGATE_ARTIFACT_OK cases=16 pairs=8 real_input=1 early_vs_late=1')
           PY
       - name: Upload XI open-play attacking E bot telemetry
         if: always()
