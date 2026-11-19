@@ -130,6 +130,63 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
+      # Complementary attacking real-input trial. Unlike the existing
+      # defensive handoff bot it starts with human XI possession, issues
+      # actual E keys, and observes full 22-player AI/tackle/ball outcomes.
+      - name: Autoplay XI · real input attacking E during open play
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-attacking-e.log"
+          set +e
+          timeout 130s "$godot" --headless --quit-after 11000 --path games/chess-football-godot --script res://tests/xi_attacking_regate_input_bot.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI real-input attacking E simulation failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_ATTACK_REGATE_INPUT_OK' "$log"
+          python3 - "$log" "$RUNNER_TEMP/football-xi-attacking-e.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          prefix = 'FOOTBALL_XI_ATTACK_REGATE_INPUT '
+          reports = [json.loads(line[len(prefix):])
+                     for line in Path(sys.argv[1]).read_text().splitlines()
+                     if line.startswith(prefix)]
+          assert len(reports) == 1, 'Expected one whole-XI attacking bot report'
+          report = reports[0]
+          assert report['kind'] == 'seeded_real_input_xi_open_play_12s_windows_not_full_matches'
+          assert report['frames_per_trial'] == 720 and report['result_after_frames'] == 48
+          assert [(x['difficulty'], x['opening']) for x in report['cases']] == [
+              ('normal', 'cut'), ('normal', 'feint'), ('hard', 'cut'), ('hard', 'feint')
+          ]
+          assert report['e_events'] == sum(x['e_executed'] for x in report['cases'])
+          assert all(x['e_pressed'] == x['e_executed'] >= 1
+                     and x['pressured_e'] >= 1
+                     and len(x['events']) == x['e_executed']
+                     and sum(x['possession_frames'].values()) == x['ticks'] == 720
+                     for x in report['cases'])
+          assert sum(report['outcomes'].values()) == report['e_events']
+          assert all(e['outcome_at_0_8s'] in report['outcomes']
+                     and e['mode'] in ('cut', 'feint')
+                     and e['nearest_rival_at_e'] > 0
+                     for case in report['cases'] for e in case['events'])
+          Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
+          print('FOOTBALL_XI_ATTACK_REGATE_ARTIFACT_OK cases=4 real_input=1')
+          PY
+      - name: Upload XI open-play attacking E bot telemetry
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-xi-attacking-regates
+          path: ${{ runner.temp }}/football-xi-attacking-e.json
+          retention-days: 7
+          if-no-files-found: warn
+
       - name: Autoplay XI · real input bot, pressure and handoff telemetry
         shell: bash
         run: |
