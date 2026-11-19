@@ -221,6 +221,10 @@ func _initialize() -> void:
 	game.match_team_size = 5
 	carrier.match_pitch = ChessFootballMath.PITCH_RECT
 	game.ball.attach_to(carrier)
+	# The preceding REAL successful tackle stunned the carrier; reset the
+	# scenario before checking unrelated legacy five-a-side rules.
+	carrier.contact_stun_seconds = 0.0
+	carrier.tackle_recovery_seconds = 0.0
 	carrier.dribble_burst_seconds = 0.0
 	carrier.dribble_cooldown_seconds = 0.0
 	carrier.action_lock_seconds = 0.0
