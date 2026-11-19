@@ -346,7 +346,10 @@ func _initialize() -> void:
 	carrier.dribble_burst_seconds = 0.0
 	carrier.xi_feint_exit_run_seconds = 0.34
 	game.ball.tick_ball(0.0)
-	presser.global_position = centre + Vector2(65.0, -36.0)
+	# Set the approaching boot relative to the REAL, potentially
+	# left- or right-facing ball anchor: prior tests may have flipped
+	# the sprite. A fixed centre-relative spot tested the wrong lane.
+	presser.global_position = game.ball.global_position + Vector2(38.0, -50.0)
 	presser.velocity = Vector2.LEFT * presser.base_speed
 	presser.tackle_active_seconds = 0.0
 	presser.tackle_cooldown_seconds = 0.0
