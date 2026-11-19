@@ -242,6 +242,15 @@ const AI_XI_NORMAL_FIRST_TOUCH_REACTION := 0.38
 # Shorter than Normal's first-touch read; no new state or physical buffs.
 const AI_XI_HARD_FIRST_TOUCH_READ := 0.22
 const AI_XI_EXPERT_FIRST_TOUCH_READ := 0.12
+# A NEW human E touch must be read even during an older possession.
+# This is CPU decision latency, not immunity: already-launched tackle
+# hitboxes and physical collisions still resolve on every physics frame.
+const AI_XI_CUT_READ_NORMAL := 0.32
+# Normal must not commit a precisely timed tackle on the same 0.45s frame
+# in every diagonal cut. Previously launched tackles remain physical.
+const AI_XI_CUT_TACKLE_READ_NORMAL := 0.50
+const AI_XI_CUT_READ_HARD := 0.16
+const AI_XI_CUT_READ_EXPERT := 0.09
 const AI_XI_SECOND_PRESS_ACTIVATION := 320.0
 # XI Normal+ second defender reads an actual goalward diagonal dribble.
 # Maximum lead is well below one running stride; movement still obeys
@@ -1723,6 +1732,70 @@ func _ai_xi_observed_carrier_velocity(owner: Footballer) -> Vector2:
 # corrects as the second plant becomes visible. It still pursues a real point,
 # moves through normal CharacterBody2D physics and can make a legal tackle.
 # Never fake an observation for Hard/Expert/Easy, 5v5 or an ordinary run/cut.
+# CPU cannot know the human's new cut direction from the same 60 Hz frame
+# as the planted foot. For a short difficulty-scaled observation window it
+# chases the PRE-CUT running lane, then blends to the actual current body.
+# No defender is frozen, teleported, slowed or prevented from physical contact.
+func _ai_xi_cut_read_target(presser: Footballer, owner: Footballer) -> Vector2:
+	if (
+		match_team_size != 11 or quick_difficulty == "easy"
+		or presser.team_id != 1 or owner.team_id != 0
+		or ball.carrier != owner or not owner.dribble_active()
+		or owner.dribble_mode != "cut"
+	):
+		return Vector2.ZERO
+	var window: float = _ai_xi_cut_read_seconds()
+	var elapsed: float = owner.dribble_duration_seconds - owner.dribble_burst_seconds
+	if elapsed >= window:
+		return Vector2.ZERO
+	var original_line: Vector2 = owner.dribble_entry_direction.normalized()
+	var progress: float = maxf(
+		0.0, (owner.global_position - owner.dribble_origin_position).dot(original_line)
+	)
+	var old_lane: Vector2 = owner.dribble_origin_position + original_line * (progress + 38.0)
+	var caught_up: float = smoothstep(window * 0.45, window, maxf(elapsed, 0.0))
+	return ChessFootballMath.clamp_to_pitch(
+		old_lane.lerp(owner.global_position, caught_up), match_pitch
+	)
+
+
+func _ai_xi_cut_read_seconds() -> float:
+	return (
+		AI_XI_CUT_READ_NORMAL if quick_difficulty == "normal"
+		else AI_XI_CUT_READ_HARD if quick_difficulty == "hard"
+		else AI_XI_CUT_READ_EXPERT
+	)
+
+
+# A NEW E creates its own decision window even after an established
+# possession. Normal's read extends briefly beyond the planted animation
+# so the defender cannot reclaim at the same fixed physics frame every
+# time. An already active real tackle still hits on the normal path.
+func _ai_xi_dribble_tackle_read_ready(victim: Footballer) -> bool:
+	if (
+		match_team_size != 11 or quick_difficulty == "easy"
+		or victim.team_id != 0 or ball.carrier != victim
+		or victim.dribble_mode == "burst"
+	):
+		return true
+	if victim.dribble_mode == "cut" and victim.xi_cut_exit_run_seconds > 0.0:
+		var elapsed: float = (
+			victim.dribble_duration_seconds + victim.XI_CUT_EXIT_RUN_SECONDS
+			- victim.xi_cut_exit_run_seconds
+		)
+		var required: float = (
+			AI_XI_CUT_TACKLE_READ_NORMAL if quick_difficulty == "normal"
+			else _ai_xi_cut_read_seconds()
+		)
+		return elapsed >= required
+	if not victim.dribble_active():
+		return true
+	return (
+		victim.dribble_duration_seconds - victim.dribble_burst_seconds
+		>= _ai_xi_cut_read_seconds()
+	)
+
+
 func _ai_xi_normal_feint_read_offset(presser: Footballer, owner: Footballer) -> Vector2:
 	if (
 		match_team_size != 11
@@ -1785,6 +1858,9 @@ func _ai_xi_human_press_target(presser: Footballer, owner: Footballer) -> Vector
 func _ai_press_target(presser: Footballer, owner: Footballer) -> Vector2:
 	if match_team_size == 11 and presser.team_id == 0 and owner.team_id == 1:
 		return _ai_xi_human_press_target(presser, owner)
+	var cut_target: Vector2 = _ai_xi_cut_read_target(presser, owner)
+	if cut_target != Vector2.ZERO:
+		return cut_target
 	var feint_offset: Vector2 = _ai_xi_normal_feint_read_offset(presser, owner)
 	if feint_offset.length_squared() > 0.001:
 		return ChessFootballMath.clamp_to_pitch(
@@ -3485,6 +3561,8 @@ func _ai_xi_normal_tackle_read_due(victim: Footballer, delta: float) -> bool:
 func _ai_xi_tackle_commit_ready(
 	tackler: Footballer, victim: Footballer, is_cover: bool
 ) -> bool:
+	if tackler.team_id == 1 and not _ai_xi_dribble_tackle_read_ready(victim):
+		return false
 	if (
 		match_team_size == 11
 		and tackler.team_id == 1

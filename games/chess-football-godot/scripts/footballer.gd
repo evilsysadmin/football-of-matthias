@@ -93,6 +93,12 @@ var dribble_cooldown_seconds: float = 0.0
 var dribble_burst_seconds: float = 0.0
 var dribble_direction: Vector2 = Vector2.RIGHT
 var dribble_entry_direction: Vector2 = Vector2.RIGHT
+# Planting origin of the REAL E cut, used only for defender perception.
+var dribble_origin_position: Vector2 = Vector2.ZERO
+# XI human cut retains a bounded, stamina-paying running exit after E's
+# planted foot. This is normal physical sprint, NOT a dribble protection flag.
+const XI_CUT_EXIT_RUN_SECONDS := 0.42
+var xi_cut_exit_run_seconds: float = 0.0
 var dribble_mode: String = "cut"
 var dribble_duration_seconds: float = DRIBBLE_BURST_SECONDS
 var dribble_touch_distance: float = DRIBBLE_TOUCH_DISTANCE
@@ -204,6 +210,7 @@ func _process(delta: float) -> void:
 	tackle_cooldown_seconds = maxf(0.0, tackle_cooldown_seconds - delta)
 	dribble_cooldown_seconds = maxf(0.0, dribble_cooldown_seconds - delta)
 	dribble_burst_seconds = maxf(0.0, dribble_burst_seconds - delta)
+	xi_cut_exit_run_seconds = maxf(0.0, xi_cut_exit_run_seconds - delta)
 	tackle_recovery_seconds = maxf(0.0, tackle_recovery_seconds - delta)
 	tackle_active_seconds = maxf(0.0, tackle_active_seconds - delta)
 	if tackle_active_seconds <= 0.0:
@@ -234,6 +241,8 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		return
 	if dribble_active() and not has_ball:
 		dribble_burst_seconds = 0.0
+	if not has_ball:
+		xi_cut_exit_run_seconds = 0.0
 	var dribbling := dribble_active() and has_ball
 	# The first E plant still sells the feint. Only after the second boot
 	# commits may the human steer the exit; no instant snap or invulnerability.
@@ -257,7 +266,18 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		)
 		wanted_direction = dribble_direction.rotated(turn_angle * xi_cut_exit)
 	var moving := wanted_direction.length_squared() > 0.001
-	var actual_sprint := _update_stamina(delta, sprinting and not dribbling, moving)
+	# A cut with retained possession needs a genuine powered EXIT, otherwise
+	# the CPU's regular 1.34x defensive sprint catches the 1.0x carrier at
+	# the first frame after E ends. Reuse the EXACT normal sprint kinematics,
+	# acceleration and stamina cost; no burst without real player input.
+	var cut_exit_sprint := (
+		match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
+		and has_ball and not dribbling and moving
+		and xi_cut_exit_run_seconds > 0.0
+	)
+	var actual_sprint := _update_stamina(
+		delta, (sprinting or cut_exit_sprint) and not dribbling, moving
+	)
 	last_sprinting = actual_sprint or dribbling
 	var xi_feint_speed := (
 		lerpf(XI_DRIBBLE_FEINT_SPEED, 1.10, xi_feint_exit)
@@ -280,6 +300,10 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	# Technique affects dribbling/carrying only, never off-ball sprints.
 	if has_ball and role != "keeper":
 		speed *= technique_control_multiplier
+	if cut_exit_sprint:
+		# Technique already improves control; a free E follow-through must
+		# NEVER exceed the player's ordinary 1.34x sprint ceiling.
+		speed = minf(speed, base_speed * SPRINT_SPEED_MULTIPLIER)
 	if tackle_recovery_seconds > 0.0:
 		speed *= 0.42
 	if contact_stun_seconds > 0.0:
@@ -457,6 +481,7 @@ func start_dribble(direction: Vector2, kind: String = "cut") -> bool:
 	var entering_velocity: Vector2 = velocity
 	dribble_direction = wanted.normalized()
 	dribble_entry_direction = dribble_direction
+	dribble_origin_position = global_position
 	if (
 		kind == "cut" and match_pitch == Formation.ELEVEN_PITCH_RECT
 		and role != "keeper" and entering_velocity.length_squared() > 144.0
@@ -481,6 +506,11 @@ func start_dribble(direction: Vector2, kind: String = "cut") -> bool:
 		else DRIBBLE_TOUCH_DISTANCE
 	)
 	dribble_burst_seconds = dribble_duration_seconds
+	xi_cut_exit_run_seconds = (
+		dribble_duration_seconds + XI_CUT_EXIT_RUN_SECONDS
+		if kind == "cut" and match_pitch == Formation.ELEVEN_PITCH_RECT
+		and role != "keeper" else 0.0
+	)
 	# Scouting technique makes execution/recovery noticeably more responsive,
 	# not an RNG success roll or collision immunity. Rating 75 is neutral.
 	var base_cooldown := (
@@ -608,6 +638,7 @@ func send_off() -> void:
 	xi_tackle_launch_heading = Vector2.ZERO
 	dribble_cooldown_seconds = 0.0
 	dribble_burst_seconds = 0.0
+	xi_cut_exit_run_seconds = 0.0
 	dribble_direction = Vector2.RIGHT
 	dribble_mode = "cut"
 	dribble_duration_seconds = DRIBBLE_BURST_SECONDS
@@ -625,6 +656,7 @@ func available_for_play() -> bool:
 
 func receive_tackle_contact(push_direction: Vector2, duration: float = 0.30) -> void:
 	dribble_burst_seconds = 0.0
+	xi_cut_exit_run_seconds = 0.0
 	contact_stun_total = maxf(duration, 0.05)
 	contact_stun_seconds = contact_stun_total
 	tackle_recovery_seconds = maxf(tackle_recovery_seconds, duration + 0.08)
@@ -641,6 +673,7 @@ func receive_tackle_contact(push_direction: Vector2, duration: float = 0.30) -> 
 # A fall is a real no-movement, no-pickup state. Both actors retain their
 # ordinary physical colliders and recover automatically on their own clock.
 func xi_collision_stumble(seconds: float) -> void:
+	xi_cut_exit_run_seconds = 0.0
 	contact_stun_total = maxf(seconds, 0.08)
 	contact_stun_seconds = maxf(contact_stun_seconds, contact_stun_total)
 	dribble_burst_seconds = 0.0
@@ -648,6 +681,7 @@ func xi_collision_stumble(seconds: float) -> void:
 
 
 func xi_collision_fall(push: Vector2, seconds: float) -> void:
+	xi_cut_exit_run_seconds = 0.0
 	xi_collision_push_direction = push.normalized() if push.length_squared() > 0.001 else Vector2.ZERO
 	xi_collision_down_total = maxf(seconds, 0.40)
 	xi_collision_down_seconds = xi_collision_down_total
@@ -942,4 +976,3 @@ func _draw() -> void:
 			Vector2(0, -58),
 		])
 		draw_colored_polygon(marker, Color(1.0, 0.82, 0.24, 0.96))
-

@@ -56,6 +56,21 @@ jobs:
             echo '::error::XI project import failed.'
             exit 1
           fi
+      - name: Test E cut after extended possession (no oracle tackle)
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-mid-possession-regate.log"
+          set +e
+          timeout 35s "$godot" --headless --quit-after 3000 --path games/chess-football-godot --script res://tests/xi_mid_possession_dribble_read_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_MID_POSSESSION_DRIBBLE_READ_OK' "$log"
+
       - name: Run real 22-player simulation at 60 Hz
         shell: bash
         run: |
