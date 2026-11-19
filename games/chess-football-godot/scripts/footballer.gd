@@ -93,6 +93,8 @@ var dribble_cooldown_seconds: float = 0.0
 var dribble_burst_seconds: float = 0.0
 var dribble_direction: Vector2 = Vector2.RIGHT
 var dribble_entry_direction: Vector2 = Vector2.RIGHT
+# Planting origin of the REAL E cut, used only for defender perception.
+var dribble_origin_position: Vector2 = Vector2.ZERO
 var dribble_mode: String = "cut"
 var dribble_duration_seconds: float = DRIBBLE_BURST_SECONDS
 var dribble_touch_distance: float = DRIBBLE_TOUCH_DISTANCE
@@ -457,6 +459,7 @@ func start_dribble(direction: Vector2, kind: String = "cut") -> bool:
 	var entering_velocity: Vector2 = velocity
 	dribble_direction = wanted.normalized()
 	dribble_entry_direction = dribble_direction
+	dribble_origin_position = global_position
 	if (
 		kind == "cut" and match_pitch == Formation.ELEVEN_PITCH_RECT
 		and role != "keeper" and entering_velocity.length_squared() > 144.0
@@ -942,4 +945,3 @@ func _draw() -> void:
 			Vector2(0, -58),
 		])
 		draw_colored_polygon(marker, Color(1.0, 0.82, 0.24, 0.96))
-
