@@ -1,7 +1,9 @@
 extends SceneTree
 
-# Attack-side companion to eleven_autoplay_player_bot.gd. Eight real 12-second
-# 22-player open-play windows; the bot presses the SAME XI E/movement keys
+# Attack-side companion to eleven_autoplay_player_bot.gd. Eight PAIRS of
+# real 12-second 22-player open-play windows: same initial seed and defender,
+# one E action arm versus a directional-movement-only control arm.
+# The E arm presses the SAME XI E/movement keys
 # used by a human and the match executes its normal _physics_process.
 # Only the starting possession and one approaching defender are staged.
 # No manual placement, ball grants, direct _try_dribble or AI override
@@ -70,6 +72,7 @@ func _outcome(game: Node2D, original: Footballer) -> String:
 
 
 func _play(spec: Dictionary) -> Dictionary:
+	var use_e: bool = bool(spec["use_e"])
 	_release_keys()
 	seed(int(spec["seed"]))
 	var scene: PackedScene = load("res://main.tscn") as PackedScene
@@ -114,6 +117,14 @@ func _play(spec: Dictionary) -> Dictionary:
 	var minimum_defender_distance := INF
 	var max_advance: float = 0.0
 	var origin: Vector2 = player.global_position
+	var start_stamina: float = player.stamina
+	var initial_rival_distance: float = float(_nearest_rival(game, player)["distance"])
+	var opening_outcome: String = ""
+	var opening_loss_frame: int = -1
+	var opening_loss_cause: String = ""
+	var opening_forward_gain: float = 0.0
+	var opening_lateral_gain: float = 0.0
+	var opening_stamina_spent: float = 0.0
 	for tick in range(TICKS):
 		var playing: bool = not (
 			game.kickoff_active or game.goal_restart_active or game.set_piece_active
@@ -139,12 +150,14 @@ func _play(spec: Dictionary) -> Dictionary:
 		var mode: String = ""
 		if tick == 0:
 			assert(holding and playing)
-			press_e = true
+			# The control arm preserves the first-frame feint pause, then
+			# follows the SAME live directional policy but never presses E.
+			press_e = use_e
 			mode = String(spec["opening"])
 			if mode == "feint":
 				input_direction = Vector2.ZERO
 		elif (
-			playing and holding and pending.is_empty()
+			use_e and playing and holding and pending.is_empty()
 			and tick >= next_e_tick and tick <= TICKS - RESULT_AFTER_FRAMES
 			and current.can_dribble()
 			and distance < 190.0 and distance > 42.0 and not prior_e
@@ -224,6 +237,20 @@ func _play(spec: Dictionary) -> Dictionary:
 					"advance": snappedf(original.global_position.x - origin.x, 0.1),
 				})
 				pending.clear()
+		if tick < RESULT_AFTER_FRAMES:
+			if game.ball.carrier != player and opening_loss_frame < 0:
+				opening_loss_frame = tick
+				opening_loss_cause = (
+					"clean_tackle_pending_claim" if game.pending_tackle_player != null
+					else "body_contact" if player.xi_collision_guard_seconds > 0.0
+					else "tackle_or_contact_stun" if player.contact_stun_seconds > 0.0
+					else "other_ball_event"
+				)
+			if tick + 1 == RESULT_AFTER_FRAMES:
+				opening_outcome = _outcome(game, player)
+				opening_forward_gain = snappedf(player.global_position.x - origin.x, 0.1)
+				opening_lateral_gain = snappedf(absf(player.global_position.y - origin.y), 0.1)
+				opening_stamina_spent = snappedf(start_stamina - player.stamina, 0.1)
 		if game.ball.carrier == null:
 			possession["loose"] = int(possession["loose"]) + 1
 		elif game.ball.carrier.team_id == 0:
@@ -243,14 +270,29 @@ func _play(spec: Dictionary) -> Dictionary:
 		await process_frame
 	_release_keys()
 	assert(game.match_seconds >= TICKS * STEP - STEP)
-	assert(attempted >= 1 and accepted == attempted)
-	assert(pressured_attempts >= 1, "At least the kickoff E must face a live rival")
-	assert(events.size() >= 1 and events.size() == accepted,
-		"Every issued real E must have a complete 0.8s physical observation")
+	if use_e:
+		assert(attempted >= 1 and accepted == attempted)
+		assert(pressured_attempts >= 1, "The opening E must face a live rival")
+		assert(events.size() >= 1 and events.size() == accepted,
+			"Every issued real E must have a complete 0.8s physical observation")
+	else:
+		assert(attempted == 0 and accepted == 0 and pressured_attempts == 0,
+			"No-E control must never press a dribble key")
+		assert(events.is_empty(), "No-E control must not invent regate outcomes")
+	assert(opening_outcome in ["retained", "loose", "cpu_stolen", "teammate", "restart"],
+		"Each pair arm needs a real 48-frame opening ball outcome")
 	assert(moving_frames > 240)
 	assert(possession["human"] + possession["cpu"] + possession["loose"] == TICKS)
 	var result: Dictionary = {
 		"seed": int(spec["seed"]),
+		"variant": "e" if use_e else "run_without_e",
+		"opening_outcome": opening_outcome,
+		"opening_first_loss_frame": opening_loss_frame,
+		"opening_first_loss_cause_hint": opening_loss_cause,
+		"opening_forward_gain": opening_forward_gain,
+		"opening_lateral_gain": opening_lateral_gain,
+		"opening_stamina_spent": opening_stamina_spent,
+		"nearest_rival_at_start": snappedf(initial_rival_distance, 0.1),
 		"difficulty": String(spec["difficulty"]),
 		"opening": String(spec["opening"]),
 		"approach": String(spec["approach"]),
@@ -275,36 +317,75 @@ func _play(spec: Dictionary) -> Dictionary:
 func _initialize() -> void:
 	var reports: Array[Dictionary] = []
 	for spec in SPECS:
-		reports.append(await _play(spec))
+		# Re-seed/re-create the complete scene for both arms. Start state
+		# is matched, but later AI decisions can diverge naturally.
+		for use_e in [true, false]:
+			var paired_spec: Dictionary = spec.duplicate()
+			paired_spec["use_e"] = use_e
+			reports.append(await _play(paired_spec))
 	var total_events := 0
 	var real_tackles := 0
 	var actual_outcomes: Dictionary = {"retained": 0, "loose": 0, "teammate": 0,
 		"cpu_stolen": 0, "restart": 0}
 	for report in reports:
 		assert(report["e_pressed"] == report["e_executed"])
+		assert(bool(report["variant"] == "e") == bool(report["e_pressed"] >= 1))
 		total_events += int(report["e_executed"])
 		real_tackles += int(report["cpu_tackles"])
 		for event in report["events"]:
 			var outcome: String = String(event["outcome_at_0_8s"])
 			assert(actual_outcomes.has(outcome))
 			actual_outcomes[outcome] = int(actual_outcomes[outcome]) + 1
-	assert(reports.size() == 8 and total_events >= 8)
+	assert(reports.size() == 16 and total_events >= 8)
 	assert(total_events == (
 		int(actual_outcomes["retained"]) + int(actual_outcomes["loose"]) +
 		int(actual_outcomes["teammate"]) + int(actual_outcomes["cpu_stolen"]) +
 		int(actual_outcomes["restart"])
 	))
-	# First establish observed whole-XI gameplay baselines; do not invent
-	# a pass-rate threshold from the separate isolated 1v1 fixture.
+	# Compare ONLY a matched starting state. A live 22-player run can
+	# diverge after the first step, so this measures real consequences,
+	# not a guaranteed counterfactual or a fixed success percentage.
+	var pairs: Array[Dictionary] = []
+	for i in range(0, reports.size(), 2):
+		var e: Dictionary = reports[i]
+		var control: Dictionary = reports[i + 1]
+		assert(e["variant"] == "e" and control["variant"] == "run_without_e")
+		assert(e["seed"] == control["seed"]
+			and e["difficulty"] == control["difficulty"]
+			and e["opening"] == control["opening"]
+			and e["approach"] == control["approach"])
+		assert(absf(float(e["nearest_rival_at_start"]) -
+			float(control["nearest_rival_at_start"])) < 1.0,
+			"Paired trials must begin under the same physical pressure")
+		pairs.append({
+			"seed": e["seed"],
+			"difficulty": e["difficulty"],
+			"opening": e["opening"],
+			"approach": e["approach"],
+			"e_outcome": e["opening_outcome"],
+			"run_outcome": control["opening_outcome"],
+			"e_first_loss_frame": e["opening_first_loss_frame"],
+			"run_first_loss_frame": control["opening_first_loss_frame"],
+			"e_forward_gain": e["opening_forward_gain"],
+			"run_forward_gain": control["opening_forward_gain"],
+			"e_lateral_gain": e["opening_lateral_gain"],
+			"run_lateral_gain": control["opening_lateral_gain"],
+			"e_stamina_spent": e["opening_stamina_spent"],
+			"run_stamina_spent": control["opening_stamina_spent"],
+		})
+	assert(pairs.size() == 8)
+	# Baseline only: the isolated #208 matrix has robust floors; the
+	# live full XI A/B bot currently reports, it does not fake a pass rate.
 	var payload := {
-		"kind": "seeded_real_input_xi_open_play_12s_windows_not_full_matches",
+		"kind": "seeded_paired_real_input_xi_open_play_12s_not_full_matches",
 		"frames_per_trial": TICKS,
 		"result_after_frames": RESULT_AFTER_FRAMES,
 		"cases": reports,
+		"pairs": pairs,
 		"outcomes": actual_outcomes,
 		"e_events": total_events,
 		"cpu_tackles": real_tackles,
 	}
 	print("FOOTBALL_XI_ATTACK_REGATE_INPUT " + JSON.stringify(payload))
-	print("FOOTBALL_XI_ATTACK_REGATE_INPUT_OK cases=8 input=keyboard ai=full xi=22")
+	print("FOOTBALL_XI_ATTACK_REGATE_INPUT_OK cases=16 pairs=8 input=keyboard ai=full xi=22")
 	quit(0)
