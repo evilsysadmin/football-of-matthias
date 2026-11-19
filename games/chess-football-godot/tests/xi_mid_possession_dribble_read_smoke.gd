@@ -287,6 +287,18 @@ func _initialize() -> void:
 	carrier.action_lock_seconds = 0.0
 	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
 	assert(carrier.xi_feint_exit_run_seconds > carrier.dribble_duration_seconds)
+	# First planted boot remains deliberate, but the second-step exit
+	# becomes responsive before the 0.24s animation has fully elapsed.
+	# These checks use real remaining action time, not frame-rate guesses.
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.86
+	assert(carrier._xi_feint_exit_ratio() == 0.0,
+		"An instantaneous turn would delete the first E plant")
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.54
+	assert(carrier._xi_feint_exit_ratio() > 0.18,
+		"Human direction must influence the second plant by mid-feint")
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.18
+	assert(carrier._xi_feint_exit_ratio() > 0.99,
+		"Feint exit steering must be nearly complete before E finishes")
 	carrier.dribble_burst_seconds = 0.0
 	carrier.xi_feint_exit_run_seconds = 0.24
 	game.ball.tick_ball(0.0)
