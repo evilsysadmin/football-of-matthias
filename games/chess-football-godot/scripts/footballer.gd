@@ -59,6 +59,8 @@ const XI_DRIBBLE_FEINT_SECONDS := 0.24
 const DRIBBLE_LONG_TOUCH_SECONDS := 0.27
 const DRIBBLE_FEINT_SPEED := 0.65
 const XI_DRIBBLE_FEINT_SPEED := 0.44
+# Real powered second step is below the ordinary 1.34x sprint cap.
+const XI_DRIBBLE_FEINT_SECOND_STEP_SPEED := 1.16
 const DRIBBLE_LONG_TOUCH_SPEED := 1.56
 const DRIBBLE_FEINT_TOUCH := 8.0
 const DRIBBLE_LONG_TOUCH := 32.0
@@ -288,12 +290,20 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		and has_ball and not dribbling and direction.length_squared() > 0.04
 		and xi_feint_exit_run_seconds > 0.0
 	)
+	# The powered second plant costs ordinary sprint stamina ONLY if the
+	# human actually steers; a stationary decorative E gets no free dash.
+	var powered_feint: bool = (
+		dribbling and dribble_mode == "feint"
+		and match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
+		and xi_feint_exit > 0.08 and direction.length_squared() > 0.04
+	)
 	var actual_sprint := _update_stamina(
-		delta, (sprinting or cut_exit_sprint or feint_exit_sprint) and not dribbling, moving
+		delta, ((sprinting or cut_exit_sprint or feint_exit_sprint) and not dribbling)
+			or powered_feint, moving
 	)
 	last_sprinting = actual_sprint or dribbling
 	var xi_feint_speed := (
-		lerpf(XI_DRIBBLE_FEINT_SPEED, 1.10, xi_feint_exit)
+		_xi_feint_plant_speed_multiplier()
 		if match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
 		else DRIBBLE_FEINT_SPEED
 	)
@@ -313,9 +323,12 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	# Technique affects dribbling/carrying only, never off-ball sprints.
 	if has_ball and role != "keeper":
 		speed *= technique_control_multiplier
-	if cut_exit_sprint or feint_exit_sprint:
-		# Technique already improves control; a paid E follow-through must
-		# NEVER exceed the player's ordinary 1.34x sprint ceiling.
+	if cut_exit_sprint or feint_exit_sprint or (
+		dribbling and dribble_mode == "feint"
+		and match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
+	):
+		# Technique already improves control; the real E second plant
+		# NEVER exceeds the player's ordinary 1.34x sprint ceiling.
 		speed = minf(speed, base_speed * SPRINT_SPEED_MULTIPLIER)
 	if tackle_recovery_seconds > 0.0:
 		speed *= 0.42
@@ -566,7 +579,20 @@ func _xi_feint_exit_ratio() -> float:
 		dribble_burst_seconds / maxf(dribble_duration_seconds, 0.001),
 		0.0, 1.0
 	)
-	return smoothstep(0.55, 0.92, progress)
+	return smoothstep(0.20, 0.74, progress)
+
+
+# Maintain the first planted boot, then accelerate sideways with normal
+# CharacterBody2D kinematics. No teleport, tackle shield or extra sprint cap.
+func _xi_feint_plant_speed_multiplier() -> float:
+	var progress: float = 1.0 - clampf(
+		dribble_burst_seconds / maxf(dribble_duration_seconds, 0.001),
+		0.0, 1.0
+	)
+	return lerpf(
+		XI_DRIBBLE_FEINT_SPEED, XI_DRIBBLE_FEINT_SECOND_STEP_SPEED,
+		smoothstep(0.12, 0.68, progress)
+	)
 
 
 # Three genuine physical beats in XI: a brief running-foot plant, a
