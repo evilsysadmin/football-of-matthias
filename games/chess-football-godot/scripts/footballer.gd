@@ -541,21 +541,21 @@ func _xi_cut_motion_direction() -> Vector2:
 	):
 		return dribble_direction
 	return dribble_entry_direction.lerp(
-		# Reach the lateral lane by mid-touch, not only as E finishes:
-		# a sharper planted foot makes the cut visible from match zoom.
-		dribble_direction, smoothstep(0.10, 0.52, _xi_cut_progress())
+		# Preserve the first planted foot, but take the lateral lane sooner:
+		# the defender must have actual grass to miss before contact.
+		dribble_direction, smoothstep(0.06, 0.38, _xi_cut_progress())
 	).normalized()
 
 
 func _xi_cut_speed_multiplier() -> float:
 	var progress := _xi_cut_progress()
 	if progress < 0.25:
-		return lerpf(0.82, 0.72, smoothstep(0.0, 0.25, progress))
+		return lerpf(0.82, 0.90, smoothstep(0.0, 0.25, progress))
 	if progress < 0.64:
-		return lerpf(0.72, 1.05, smoothstep(0.25, 0.64, progress))
-	# Finishing the cut is quicker than the plant, but NEVER a sprint buff:
-	# 1.24 < ordinary 1.34x sprint; F retains the real long-touch burst.
-	return lerpf(1.05, 1.24, smoothstep(0.64, 1.0, progress))
+		return lerpf(0.90, 1.15, smoothstep(0.25, 0.64, progress))
+	# A planted foot is followed by a real evasive acceleration, not a stall.
+	# Even at exit 1.24 remains under ordinary 1.34x sprint; F is unchanged.
+	return lerpf(1.15, 1.24, smoothstep(0.64, 1.0, progress))
 
 
 # Only after the planted touch may the human steer the exit by <= 45 deg.
