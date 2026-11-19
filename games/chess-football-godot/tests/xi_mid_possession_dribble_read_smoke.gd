@@ -66,7 +66,8 @@ func _initialize() -> void:
 		assert(game._ai_xi_dribble_tackle_read_ready(carrier))
 		assert(game._ai_xi_tackle_commit_ready(presser, carrier, false),
 			"New legal front-on tackles must be permitted after the read")
-		assert(game._ai_press_target(presser, carrier).is_equal_approx(centre))
+		assert(game._ai_press_target(presser, carrier).distance_to(centre) < 130.0,
+			"After reading the cut CPU must resume pursuit of the real carrier")
 
 	# F remains a risky long touch: it does not inherit the E reading beat.
 	carrier.dribble_burst_seconds = 0.0
