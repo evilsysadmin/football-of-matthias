@@ -327,5 +327,52 @@ func _initialize() -> void:
 	print("FOOTBALL_XI_REAL_FEINT_BALL_CONTACT_OK torso_is_not_ball=1 clean_ball_tackle=1 burst_unchanged=1 expires=1")
 	print("FOOTBALL_XI_REAL_CUT_BALL_CONTACT_OK torso_is_not_ball=1 clean_ball_tackle=1 legacy_unchanged=1")
 	print("FOOTBALL_XI_CUT_SPRINT_EXIT_OK stamina_paid=1 capped=1 no_immunity=1 legacy_unchanged=1")
+	# Hard may launch a real tackle at the outer edge of a planted
+	# feint instead of waiting for a guaranteed 60Hz ball contact.
+	# If the visible ball is outside the fixed hitbox, the lunge MUST
+	# miss and consume ordinary cooldown. A later true contact can
+	# still win possession: the attacker receives no immunity.
+	game.match_team_size = 11
+	game._set_quick_difficulty("hard")
+	game.ball.attach_to(carrier)
+	carrier.dribble_burst_seconds = 0.0
+	carrier.dribble_cooldown_seconds = 0.0
+	carrier.action_lock_seconds = 0.0
+	carrier.contact_stun_seconds = 0.0
+	carrier.tackle_recovery_seconds = 0.0
+	carrier.velocity = Vector2.ZERO
+	carrier.global_position = centre
+	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
+	carrier.dribble_burst_seconds = 0.0
+	carrier.xi_feint_exit_run_seconds = 0.34
+	game.ball.tick_ball(0.0)
+	presser.global_position = centre + Vector2(65.0, -36.0)
+	presser.velocity = Vector2.LEFT * presser.base_speed
+	presser.tackle_active_seconds = 0.0
+	presser.tackle_cooldown_seconds = 0.0
+	presser.tackle_recovery_seconds = 0.0
+	presser.action_lock_seconds = 0.0
+	var ahead: Dictionary = game._tackle_hitbox(
+		presser, game._tackle_contact_target(carrier)
+	)
+	assert(not bool(ahead["contact"]), "The first feint challenge is a genuine physical miss")
+	assert(game._ai_xi_tackle_commit_ready(presser, carrier, false),
+		"Hard primary may commit to the *observed* empty foot lane")
+	assert(not game._ai_xi_tackle_commit_ready(presser, carrier, true),
+		"Second cover must not inherit first-presser anticipatory tackles")
+	game._set_quick_difficulty("expert")
+	assert(not game._ai_xi_tackle_commit_ready(presser, carrier, false),
+		"Expert must retain its existing clean-contact approach")
+	game._set_quick_difficulty("hard")
+	assert(not game._try_tackle(presser),
+		"An anticipatory lunge must not register a phantom tackle")
+	assert(presser.tackle_active() and presser.tackle_cooldown_seconds > 0.0)
+	assert(game.ball.carrier == carrier)
+	# The boot is STILL physically active and can claim a real ball.
+	presser.global_position = game.ball.global_position + Vector2(14.0, 0.0)
+	game._update_active_tackle_contacts()
+	assert(game.ball.carrier == null,
+		"An actual active-foot contact must win after the early commitment")
+	print("FOOTBALL_XI_HARD_FEINT_ANTICIPATION_OK genuine_miss=1 cooldown=1 later_contact=1 cover_unchanged=1")
 	print("FOOTBALL_XI_MID_POSSESSION_DRIBBLE_READ_OK")
 	quit(0)
