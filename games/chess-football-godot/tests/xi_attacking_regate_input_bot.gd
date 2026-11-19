@@ -1,6 +1,6 @@
 extends SceneTree
 
-# Attack-side companion to eleven_autoplay_player_bot.gd. Eight PAIRS of
+# Attack-side companion to eleven_autoplay_player_bot.gd. Twelve PAIRS of
 # real 12-second 22-player open-play windows: same initial seed and defender,
 # one E action arm versus a directional-movement-only control arm.
 # The E arm presses the SAME XI E/movement keys
@@ -13,6 +13,7 @@ const XI: Rect2 = Formation.ELEVEN_PITCH_RECT
 const STEP := 1.0 / 60.0
 const TICKS := 720
 const RESULT_AFTER_FRAMES := 48
+const FOLLOWTHROUGH_AFTER_FRAMES := 72 # 1.2 seconds: catch delayed CPU recapture
 const SPECS := [
 	{"seed": 67113, "difficulty": "normal", "opening": "cut", "side": -1.0, "approach": "late", "rival_offset": 148.0},
 	{"seed": 67113, "difficulty": "normal", "opening": "cut", "side": -1.0, "approach": "early", "rival_offset": 225.0},
@@ -22,6 +23,12 @@ const SPECS := [
 	{"seed": 67119, "difficulty": "hard", "opening": "cut", "side": 1.0, "approach": "early", "rival_offset": 225.0},
 	{"seed": 67123, "difficulty": "hard", "opening": "feint", "side": -1.0, "approach": "late", "rival_offset": 148.0},
 	{"seed": 67123, "difficulty": "hard", "opening": "feint", "side": -1.0, "approach": "early", "rival_offset": 225.0},
+	# The 149/226 extremes both lose possession by 1.2s. Test the
+	# physically plausible middle timing, with matched no-E controls.
+	{"seed": 67113, "difficulty": "normal", "opening": "cut", "side": -1.0, "approach": "middle", "rival_offset": 185.0},
+	{"seed": 67117, "difficulty": "normal", "opening": "feint", "side": 1.0, "approach": "middle", "rival_offset": 185.0},
+	{"seed": 67119, "difficulty": "hard", "opening": "cut", "side": 1.0, "approach": "middle", "rival_offset": 185.0},
+	{"seed": 67123, "difficulty": "hard", "opening": "feint", "side": -1.0, "approach": "middle", "rival_offset": 185.0},
 ]
 const KEYS := ["move_left", "move_right", "move_up", "move_down",
 	"sprint", "tackle", "special_move", "change_player", "shoot_ball", "pass_ball"]
@@ -130,6 +137,10 @@ func _play(spec: Dictionary) -> Dictionary:
 	var opening_forward_gain: float = 0.0
 	var opening_lateral_gain: float = 0.0
 	var opening_stamina_spent: float = 0.0
+	var followthrough_outcome: String = ""
+	var followthrough_first_loss_frame: int = -1
+	var followthrough_forward_gain: float = 0.0
+	var followthrough_lateral_gain: float = 0.0
 	for tick in range(TICKS):
 		var playing: bool = not (
 			game.kickoff_active or game.goal_restart_active or game.set_piece_active
@@ -279,6 +290,17 @@ func _play(spec: Dictionary) -> Dictionary:
 				opening_forward_gain = snappedf(player.global_position.x - origin.x, 0.1)
 				opening_lateral_gain = snappedf(absf(player.global_position.y - origin.y), 0.1)
 				opening_stamina_spent = snappedf(start_stamina - player.stamina, 0.1)
+		if tick < FOLLOWTHROUGH_AFTER_FRAMES:
+			if game.ball.carrier != player and followthrough_first_loss_frame < 0:
+				followthrough_first_loss_frame = tick
+			if tick + 1 == FOLLOWTHROUGH_AFTER_FRAMES:
+				followthrough_outcome = _outcome(game, player)
+				followthrough_forward_gain = snappedf(
+					player.global_position.x - origin.x, 0.1
+				)
+				followthrough_lateral_gain = snappedf(
+					absf(player.global_position.y - origin.y), 0.1
+				)
 		if game.ball.carrier == null:
 			possession["loose"] = int(possession["loose"]) + 1
 		elif game.ball.carrier.team_id == 0:
@@ -309,6 +331,8 @@ func _play(spec: Dictionary) -> Dictionary:
 		assert(events.is_empty(), "No-E control must not invent regate outcomes")
 	assert(opening_outcome in ["retained", "loose", "cpu_stolen", "teammate", "restart"],
 		"Each pair arm needs a real 48-frame opening ball outcome")
+	assert(followthrough_outcome in ["retained", "loose", "cpu_stolen", "teammate", "restart"],
+		"Every arm must also have a real 72-frame followthrough ball outcome")
 	assert(moving_frames > 240)
 	assert(possession["human"] + possession["cpu"] + possession["loose"] == TICKS)
 	var result: Dictionary = {
@@ -320,6 +344,10 @@ func _play(spec: Dictionary) -> Dictionary:
 		"opening_forward_gain": opening_forward_gain,
 		"opening_lateral_gain": opening_lateral_gain,
 		"opening_stamina_spent": opening_stamina_spent,
+		"followthrough_outcome": followthrough_outcome,
+		"followthrough_first_loss_frame": followthrough_first_loss_frame,
+		"followthrough_forward_gain": followthrough_forward_gain,
+		"followthrough_lateral_gain": followthrough_lateral_gain,
 		"nearest_rival_at_start": snappedf(initial_rival_distance, 0.1),
 		"difficulty": String(spec["difficulty"]),
 		"opening": String(spec["opening"]),
@@ -364,7 +392,7 @@ func _initialize() -> void:
 			var outcome: String = String(event["outcome_at_0_8s"])
 			assert(actual_outcomes.has(outcome))
 			actual_outcomes[outcome] = int(actual_outcomes[outcome]) + 1
-	assert(reports.size() == 16 and total_events >= 8)
+	assert(reports.size() == 24 and total_events >= 12)
 	assert(total_events == (
 		int(actual_outcomes["retained"]) + int(actual_outcomes["loose"]) +
 		int(actual_outcomes["teammate"]) + int(actual_outcomes["cpu_stolen"]) +
@@ -400,9 +428,17 @@ func _initialize() -> void:
 			"run_lateral_gain": control["opening_lateral_gain"],
 			"e_stamina_spent": e["opening_stamina_spent"],
 			"run_stamina_spent": control["opening_stamina_spent"],
+			"e_outcome_1_2s": e["followthrough_outcome"],
+			"run_outcome_1_2s": control["followthrough_outcome"],
+			"e_first_loss_1_2s": e["followthrough_first_loss_frame"],
+			"run_first_loss_1_2s": control["followthrough_first_loss_frame"],
+			"e_forward_gain_1_2s": e["followthrough_forward_gain"],
+			"run_forward_gain_1_2s": control["followthrough_forward_gain"],
+			"e_lateral_gain_1_2s": e["followthrough_lateral_gain"],
+			"run_lateral_gain_1_2s": control["followthrough_lateral_gain"],
 		})
-	assert(pairs.size() == 8)
-	# A repeat AFTER 16 other runs checks how much the complete, seeded
+	assert(pairs.size() == 12)
+	# A repeat AFTER 24 other runs checks how much the complete, seeded
 	# match startup/AI drifts over time. Hard/cut/early previously flipped
 	# its 48-frame outcome across CI runs despite no cut-rule changes.
 	# Report discrepancies rather than hiding them or claiming bitwise
@@ -452,6 +488,7 @@ func _initialize() -> void:
 		"kind": "seeded_paired_real_input_xi_open_play_12s_not_full_matches",
 		"frames_per_trial": TICKS,
 		"result_after_frames": RESULT_AFTER_FRAMES,
+		"followthrough_after_frames": FOLLOWTHROUGH_AFTER_FRAMES,
 		"cases": reports,
 		"pairs": pairs,
 		"replay_audit": replay_audit,
@@ -460,5 +497,5 @@ func _initialize() -> void:
 		"cpu_tackles": real_tackles,
 	}
 	print("FOOTBALL_XI_ATTACK_REGATE_INPUT " + JSON.stringify(payload))
-	print("FOOTBALL_XI_ATTACK_REGATE_INPUT_OK cases=16 pairs=8 input=keyboard ai=full xi=22")
+	print("FOOTBALL_XI_ATTACK_REGATE_INPUT_OK cases=24 pairs=12 input=keyboard ai=full xi=22")
 	quit(0)
