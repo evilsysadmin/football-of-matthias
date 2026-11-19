@@ -189,8 +189,12 @@ func _initialize() -> void:
 	carrier.velocity = Vector2.ZERO
 	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
 	assert(carrier._xi_feint_exit_ratio() == 0.0)
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.75
+	assert(carrier._xi_feint_exit_ratio() == 0.0,
+		"The initial standing E foot plant must not permit an instant turn")
 	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.60
-	assert(carrier._xi_feint_exit_ratio() == 0.0)
+	assert(carrier._xi_feint_exit_ratio() > 0.0 and carrier._xi_feint_exit_ratio() < 0.5,
+		"The second feint plant must begin responding at mid-action, never snap")
 	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.08
 	assert(carrier._xi_feint_exit_ratio() > 0.99)
 	var velocity_before_exit: Vector2 = carrier.velocity
