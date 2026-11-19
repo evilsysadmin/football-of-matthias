@@ -160,7 +160,9 @@ jobs:
           assert len(reports) == 1, 'Expected one whole-XI attacking bot report'
           report = reports[0]
           assert report['kind'] == 'seeded_paired_real_input_xi_open_play_12s_not_full_matches'
-          assert report['frames_per_trial'] == 720 and report['result_after_frames'] == 48
+          assert (report['frames_per_trial'] == 720
+                  and report['result_after_frames'] == 48
+                  and report['followup_after_frames'] == 72)
           expected = [
               ('normal', 'cut', 'late'), ('normal', 'cut', 'early'),
               ('normal', 'feint', 'late'), ('normal', 'feint', 'early'),
@@ -194,7 +196,11 @@ jobs:
           assert all((p['e_outcome'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
                       and p['run_outcome'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
                       and p['e_first_loss_frame'] >= -1
-                      and p['run_first_loss_frame'] >= -1)
+                      and p['run_first_loss_frame'] >= -1
+                      and p['e_outcome_at_1_2s'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+                      and p['run_outcome_at_1_2s'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+                      and -1 <= p['e_first_loss_frame_at_1_2s'] < 72
+                      and -1 <= p['run_first_loss_frame_at_1_2s'] < 72)
                      for p in report['pairs'])
           assert all(x['staged_rival_distance'] == (
               148.0 if x['approach'] == 'late' else 225.0
@@ -208,6 +214,7 @@ jobs:
               and len(x['events']) == x['e_executed']
               and sum(x['possession_frames'].values()) == x['ticks'] == 720
               and x['opening_outcome'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+              and x['opening_outcome_at_1_2s'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
               for x in report['cases']
           )
           assert sum(report['outcomes'].values()) == report['e_events']
@@ -215,8 +222,15 @@ jobs:
                      and e['mode'] in ('cut', 'feint')
                      and e['nearest_rival_at_e'] > 0
                      for case in report['cases'] for e in case['events'])
+          for p in report['pairs']:
+              if p['difficulty'] == 'hard' and p['approach'] == 'early':
+                  print('FOOTBALL_XI_HARD_E_1_2S %s E=%s/%s run=%s/%s E_loss=%d run_loss=%d' % (
+                      p['opening'], p['e_outcome'], p['e_outcome_at_1_2s'],
+                      p['run_outcome'], p['run_outcome_at_1_2s'],
+                      p['e_first_loss_frame_at_1_2s'], p['run_first_loss_frame_at_1_2s']
+                  ))
           Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
-          print('FOOTBALL_XI_ATTACK_REGATE_ARTIFACT_OK cases=16 pairs=8 seeded_replays=2 real_input=1 early_vs_late=1')
+          print('FOOTBALL_XI_ATTACK_REGATE_ARTIFACT_OK cases=16 pairs=8 seeded_replays=2 real_input=1 followup=1.2s')
           PY
       - name: Upload XI open-play attacking E bot telemetry
         if: always()
