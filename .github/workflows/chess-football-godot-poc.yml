@@ -833,11 +833,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # GitHub's minimal CI image does not guarantee FFmpeg is present.
-          # Install the distro package only when needed; no binary in Git.
+          # Some runner images omit FFmpeg, while apt-get update may hang
+          # silently for >15 min. Try existing package indexes first; fail
+          # visibly and within a bounded time if the mirror is unhealthy.
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq ffmpeg
+            echo 'FOOTBALL_FFMPEG_INSTALL_PRELOADED_INDEX'
+            apt-cache policy ffmpeg || true
+            if ! sudo timeout -k 10s 90s apt-get install -y -qq \
+              --no-install-recommends -o DPkg::Lock::Timeout=30 ffmpeg; then
+              echo '::warning::Cached FFmpeg package index unavailable; bounded APT refresh required.'
+              sudo timeout -k 10s 90s apt-get update -qq \
+                -o Acquire::Retries=1 \
+                -o Acquire::http::Timeout=20 \
+                -o Acquire::https::Timeout=20
+              sudo timeout -k 10s 120s apt-get install -y -qq \
+                --no-install-recommends -o DPkg::Lock::Timeout=30 ffmpeg
+            fi
           fi
           command -v ffmpeg
           command -v ffprobe
