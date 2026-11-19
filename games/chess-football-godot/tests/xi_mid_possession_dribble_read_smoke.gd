@@ -62,7 +62,28 @@ func _initialize() -> void:
 			"CPU must first follow old running lane, not instantaneously mirror cut")
 		assert(old_lane != observed)
 		carrier.global_position = centre
-		carrier.dribble_burst_seconds = carrier.dribble_duration_seconds - read_seconds - 0.01
+		var legal_tackle_read: float = (
+			game.AI_XI_CUT_TACKLE_READ_NORMAL if level == "normal" else read_seconds
+		)
+		# The planted E animation and the stamina-paid exit both advance on
+		# actual physics time. Simulate both clocks to the same precise instant.
+		carrier.dribble_burst_seconds = maxf(
+			0.0, carrier.dribble_duration_seconds - read_seconds - 0.01
+		)
+		carrier.xi_cut_exit_run_seconds = (
+			carrier.dribble_duration_seconds + carrier.XI_CUT_EXIT_RUN_SECONDS
+			- read_seconds - 0.01
+		)
+		if level == "normal":
+			assert(not game._ai_xi_dribble_tackle_read_ready(carrier),
+				"Normal must read beyond the planted touch before attacking")
+		carrier.dribble_burst_seconds = maxf(
+			0.0, carrier.dribble_duration_seconds - legal_tackle_read - 0.01
+		)
+		carrier.xi_cut_exit_run_seconds = (
+			carrier.dribble_duration_seconds + carrier.XI_CUT_EXIT_RUN_SECONDS
+			- legal_tackle_read - 0.01
+		)
 		assert(game._ai_xi_dribble_tackle_read_ready(carrier))
 		assert(game._ai_xi_tackle_commit_ready(presser, carrier, false),
 			"New legal front-on tackles must be permitted after the read")
