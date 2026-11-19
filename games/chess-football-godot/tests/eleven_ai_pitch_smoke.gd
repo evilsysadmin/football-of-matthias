@@ -172,8 +172,10 @@ func _initialize() -> void:
 	assert(mirrored.y > 30.0 and is_equal_approx(mirrored.y, -false_first.y))
 	game._set_quick_difficulty("hard")
 	var hard_mirror: Vector2 = game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker)
-	assert(hard_mirror.y > 20.0 and is_equal_approx(hard_mirror.y, -hard_read.y),
-		"Hard must physically misread either planted wing symmetrically")
+	assert(hard_mirror.y > 20.0
+		and hard_mirror.y >= absf(hard_read.y) * 0.70
+		and hard_mirror.y <= absf(hard_read.y) * 1.30,
+		"Hard must react on both wings without ignoring the actual support-foot offset")
 	xi_cover_player.global_position = striker.global_position + Vector2(350.0, 0.0)
 	assert(game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO,
 		"A distant defender must not magically react to an unseen foot")
