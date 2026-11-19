@@ -236,9 +236,23 @@ func _initialize() -> void:
 			)
 			assert(early_target.distance_to(old_running_target) < 0.1,
 				"First E plant must follow pre-cut momentum")
+		elif action == "feint":
+			# Hard may chase a bounded lateral planted-foot cue, but cannot
+			# predict forward travel from the same-frame unknown input.
+			var read_from_foot: Vector2 = game._ai_xi_skilled_feint_read_offset(
+				xi_cover_player, striker
+			)
+			assert(read_from_foot.length() <= 54.01)
+			assert(early_target.is_equal_approx(
+				ChessFootballMath.clamp_to_pitch(
+					striker.global_position + read_from_foot, XI
+				)
+			))
+			assert(absf(early_target.x - striker.global_position.x) < 0.1,
+				"A first-foot cue cannot provide a psychic forward forecast")
 		else:
 			assert(early_target.is_equal_approx(striker.global_position),
-				"Early XI %s cannot give CPU a psychic pursuit forecast" % action)
+				"Early F must not create a false planted-foot read")
 		assert(game._ai_xi_diagonal_cover_lead(
 			xi_cover_player, striker.global_position
 		) == Vector2.ZERO, "Cover must not anticipate the first %s step" % action)
