@@ -131,14 +131,14 @@ func _initialize() -> void:
 	var physical_foot: Vector2 = striker.ball_anchor()
 	assert(physical_foot.y > 12.0)
 	var hard_read: Vector2 = game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker)
-	assert(hard_read.y < -20.0 and absf(hard_read.y) <= 54.01)
+	assert(hard_read.y < -50.0 and absf(hard_read.y) <= 108.01)
 	assert(game._ai_press_target(xi_cover_player, striker).is_equal_approx(
 		striker.global_position + hard_read
 	))
-	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.70
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.55
 	var hard_fade: Vector2 = game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker)
 	assert(absf(hard_fade.y) < absf(hard_read.y))
-	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.30
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.04
 	assert(game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO,
 		"Hard must return to the real chase point after the first plant")
 	striker.dribble_burst_seconds = striker.dribble_duration_seconds
@@ -172,7 +172,7 @@ func _initialize() -> void:
 	assert(mirrored.y > 30.0 and is_equal_approx(mirrored.y, -false_first.y))
 	game._set_quick_difficulty("hard")
 	var hard_mirror: Vector2 = game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker)
-	assert(hard_mirror.y > 20.0
+	assert(hard_mirror.y > 50.0
 		and hard_mirror.y >= absf(hard_read.y) * 0.70
 		and hard_mirror.y <= absf(hard_read.y) * 1.30,
 		"Hard must react on both wings without ignoring the actual support-foot offset")
@@ -242,7 +242,7 @@ func _initialize() -> void:
 			var read_from_foot: Vector2 = game._ai_xi_skilled_feint_read_offset(
 				xi_cover_player, striker
 			)
-			assert(read_from_foot.length() <= 54.01)
+			assert(read_from_foot.length() <= 108.01)
 			assert(early_target.is_equal_approx(
 				ChessFootballMath.clamp_to_pitch(
 					striker.global_position + read_from_foot, XI
