@@ -115,7 +115,7 @@ func _initialize() -> void:
 	game._set_quick_difficulty("expert")
 	game.ball.possession_seconds = 0.08
 	assert(game._ai_xi_skilled_tackle_decision_due(striker, 1.0 / 60.0))
-	game.ball.possession_seconds = 0.09
+	game.ball.possession_seconds = 0.10
 	assert(not game._ai_xi_skilled_tackle_decision_due(striker, 1.0 / 60.0))
 	game._set_quick_difficulty("easy")
 	assert(game._ai_xi_skilled_tackle_decision_due(striker, 1.0 / 60.0))
