@@ -13,6 +13,7 @@ const XI: Rect2 = Formation.ELEVEN_PITCH_RECT
 const STEP := 1.0 / 60.0
 const TICKS := 720
 const RESULT_AFTER_FRAMES := 48
+const FOLLOWUP_AFTER_FRAMES := 72  # Observe a real 1.2s escape, not a delayed 0.8s tackle.
 const SPECS := [
 	{"seed": 67113, "difficulty": "normal", "opening": "cut", "side": -1.0, "approach": "late", "rival_offset": 148.0},
 	{"seed": 67113, "difficulty": "normal", "opening": "cut", "side": -1.0, "approach": "early", "rival_offset": 225.0},
@@ -126,6 +127,8 @@ func _play(spec: Dictionary) -> Dictionary:
 	var initial_rival_distance: float = float(_nearest_rival(game, player)["distance"])
 	var opening_outcome: String = ""
 	var opening_loss_frame: int = -1
+	var opening_outcome_at_1_2s: String = ""
+	var opening_first_loss_frame_at_1_2s: int = -1
 	var opening_loss_cause: String = ""
 	var opening_forward_gain: float = 0.0
 	var opening_lateral_gain: float = 0.0
@@ -279,6 +282,11 @@ func _play(spec: Dictionary) -> Dictionary:
 				opening_forward_gain = snappedf(player.global_position.x - origin.x, 0.1)
 				opening_lateral_gain = snappedf(absf(player.global_position.y - origin.y), 0.1)
 				opening_stamina_spent = snappedf(start_stamina - player.stamina, 0.1)
+		if tick < FOLLOWUP_AFTER_FRAMES:
+			if game.ball.carrier != player and opening_first_loss_frame_at_1_2s < 0:
+				opening_first_loss_frame_at_1_2s = tick
+			if tick + 1 == FOLLOWUP_AFTER_FRAMES:
+				opening_outcome_at_1_2s = _outcome(game, player)
 		if game.ball.carrier == null:
 			possession["loose"] = int(possession["loose"]) + 1
 		elif game.ball.carrier.team_id == 0:
@@ -309,13 +317,17 @@ func _play(spec: Dictionary) -> Dictionary:
 		assert(events.is_empty(), "No-E control must not invent regate outcomes")
 	assert(opening_outcome in ["retained", "loose", "cpu_stolen", "teammate", "restart"],
 		"Each pair arm needs a real 48-frame opening ball outcome")
+	assert(opening_outcome_at_1_2s in ["retained", "loose", "cpu_stolen", "teammate", "restart"],
+		"Each pair arm needs a complete 72-frame follow-up")
 	assert(moving_frames > 240)
 	assert(possession["human"] + possession["cpu"] + possession["loose"] == TICKS)
 	var result: Dictionary = {
 		"seed": int(spec["seed"]),
 		"variant": "e" if use_e else "run_without_e",
 		"opening_outcome": opening_outcome,
+		"opening_outcome_at_1_2s": opening_outcome_at_1_2s,
 		"opening_first_loss_frame": opening_loss_frame,
+		"opening_first_loss_frame_at_1_2s": opening_first_loss_frame_at_1_2s,
 		"opening_first_loss_cause_hint": opening_loss_cause,
 		"opening_forward_gain": opening_forward_gain,
 		"opening_lateral_gain": opening_lateral_gain,
@@ -392,6 +404,10 @@ func _initialize() -> void:
 			"approach": e["approach"],
 			"e_outcome": e["opening_outcome"],
 			"run_outcome": control["opening_outcome"],
+			"e_outcome_at_1_2s": e["opening_outcome_at_1_2s"],
+			"run_outcome_at_1_2s": control["opening_outcome_at_1_2s"],
+			"e_first_loss_frame_at_1_2s": e["opening_first_loss_frame_at_1_2s"],
+			"run_first_loss_frame_at_1_2s": control["opening_first_loss_frame_at_1_2s"],
 			"e_first_loss_frame": e["opening_first_loss_frame"],
 			"run_first_loss_frame": control["opening_first_loss_frame"],
 			"e_forward_gain": e["opening_forward_gain"],
@@ -452,6 +468,7 @@ func _initialize() -> void:
 		"kind": "seeded_paired_real_input_xi_open_play_12s_not_full_matches",
 		"frames_per_trial": TICKS,
 		"result_after_frames": RESULT_AFTER_FRAMES,
+		"followup_after_frames": FOLLOWUP_AFTER_FRAMES,
 		"cases": reports,
 		"pairs": pairs,
 		"replay_audit": replay_audit,

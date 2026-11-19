@@ -1352,6 +1352,39 @@ func _initialize() -> void:
 	game.match_team_size = 5
 	assert(game._ai_press_target(human_far, cpu_owner) == cpu_owner.global_position)
 	game.match_team_size = 11
+	# Stationary E previously checked only 190 units of threat distance.
+	# A fast XI presser already closing from ~226 makes E point STRAIGHT
+	# into him; this verifies the corrected cue before contact is possible.
+	var saved_enemy_positions: Array[Vector2] = []
+	for defender: Footballer in game.teams[1]:
+		saved_enemy_positions.append(defender.global_position)
+		defender.global_position = XI.position + Vector2(85.0, 95.0)
+	var feint_owner: Footballer = game.teams[0][10]
+	var saved_feint_pos: Vector2 = feint_owner.global_position
+	feint_owner.global_position = XI.get_center()
+	game.ball.attach_to(feint_owner)
+	var visible_presser: Footballer = game.teams[1][5]
+	visible_presser.global_position = feint_owner.global_position + Vector2(225.0, 18.0)
+	var early_escape: Vector2 = game._auto_dribble_direction(feint_owner)
+	assert(early_escape.x > 0.35 and early_escape.y < -0.65,
+		"XI standing E must select an open physical flank BEFORE a 226-unit presser enters tackle range")
+	visible_presser.global_position = feint_owner.global_position + Vector2(225.0, -18.0)
+	var mirror_escape: Vector2 = game._auto_dribble_direction(feint_owner)
+	assert(mirror_escape.x > 0.35 and mirror_escape.y > 0.65,
+		"Stationary E must use the opposing wing, not a fixed scripted sidestep")
+	visible_presser.global_position = feint_owner.global_position + Vector2(350.0, 18.0)
+	assert(game._auto_dribble_direction(feint_owner) == Vector2.RIGHT,
+		"No threat in the XI scouting radius means ordinary forward movement")
+	visible_presser.global_position = feint_owner.global_position + Vector2(225.0, 18.0)
+	game.match_team_size = 5
+	assert(game._auto_dribble_direction(feint_owner) == Vector2.RIGHT,
+		"Legacy 5v5 retains its old 190-unit threat read and unchanged sidestep")
+	game.match_team_size = 11
+	for i in range(game.teams[1].size()):
+		game.teams[1][i].global_position = saved_enemy_positions[i]
+	feint_owner.global_position = saved_feint_pos
+	game.ball.attach_to(cpu_owner)
+	print("FOOTBALL_XI_EARLY_FEINT_LANE_OK pressure_225=side_stepped mirror=1 far=forward legacy=unchanged")
 	print("FOOTBALL_XI_INTERCEPT_CONTINUITY_OK approach_60hz=45 aim_jump_lt_4=1 tackle_body=1 startup_fade=1 far_lead=1 5v5=off")
 	print("FOOTBALL_XI_HUMAN_INTERCEPT_OK observed=1 diagonal=1 bounded=1 cut_reactive=1 close_tackle=body loose=off 5v5=off")
 	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 e_hitbox_contact=1 tackle_ready_only=1 manual_override=1 owner_transfer=stop no_flicker=1 manual_q=1 fallen=off 5v5=off")

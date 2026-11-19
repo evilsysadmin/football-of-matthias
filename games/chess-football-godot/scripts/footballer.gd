@@ -58,7 +58,10 @@ const DRIBBLE_FEINT_SECONDS := 0.16
 const XI_DRIBBLE_FEINT_SECONDS := 0.24
 const DRIBBLE_LONG_TOUCH_SECONDS := 0.27
 const DRIBBLE_FEINT_SPEED := 0.65
-const XI_DRIBBLE_FEINT_SPEED := 0.44
+# A sharper side-step needs actual movement: the prior 0.44x planted
+# first step traversed almost no ground. Keep 0.82x below walking pace;
+# the same normal sprint ceiling and real acceleration still apply.
+const XI_DRIBBLE_FEINT_SPEED := 0.82
 const DRIBBLE_LONG_TOUCH_SPEED := 1.56
 const DRIBBLE_FEINT_TOUCH := 8.0
 const DRIBBLE_LONG_TOUCH := 32.0
