@@ -97,5 +97,51 @@ func _initialize() -> void:
 	assert(game.ball.carrier == null, "Committed tackle must still dislodge carrier")
 	game.match_team_size = 5
 	assert(game._ai_xi_dribble_tackle_read_ready(carrier))
+	# E has a real stamina-paid running follow-through. Otherwise a human
+	# drops to 1.0x speed when E ends and the ordinary CPU 1.34x sprint
+	# immediately catches them again, even after an earned lateral separation.
+	game.match_team_size = 11
+	carrier.global_position = centre
+	carrier.velocity = Vector2.RIGHT * carrier.base_speed
+	carrier.contact_stun_seconds = 0.0
+	carrier.tackle_recovery_seconds = 0.0
+	carrier.action_lock_seconds = 0.0
+	carrier.dribble_cooldown_seconds = 0.0
+	carrier.dribble_burst_seconds = 0.0
+	carrier.stamina = carrier.STAMINA_MAX
+	carrier.sprint_exhausted = false
+	game.ball.attach_to(carrier)
+	assert(carrier.start_dribble(Vector2.RIGHT, "cut"))
+	assert(carrier.xi_cut_exit_run_seconds > carrier.dribble_duration_seconds)
+	carrier.dribble_burst_seconds = 0.0
+	carrier.xi_cut_exit_run_seconds = 0.26
+	var stamina_before: float = carrier.stamina
+	await physics_frame
+	carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+	assert(carrier.last_sprinting, "The E exit must use genuine normal sprint")
+	assert(carrier.stamina < stamina_before, "E exit must spend sprint stamina")
+	assert(carrier.velocity.length() > carrier.base_speed + 10.0)
+	assert(carrier.velocity.length() < carrier.base_speed * carrier.SPRINT_SPEED_MULTIPLIER + 1.0)
+	carrier.xi_cut_exit_run_seconds = 0.0
+	await physics_frame
+	carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+	assert(not carrier.last_sprinting, "The E follow-through must expire")
+	# Stealing or releasing the ball cancels the exit immediately.
+	carrier.xi_cut_exit_run_seconds = 0.25
+	game.ball.release(Vector2.RIGHT, 40.0)
+	carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+	assert(carrier.xi_cut_exit_run_seconds == 0.0)
+	# Neither F nor legacy 5v5 inherit the special E follow-through.
+	game.ball.attach_to(carrier)
+	carrier.dribble_cooldown_seconds = 0.0
+	carrier.action_lock_seconds = 0.0
+	assert(carrier.start_dribble(Vector2.RIGHT, "burst"))
+	assert(carrier.xi_cut_exit_run_seconds == 0.0)
+	carrier.dribble_burst_seconds = 0.0
+	carrier.dribble_cooldown_seconds = 0.0
+	carrier.match_pitch = ChessFootballMath.PITCH_RECT
+	assert(carrier.start_dribble(Vector2.RIGHT, "cut"))
+	assert(carrier.xi_cut_exit_run_seconds == 0.0)
+	print("FOOTBALL_XI_CUT_SPRINT_EXIT_OK stamina_paid=1 capped=1 no_immunity=1 legacy_unchanged=1")
 	print("FOOTBALL_XI_MID_POSSESSION_DRIBBLE_READ_OK")
 	quit(0)
