@@ -143,6 +143,13 @@ func _initialize() -> void:
 	assert(carrier.stamina < stamina_before, "E exit must spend sprint stamina")
 	assert(carrier.velocity.length() > carrier.base_speed + 10.0)
 	assert(carrier.velocity.length() < carrier.base_speed * carrier.SPRINT_SPEED_MULTIPLIER + 1.0)
+	# Do not only check the first acceleration tick: technique must not
+	# amplify the follow-through above ordinary sprint at steady speed.
+	for tick in range(10):
+		await physics_frame
+		carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+		assert(carrier.velocity.length() <= carrier.base_speed * carrier.SPRINT_SPEED_MULTIPLIER + 1.0)
+		carrier._process(1.0 / 60.0)
 	carrier.xi_cut_exit_run_seconds = 0.0
 	await physics_frame
 	carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
