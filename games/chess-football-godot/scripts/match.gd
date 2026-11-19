@@ -3468,7 +3468,10 @@ func _tackle_contact_target(victim: Footballer) -> Vector2:
 				victim.dribble_mode == "cut"
 				and (victim.dribble_active() or victim.xi_cut_exit_run_seconds > 0.0)
 			)
-			or (victim.dribble_mode == "feint" and victim.dribble_active())
+			or (
+				victim.dribble_mode == "feint"
+				and (victim.dribble_active() or victim.xi_feint_exit_run_seconds > 0.0)
+			)
 		)
 	):
 		return ball.global_position
