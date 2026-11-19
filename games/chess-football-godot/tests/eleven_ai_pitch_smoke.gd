@@ -187,9 +187,19 @@ func _initialize() -> void:
 		striker.action_lock_seconds = 0.0
 		assert(striker.start_dribble(Vector2(1.0, 1.0), action))
 		assert(game._ai_xi_observed_carrier_velocity(striker) == Vector2.ZERO)
-		assert(game._ai_press_target(xi_cover_player, striker).is_equal_approx(
-			striker.global_position
-		), "Early XI %s cannot give CPU a psychic pursuit forecast" % action)
+		var early_target: Vector2 = game._ai_press_target(xi_cover_player, striker)
+		if action == "cut":
+			# During E the CPU still sees the OLD running lane, not the
+			# newly chosen cut. This is a physical interception target,
+			# not clairvoyance or a fake tackle lock.
+			var old_running_target: Vector2 = (
+				striker.dribble_origin_position + striker.dribble_entry_direction * 38.0
+			)
+			assert(early_target.distance_to(old_running_target) < 0.1,
+				"First E plant must follow pre-cut momentum")
+		else:
+			assert(early_target.is_equal_approx(striker.global_position),
+				"Early XI %s cannot give CPU a psychic pursuit forecast" % action)
 		assert(game._ai_xi_diagonal_cover_lead(
 			xi_cover_player, striker.global_position
 		) == Vector2.ZERO, "Cover must not anticipate the first %s step" % action)
@@ -218,6 +228,12 @@ func _initialize() -> void:
 	game.ball.possession_seconds = 0.0
 	assert(not game._ai_xi_tackle_commit_ready(xi_cover_player, striker, false))
 	game.ball.possession_seconds = game.AI_XI_HARD_FIRST_TOUCH_READ + 0.01
+	# BOTH independent reads must have elapsed: fresh ball possession and
+	# the first planted E, even when the ball was already under control.
+	assert(not game._ai_xi_tackle_commit_ready(xi_cover_player, striker, false))
+	striker.dribble_burst_seconds = (
+		striker.dribble_duration_seconds - game._ai_xi_cut_read_seconds() - 0.01
+	)
 	assert(game._ai_xi_tackle_commit_ready(xi_cover_player, striker, false))
 	xi_cover_player.global_position = contact_position
 	xi_cover_player.velocity = contact_velocity
