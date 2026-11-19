@@ -566,7 +566,13 @@ func _xi_feint_exit_ratio() -> float:
 		dribble_burst_seconds / maxf(dribble_duration_seconds, 0.001),
 		0.0, 1.0
 	)
-	return smoothstep(0.55, 0.92, progress)
+	# A real standing plant still occupies the opening ~0.08 seconds,
+	# but a commanded exit must not spend nearly the entire 0.24s feint
+	# crawling at 0.44x while the normal defender sprints. Complete the
+	# second step by ~0.19s; the SAME speed curve tops out at 1.10x,
+	# then ordinary stamina-paid sprint handles the post-feint run.
+	# No extra reach, tackle immunity or 5v5/keeper change.
+	return smoothstep(0.32, 0.78, progress)
 
 
 # Three genuine physical beats in XI: a brief running-foot plant, a
