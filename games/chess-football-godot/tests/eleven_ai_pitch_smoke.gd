@@ -126,21 +126,58 @@ func _initialize() -> void:
 	striker.dribble_burst_seconds = striker.dribble_duration_seconds
 	game._set_quick_difficulty("hard")
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	# Hard can be fooled briefly by the CURRENT foot/ball cue, not a
+	# predicted human input. Its smaller target fades before Normal's.
+	var physical_foot: Vector2 = striker.ball_anchor()
+	assert(physical_foot.y > 12.0)
+	var hard_read: Vector2 = game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker)
+	assert(hard_read.y < -20.0 and absf(hard_read.y) <= 54.01)
+	assert(game._ai_press_target(xi_cover_player, striker).is_equal_approx(
+		striker.global_position + hard_read
+	))
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.70
+	var hard_fade: Vector2 = game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker)
+	assert(absf(hard_fade.y) < absf(hard_read.y))
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.30
+	assert(game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO,
+		"Hard must return to the real chase point after the first plant")
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds
 	game._set_quick_difficulty("expert")
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	var expert_read: Vector2 = game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker)
+	assert(expert_read.y < 0.0 and absf(expert_read.y) < absf(hard_read.y))
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.60
+	assert(game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO,
+		"Expert must correct its plant observation earlier than Hard")
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds
 	game._set_quick_difficulty("easy")
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	assert(game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
 	game._set_quick_difficulty("normal")
 	game.match_team_size = 5
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	game._set_quick_difficulty("hard")
+	assert(game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO,
+		"5v5 does not inherit XI misreads")
 	game.match_team_size = 11
 	striker.dribble_mode = "cut"
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	assert(game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO,
+		"The deliberate running E cut still has its old perception contract")
+	game._set_quick_difficulty("normal")
 	# Mirror direction: a fake left-right cue must not be hard-coded to one wing.
 	striker.dribble_mode = "feint"
 	striker.dribble_direction = Vector2(1.0, -0.75).normalized()
 	var mirrored: Vector2 = game._ai_xi_normal_feint_read_offset(xi_cover_player, striker)
 	assert(mirrored.y > 30.0 and is_equal_approx(mirrored.y, -false_first.y))
+	game._set_quick_difficulty("hard")
+	var hard_mirror: Vector2 = game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker)
+	assert(hard_mirror.y > 20.0 and is_equal_approx(hard_mirror.y, -hard_read.y),
+		"Hard must physically misread either planted wing symmetrically")
+	xi_cover_player.global_position = striker.global_position + Vector2(350.0, 0.0)
+	assert(game._ai_xi_skilled_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO,
+		"A distant defender must not magically react to an unseen foot")
+	xi_cover_player.global_position = striker.global_position + Vector2(155.0, 0.0)
 	striker.dribble_burst_seconds = 0.0
 	striker.dribble_cooldown_seconds = 0.0
 	striker.velocity = Vector2.ZERO
