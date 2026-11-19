@@ -1816,13 +1816,17 @@ func _ai_xi_skilled_feint_read_offset(presser: Footballer, owner: Footballer) ->
 	if absf(foot.y) < 12.0:
 		return Vector2.ZERO
 	var elapsed: float = owner.dribble_duration_seconds - owner.dribble_burst_seconds
-	var window: float = 0.115 if quick_difficulty == "hard" else 0.065
+	# Hard pressers commit harder to the visible first step. That
+	# aggressiveness is exploitable by an E fake, whereas disciplined
+	# Expert corrects quickly. These are perception targets ONLY: a
+	# well-timed physical tackle remains legal on every difficulty.
+	var window: float = 0.225 if quick_difficulty == "hard" else 0.075
 	if elapsed < 0.0 or elapsed >= window:
 		return Vector2.ZERO
-	var maximum: float = 54.0 if quick_difficulty == "hard" else 26.0
-	var strength: float = 1.8 if quick_difficulty == "hard" else 1.0
+	var maximum: float = 108.0 if quick_difficulty == "hard" else 34.0
+	var strength: float = 5.0 if quick_difficulty == "hard" else 1.30
 	var wrong_foot: float = -signf(foot.y) * minf(absf(foot.y) * strength, maximum)
-	var fading: float = 1.0 - smoothstep(window * 0.25, window, elapsed)
+	var fading: float = 1.0 - smoothstep(window * 0.38, window, elapsed)
 	return Vector2(0.0, wrong_foot * fading)
 
 
