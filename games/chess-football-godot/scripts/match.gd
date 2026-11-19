@@ -246,6 +246,9 @@ const AI_XI_EXPERT_FIRST_TOUCH_READ := 0.12
 # This is CPU decision latency, not immunity: already-launched tackle
 # hitboxes and physical collisions still resolve on every physics frame.
 const AI_XI_CUT_READ_NORMAL := 0.24
+# Normal must not commit a precisely timed tackle on the same 0.45s frame
+# in every diagonal cut. Previously launched tackles remain physical.
+const AI_XI_CUT_TACKLE_READ_NORMAL := 0.50
 const AI_XI_CUT_READ_HARD := 0.16
 const AI_XI_CUT_READ_EXPERT := 0.09
 const AI_XI_SECOND_PRESS_ACTIVATION := 320.0
@@ -1764,14 +1767,28 @@ func _ai_xi_cut_read_seconds() -> float:
 	)
 
 
-# An E action halfway through possession still requires a fresh read before
-# the CPU CHOOSES a new tackle. A committed tackle remains fully legal.
+# A NEW E creates its own decision window even after an established
+# possession. Normal's read extends briefly beyond the planted animation
+# so the defender cannot reclaim at the same fixed physics frame every
+# time. An already active real tackle still hits on the normal path.
 func _ai_xi_dribble_tackle_read_ready(victim: Footballer) -> bool:
 	if (
 		match_team_size != 11 or quick_difficulty == "easy"
 		or victim.team_id != 0 or ball.carrier != victim
-		or not victim.dribble_active() or victim.dribble_mode == "burst"
+		or victim.dribble_mode == "burst"
 	):
+		return true
+	if victim.dribble_mode == "cut" and victim.xi_cut_exit_run_seconds > 0.0:
+		var elapsed: float = (
+			victim.dribble_duration_seconds + victim.XI_CUT_EXIT_RUN_SECONDS
+			- victim.xi_cut_exit_run_seconds
+		)
+		var required: float = (
+			AI_XI_CUT_TACKLE_READ_NORMAL if quick_difficulty == "normal"
+			else _ai_xi_cut_read_seconds()
+		)
+		return elapsed >= required
+	if not victim.dribble_active():
 		return true
 	return (
 		victim.dribble_duration_seconds - victim.dribble_burst_seconds
