@@ -104,6 +104,28 @@ func _initialize() -> void:
 	assert(game._ai_xi_normal_tackle_read_due(striker, 1.0 / 60.0))
 	game.match_team_size = 11
 	game.ball.possession_seconds = original_age
+	# Hard/Expert still track and physically tackle the real ball, but may
+	# only LAUNCH NEW entries at possession-clock beats (not 60Hz oracle).
+	# Existing launched tackles and cover do not inherit artificial shields.
+	game._set_quick_difficulty("hard")
+	game.ball.possession_seconds = 0.245
+	assert(game._ai_xi_skilled_tackle_decision_due(striker, 1.0 / 60.0))
+	game.ball.possession_seconds = 0.26
+	assert(not game._ai_xi_skilled_tackle_decision_due(striker, 1.0 / 60.0))
+	game._set_quick_difficulty("expert")
+	game.ball.possession_seconds = 0.08
+	assert(game._ai_xi_skilled_tackle_decision_due(striker, 1.0 / 60.0))
+	game.ball.possession_seconds = 0.09
+	assert(not game._ai_xi_skilled_tackle_decision_due(striker, 1.0 / 60.0))
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_skilled_tackle_decision_due(striker, 1.0 / 60.0))
+	game._set_quick_difficulty("hard")
+	game.match_team_size = 5
+	assert(game._ai_xi_skilled_tackle_decision_due(striker, 1.0 / 60.0))
+	game.match_team_size = 11
+	game._set_quick_difficulty("normal")
+	assert(game._ai_xi_skilled_tackle_decision_due(striker, 1.0 / 60.0))
+	game.ball.possession_seconds = original_age
 	# A real XI stationary E feint should briefly wrong-foot *Normal's*
 	# primary defender toward the false first boot plant, then recover.
 	# No speed boost, collision immunity, lucky tackle miss or AI freeze.
