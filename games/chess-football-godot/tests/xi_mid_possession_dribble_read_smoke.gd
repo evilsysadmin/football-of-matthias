@@ -170,48 +170,63 @@ func _initialize() -> void:
 	carrier.match_pitch = ChessFootballMath.PITCH_RECT
 	assert(carrier.start_dribble(Vector2.RIGHT, "cut"))
 	assert(carrier.xi_cut_exit_run_seconds == 0.0)
-	# Normal XI should chase a real planted E instead of projecting its
-	# changed direction a full stride. Hard retains ordinary forward lead.
-	# Neither the defender's real speed nor the physical hitbox is changed.
+	# An XI cut carries a REAL physical ball out onto the outside foot.
+	# A CPU boot through the torso must not steal the ball on the other side.
+	# Use the actual FootballBall tick and its stride phase, not a fake spot.
+	game.match_team_size = 11
 	carrier.match_pitch = game.match_pitch
 	carrier.global_position = centre
-	carrier.velocity = Vector2(220.0, 110.0)
+	carrier.velocity = Vector2.RIGHT * carrier.base_speed
 	carrier.dribble_burst_seconds = 0.0
 	carrier.dribble_cooldown_seconds = 0.0
 	carrier.action_lock_seconds = 0.0
+	carrier.contact_stun_seconds = 0.0
+	carrier.tackle_recovery_seconds = 0.0
+	presser.tackle_active_seconds = 0.0
+	presser.tackle_cooldown_seconds = 0.0
+	presser.action_lock_seconds = 0.0
+	presser.tackle_recovery_seconds = 0.0
 	game.ball.attach_to(carrier)
 	assert(carrier.start_dribble(Vector2(1.0, 0.76), "cut"))
-	# After the 0.34s E animation ends, Normal still needs to reset
-	# its planted foot through part of the authentic 0.42s exit stride.
-	carrier.dribble_burst_seconds = 0.0
-	carrier.xi_cut_exit_run_seconds = 0.38
-	presser.global_position = centre + Vector2(160.0, -75.0)
-	game._set_quick_difficulty("normal")
-	assert(game._ai_xi_cut_read_target(presser, carrier) != Vector2.ZERO,
-		"Normal must not instantly forget the mistaken lane when E animation ends")
-	# After real recovery the defender keeps chasing with a bounded lead,
-	# rather than remaining artificially fooled or frozen forever.
-	carrier.xi_cut_exit_run_seconds = 0.12
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.15
+	carrier.xi_cut_exit_run_seconds = carrier.dribble_burst_seconds + carrier.XI_CUT_EXIT_RUN_SECONDS
+	game.ball.xi_carry_distance = game.ball.XI_TOUCH_STRIDE_DISTANCE * 0.5
+	game.ball.tick_ball(0.0)
+	var real_foot_ball: Vector2 = game.ball.global_position
+	assert(real_foot_ball.distance_to(centre) > 45.0,
+		"XI cut ball must really be outside the planted torso")
+	presser.global_position = centre + Vector2(43.0, 0.0)
 	presser.velocity = Vector2.LEFT * presser.base_speed
-	game._set_quick_difficulty("normal")
-	var normal_target: Vector2 = game._ai_press_target(presser, carrier)
-	game._set_quick_difficulty("hard")
-	var hard_target: Vector2 = game._ai_press_target(presser, carrier)
-	assert(normal_target.distance_to(centre) > 1.0,
-		"Normal must continue pursuing observed real movement")
-	assert(normal_target.distance_to(centre) < hard_target.distance_to(centre) * 0.55,
-		"Normal must not predict a fresh E exit farther ahead than Hard")
-	game._set_quick_difficulty("normal")
-	carrier.xi_cut_exit_run_seconds = 0.0
-	var full_target: Vector2 = game._ai_press_target(presser, carrier)
-	assert(full_target.distance_to(hard_target) < 0.01,
-		"Only a current E exit should damp prediction, not general defence")
-	carrier.xi_cut_exit_run_seconds = 0.3
+	assert(bool(game._tackle_hitbox(presser, centre)["contact"]),
+		"Body-centred contact would have stolen the old phantom ball")
+	assert(not bool(game._tackle_hitbox(presser, real_foot_ball)["contact"]),
+		"The real outside boot must be clear of the standing tackle")
+	assert(game._tackle_contact_target(carrier) == real_foot_ball)
+	assert(not game._try_tackle(presser),
+		"A standing CPU tackle into the torso cannot steal a distant outside-foot ball")
+	assert(game.ball.carrier == carrier)
+	# No immunity: put the SAME boot in the path of the real carried ball.
+	presser.tackle_active_seconds = 0.0
+	presser.tackle_cooldown_seconds = 0.0
+	presser.tackle_recovery_seconds = 0.0
+	presser.action_lock_seconds = 0.0
+	presser.global_position = real_foot_ball + Vector2(14.0, 0.0)
+	presser.velocity = Vector2.LEFT * presser.base_speed
+	assert(presser.global_position.distance_to(centre) < game.TACKLE_ATTEMPT_RANGE)
+	assert(bool(game._tackle_hitbox(presser, real_foot_ball)["clean"]))
+	assert(game._try_tackle(presser),
+		"A well-placed boot on the real ball must still win a clean tackle")
+	assert(game.ball.carrier == null)
+	# CPU and human share this rule; XI keepers and historical 5v5 do not.
 	game.match_team_size = 5
-	assert(game._ai_press_target(presser, carrier).is_equal_approx(centre),
-		"Legacy 5v5 must never receive an XI pursuit forecast")
-	game.match_team_size = 11
-	print("FOOTBALL_XI_NORMAL_CUT_PRESS_LEAD_OK reduced_foresight=1 hard_unchanged=1 five_unchanged=1")
+	carrier.match_pitch = ChessFootballMath.PITCH_RECT
+	game.ball.attach_to(carrier)
+	carrier.dribble_burst_seconds = 0.0
+	carrier.dribble_cooldown_seconds = 0.0
+	carrier.action_lock_seconds = 0.0
+	assert(carrier.start_dribble(Vector2.RIGHT, "cut"))
+	assert(game._tackle_contact_target(carrier) == carrier.global_position)
+	print("FOOTBALL_XI_REAL_CUT_BALL_CONTACT_OK torso_is_not_ball=1 clean_ball_tackle=1 legacy_unchanged=1")
 	print("FOOTBALL_XI_CUT_SPRINT_EXIT_OK stamina_paid=1 capped=1 no_immunity=1 legacy_unchanged=1")
 	print("FOOTBALL_XI_MID_POSSESSION_DRIBBLE_READ_OK")
 	quit(0)
