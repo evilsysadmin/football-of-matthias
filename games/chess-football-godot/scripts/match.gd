@@ -245,10 +245,10 @@ const AI_XI_EXPERT_FIRST_TOUCH_READ := 0.12
 # A NEW human E touch must be read even during an older possession.
 # This is CPU decision latency, not immunity: already-launched tackle
 # hitboxes and physical collisions still resolve on every physics frame.
-const AI_XI_CUT_READ_NORMAL := 0.24
+const AI_XI_CUT_READ_NORMAL := 0.32
 # Normal must not commit a precisely timed tackle on the same 0.45s frame
 # in every diagonal cut. Previously launched tackles remain physical.
-const AI_XI_CUT_TACKLE_READ_NORMAL := 0.58
+const AI_XI_CUT_TACKLE_READ_NORMAL := 0.50
 const AI_XI_CUT_READ_HARD := 0.16
 const AI_XI_CUT_READ_EXPERT := 0.09
 const AI_XI_SECOND_PRESS_ACTIVATION := 320.0
