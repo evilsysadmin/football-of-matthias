@@ -215,6 +215,19 @@ jobs:
                      and e['mode'] in ('cut', 'feint')
                      and e['nearest_rival_at_e'] > 0
                      for case in report['cases'] for e in case['events'])
+          first_losses = [e['first_loss'] for case in report['cases']
+                          for e in case['events'] if e['lost_possession_at_any_point']]
+          assert first_losses, 'This pressure fixture must observe physical possession losses'
+          for loss in first_losses:
+              tacklers = loss['active_tacklers']
+              assert len(tacklers) == loss['active_cpu_tackles']
+              assert all(
+                  isinstance(t['index'], int) and 0 <= t['index'] < 11
+                  and t['assignment'] in ('primary', 'cover', 'other')
+                  and t['distance_to_ball'] >= 0
+                  and isinstance(t['clean_ball_hitbox'], bool)
+                  for t in tacklers
+              )
           Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
           print('FOOTBALL_XI_ATTACK_REGATE_ARTIFACT_OK cases=16 pairs=8 seeded_replays=2 real_input=1 early_vs_late=1')
           PY

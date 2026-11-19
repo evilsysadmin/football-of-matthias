@@ -217,15 +217,38 @@ func _play(spec: Dictionary) -> Dictionary:
 					elif original.contact_stun_seconds > 0.0:
 						source = "tackle_or_contact_stun"
 					var rivals_tackling := 0
+					var active_tacklers: Array[Dictionary] = []
+					# At the first real loss, identify the physical launching
+					# defender. Hard can challenge with BOTH primary + cover;
+					# a first-presser-only fake may be irrelevant if cover
+					# executes the decisive tackle. Read current role caches,
+					# never call a role selector that could mutate the AI.
+					var primary: Footballer = game.ai_primary_presser_cache[1]
+					var cover: Footballer = game.ai_secondary_presser_cache[1]
 					for rival: Footballer in game.teams[1]:
 						if rival.tackle_active():
 							rivals_tackling += 1
+							active_tacklers.append({
+								"index": rival.squad_index,
+								"assignment": (
+									"primary" if rival == primary
+									else "cover" if rival == cover
+									else "other"
+								),
+								"distance_to_ball": snappedf(
+									rival.global_position.distance_to(game.ball.global_position), 0.1
+								),
+								"clean_ball_hitbox": bool(game._tackle_hitbox(
+									rival, game.ball.global_position
+								)["clean"]),
+							})
 					var nearest_at_loss: Dictionary = _nearest_rival(game, original)
 					pending["first_loss"] = {
 						"frame": tick - int(pending["tick"]),
 						"cause_hint": source,
 						"nearest_rival": snappedf(float(nearest_at_loss["distance"]), 0.1),
 						"active_cpu_tackles": rivals_tackling,
+						"active_tacklers": active_tacklers,
 						"carrier_down": original.xi_collision_down_seconds > 0.0,
 						"stun_seconds": snappedf(original.contact_stun_seconds, 0.01),
 						"feedback": game.action_feedback_text,
