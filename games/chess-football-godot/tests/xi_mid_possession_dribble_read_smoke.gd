@@ -345,6 +345,9 @@ func _initialize() -> void:
 	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
 	carrier.dribble_burst_seconds = 0.0
 	carrier.xi_feint_exit_run_seconds = 0.34
+	# A tackle decision remains illegal before the existing Hard first-touch
+	# read; the early-lunge experiment must NOT bypass that contract.
+	game.ball.possession_seconds = game.AI_XI_HARD_FIRST_TOUCH_READ + 0.02
 	game.ball.tick_ball(0.0)
 	# Set the approaching boot relative to the REAL, potentially
 	# left- or right-facing ball anchor: prior tests may have flipped
