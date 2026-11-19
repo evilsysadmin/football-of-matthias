@@ -250,6 +250,10 @@ const AI_XI_CUT_READ_NORMAL := 0.32
 # After the first plant, react to the real current feet rather than
 # projecting the freshly changed velocity a full defender stride ahead.
 const AI_XI_NORMAL_CUT_PRESS_LEAD_SCALE := 0.40
+# A normal defender cannot reset its feet instantly when the 0.34s planted
+# E ends; it takes a short physical recovery during the real exit stride.
+# This is pursuit direction only. Legal contact remains fully authoritative.
+const AI_XI_NORMAL_CUT_RECOVERY_SECONDS := 0.58
 # Normal must not commit a precisely timed tackle on the same 0.45s frame
 # in every diagonal cut. Previously launched tackles remain physical.
 const AI_XI_CUT_TACKLE_READ_NORMAL := 0.50
@@ -1744,12 +1748,20 @@ func _ai_xi_cut_read_target(presser: Footballer, owner: Footballer) -> Vector2:
 	if (
 		match_team_size != 11 or quick_difficulty == "easy"
 		or presser.team_id != 1 or owner.team_id != 0
-		or ball.carrier != owner or not owner.dribble_active()
-		or owner.dribble_mode != "cut"
+		or ball.carrier != owner or owner.dribble_mode != "cut"
+		or (not owner.dribble_active() and owner.xi_cut_exit_run_seconds <= 0.0)
 	):
 		return Vector2.ZERO
-	var window: float = _ai_xi_cut_read_seconds()
-	var elapsed: float = owner.dribble_duration_seconds - owner.dribble_burst_seconds
+	var window: float = (
+		AI_XI_NORMAL_CUT_RECOVERY_SECONDS if quick_difficulty == "normal"
+		else _ai_xi_cut_read_seconds()
+	)
+	var elapsed: float = (
+		owner.dribble_duration_seconds + owner.XI_CUT_EXIT_RUN_SECONDS
+		- owner.xi_cut_exit_run_seconds
+		if owner.xi_cut_exit_run_seconds > 0.0
+		else owner.dribble_duration_seconds - owner.dribble_burst_seconds
+	)
 	if elapsed >= window:
 		return Vector2.ZERO
 	var original_line: Vector2 = owner.dribble_entry_direction.normalized()
