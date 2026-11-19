@@ -160,7 +160,9 @@ jobs:
           assert len(reports) == 1, 'Expected one whole-XI attacking bot report'
           report = reports[0]
           assert report['kind'] == 'seeded_paired_real_input_xi_open_play_12s_not_full_matches'
-          assert report['frames_per_trial'] == 720 and report['result_after_frames'] == 48
+          assert (report['frames_per_trial'] == 720
+                  and report['result_after_frames'] == 48
+                  and report['followthrough_after_frames'] == 72)
           expected = [
               ('normal', 'cut', 'late'), ('normal', 'cut', 'early'),
               ('normal', 'feint', 'late'), ('normal', 'feint', 'early'),
@@ -191,11 +193,16 @@ jobs:
                      and (a['repeat_loss_frame'] == -1 or
                           0 <= a['repeat_loss_frame'] < 48)
                      for a in audit)
-          assert all((p['e_outcome'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
-                      and p['run_outcome'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
-                      and p['e_first_loss_frame'] >= -1
-                      and p['run_first_loss_frame'] >= -1)
-                     for p in report['pairs'])
+          outcomes = ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+          assert all(
+              p['e_outcome'] in outcomes and p['run_outcome'] in outcomes
+              and p['e_outcome_1_2s'] in outcomes and p['run_outcome_1_2s'] in outcomes
+              and -1 <= p['e_first_loss_frame'] < 48
+              and -1 <= p['run_first_loss_frame'] < 48
+              and -1 <= p['e_first_loss_1_2s'] < 72
+              and -1 <= p['run_first_loss_1_2s'] < 72
+              for p in report['pairs']
+          )
           assert all(x['staged_rival_distance'] == (
               148.0 if x['approach'] == 'late' else 225.0
           ) for x in report['cases'])
@@ -208,6 +215,8 @@ jobs:
               and len(x['events']) == x['e_executed']
               and sum(x['possession_frames'].values()) == x['ticks'] == 720
               and x['opening_outcome'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+              and x['followthrough_outcome'] in ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+              and -1 <= x['followthrough_first_loss_frame'] < 72
               for x in report['cases']
           )
           assert sum(report['outcomes'].values()) == report['e_events']
