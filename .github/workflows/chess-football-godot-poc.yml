@@ -6,8 +6,10 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: football-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Keep every main commit's complete gameplay, visual and delivery evidence.
+  # Only superseded revisions of the same PR may be cancelled.
+  group: football-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   GODOT_VERSION: '4.7.2'
   GODOT_RELEASE: '4.7.2-stable'
