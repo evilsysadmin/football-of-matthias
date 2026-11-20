@@ -6,8 +6,10 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: football-xi-endurance-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Preserve each main SHA's deterministic XI match telemetry independently.
+  # Only superseded revisions of the same PR may be cancelled.
+  group: football-xi-endurance-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   xi-endurance:
