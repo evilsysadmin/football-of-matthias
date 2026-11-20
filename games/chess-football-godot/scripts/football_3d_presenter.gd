@@ -992,6 +992,19 @@ func _emit_hero_v5_ci_receipt() -> void:
 
 # Native R2 v2 eight-pose action pack, independent of the legacy source-
 # sized tackler decoder. A failed fetch/shape/hash leaves local canon intact.
+# Localhost-only CI tracing; never publish token, profile or browser state.
+func _ci_action_pose_trace(event_name: String, team_id: int, action: StringName, detail: String = "") -> void:
+	if not OS.has_feature("web") or match_node.match_team_size != 11:
+		return
+	var payload := JSON.stringify({
+		"event": event_name, "team": team_id, "action": String(action),
+		"detail": detail, "installed": _action_poses_r2_loaded.size(),
+	})
+	JavaScriptBridge.eval(
+		"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) console.log('FOOTBALL_XI_ACTION_POSE_DIAG ' + JSON.stringify(%s));" % payload,
+		true
+	)
+
 func _request_action_poses_from_r2() -> void:
 	# Old 5v5 remains the canon-only headless fixture.
 	if not OS.has_feature("web") or match_node.match_team_size != 11:
@@ -1000,29 +1013,39 @@ func _request_action_poses_from_r2() -> void:
 		for action in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
 			var meta := ChessFootballActionPosesR2.sheet_meta(team_id, action)
 			if meta.is_empty():
+				_ci_action_pose_trace("missing_meta", team_id, action)
 				continue
 			var loader := ChessFootballR2AtlasLoader.new()
 			loader.name = "ActionPosesV2_%d_%s" % [team_id, String(action)]
 			add_child(loader)
 			loader.atlas_ready.connect(_on_action_pose_ready.bind(team_id, action))
+			loader.atlas_failed.connect(_on_action_pose_failed.bind(team_id, action))
+			_ci_action_pose_trace("request_start", team_id, action)
 			loader.start(meta, ChessFootballActionPosesR2.TRUSTED_ROOT)
 
 
+func _on_action_pose_failed(reason: String, team_id: int, action: StringName) -> void:
+	_ci_action_pose_trace("loader_failed", team_id, action, reason)
+
+
 func _on_action_pose_ready(image: Image, team_id: int, action: StringName) -> void:
-	_apply_verified_action_pose_frames(
-		ChessFootballActionPosesR2.frames_from_image(image, action), team_id, action
-	)
+	var textures: Array[Texture2D] = ChessFootballActionPosesR2.frames_from_image(image, action)
+	_ci_action_pose_trace("verified_webp", team_id, action, str(textures.size()))
+	_apply_verified_action_pose_frames(textures, team_id, action)
 
 
 func _apply_verified_action_pose_frames(
 	textures: Array[Texture2D], team_id: int, action: StringName
 ) -> void:
 	if team_id not in [0, 1] or action not in ChessFootballActionPosesR2.ACTIVE_ANIMATIONS:
+		_ci_action_pose_trace("reject_contract", team_id, action)
 		return
 	if textures.size() != ChessFootballActionPosesR2.COLUMNS:
+		_ci_action_pose_trace("reject_frame_count", team_id, action, str(textures.size()))
 		return
 	var key := "%d:%s" % [team_id, String(action)]
 	if _action_poses_r2_loaded.has(key):
+		_ci_action_pose_trace("duplicate", team_id, action)
 		return
 	var targets: Array[SpriteFrames] = []
 	for player in match_node.teams[team_id]:
@@ -1030,15 +1053,19 @@ func _apply_verified_action_pose_frames(
 			continue
 		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
 		if sprite == null or sprite.sprite_frames == null:
+			_ci_action_pose_trace("reject_missing_sprite_bank", team_id, action)
 			return
 		var bank := sprite.sprite_frames
 		if action in [&"tackle", &"slide_tackle"]:
 			if not bank.has_animation(action) or bank.get_frame_count(action) != 8:
+				_ci_action_pose_trace("reject_tackle_bank_shape", team_id, action)
 				return
 		elif bank.has_animation(action):
+			_ci_action_pose_trace("reject_existing_animation", team_id, action)
 			return
 		targets.append(bank)
 	if targets.size() != match_node.match_team_size - 1:
+		_ci_action_pose_trace("reject_target_count", team_id, action, str(targets.size()))
 		return
 	for bank in targets:
 		if action in [&"dribble_cut", &"dribble_burst"]:
@@ -1051,6 +1078,7 @@ func _apply_verified_action_pose_frames(
 			else:
 				bank.add_frame(action, textures[i])
 	_action_poses_r2_loaded[key] = true
+	_ci_action_pose_trace("installed", team_id, action)
 	# Local, opt-in player-facing diagnostics. Report only the exact set of
 	# verified R2 sheets installed in SpriteFrames, not network attempts,
 	# gameplay, user identity or telemetry. Only the authenticated staging
