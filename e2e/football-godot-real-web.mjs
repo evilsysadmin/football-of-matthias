@@ -694,11 +694,30 @@ try {
   // Require a CI-only receipt from the real XI Godot WASM presenter, emitted
   // only after ALL eight R2 action sheets replace the real team sprite banks.
   // If a browser silently falls back to old art, the required gate fails.
-  await page.waitForFunction(
-    () => window.__chessFootballActionPoseReceipts.some((receipt) =>
-      receipt.team_size === 11 && receipt.sheets === 8),
-    null, { timeout: 60000 }
-  );
+  try {
+    await page.waitForFunction(
+      () => window.__chessFootballActionPoseReceipts.some((receipt) =>
+        receipt.team_size === 11 && receipt.sheets === 8),
+      null, { timeout: 60000 }
+    );
+  } catch (error) {
+    // Keep the strict installed-sprites gate; a 200 response is not proof.
+    // A hung software-WebGL renderer must not stall CI diagnostics forever.
+    const diagnostic = await Promise.race([
+      page.evaluate(() => ({
+        webReady: window.__chessFootballWebReady === true,
+        canvasPresent: Boolean(document.querySelector('canvas')),
+        actionPoseReceipts: Array.isArray(window.__chessFootballActionPoseReceipts)
+          ? window.__chessFootballActionPoseReceipts.slice(-8) : null,
+        heroV5Receipts: Array.isArray(window.__chessFootballHeroV5Receipts)
+          ? window.__chessFootballHeroV5Receipts.slice(-4) : null,
+      })).catch((probeError) => ({ probeError: String(probeError.message || probeError) })),
+      new Promise((resolve) => setTimeout(() =>
+        resolve({ probeError: 'WebGL diagnostic timed out after 5s' }), 5000)),
+    ]);
+    console.error('FOOTBALL_XI_WEB_ACTION_POSE_RECEIPT_TIMEOUT', JSON.stringify(diagnostic));
+    throw error;
+  }
   console.log('FOOTBALL_XI_REAL_WEB_ACTION_POSES_INSTALLED_OK teams=2 actions=4 sheets=8');
   // HTTP 200 by itself is not enough: actual Godot WASM must install all
   // four V5 banks into 20 outfield SpriteFrames before continuing.
