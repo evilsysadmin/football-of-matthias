@@ -462,6 +462,24 @@ jobs:
       # Paired real-input E→Space experiment. A successful pass requires
       # a real release and first physical touch by the intended XI teammate.
       # Neither E timing nor defending gameplay is modified by this scout.
+      # Real XI keyboard-regression guard, including rejected E during Space,
+      # accepted E taking priority, the visible receiver, and untouched 5v5.
+      - name: XI · E and charged Space input ownership + real pass receiver cue
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-e-pass-keys.log"
+          set +e
+          timeout 70s "$godot" --headless --quit-after 3000 --path games/chess-football-godot --script res://tests/xi_e_pass_charging_input_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI E→Space input and recipient cue regression failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_E_PASS_CHARGE_INPUT_OK rejected_e_keeps_space=true real_release=true accepted_e_cancels=true live_target=true free_lane=true legacy_5v5=true' "$log"
+
       - name: Scout XI · real E into charged Space pass and physical first touch
         shell: bash
         run: |
