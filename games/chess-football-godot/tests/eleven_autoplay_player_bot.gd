@@ -260,16 +260,21 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 			player.set_process(false)
 	await process_frame
 	await process_frame
-	# The first tick in this QA run begins NOW, not at scene insertion.
-	# Record the warmup offset but never let it contaminate the replay's
-	# Q switch clock or any per-possession time-based decision.
+	# The first imported Godot scene can schedule physics while warming
+	# up even after the pre/post-add disable. Reassert exclusive ownership
+	# AFTER both warmup frames, before the very first measured input tick.
+	# This does not change a real match: only the QA bot drives this node.
 	var warmup_clock: float = game.match_seconds
 	assert(not is_nan(warmup_clock) and not is_inf(warmup_clock))
+	game.set_physics_process(false)
+	game.set_process(false)
 	game.match_seconds = 0.0
 	game._reset_ai_adaptation()
+	print("FOOTBALL_XI_REPLAY_WARMUP_CLOCK %.5f native_physics=%s fixed_start=%.5f" % [
+		warmup_clock, str(game.is_physics_processing()), game.match_seconds
+	])
 	assert(not game.is_physics_processing() and absf(game.match_seconds) < 0.001,
 		"XI bot must own the complete replay clock after rendering warmup")
-	print("FOOTBALL_XI_REPLAY_WARMUP_CLOCK %.5f" % warmup_clock)
 	game._set_quick_difficulty(difficulty)
 	game.kickoff_active = false
 	game.goal_restart_active = false
