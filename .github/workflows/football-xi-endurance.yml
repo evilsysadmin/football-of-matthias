@@ -198,6 +198,26 @@ jobs:
                           0 <= a['repeat_loss_frame'] < 48)
                      for a in audit)
           outcomes = ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+          # The first Hard/feint/late win needs its own E and no-E replay,
+          # not merely the legacy Hard/cut/early drift audit.
+          earned = report['earned_e_replay_audit']
+          assert [(a['seed'], a['variant'], a['difficulty'],
+                   a['opening'], a['approach']) for a in earned] == [
+              (67123, 'e', 'hard', 'feint', 'late'),
+              (67123, 'run_without_e', 'hard', 'feint', 'late'),
+          ]
+          assert all(
+              a['original_outcome_1_2s'] in outcomes
+              and a['repeated_outcome_1_2s'] in outcomes
+              and a['retention_reproducible'] == (
+                  (a['original_outcome_1_2s'] == 'retained') ==
+                  (a['repeated_outcome_1_2s'] == 'retained')
+              )
+              and -1 <= a['original_first_loss_1_2s'] < 72
+              and -1 <= a['repeated_first_loss_1_2s'] < 72
+              and a['first_cpu_tackles'] >= 0 and a['repeat_cpu_tackles'] >= 0
+              for a in earned
+          )
           assert all(
               p['e_outcome'] in outcomes and p['run_outcome'] in outcomes
               and p['e_outcome_1_2s'] in outcomes and p['run_outcome_1_2s'] in outcomes
