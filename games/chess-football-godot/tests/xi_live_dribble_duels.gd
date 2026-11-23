@@ -188,6 +188,10 @@ func _initialize() -> void:
 	_reset_duel(game, carrier, presser, "normal", "far")
 	carrier.velocity = Vector2.ZERO
 	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
+	assert(is_equal_approx(carrier.dribble_duration_seconds, 0.18),
+		"XI stationary E plant must finish in 0.18s before normal paid exit")
+	assert(carrier.DRIBBLE_FEINT_SECONDS == 0.16,
+		"5v5 and keeper feint duration must remain unchanged")
 	assert(carrier._xi_feint_exit_ratio() == 0.0)
 	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.60
 	assert(carrier._xi_feint_exit_ratio() == 0.0)
