@@ -189,8 +189,12 @@ func _initialize() -> void:
 	carrier.velocity = Vector2.ZERO
 	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
 	assert(carrier._xi_feint_exit_ratio() == 0.0)
-	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.60
-	assert(carrier._xi_feint_exit_ratio() == 0.0)
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.80
+	assert(carrier._xi_feint_exit_ratio() == 0.0,
+		"The first planted XI feint foot must stay committed before steering")
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.35
+	assert(carrier._xi_feint_exit_ratio() > 0.35 and carrier._xi_feint_exit_ratio() < 0.90,
+		"XI feint must accept a meaningful human steering command before its final foot")
 	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.08
 	assert(carrier._xi_feint_exit_ratio() > 0.99)
 	var velocity_before_exit: Vector2 = carrier.velocity
@@ -198,6 +202,8 @@ func _initialize() -> void:
 	carrier.move_human(DT, Vector2.UP, false)
 	assert(carrier.velocity.y < velocity_before_exit.y,
 		"Human input after the second feint plant must steer the exit")
+	assert(carrier.velocity.y < -absf(carrier.velocity.x) * 2.0,
+		"A full XI feint exit must respond to the requested lane, not auto-direction")
 	assert(game.ball.carrier == carrier and carrier.contact_stun_seconds == 0.0)
 	carrier.match_pitch = ChessFootballMath.PITCH_RECT
 	assert(carrier._xi_feint_exit_ratio() == 0.0,
