@@ -459,6 +459,114 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
+      # Paired real-input E→Space experiment. A successful pass requires
+      # a real release and first physical touch by the intended XI teammate.
+      # Neither E timing nor defending gameplay is modified by this scout.
+      - name: Scout XI · real E into charged Space pass and physical first touch
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-e-pass.log"
+          set +e
+          timeout 195s "$godot" --headless --quit-after 18000 --path games/chess-football-godot --script res://tests/xi_e_pass_exit_scout.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI real E→Space first-touch scout failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_E_PASS_SCOUT_OK pairs=24 arms=48 real_space=true' "$log"
+          python3 - "$log" "$RUNNER_TEMP/football-xi-e-pass.json" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          prefix = 'FOOTBALL_XI_E_PASS_SCOUT '
+          reports = [json.loads(line[len(prefix):])
+                     for line in Path(sys.argv[1]).read_text().splitlines()
+                     if line.startswith(prefix)]
+          assert len(reports) == 1, 'Expected exactly one 22-player pass scout'
+          report = reports[0]
+          assert report['kind'] == (
+              'paired_real_xi_22_player_e_or_run_then_actual_space_pass_not_human_win_rate'
+          )
+          assert report['arms'] == 48 and report['pairs'] == 24
+          assert report['pass_start_frames'] == [8, 14, 20]
+          assert report['charge_frames'] == 7 and report['simulation_frames'] == 170
+          rows = report['rows']
+          assert len(rows) == 48
+          earned = []
+          e_success = 0
+          run_success = 0
+          for i in range(0, len(rows), 2):
+              e, control = rows[i:i+2]
+              assert e['variant'] == 'e'
+              assert control['variant'] == 'run_without_e'
+              assert e['e_executed'] and not control['e_executed']
+              assert e['seed'] == control['seed']
+              assert e['mode'] == control['mode']
+              assert e['side'] == control['side']
+              assert e['distance'] == control['distance']
+              assert e['pass_start_frame'] == control['pass_start_frame']
+              assert abs(e['start_rival_distance'] -
+                         control['start_rival_distance']) < 0.1
+              assert e['mode'] in ('feint', 'cut')
+              assert e['side'] in ('upper', 'lower')
+              for x in (e, control):
+                  assert x['pass_start_frame'] in (8, 14, 20)
+                  assert x['first_touch_team'] in (-1, 0, 1)
+                  assert x['cpu_tackles'] >= 0
+                  assert x['clean_intended_pass'] == (
+                      x['pass_released'] and x['first_loss_before_pass'] == -1
+                      and x['first_touch_team'] == 0
+                      and x['first_touch_index'] == x['intended_receiver_index']
+                      and not x['had_restart']
+                  )
+                  if x['pass_released']:
+                      assert x['pass_charge_started']
+                      assert x['pass_release_frame'] == (
+                          x['pass_start_frame'] + report['charge_frames']
+                      )
+                      assert x['released_power'] > 0
+                  else:
+                      assert x['pass_release_frame'] == -1
+                      assert x['released_power'] == 0
+              e_success += int(e['clean_intended_pass'])
+              run_success += int(control['clean_intended_pass'])
+              if e['clean_intended_pass'] and not control['clean_intended_pass']:
+                  earned.append({
+                      'mode': e['mode'], 'side': e['side'],
+                      'distance': e['distance'],
+                      'pass_start_frame': e['pass_start_frame']
+                  })
+          report['clean_e_to_pass'] = e_success
+          report['clean_running_to_pass'] = run_success
+          report['e_only_clean_pass_pairs'] = earned
+          Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
+          if os.environ.get('GITHUB_STEP_SUMMARY'):
+              with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
+                  summary.write(
+                      '### XI E → pase real / 22 jugadores\n'
+                      f'- Pases al receptor previsto sin robo previo: '
+                      f'E **{e_success}/24**, correr **{run_success}/24**\n'
+                      f'- Parejas exclusivas de E: **{len(earned)}/24**\n'
+                      '- 48 brazos de prueba, Space cargado 7 frames y '
+                      'primer contacto físico, no una tasa de juego real.\n'
+                  )
+          print('FOOTBALL_XI_E_PASS_ARTIFACT_OK arms=48 pairs=24 '
+                f'e={e_success} no_e={run_success} e_only={len(earned)}')
+          PY
+      - name: Upload real XI E-to-pass outcomes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-xi-e-pass-scout
+          path: ${{ runner.temp }}/football-xi-e-pass.json
+          retention-days: 7
+          if-no-files-found: warn
+
       - name: Autoplay XI · real input bot, pressure and handoff telemetry
         shell: bash
         run: |
