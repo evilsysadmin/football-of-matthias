@@ -245,6 +245,11 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	game.set_process(false)
 	game.set_physics_process(false)
 	root.add_child(game)
+	# Godot enables _physics_process automatically when a script with that
+	# callback enters the SceneTree. Explicitly disable it again AFTER
+	# insertion; the pre-tree setting alone is not authoritative here.
+	game.set_physics_process(false)
+	game.set_process(false)
 	assert(not game.is_physics_processing(),
 		"XI bot must suspend native live match updates before any warmup frames")
 	# _ready() and scene insertion may cost a native tick. We will establish
