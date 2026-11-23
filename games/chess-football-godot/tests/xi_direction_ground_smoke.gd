@@ -113,8 +113,15 @@ func _initialize() -> void:
 					assert(material.albedo_texture.get_size() == actual_frame.get_size())
 					assert(material.albedo_texture.get_image().get_used_rect() ==
 						actual_frame.get_image().get_used_rect())
-					assert(material.albedo_texture.get_image().get_data() !=
-						actual_frame.get_image().get_data())
+					var numbered_pixels: PackedByteArray = material.albedo_texture.get_image().get_data()
+					var source_pixels: PackedByteArray = actual_frame.get_image().get_data()
+					if numbered_pixels == source_pixels:
+						print("FOOTBALL_XI_DORSAL_EMPTY_PIXELS mode=%s team=%d shirt=%d animation=%s source=%d used=%s" % [
+							mode, team_id, player.shirt_number, String(sprite.animation),
+							actual_frame.get_instance_id(), str(actual_frame.get_image().get_used_rect())
+						])
+					assert(numbered_pixels != source_pixels,
+						"Rendered back must have real shirt ink, not merely another texture instance")
 				else:
 					assert(material.albedo_texture == actual_frame)
 				assert(quad.scale == sprite.scale)
