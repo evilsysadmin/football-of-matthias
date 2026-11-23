@@ -8,8 +8,8 @@ extends SceneTree
 # Drive the manually stepped 60 Hz match from SceneTree.physics_frame rather
 # than a variable-rate rendered frame. A rendered frame can contain zero or
 # multiple physical ticks, allowing collision-server state to diverge.
-# Input still reaches the REAL _physics_process within the same bot tick;
-# Q's press edge and manual override remain mandatory assertions below.
+# Input reaches the REAL _physics_process on the next physics tick, after
+# Godot has registered its press edge; Q remains an enforced manual action.
 const Formation = preload("res://scripts/football_match_formation.gd")
 const XI := Formation.ELEVEN_PITCH_RECT
 const STEP := 1.0 / 60.0
@@ -367,6 +367,12 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 			shooting_frames -= 1
 
 		_act(direction, sprint, press_e, press_q, press_shot)
+		# Godot marks a programmatically pressed action as 'just pressed'
+		# for the NEXT physics tick (not the tick in which action_press()
+		# was called). Submit real actions first, then enter that tick
+		# before querying them inside the unchanged _physics_process().
+		# This preserves Q/E press edges without directly selecting actors.
+		await physics_frame
 		if moving and Input.get_vector("move_left", "move_right", "move_up", "move_down").length() > 0.2:
 			movement_frames += 1
 		if press_e:
@@ -561,11 +567,6 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 				"ball_y": snappedf(game.ball.global_position.y, 0.1),
 				"score": [int(game.score[0]), int(game.score[1])],
 			})
-		# Advance the 60 Hz physics server exactly once between manual steps.
-		# Previously awaiting render frames introduced variable intervening
-		# physics steps and defeated same-seed replay. Browser-equivalent
-		# Input.action_press() still precedes the real _physics_process().
-		await physics_frame
 
 	if not active_pressure_gap.is_empty():
 		_finish_pressure_gap(pressure_gap_episodes, active_pressure_gap, TICKS, "simulation_end")
