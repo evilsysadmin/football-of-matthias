@@ -1825,6 +1825,44 @@ func _ai_xi_normal_feint_read_offset(presser: Footballer, owner: Footballer) -> 
 # The first HUMAN teammate anticipates only the real velocity observed
 # this frame, never a predicted input. Inside tackle approach, close on the
 # carrier's real centre; with a loose ball, ordinary pursuit takes over.
+# A Hard defender already sprinting INTO a stationary XI E feint can
+# briefly commit to the visible false boot/shoulder cue. This changes the
+# ordinary move_ai target, never the defender's pace, acceleration, tackle
+# hitboxes, cooldown or the carrier's possession. Unlike Normal's broader
+# decoy, Hard reacts only if physically close and MOVING toward the owner.
+# If the player mistimes E or the defender has not committed, no misread.
+func _ai_xi_hard_committed_feint_offset(
+	presser: Footballer, owner: Footballer
+) -> Vector2:
+	if (
+		match_team_size != 11 or quick_difficulty != "hard"
+		or presser.team_id != 1 or owner.team_id != 0
+		or ball.carrier != owner or not owner.dribble_active()
+		or owner.dribble_mode != "feint" or owner.role == "keeper"
+		or absf(owner.dribble_direction.y) < 0.20
+	):
+		return Vector2.ZERO
+	var toward: Vector2 = owner.global_position - presser.global_position
+	var separation: float = toward.length()
+	if (
+		separation < 1.0
+		or separation > TACKLE_ATTEMPT_RANGE + 86.0
+		or presser.velocity.dot(toward / separation) < 95.0
+	):
+		return Vector2.ZERO
+	var progress: float = 1.0 - clampf(
+		owner.dribble_burst_seconds / maxf(owner.dribble_duration_seconds, 0.001),
+		0.0, 1.0
+	)
+	if progress >= 0.42:
+		return Vector2.ZERO
+	var lateral_cue: float = -signf(owner.dribble_direction.y) * (
+		minf(absf(owner.dribble_direction.y) * 62.0, 38.0)
+		* (1.0 - progress / 0.42)
+	)
+	return Vector2(0.0, lateral_cue)
+
+
 func _ai_xi_human_press_target(presser: Footballer, owner: Footballer) -> Vector2:
 	if (
 		match_team_size != 11
@@ -1861,7 +1899,10 @@ func _ai_press_target(presser: Footballer, owner: Footballer) -> Vector2:
 	var cut_target: Vector2 = _ai_xi_cut_read_target(presser, owner)
 	if cut_target != Vector2.ZERO:
 		return cut_target
-	var feint_offset: Vector2 = _ai_xi_normal_feint_read_offset(presser, owner)
+	var feint_offset: Vector2 = (
+		_ai_xi_normal_feint_read_offset(presser, owner)
+		+ _ai_xi_hard_committed_feint_offset(presser, owner)
+	)
 	if feint_offset.length_squared() > 0.001:
 		return ChessFootballMath.clamp_to_pitch(
 			owner.global_position + feint_offset, match_pitch
