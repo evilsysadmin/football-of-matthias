@@ -992,6 +992,15 @@ func contextual_help_text(touch: bool = false) -> String:
 			return "PASE EN VUELO · pulsa Space otra vez para pedir pared"
 		return "BALÓN SUELTO · joystick persigue · toca compañero para cambiar" if touch else "BALÓN SUELTO · WASD persigue · Shift sprint · Q/Tab cambia jugador"
 	if ball.carrier == controlled:
+		# Show the next deliberate input while the actual E gesture remains
+		# relevant. No promise that the lane is safe or the defender fooled.
+		if not touch and pass_charging and pass_directional_charge:
+			return "PASE · WASD apunta al compañero · suelta Space para pasar"
+		if (
+			not touch and action_feedback_seconds > 0.0
+			and action_feedback_text in ["AMAGO", "RECORTE"]
+		):
+			return "REGATE · orienta la salida con WASD · Space para pasar"
 		return (
 			"ATACAS · compañero: pase · portería: tiro · césped libre: regate"
 			if touch else
@@ -1011,6 +1020,32 @@ func _show_action_feedback(cue: String) -> void:
 	action_feedback_text = cue
 	action_feedback_seconds = 0.70
 
+# The charge meter communicates the ACTUAL currently selected recipient.
+# It never infers pass safety, makes a pass, or marks an empty lane as a
+# completed pass. Passes into free space remain available by manual choice.
+func _xi_pass_charge_label() -> String:
+	var profile: String = _pass_profile_name(_pass_charge_ratio())
+	if match_team_size != 11 or not pass_directional_charge:
+		return profile
+	var target: Footballer = pass_target
+	if (
+		target == null or not is_instance_valid(target)
+		or target.sent_off or controlled == null
+		or target == controlled or target.team_id != controlled.team_id
+	):
+		return profile + " · LIBRE"
+	var to_target: Vector2 = target.global_position - controlled.global_position
+	if (
+		to_target.length_squared() < 0.001
+		or pass_aim_direction.normalized().dot(to_target.normalized())
+			< PASS_MIN_TARGET_ALIGNMENT
+	):
+		return profile + " · LIBRE"
+	var receiver_name: String = target.scouting_player_name.strip_edges()
+	return profile + " · " + (
+		receiver_name.left(18) if not receiver_name.is_empty() else "COMPAÑERO"
+	)
+
 func _refresh_hud() -> void:
 	score_label.text = "FC Matthias %d - %d Real Enroque" % [score[0], score[1]]
 	if human_set_piece_available():
@@ -1029,7 +1064,7 @@ func _refresh_hud() -> void:
 	if shot_meter_label != null:
 		shot_meter_label.visible = charge_visible
 		if pass_charging:
-			shot_meter_label.text = _pass_profile_name(_pass_charge_ratio())
+			shot_meter_label.text = _xi_pass_charge_label()
 		elif shot_charging:
 			shot_meter_label.text = _shot_profile_name(_shot_charge_ratio())
 		else:
@@ -3839,8 +3874,12 @@ func _update_xi_cut_duel_followthrough() -> void:
 func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 	if controlled == null or ball.carrier != controlled:
 		return false
-	_cancel_shot_charge()
-	_cancel_pass_charge()
+	# On XI, a rejected E (cooldown/stun) must not eat an already-held
+	# Space pass. An ACCEPTED E still overrides/cancels that pass normally.
+	# Legacy 5v5 keeps its historical pre-attempt cancellation contract.
+	if match_team_size != 11:
+		_cancel_shot_charge()
+		_cancel_pass_charge()
 	var stationary: bool = (
 		direction.length_squared() < 0.0324
 		and controlled.velocity.length() < controlled.base_speed * 0.35
@@ -3853,6 +3892,8 @@ func _try_dribble(direction: Vector2, sprinting: bool = false) -> bool:
 		wanted = _xi_contextual_cut_direction(controlled, wanted)
 	var started := controlled.start_dribble(wanted, kind)
 	if started and match_team_size == 11:
+		_cancel_shot_charge()
+		_cancel_pass_charge()
 		_arm_xi_cut_duel(controlled)
 		_show_action_feedback(
 			"AMAGO" if kind == "feint" else "TOQUE LARGO" if kind == "burst" else "RECORTE"
