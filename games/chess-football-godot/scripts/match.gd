@@ -1988,6 +1988,9 @@ func _ai_stable_press_role(
 			or player == controlled
 			or player.role == "keeper"
 			or player == excluded
+			# A fallen XI player cannot move_ai() until recovery, so assigning
+			# that body as first/second presser strands the real defending team.
+			or (match_team_size == 11 and player.xi_collision_down_seconds > 0.0)
 		):
 			continue
 		var distance: float = player.global_position.distance_to(point)
@@ -2014,6 +2017,7 @@ func _ai_stable_press_role(
 		and previous != controlled
 		and previous.role != "keeper"
 		and previous != excluded
+		and (match_team_size != 11 or previous.xi_collision_down_seconds <= 0.0)
 		and (
 			not keep_xi_defensive_roles
 			or previous.global_position.distance_to(point)
@@ -4321,13 +4325,15 @@ func _maybe_auto_select_xi_human_defender() -> bool:
 		or controlled == null or controlled.sent_off
 		or controlled.role == "keeper"
 		or controlled.tackle_active()
-		or controlled.xi_collision_down_seconds > 0.0
 		or match_seconds < xi_human_auto_switch_block_until
 	):
 		return false
 	var owner: Footballer = ball.carrier
+	# A grounded selection cannot defend even if physically closest. Only
+	# an eligible teammate may inherit control; Q grace still wins above.
+	var current_downed: bool = controlled.xi_collision_down_seconds > 0.0
 	var current_distance: float = controlled.global_position.distance_to(owner.global_position)
-	if current_distance <= AI_XI_HUMAN_AUTO_SWITCH_KEEP_RADIUS:
+	if not current_downed and current_distance <= AI_XI_HUMAN_AUTO_SWITCH_KEEP_RADIUS:
 		return false
 	var nearest: Footballer = null
 	var nearest_distance := AI_XI_HUMAN_AUTO_SWITCH_RADIUS
@@ -4343,7 +4349,9 @@ func _maybe_auto_select_xi_human_defender() -> bool:
 		if distance < nearest_distance:
 			nearest = candidate
 			nearest_distance = distance
-	if nearest == null or current_distance - nearest_distance < AI_XI_HUMAN_AUTO_SWITCH_MIN_GAIN:
+	if nearest == null:
+		return false
+	if not current_downed and current_distance - nearest_distance < AI_XI_HUMAN_AUTO_SWITCH_MIN_GAIN:
 		return false
 	_select_player(nearest)
 	xi_human_auto_switch_block_until = match_seconds + AI_XI_HUMAN_AUTO_SWITCH_COOLDOWN
