@@ -30,7 +30,34 @@ const KEYS := ["move_left", "move_right", "move_up", "move_down",
 	"sprint", "tackle", "change_player", "shoot_ball"]
 
 
+# On a genuinely cold Godot process, the first XI scene can advance about
+# 0.15 seconds of native collision/actor state while loading. PREWARM a
+# sacrificial fully functional XI scene instead of disabling PROCESS_MODE on
+# measured matches (which would suppress real in-tree physics interactions).
+# No score, replay observation or direct player control is taken from here.
+func _prewarm_cold_xi_scene() -> void:
+	_release_keys()
+	var packed := load("res://main.tscn") as PackedScene
+	assert(packed != null)
+	var warmup = packed.instantiate()
+	warmup.match_team_size = 11
+	root.add_child(warmup)
+	await process_frame
+	await process_frame
+	warmup.set_process(false)
+	warmup.set_physics_process(false)
+	for team in warmup.teams:
+		for player: Footballer in team:
+			player.set_process(false)
+	root.remove_child(warmup)
+	warmup.queue_free()
+	await process_frame
+	_release_keys()
+	print("FOOTBALL_XI_COLD_WARMUP_OK discarded_scene=1 measured_ticks=0")
+
+
 func _initialize() -> void:
+	await _prewarm_cold_xi_scene()
 	var runs: Array[Dictionary] = []
 	for spec in SCENARIOS:
 		runs.append(await _play(int(spec["seed"]), String(spec["difficulty"])))
@@ -106,8 +133,14 @@ func _initialize() -> void:
 		assert(int(run["ticks"]) == TICKS)
 		assert(int(run["movement_frames"]) > 120,
 			"Autoplay bot must really steer the human-controlled character")
-		assert(int(run["cpu_possession_frames"]) > 0)
-		assert(int(run["defensive_samples"]) > 0)
+		# A fully disabled fixture might replay identically only because
+		# genuine physical duels never happened. Reject that false-green.
+		assert(int(run["cpu_possession_frames"]) >= 50,
+			"Real-input XI must preserve sustained CPU possession for pressure QA")
+		assert(int(run["defensive_samples"]) >= 50,
+			"Real-input XI must sample physically active human defence")
+		assert(int(run["tackles_launched"]) >= 1,
+			"Real-input XI must launch a physical E tackle; a passive replay is not valid")
 		assert(int(run["illegal_auto_handoffs"]) == 0)
 		assert(int(run["manual_q_inputs"]) >= 1,
 			"Each live XI trial must actually press Q after an automatic handoff")
@@ -239,13 +272,11 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	assert(packed != null)
 	var game = packed.instantiate()
 	game.match_team_size = 11
-	# Godot can re-enable script callbacks while a new scene enters the
-	# tree, even after set_physics_process(false). Disable the ENTIRE
-	# fixture subtree before _ready() so the first match cannot advance
-	# 0.15 seconds while subsequent seeded replays advance zero.
-	# Direct bot calls to _physics_process(STEP) and player._process(STEP)
-	# still drive physical gameplay under the exact same 60 Hz input path.
-	game.process_mode = Node.PROCESS_MODE_DISABLED
+	# This measured fixture retains its normal, PHYSICALLY ACTIVE scene
+	# hierarchy. The preceding discarded scene absorbs first-load stalls.
+	# Suppressing process_mode on the entire match gave a misleading
+	# identical replay with almost no possession and zero real tackles.
+	game.process_mode = Node.PROCESS_MODE_INHERIT
 	game.set_process(false)
 	game.set_physics_process(false)
 	root.add_child(game)
@@ -279,9 +310,9 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	])
 	assert(absf(warmup_clock) < 0.001,
 		"An XI fixture must not simulate any hidden physics before its first measured bot tick")
-	assert(game.process_mode == Node.PROCESS_MODE_DISABLED
+	assert(game.process_mode != Node.PROCESS_MODE_DISABLED
 		and not game.is_physics_processing() and absf(game.match_seconds) < 0.001,
-		"XI bot must own the complete replay clock after rendering warmup")
+		"XI bot needs real match collisions with only native script ticks paused")
 	game._set_quick_difficulty(difficulty)
 	game.kickoff_active = false
 	game.goal_restart_active = false
