@@ -544,6 +544,42 @@ jobs:
           report['clean_e_to_pass'] = e_success
           report['clean_running_to_pass'] = run_success
           report['e_only_clean_pass_pairs'] = earned
+          candidate = report['candidate_original']
+          assert candidate['e']['mode'] == 'feint'
+          assert candidate['e']['side'] == 'upper'
+          assert candidate['e']['distance'] == 148.0
+          assert candidate['e']['pass_start_frame'] == 20
+          assert candidate['e']['seed'] == 69219
+          assert candidate['run_without_e']['variant'] == 'run_without_e'
+          repeats = report['candidate_replays']
+          assert len(repeats) == 2
+          replay_e_wins = 0
+          replay_pairs_match = 0
+          for number, trial in enumerate(repeats, start=1):
+              assert trial['iteration'] == number
+              e = trial['e']
+              control = trial['run_without_e']
+              assert e['e_executed'] and not control['e_executed']
+              assert abs(e['start_rival_distance'] -
+                         control['start_rival_distance']) < 0.1
+              assert (e['mode'], e['distance'], e['side'],
+                      e['pass_start_frame'], e['seed']) == (
+                          'feint', 148.0, 'upper', 20, 69219
+                      )
+              replay_e_wins += int(e['clean_intended_pass'] and
+                                   not control['clean_intended_pass'])
+              replay_pairs_match += int(
+                  e['clean_intended_pass'] == candidate['e']['clean_intended_pass']
+                  and control['clean_intended_pass'] ==
+                      candidate['run_without_e']['clean_intended_pass']
+              )
+          report['replayed_e_only_wins'] = replay_e_wins
+          report['replications_matching_original_outcomes'] = replay_pairs_match
+          report['repeated_candidate_earned'] = (
+              candidate['e']['clean_intended_pass']
+              and not candidate['run_without_e']['clean_intended_pass']
+              and replay_e_wins == 2
+          )
           Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
           if os.environ.get('GITHUB_STEP_SUMMARY'):
               with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
