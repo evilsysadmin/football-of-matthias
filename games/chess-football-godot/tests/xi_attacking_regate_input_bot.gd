@@ -482,6 +482,41 @@ func _initialize() -> void:
 		})
 	assert(replay_audit.size() == 2)
 	print("FOOTBALL_XI_ATTACK_REPLAY_AUDIT " + JSON.stringify(replay_audit))
+	# The new Hard/feint/late near-miss can look like one earned victory.
+	# Replay BOTH arms after the other 26 real simulations to distinguish
+	# a repeatable physical win from startup/AI replay drift.
+	var earned_e_replay_audit: Array[Dictionary] = []
+	for use_e in [true, false]:
+		var earned_spec: Dictionary = SPECS[6].duplicate()
+		earned_spec["use_e"] = use_e
+		var earned_repeat: Dictionary = await _play(earned_spec)
+		var earned_original: Dictionary = reports[12 + (0 if use_e else 1)]
+		assert(
+			earned_repeat["difficulty"] == "hard"
+			and earned_repeat["opening"] == "feint"
+			and earned_repeat["approach"] == "late"
+			and earned_original["variant"] == earned_repeat["variant"]
+		)
+		var prior_retained: bool = earned_original["followthrough_outcome"] == "retained"
+		var repeated_retained: bool = earned_repeat["followthrough_outcome"] == "retained"
+		earned_e_replay_audit.append({
+			"seed": earned_repeat["seed"],
+			"variant": earned_repeat["variant"],
+			"difficulty": earned_repeat["difficulty"],
+			"opening": earned_repeat["opening"],
+			"approach": earned_repeat["approach"],
+			"original_outcome_1_2s": earned_original["followthrough_outcome"],
+			"repeated_outcome_1_2s": earned_repeat["followthrough_outcome"],
+			"original_first_loss_1_2s": earned_original["followthrough_first_loss_frame"],
+			"repeated_first_loss_1_2s": earned_repeat["followthrough_first_loss_frame"],
+			"retention_reproducible": prior_retained == repeated_retained,
+			"first_advance_1_2s": earned_original["followthrough_forward_gain"],
+			"repeat_advance_1_2s": earned_repeat["followthrough_forward_gain"],
+			"first_cpu_tackles": earned_original["cpu_tackles"],
+			"repeat_cpu_tackles": earned_repeat["cpu_tackles"],
+		})
+	assert(earned_e_replay_audit.size() == 2)
+	print("FOOTBALL_XI_EARNED_E_REPLAY_AUDIT " + JSON.stringify(earned_e_replay_audit))
 	# Baseline only: the isolated #208 matrix has robust floors; the
 	# live full XI A/B bot currently reports, it does not fake a pass rate.
 	var payload := {
@@ -492,6 +527,7 @@ func _initialize() -> void:
 		"cases": reports,
 		"pairs": pairs,
 		"replay_audit": replay_audit,
+		"earned_e_replay_audit": earned_e_replay_audit,
 		"outcomes": actual_outcomes,
 		"e_events": total_events,
 		"cpu_tackles": real_tackles,
