@@ -5,8 +5,11 @@ extends SceneTree
 # _physics_process that the browser plays; no direct AI/tackle shortcuts.
 # Two seed-matched 24-second open-play sessions, not 90-minute telemetry.
 # The bot uses the established real Godot Input edge path. A separate
-# physics_frame experiment broke Q action edges; compare same-seed replays
-# first, before changing how browser-equivalent controls reach the engine.
+# Drive the manually stepped 60 Hz match from SceneTree.physics_frame rather
+# than a variable-rate rendered frame. A rendered frame can contain zero or
+# multiple physical ticks, allowing collision-server state to diverge.
+# Input still reaches the REAL _physics_process within the same bot tick;
+# Q's press edge and manual override remain mandatory assertions below.
 const Formation = preload("res://scripts/football_match_formation.gd")
 const XI := Formation.ELEVEN_PITCH_RECT
 const STEP := 1.0 / 60.0
@@ -74,9 +77,9 @@ func _initialize() -> void:
 			or original["score"] != repeated["score"]
 		):
 			first_state_divergence_tick = int(original["tick"])
-	# A non-identical replay is an OBSERVATION, never a successful
-	# determinism claim. Preserve the discrepancy for the next physics/CI
-	# stabilization iteration, while still gating each real-input trial.
+	# Same-seed replay is a strict QA contract, not a gameplay change.
+	# Emit all mismatched fields before failing; never mask different ball,
+	# possession, input, tackles or scoring states.
 	var replay_audit := {
 		"checked": true,
 		"seed": int(SCENARIOS[0]["seed"]),
@@ -96,6 +99,8 @@ func _initialize() -> void:
 	assert(int(replay["manual_q_effective"]) == 1 and int(replay["illegal_auto_handoffs"]) == 0,
 		"Replay must not silently lose genuine Q or defensive handoff safeguards")
 	print("FOOTBALL_XI_REPLAY_AUDIT " + JSON.stringify(replay_audit))
+	assert(bool(replay_audit["identical"]),
+		"Same-seed XI physics ticks must replay input, possession, ball and actions identically")
 	var all_auto := 0
 	for run in runs:
 		assert(int(run["ticks"]) == TICKS)
@@ -556,9 +561,11 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 				"ball_y": snappedf(game.ball.global_position.y, 0.1),
 				"score": [int(game.score[0]), int(game.score[1])],
 			})
-		# Keep action just_pressed/just_released edges on the existing proven
-		# input path. Match physics advances explicitly by STEP = 1/60.
-		await process_frame
+		# Advance the 60 Hz physics server exactly once between manual steps.
+		# Previously awaiting render frames introduced variable intervening
+		# physics steps and defeated same-seed replay. Browser-equivalent
+		# Input.action_press() still precedes the real _physics_process().
+		await physics_frame
 
 	if not active_pressure_gap.is_empty():
 		_finish_pressure_gap(pressure_gap_episodes, active_pressure_gap, TICKS, "simulation_end")
