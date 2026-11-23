@@ -283,6 +283,15 @@ const AI_PRESS_ROLE_CLOSE_SWITCH_MARGIN := 14.0
 const AI_XI_DEFENSIVE_ROLE_HOLD_MARGIN := 55.0
 const AI_XI_DEFENSIVE_ROLE_MAX_DISTANCE := 360.0
 const AI_DEFENSIVE_SHIFT_RATIO := 0.16
+# Only human-side XI non-pressers compact LOCALLY as the rival enters the
+# dangerous half. Do not drag the entire 4-3-3 into a harmless far-side
+# possession: two genuine pressers already chase while everyone else
+# protects their lanes. Movement still goes through normal move_ai().
+const AI_XI_HUMAN_COMPACT_MAX_SHIFT_RATIO := 0.33
+const AI_XI_HUMAN_COMPACT_NEAR_HOME_DISTANCE := 330.0
+const AI_XI_HUMAN_COMPACT_FAR_HOME_DISTANCE := 920.0
+const AI_XI_HUMAN_COMPACT_FULL_THREAT_X := -100.0
+const AI_XI_HUMAN_COMPACT_NO_THREAT_X := 260.0
 const AI_COVER_INTENSITY := 0.86
 const AI_TEAM_PRESS_INTENSITY := 0.75
 const AI_ADAPT_SAMPLE_SECONDS := 1.0
@@ -1614,13 +1623,7 @@ func _update_ai(delta: float) -> void:
 					target = lane_assignment["target"]
 					intensity = _ai_adaptive_intensity(AI_TEAM_PRESS_INTENSITY)
 				else:
-					target = ChessFootballMath.clamp_to_pitch(
-						player.home_position.lerp(
-							ball.carrier.global_position,
-							AI_DEFENSIVE_SHIFT_RATIO,
-						),
-						match_pitch
-					)
+					target = _ai_xi_human_compact_target(player, ball.carrier)
 					intensity = _ai_adaptive_intensity(AI_TEAM_PRESS_INTENSITY)
 
 			# Keep supporting teammates apart. A nearby CPU second presser
@@ -2114,6 +2117,39 @@ func _ai_xi_diagonal_cover_lead(player: Footballer, threat_position: Vector2) ->
 # Human-side backup defender closes to a real reachable goal-side position.
 # Unlike the CPU's strategic cover, do not drift back toward a distant home
 # lane or get pushed away by teammate separation at the final challenge.
+# Outfielders who are neither the first nor second presser help seal nearby
+# midfield lanes when the CPU attacks OUR half. A smooth danger/proximity
+# blend prevents a formation snap on crossing midfield. The maximum extra
+# shift is only 17% of the existing home-to-carrier vector: this is NOT a
+# third chasing presser, a speed boost, or an automatic tackling permission.
+func _ai_xi_human_compact_target(player: Footballer, owner: Footballer) -> Vector2:
+	var ratio: float = AI_DEFENSIVE_SHIFT_RATIO
+	if (
+		match_team_size == 11 and player.team_id == 0
+		and owner != null and owner.team_id == 1
+		and ball.carrier == owner
+	):
+		var centre_x: float = match_pitch.get_center().x
+		var threat_weight: float = 1.0 - smoothstep(
+			centre_x + AI_XI_HUMAN_COMPACT_FULL_THREAT_X,
+			centre_x + AI_XI_HUMAN_COMPACT_NO_THREAT_X,
+			owner.global_position.x
+		)
+		var home_distance: float = player.home_position.distance_to(owner.global_position)
+		var proximity_weight: float = 1.0 - smoothstep(
+			AI_XI_HUMAN_COMPACT_NEAR_HOME_DISTANCE,
+			AI_XI_HUMAN_COMPACT_FAR_HOME_DISTANCE,
+			home_distance
+		)
+		ratio = lerpf(
+			AI_DEFENSIVE_SHIFT_RATIO, AI_XI_HUMAN_COMPACT_MAX_SHIFT_RATIO,
+			threat_weight * proximity_weight
+		)
+	return ChessFootballMath.clamp_to_pitch(
+		player.home_position.lerp(owner.global_position, ratio), match_pitch
+	)
+
+
 func _ai_xi_human_close_cover_target(player: Footballer, owner: Footballer) -> Vector2:
 	if match_team_size != 11 or player.team_id != 0 or owner.team_id != 1:
 		return _ai_cover_target(player, owner.global_position)
