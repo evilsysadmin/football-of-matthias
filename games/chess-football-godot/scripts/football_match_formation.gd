@@ -1,12 +1,11 @@
 class_name FootballMatchFormation
 extends RefCounted
 
-# Future regulation-style 11-a-side field: approx. 105:68 aspect ratio.
-# It shares the existing centre with the live 5v5 pitch, so ball/camera
-# origins will not jump when the full-pitch migration is enabled.
-# DO NOT switch the live pitch or actor count until AI, restarts, camera,
-# 11 unique starters and the real Web visual gate have been integrated.
-const ELEVEN_PITCH_RECT := Rect2(-680.0, -510.0, 4000.0, 2600.0)
+# XI +4% linear dimensions compared with the 4000x2600 baseline.
+# A/B experiment #224: +8.16% playable area, unchanged centre (1320,790),
+# aspect ratio, actor sizes, speed, tackle geometry, camera and legacy 5v5.
+# This is an actual 11v11 pitch change, not a visual-only turf extension.
+const ELEVEN_PITCH_RECT := Rect2(-760.0, -562.0, 4160.0, 2704.0)
 
 # Formation order is deliberately stable. The keeper is always index zero.
 # Current arcade lineup remains byte-for-byte equivalent to match.gd's
