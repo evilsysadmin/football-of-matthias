@@ -588,7 +588,12 @@ jobs:
                       f'- Pases al receptor previsto sin robo previo: '
                       f'E **{e_success}/24**, correr **{run_success}/24**\n'
                       f'- Parejas exclusivas de E: **{len(earned)}/24**\n'
-                      '- 48 brazos de prueba, Space cargado 7 frames y '
+                      f'- Repetición del primer pase exclusivo de E: **'
+                      f'{replay_e_wins}/2** pares reproducidos; '
+                      f'**{"sí" if report["repeated_candidate_earned"] else "no"}** '
+                      'es una ventaja confirmada en este caso\n'
+                      '- 48 brazos base más 4 de replay independiente, '
+                      'Space cargado 7 frames y '
                       'primer contacto físico, no una tasa de juego real.\n'
                   )
           print('FOOTBALL_XI_E_PASS_ARTIFACT_OK arms=48 pairs=24 '
