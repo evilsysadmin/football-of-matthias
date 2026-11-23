@@ -1849,8 +1849,12 @@ jobs:
           set -e
           for mode in BROADCAST TACTICAL; do
             file="$(sed -n "s/^FOOTBALL_XI_PASS_RING_CAPTURE_${mode}=//p" "$log" | tail -1)"
+            detail="$(sed -n "s/^FOOTBALL_XI_PASS_RING_DETAIL_${mode}=//p" "$log" | tail -1)"
             if [[ -n "$file" && -s "$file" ]]; then
               cp "$file" "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-${mode,,}.png"
+            fi
+            if [[ -n "$detail" && -s "$detail" ]]; then
+              cp "$detail" "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-detail-${mode,,}.png"
             fi
           done
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
@@ -1860,6 +1864,8 @@ jobs:
           grep -q 'FOOTBALL_XI_PASS_RING_OK modes=2 frames=2 actors=22 only_selected=1 invalid_aim_hidden=1 pause_hidden=1 restart_hidden=1 release_hidden=1 authority_unchanged=1' "$log"
           test -s "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-broadcast.png"
           test -s "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-tactical.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-detail-broadcast.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-detail-tactical.png"
       - name: Upload visual review
         if: always()
         uses: actions/upload-artifact@v7
