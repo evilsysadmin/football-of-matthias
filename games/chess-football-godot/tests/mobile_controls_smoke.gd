@@ -205,7 +205,8 @@ func _initialize() -> void:
 		await physics_frame
 	xi.set_physics_process(false)
 	assert(xi.debug_team_counts() == [11, 11])
-	assert(xi.match_pitch.size == Vector2(4000.0, 2600.0))
+	assert(xi.match_pitch.size == Vector2(4000.0, 2704.0))
+	assert(xi.match_pitch == FootballMatchFormation.ELEVEN_PITCH_RECT)
 	xi.debug_prepare_kickoff(0)
 	xi.debug_force_kickoff_ready()
 	# The active XI guide teaches the CURRENT situation instead of a
