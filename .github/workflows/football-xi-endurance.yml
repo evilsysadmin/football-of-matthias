@@ -315,6 +315,106 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
+      # Skill-specific diagnostic: the 12-pair pressure bot always E's at
+      # tick zero; this separate, bounded matrix probes human E timing.
+      # Keep it independent of difficulty tuning and all gameplay gates.
+      - name: Scout XI · E timing before, during and after real Hard pressure
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-e-timing.log"
+          set +e
+          timeout 170s "$godot" --headless --quit-after 16000 --path games/chess-football-godot --script res://tests/xi_e_skill_timing_scout.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI E timing scout failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_E_TIMING_SCOUT_OK fixtures=24 arms=48' "$log"
+          python3 - "$log" "$RUNNER_TEMP/football-xi-e-timing.json" <<'PY'
+          import json
+          import os
+          import sys
+          from collections import Counter
+          from pathlib import Path
+
+          prefix = 'FOOTBALL_XI_E_TIMING_SCOUT '
+          reports = [json.loads(line[len(prefix):])
+                     for line in Path(sys.argv[1]).read_text().splitlines()
+                     if line.startswith(prefix)]
+          assert len(reports) == 1, 'Expected one physical E timing sweep'
+          report = reports[0]
+          assert report['fixtures'] == 24 and report['arms'] == 48
+          assert report['sampled_trigger_frames'] == [0, 8, 16]
+          assert report['distances'] == [148.0, 185.0]
+          assert report['followthrough_frames'] == 72
+          rows = report['rows']
+          assert len(rows) == 48
+          outcomes = ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+          actual_e = 0
+          paired_wins = []
+          for i in range(0, len(rows), 2):
+              e, control = rows[i:i+2]
+              assert e['variant'] == 'e' and control['variant'] == 'run_without_e'
+              assert e['seed'] == control['seed']
+              assert e['action'] == control['action']
+              assert e['side'] == control['side']
+              assert e['distance'] == control['distance']
+              assert e['trigger_frame'] == control['trigger_frame']
+              assert e['action'] in ('cut', 'feint')
+              assert e['side'] in ('upper', 'lower')
+              assert e['outcome_1_2s_after_trigger'] in outcomes
+              assert control['outcome_1_2s_after_trigger'] in outcomes
+              assert not control['e_executed']
+              assert -1 <= e['first_loss_after_trigger'] < 72
+              assert -1 <= control['first_loss_after_trigger'] < 72
+              assert e['cpu_tackle_attempts'] >= 0
+              assert control['cpu_tackle_attempts'] >= 0
+              assert abs(e['rival_distance_at_trigger'] -
+                         control['rival_distance_at_trigger']) < 1.0
+              actual_e += int(e['e_executed'])
+              if (e['e_executed'] and
+                      e['outcome_1_2s_after_trigger'] == 'retained' and
+                      control['outcome_1_2s_after_trigger'] != 'retained'):
+                  paired_wins.append({
+                      'action': e['action'], 'side': e['side'],
+                      'distance': e['distance'], 'trigger': e['trigger_frame']
+                  })
+          assert actual_e >= 12, 'E sweep must actually exercise pressured E'
+          assert sum(x['cpu_tackle_attempts'] for x in rows) > 0
+          report['accepted_e_inputs'] = actual_e
+          report['physically_earned_pairs'] = paired_wins
+          Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
+          if os.environ.get('GITHUB_STEP_SUMMARY'):
+              paired = len(paired_wins)
+              kept = sum(x['outcome_1_2s_after_trigger'] == 'retained'
+                         for x in rows[::2])
+              controls = sum(x['outcome_1_2s_after_trigger'] == 'retained'
+                             for x in rows[1::2])
+              with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
+                  summary.write(
+                      '### XI E · Timing de entrada / 22 futbolistas\n'
+                      f'- E ejecutados físicamente: **{actual_e}/24**\n'
+                      f'- Retenciones E 1,2s tras trigger: **{kept}/24**\n'
+                      f'- Retenciones control sin E: **{controls}/24**\n'
+                      f'- Parejas donde E mejora control: **{paired}/24**\n'
+                      '- Escenarios Hard: t=0,8,16 frames, distancias 148/185, '
+                      'ambas bandas, cut y feint; no son tasas de éxito humano.\n'
+                  )
+          print('FOOTBALL_XI_E_TIMING_ARTIFACT_OK arms=48 fixtures=24 '
+                f'accepted_e={actual_e} paired_wins={len(paired_wins)}')
+          PY
+      - name: Upload XI E timing scout measurements
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-xi-e-timing-scout
+          path: ${{ runner.temp }}/football-xi-e-timing.json
+          retention-days: 7
+          if-no-files-found: warn
+
       - name: Autoplay XI · real input bot, pressure and handoff telemetry
         shell: bash
         run: |
