@@ -59,7 +59,9 @@ const DRIBBLE_FEINT_SECONDS := 0.16
 const XI_DRIBBLE_FEINT_SECONDS := 0.18
 const DRIBBLE_LONG_TOUCH_SECONDS := 0.27
 const DRIBBLE_FEINT_SPEED := 0.65
-const XI_DRIBBLE_FEINT_SPEED := 0.44
+# Match the legacy physical feint travel footprint: 0.18*0.59 ~= 0.16*0.65.
+# Re-time the same two boot plants; no ordinary running/sprint speed change.
+const XI_DRIBBLE_FEINT_SPEED := 0.59
 const DRIBBLE_LONG_TOUCH_SPEED := 1.56
 const DRIBBLE_FEINT_TOUCH := 8.0
 const DRIBBLE_LONG_TOUCH := 32.0
