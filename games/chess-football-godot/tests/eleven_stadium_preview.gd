@@ -155,8 +155,16 @@ func _initialize() -> void:
 			corner_focus, alternate[0], alternate[1], alternate[2],
 			alternate[3], alternate[4], game.match_pitch
 		), corner_focus), "XI corner stadium framing leaked into another state")
-	assert(is_equal_approx(stage.field_width, 56.0))
-	assert(is_equal_approx(stage.field_depth, 36.4))
+	# This is the actual 2D pitch transformed into 3D at the SAME world
+	# scale as main: no cosmetic grass and no camera/actor zoom cheating.
+	assert(is_equal_approx(stage.field_width, 58.24))
+	assert(is_equal_approx(stage.field_depth, 37.856))
+	assert(is_equal_approx(
+		stage.field_width, game.match_pitch.size.x * ChessFootball3DPresenter.WORLD_SCALE
+	))
+	assert(is_equal_approx(
+		stage.field_depth, game.match_pitch.size.y * ChessFootball3DPresenter.WORLD_SCALE
+	))
 	assert(stage.player_sprites.size() == 22)
 	assert(stage.player_nodes.size() == 22)
 	assert(stage.xi_raster_meshes.size() == 22)
