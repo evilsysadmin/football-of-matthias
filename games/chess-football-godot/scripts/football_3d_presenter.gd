@@ -170,6 +170,23 @@ var body_scale_cache: Dictionary = {}
 # Lighting is already disabled for billboards. The remaining brightness jump
 # comes from shadows baked differently into the authored view families.
 var tone_gain_cache: Dictionary = {}
+# Derived per-player rear-facing textures, cached on actual source frame ID
+# and physical roster number. Original local and signed R2 atlases remain
+# immutable. No extra per-player Label3D draw calls or text over faces.
+var rear_shirt_frame_cache: Dictionary = {}
+const REAR_SHIRT_FRAME_CACHE_LIMIT := 640
+const SHIRT_DIGITS := {
+	"0": "111101101101111",
+	"1": "010110010010111",
+	"2": "111001111100111",
+	"3": "111001111001111",
+	"4": "101101111001001",
+	"5": "111100111001111",
+	"6": "111100111101111",
+	"7": "111001010010010",
+	"8": "111101111101111",
+	"9": "111101111001111",
+}
 var ball_node: MeshInstance3D
 var ball_shadow: MeshInstance3D
 var keeper_catch_rigs: Dictionary = {}
@@ -2038,6 +2055,65 @@ static func xi_tactical_foot_anchor_offset(
 	return xi_rotated_foot_anchor_offset(view_camera, frame, pixel_size, scale_y, 0.0, true)
 
 
+# Paint dark ink into an IMAGE COPY of the current authenticated rear
+# raster frame. The digit pixels sit inside the visible white jersey torso
+# itself, so they move/scale with the runner and cannot float off the shirt.
+# Front/side/pass frames and all source atlas ImageTextures remain untouched.
+# This is presentation only; neither roster scoring nor ball physics reads it.
+func _xi_numbered_rear_frame(
+	player: Footballer, source: Texture2D, animation: StringName
+) -> Texture2D:
+	if source == null or player.shirt_number < 1 or player.shirt_number > 99:
+		return source
+	var name := String(animation)
+	if not (name.ends_with("_back") or name.ends_with("_back_diagonal")):
+		return source
+	var key := str(source.get_instance_id()) + ":" + str(player.shirt_number)
+	var cached: Texture2D = rear_shirt_frame_cache.get(key)
+	if cached != null:
+		return cached
+	var image: Image = source.get_image()
+	if image == null or image.is_empty():
+		return source
+	if image.get_format() != Image.FORMAT_RGBA8:
+		image.convert(Image.FORMAT_RGBA8)
+	var used: Rect2i = image.get_used_rect()
+	if used.size.y < 28 or used.size.x < 20:
+		return source
+	var glyph_scale: int = clampi(roundi(float(used.size.y) / 40.0), 2, 5)
+	var digits := str(player.shirt_number)
+	var ink_width: int = digits.length() * 3 * glyph_scale + (digits.length() - 1) * glyph_scale
+	var x_left: int = used.position.x + (used.size.x - ink_width) / 2
+	var y_top: int = used.position.y + roundi(float(used.size.y) * 0.33) - (5 * glyph_scale) / 2
+	var ink := Color(0.025, 0.070, 0.155, 1.0)
+	for index in range(digits.length()):
+		var glyph: String = SHIRT_DIGITS.get(digits.substr(index, 1), "")
+		if glyph.length() != 15:
+			continue
+		var digit_x: int = x_left + index * 4 * glyph_scale
+		for row in range(5):
+			for col in range(3):
+				if glyph.substr(row * 3 + col, 1) != "1":
+					continue
+				for sy in range(glyph_scale):
+					for sx in range(glyph_scale):
+						var x: int = digit_x + col * glyph_scale + sx
+						var y: int = y_top + row * glyph_scale + sy
+						if x < 0 or x >= image.get_width() or y < 0 or y >= image.get_height():
+							continue
+						var under: Color = image.get_pixel(x, y)
+						# Never paint outside the body silhouette or onto
+						# transparent padding. Torso placement is grounded
+						# in the approved back-view silhouette.
+						if under.a >= 0.70:
+							image.set_pixel(x, y, ink)
+	var result := ImageTexture.create_from_image(image)
+	if rear_shirt_frame_cache.size() >= REAR_SHIRT_FRAME_CACHE_LIMIT:
+		rear_shirt_frame_cache.clear()
+	rear_shirt_frame_cache[key] = result
+	return result
+
+
 func _xi_frame_texture(_player: Footballer, driver: AnimatedSprite3D) -> Texture2D:
 	var frames := driver.sprite_frames
 	if frames.has_animation(driver.animation):
@@ -2106,30 +2182,6 @@ func _build_xi_quad_bodies() -> void:
 			quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			proxy.add_child(quad)
 			xi_raster_meshes[key] = quad
-			# The shirt number is a lightweight, unshaded 3D print placed ON
-			# the raster torso, not a floating player-name HUD. It follows
-			# that body's depth compensation and animation bob and is hidden
-			# in front/side views. Never rewrite approved/CDN atlas pixels.
-			# The visible glyph is owned by this player's persistent roster
-			# identity; substitutions and future lineup changes must not
-			# regenerate it from squad_index.
-			if player.shirt_number >= 1 and player.shirt_number <= 99:
-				var shirt_print := Label3D.new()
-				shirt_print.name = "RearShirtNumber"
-				shirt_print.text = str(player.shirt_number)
-				shirt_print.font_size = 30
-				shirt_print.pixel_size = 0.0075
-				shirt_print.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-				shirt_print.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-				shirt_print.modulate = Color(0.97, 0.97, 0.93)
-				shirt_print.outline_size = 3
-				shirt_print.outline_modulate = Color(0.035, 0.046, 0.063)
-				shirt_print.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-				shirt_print.shaded = false
-				shirt_print.no_depth_test = true
-				shirt_print.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				shirt_print.visible = false
-				proxy.add_child(shirt_print)
 			# One visible body per actor: use the bundled canonical raster even
 			# when optional R2 is offline. Keep the legacy sculpt hidden so
 			# switching R2 frames never exposes a second body or a mannequin.
@@ -2753,10 +2805,13 @@ func sync_presentation(delta: float, mode: String) -> void:
 			if xi_quad != null:
 				var panel: QuadMesh = xi_quad.mesh
 				var canvas: StandardMaterial3D = xi_quad.material_override
-				var current_frame: Texture2D = _xi_frame_texture(player, sprite)
+				var source_frame: Texture2D = _xi_frame_texture(player, sprite)
+				var current_frame: Texture2D = _xi_numbered_rear_frame(
+					player, source_frame, sprite.animation
+				)
 				if canvas.albedo_texture != current_frame:
 					canvas.albedo_texture = current_frame
-				var frame_size := Vector2(current_frame.get_width(), current_frame.get_height()) * sprite.pixel_size
+				var frame_size := Vector2(source_frame.get_width(), source_frame.get_height()) * sprite.pixel_size
 				if panel.size != frame_size:
 					panel.size = frame_size
 				var flip_u: bool = sprite.flip_h
@@ -2780,7 +2835,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 				# frame bottom) pinned above the contact decal at every depth.
 				# The sprite driver stays hidden in XI; only this quad is offset.
 				var body_offset := xi_rotated_foot_anchor_offset(
-					camera, current_frame, sprite.pixel_size, sprite.scale.y,
+					camera, source_frame, sprite.pixel_size, sprite.scale.y,
 					sprite.rotation.z, tactical_billboard
 				)
 				var wanted_position := sprite.position + body_offset
@@ -2792,23 +2847,6 @@ func sync_presentation(delta: float, mode: String) -> void:
 					xi_quad.scale = sprite.scale
 				if canvas.albedo_color != sprite.modulate:
 					canvas.albedo_color = sprite.modulate
-				# Only print on ACTUAL back/back-diagonal raster views. Pass,
-				# contact, front and side animations must not grow a number
-				# floating off the player's chest or above the head.
-				var shirt_print := proxy.get_node_or_null("RearShirtNumber") as Label3D
-				if shirt_print != null:
-					var animation_name: String = String(sprite.animation)
-					shirt_print.visible = (
-						animation_name.ends_with("_back")
-						or animation_name.ends_with("_back_diagonal")
-					)
-					if shirt_print.visible:
-						# Track the moving/rotating raster torso in both
-						# broadcast and overhead lenses; never touch physics.
-						shirt_print.position = xi_quad.position + Vector3(
-							0.0, 0.23 * xi_quad.scale.y, 0.075
-						)
-						shirt_print.scale = xi_quad.scale
 			# The existing secondary motion includes deliberate running bob,
 			# which stays independent from depth and untouched here.
 			var is_controlled: bool = player == match_node.controlled
