@@ -53,9 +53,10 @@ const DRIBBLE_SPEED_MULTIPLIER := 1.52
 const DRIBBLE_ACCELERATION := 3900.0
 const DRIBBLE_TOUCH_DISTANCE := 24.0
 const DRIBBLE_FEINT_SECONDS := 0.16
-# XI only: allow two rendered shoulder beats while preserving the old feint
-# travel footprint. 5v5/keepers retain their historical timings.
-const XI_DRIBBLE_FEINT_SECONDS := 0.24
+# XI stationary E still has two readable foot plants, but the human can
+# steer and accelerate into a physically earned lane 0.06s sooner.
+# Preserve acceleration, speed ceiling, hitboxes, tackling and 5v5.
+const XI_DRIBBLE_FEINT_SECONDS := 0.18
 const DRIBBLE_LONG_TOUCH_SECONDS := 0.27
 const DRIBBLE_FEINT_SPEED := 0.65
 const XI_DRIBBLE_FEINT_SPEED := 0.44
