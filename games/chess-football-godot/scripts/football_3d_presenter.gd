@@ -2080,11 +2080,43 @@ func _xi_numbered_rear_frame(
 	var used: Rect2i = image.get_used_rect()
 	if used.size.y < 28 or used.size.x < 20:
 		return source
-	var glyph_scale: int = clampi(roundi(float(used.size.y) / 40.0), 2, 5)
+	var glyph_scale: int = clampi(roundi(float(used.size.y) / 46.0), 2, 4)
 	var digits := str(player.shirt_number)
 	var ink_width: int = digits.length() * 3 * glyph_scale + (digits.length() - 1) * glyph_scale
-	var x_left: int = used.position.x + (used.size.x - ink_width) / 2
+	var initial_x: int = used.position.x + (used.size.x - ink_width) / 2
+	# Some running frames tilt the jersey within the image. Search a small
+	# torso-only region for a white, opaque backing before printing: never
+	# paint empty padding, hair, or skin by assuming one fixed anchor.
+	var best_score: int = -1
+	var x_left: int = initial_x
 	var y_top: int = used.position.y + roundi(float(used.size.y) * 0.33) - (5 * glyph_scale) / 2
+	for torso_fraction in [0.26, 0.30, 0.34, 0.38, 0.42, 0.46]:
+		for horizontal_shift in [-8, -4, 0, 4, 8]:
+			var candidate_x: int = initial_x + horizontal_shift
+			var candidate_y: int = used.position.y + roundi(
+				float(used.size.y) * torso_fraction
+			) - (5 * glyph_scale) / 2
+			var candidate_score: int = 0
+			for digit_index in range(digits.length()):
+				var sample_glyph: String = SHIRT_DIGITS.get(digits.substr(digit_index, 1), "")
+				for row in range(5):
+					for col in range(3):
+						if sample_glyph.substr(row * 3 + col, 1) != "1":
+							continue
+						var test_x: int = candidate_x + (digit_index * 4 + col) * glyph_scale + glyph_scale / 2
+						var test_y: int = candidate_y + row * glyph_scale + glyph_scale / 2
+						if test_x < 0 or test_x >= image.get_width() or test_y < 0 or test_y >= image.get_height():
+							continue
+						var sample: Color = image.get_pixel(test_x, test_y)
+						if sample.a >= 0.30:
+							candidate_score += 1
+							if minf(sample.r, minf(sample.g, sample.b)) >= 0.60:
+								candidate_score += 4
+			if candidate_score > best_score:
+				best_score = candidate_score
+				x_left = candidate_x
+				y_top = candidate_y
+	var painted_pixels := 0
 	var ink := Color(0.025, 0.070, 0.155, 1.0)
 	for index in range(digits.length()):
 		var glyph: String = SHIRT_DIGITS.get(digits.substr(index, 1), "")
@@ -2102,11 +2134,13 @@ func _xi_numbered_rear_frame(
 						if x < 0 or x >= image.get_width() or y < 0 or y >= image.get_height():
 							continue
 						var under: Color = image.get_pixel(x, y)
-						# Never paint outside the body silhouette or onto
-						# transparent padding. Torso placement is grounded
-						# in the approved back-view silhouette.
-						if under.a >= 0.70:
-							image.set_pixel(x, y, ink)
+						# Keep the original alpha: the digit is actual ink on
+						# a pre-existing torso pixel, not a new silhouette.
+						if under.a >= 0.30:
+							image.set_pixel(x, y, Color(ink.r, ink.g, ink.b, under.a))
+							painted_pixels += 1
+	if painted_pixels == 0:
+		return source
 	var result := ImageTexture.create_from_image(image)
 	if rear_shirt_frame_cache.size() >= REAR_SHIRT_FRAME_CACHE_LIMIT:
 		rear_shirt_frame_cache.clear()
