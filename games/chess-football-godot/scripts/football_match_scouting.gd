@@ -96,7 +96,12 @@ static func starter(team_id: int, squad_index: int, team_size: int = 5) -> Dicti
 	# explicit profile property, not regenerate squad_index + 1.
 	var number_lookup: Dictionary = _load_shirt_numbers()
 	var shirt_number: Variant = number_lookup.get(String(player.get("id", "")))
-	if typeof(shirt_number) != TYPE_INT or int(shirt_number) < 1 or int(shirt_number) > 99:
+	# JSON numeric scalars arrive as FLOAT in Godot even for integral
+	# number literals. Reject fractions/nonfinite values, not valid 1..99.
+	if typeof(shirt_number) not in [TYPE_INT, TYPE_FLOAT]:
+		return {}
+	var numbered: float = float(shirt_number)
+	if is_nan(numbered) or is_inf(numbered) or numbered < 1.0 or numbered > 99.0 or floorf(numbered) != numbered:
 		return {}
 	for attribute in ATTRIBUTES:
 		var value: Variant = stats.get(attribute)
