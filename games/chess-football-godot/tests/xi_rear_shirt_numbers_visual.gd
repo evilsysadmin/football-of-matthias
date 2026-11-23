@@ -12,6 +12,12 @@ func _initialize() -> void:
 		FileAccess.get_file_as_string("res://data/scouting_rosters_v1.json")
 	)
 	assert(catalog is Dictionary and catalog["version"] == 1)
+	var shirt_catalog: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string("res://data/shirt_numbers_v1.json")
+	)
+	assert(shirt_catalog is Dictionary and shirt_catalog["version"] == 1)
+	var shirt_by_id: Dictionary = shirt_catalog["numbersByPlayerId"]
+	assert(shirt_by_id.size() == 72)
 	var validated := 0
 	for club_id in catalog["clubs"]:
 		var profiles: Array = catalog["clubs"][club_id].duplicate()
@@ -21,7 +27,7 @@ func _initialize() -> void:
 		var numbers := {}
 		for profile in profiles:
 			var id: String = String(profile["id"])
-			var number: int = int(profile.get("shirtNumber", 0))
+			var number: int = int(shirt_by_id.get(id, 0))
 			assert(not ids.has(id) and number >= 1 and number <= 99)
 			assert(not numbers.has(number),
 				"Shirt numbers must be unique PER club including substitutes")
