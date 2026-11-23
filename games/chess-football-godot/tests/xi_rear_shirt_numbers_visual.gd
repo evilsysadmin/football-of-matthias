@@ -1,5 +1,7 @@
 extends SceneTree
 
+const MatchScouting = preload("res://scripts/football_match_scouting.gd")
+
 # Identity + visual contract for authentic XI back-shirt numbers.
 # Each roster ID owns one shirt number regardless of lineup slot.
 # Real Godot renders approved back/diagonal rasters; no generated
@@ -54,7 +56,7 @@ func _initialize() -> void:
 			player.set_physics_process(false)
 			player.velocity = Vector2.ZERO
 			player.global_position = Vector2(-9999.0, -9999.0)
-			var profile := ChessFootballScouting.starter(
+			var profile := MatchScouting.starter(
 				player.team_id, player.squad_index, 11
 			)
 			assert(player.scouting_player_id == String(profile["id"]))
