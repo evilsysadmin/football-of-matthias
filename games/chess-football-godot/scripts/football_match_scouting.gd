@@ -70,6 +70,12 @@ static func starter(team_id: int, squad_index: int, team_size: int = 5) -> Dicti
 		return {}
 	if String(player.get("role", "")) != String(expected_roles[squad_index]) or String(player.get("id", "")).is_empty():
 		return {}
+	# A shirt belongs to a roster identity, NEVER to the active formation
+	# slot. Future lineup reshuffles and transfers must carry/assign this
+	# explicit profile property, not regenerate squad_index + 1.
+	var shirt_number: Variant = player.get("shirtNumber")
+	if typeof(shirt_number) != TYPE_INT or int(shirt_number) < 1 or int(shirt_number) > 99:
+		return {}
 	for attribute in ATTRIBUTES:
 		var value: Variant = stats.get(attribute)
 		if typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT:
