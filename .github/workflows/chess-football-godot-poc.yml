@@ -1837,6 +1837,35 @@ jobs:
           for phase in 0 1 2; do
             test -s "$RUNNER_TEMP/chess-football-review/xi-offball-run-phase-${phase}.png"
           done
+      - name: XI · real Space receiver foot-ring in both match cameras
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/xi-pass-recipient-ring.log"
+          set +e
+          timeout 75s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/xi_pass_recipient_ring_visual.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          for mode in BROADCAST TACTICAL; do
+            file="$(sed -n "s/^FOOTBALL_XI_PASS_RING_CAPTURE_${mode}=//p" "$log" | tail -1)"
+            detail="$(sed -n "s/^FOOTBALL_XI_PASS_RING_DETAIL_${mode}=//p" "$log" | tail -1)"
+            if [[ -n "$file" && -s "$file" ]]; then
+              cp "$file" "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-${mode,,}.png"
+            fi
+            if [[ -n "$detail" && -s "$detail" ]]; then
+              cp "$detail" "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-detail-${mode,,}.png"
+            fi
+          done
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Actual XI pass recipient foot-ring regression failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_PASS_RING_OK modes=2 frames=2 actors=22 only_selected=1 invalid_aim_hidden=1 pause_hidden=1 restart_hidden=1 release_hidden=1 authority_unchanged=1' "$log"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-broadcast.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-tactical.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-detail-broadcast.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-pass-recipient-detail-tactical.png"
       - name: XI · numbered shirts on real rear-facing 3D athletes
         shell: bash
         run: |

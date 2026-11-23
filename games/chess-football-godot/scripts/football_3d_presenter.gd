@@ -2598,6 +2598,12 @@ func sync_presentation(delta: float, mode: String) -> void:
 	# yesterday's interpolated pose; otherwise footballers visibly pulse.
 	_sync_camera(delta, mode)
 	_sync_goal_ad_panels()
+	# A single read-only lookup for all 22 foot rings (no repeated target
+	# selection, distance ranking or CPU work in the render loop).
+	var charged_receiver: Footballer = (
+		match_node._xi_pass_charge_receiver()
+		if match_node.match_team_size == 11 else null
+	)
 	# One reference per camera tick, not 22 identical screen projections.
 	# Only XI broadcast uses this scale. Tactical/5v5 keep existing paths.
 	var xi_reference_pixels := (
@@ -2867,12 +2873,15 @@ func sync_presentation(delta: float, mode: String) -> void:
 				if receiver_disc.scale != marker_footprint:
 					receiver_disc.scale = marker_footprint
 				receiver_disc.visible = (
-					match_node.human_set_piece_available()
-					and not match_node.pause_menu_open
-					and player.team_id == 0
-					and player != match_node.set_piece_player
-					and player.role != "keeper"
-					and not player.sent_off
+					player == charged_receiver
+					or (
+						match_node.human_set_piece_available()
+						and not match_node.pause_menu_open
+						and player.team_id == 0
+						and player != match_node.set_piece_player
+						and player.role != "keeper"
+						and not player.sent_off
+					)
 				)
 			var stamina_back := proxy.get_node_or_null("StaminaBack") as MeshInstance3D
 			var stamina_fill := proxy.get_node_or_null("StaminaFill") as MeshInstance3D

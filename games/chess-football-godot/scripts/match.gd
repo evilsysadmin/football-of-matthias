@@ -1020,26 +1020,44 @@ func _show_action_feedback(cue: String) -> void:
 	action_feedback_text = cue
 	action_feedback_seconds = 0.70
 
-# The charge meter communicates the ACTUAL currently selected recipient.
-# It never infers pass safety, makes a pass, or marks an empty lane as a
-# completed pass. Passes into free space remain available by manual choice.
-func _xi_pass_charge_label() -> String:
-	var profile: String = _pass_profile_name(_pass_charge_ratio())
-	if match_team_size != 11 or not pass_directional_charge:
-		return profile
+# Single, read-only source of truth for the live XI charging recipient.
+# Both the caption and the 3D foot ring must indicate the SAME actor the
+# normal release would target. Never hint at a receiver outside the legal aim
+# cone or during a restart, paused game, lost ball or touch-target pass.
+func _xi_pass_charge_receiver() -> Footballer:
+	if (
+		match_team_size != 11 or not pass_charging
+		or not pass_directional_charge or pause_menu_open
+		or kickoff_active or goal_restart_active or set_piece_active
+		or controlled == null or ball == null or ball.carrier != controlled
+		or controlled.team_id != 0
+	):
+		return null
 	var target: Footballer = pass_target
 	if (
 		target == null or not is_instance_valid(target)
-		or target.sent_off or controlled == null
-		or target == controlled or target.team_id != controlled.team_id
+		or target.sent_off or target == controlled
+		or target.team_id != controlled.team_id
 	):
-		return profile + " · LIBRE"
+		return null
 	var to_target: Vector2 = target.global_position - controlled.global_position
 	if (
 		to_target.length_squared() < 0.001
 		or pass_aim_direction.normalized().dot(to_target.normalized())
 			< PASS_MIN_TARGET_ALIGNMENT
 	):
+		return null
+	return target
+
+
+# The charge meter communicates the ACTUAL currently selected recipient.
+# It never predicts that a pass is safe, or awards an imaginary completion.
+func _xi_pass_charge_label() -> String:
+	var profile: String = _pass_profile_name(_pass_charge_ratio())
+	if match_team_size != 11 or not pass_directional_charge:
+		return profile
+	var target: Footballer = _xi_pass_charge_receiver()
+	if target == null:
 		return profile + " · LIBRE"
 	var receiver_name: String = target.scouting_player_name.strip_edges()
 	return profile + " · " + (
