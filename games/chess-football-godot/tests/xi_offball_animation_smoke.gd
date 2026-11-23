@@ -4,6 +4,33 @@ extends SceneTree
 # scene. These assertions exercise the 22-actor XI raster the user sees.
 # In particular, an off-ball actor with real movement must never slide in
 # a frozen 3D idle pose when the hidden 2D sprite was not updated.
+
+# The match renders the exact authored frame on fronts and sides, but a
+# NUMBERED DERIVED COPY of that frame when looking at a player's back.
+# All 20 runners and all 12 V3 poses must remain synchronized with that
+# onscreen material; an identity number is the only approved exception.
+func _assert_current_gait_frame(
+	stage: ChessFootball3DPresenter, player: Footballer,
+	driver: AnimatedSprite3D, material: StandardMaterial3D
+) -> void:
+	var source: Texture2D = driver.sprite_frames.get_frame_texture(
+		driver.animation, driver.frame
+	)
+	var expected: Texture2D = stage._xi_numbered_rear_frame(
+		player, source, driver.animation
+	)
+	var rear: bool = (
+		String(driver.animation).ends_with("_back")
+		or String(driver.animation).ends_with("_back_diagonal")
+	)
+	if rear:
+		assert(player.shirt_number > 0 and expected != source,
+			"Back gait must display an identity-owned derived shirt texture")
+	else:
+		assert(expected == source,
+			"Non-rear gait must keep the unmodified approved frame")
+	assert(material.albedo_texture == expected,
+		"Visible XI quad is out of sync with this gait frame and shirt")
 func _initialize() -> void:
 	var scene := load("res://main.tscn") as PackedScene
 	assert(scene != null)
@@ -59,8 +86,7 @@ func _initialize() -> void:
 				var texture: Texture2D = visible.sprite_frames.get_frame_texture(
 					visible.animation, visible.frame
 				)
-				assert(canvas.albedo_texture == texture,
-					"Actual visible XI quad does not display the gait frame")
+				_assert_current_gait_frame(stage, player, visible, canvas)
 				observed_frames[visible.frame] = true
 				observed_textures[texture.get_instance_id()] = true
 			assert(observed_frames.size() >= 6,
@@ -177,9 +203,7 @@ func _initialize() -> void:
 					"12-pose AI runner skipped a painted stride frame")
 			last_index = now_index
 			observed[now_index] = true
-			assert(material.albedo_texture ==
-				sprite.sprite_frames.get_frame_texture(sprite.animation, now_index),
-				"Visible QuadMesh is out of sync with the active V3 frame")
+			_assert_current_gait_frame(stage, runner, sprite, material)
 			advanced += stage.xi_offball_stride_advance(
 				runner.velocity.length(), 1.0 / 60.0, 12,
 				sprite.sprite_frames.get_animation_speed(sprite.animation), false
@@ -249,9 +273,7 @@ func _initialize() -> void:
 				var observed: Dictionary = visual_indices[key]
 				observed[current] = true
 				visual_indices[key] = observed
-				assert(material.albedo_texture ==
-					visible.sprite_frames.get_frame_texture(visible.animation, current),
-					"Rendered XI quad is not showing the current complete gait frame")
+				_assert_current_gait_frame(stage, player, visible, material)
 	for team in game.teams:
 		for player: Footballer in team:
 			if player.role != "keeper":
