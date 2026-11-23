@@ -5,8 +5,11 @@ extends SceneTree
 # _physics_process that the browser plays; no direct AI/tackle shortcuts.
 # Two seed-matched 24-second open-play sessions, not 90-minute telemetry.
 # The bot uses the established real Godot Input edge path. A separate
-# physics_frame experiment broke Q action edges; compare same-seed replays
-# first, before changing how browser-equivalent controls reach the engine.
+# Drive the manually stepped 60 Hz match from SceneTree.physics_frame rather
+# than a variable-rate rendered frame. A rendered frame can contain zero or
+# multiple physical ticks, allowing collision-server state to diverge.
+# Input reaches the REAL _physics_process on the next physics tick, after
+# Godot has registered its press edge; Q remains an enforced manual action.
 const Formation = preload("res://scripts/football_match_formation.gd")
 const XI := Formation.ELEVEN_PITCH_RECT
 const STEP := 1.0 / 60.0
@@ -27,7 +30,34 @@ const KEYS := ["move_left", "move_right", "move_up", "move_down",
 	"sprint", "tackle", "change_player", "shoot_ball"]
 
 
+# On a genuinely cold Godot process, the first XI scene can advance about
+# 0.15 seconds of native collision/actor state while loading. PREWARM a
+# sacrificial fully functional XI scene instead of disabling PROCESS_MODE on
+# measured matches (which would suppress real in-tree physics interactions).
+# No score, replay observation or direct player control is taken from here.
+func _prewarm_cold_xi_scene() -> void:
+	_release_keys()
+	var packed := load("res://main.tscn") as PackedScene
+	assert(packed != null)
+	var warmup = packed.instantiate()
+	warmup.match_team_size = 11
+	root.add_child(warmup)
+	await process_frame
+	await process_frame
+	warmup.set_process(false)
+	warmup.set_physics_process(false)
+	for team in warmup.teams:
+		for player: Footballer in team:
+			player.set_process(false)
+	root.remove_child(warmup)
+	warmup.queue_free()
+	await process_frame
+	_release_keys()
+	print("FOOTBALL_XI_COLD_WARMUP_OK discarded_scene=1 measured_ticks=0")
+
+
 func _initialize() -> void:
+	await _prewarm_cold_xi_scene()
 	var runs: Array[Dictionary] = []
 	for spec in SCENARIOS:
 		runs.append(await _play(int(spec["seed"]), String(spec["difficulty"])))
@@ -74,9 +104,9 @@ func _initialize() -> void:
 			or original["score"] != repeated["score"]
 		):
 			first_state_divergence_tick = int(original["tick"])
-	# A non-identical replay is an OBSERVATION, never a successful
-	# determinism claim. Preserve the discrepancy for the next physics/CI
-	# stabilization iteration, while still gating each real-input trial.
+	# Same-seed replay is a strict QA contract, not a gameplay change.
+	# Emit all mismatched fields before failing; never mask different ball,
+	# possession, input, tackles or scoring states.
 	var replay_audit := {
 		"checked": true,
 		"seed": int(SCENARIOS[0]["seed"]),
@@ -96,13 +126,21 @@ func _initialize() -> void:
 	assert(int(replay["manual_q_effective"]) == 1 and int(replay["illegal_auto_handoffs"]) == 0,
 		"Replay must not silently lose genuine Q or defensive handoff safeguards")
 	print("FOOTBALL_XI_REPLAY_AUDIT " + JSON.stringify(replay_audit))
+	assert(bool(replay_audit["identical"]),
+		"Same-seed XI physics ticks must replay input, possession, ball and actions identically")
 	var all_auto := 0
 	for run in runs:
 		assert(int(run["ticks"]) == TICKS)
 		assert(int(run["movement_frames"]) > 120,
 			"Autoplay bot must really steer the human-controlled character")
-		assert(int(run["cpu_possession_frames"]) > 0)
-		assert(int(run["defensive_samples"]) > 0)
+		# A fully disabled fixture might replay identically only because
+		# genuine physical duels never happened. Reject that false-green.
+		assert(int(run["cpu_possession_frames"]) >= 50,
+			"Real-input XI must preserve sustained CPU possession for pressure QA")
+		assert(int(run["defensive_samples"]) >= 50,
+			"Real-input XI must sample physically active human defence")
+		assert(int(run["tackles_launched"]) >= 1,
+			"Real-input XI must launch a physical E tackle; a passive replay is not valid")
 		assert(int(run["illegal_auto_handoffs"]) == 0)
 		assert(int(run["manual_q_inputs"]) >= 1,
 			"Each live XI trial must actually press Q after an automatic handoff")
@@ -234,16 +272,47 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	assert(packed != null)
 	var game = packed.instantiate()
 	game.match_team_size = 11
-	root.add_child(game)
-	await process_frame
-	await process_frame
+	# This measured fixture retains its normal, PHYSICALLY ACTIVE scene
+	# hierarchy. The preceding discarded scene absorbs first-load stalls.
+	# Suppressing process_mode on the entire match gave a misleading
+	# identical replay with almost no possession and zero real tackles.
+	game.process_mode = Node.PROCESS_MODE_INHERIT
 	game.set_process(false)
 	game.set_physics_process(false)
-	# The player clocks are advanced by the simulated match step, not by
-	# how quickly the CI host renders an otherwise headless frame.
+	root.add_child(game)
+	# Godot enables _physics_process automatically when a script with that
+	# callback enters the SceneTree. Explicitly disable it again AFTER
+	# insertion; the pre-tree setting alone is not authoritative here.
+	game.set_physics_process(false)
+	game.set_process(false)
+	assert(not game.is_physics_processing(),
+		"XI bot must suspend native live match updates before any warmup frames")
+	# _ready() and scene insertion may cost a native tick. We will establish
+	# the fixture's canonical clock only AFTER the render warmup is complete.
+	# These timers are advanced explicitly by each bot simulation step.
 	for team in game.teams:
 		for player: Footballer in team:
 			player.set_process(false)
+	await process_frame
+	await process_frame
+	# The first imported Godot scene can schedule physics while warming
+	# up even after the pre/post-add disable. Reassert exclusive ownership
+	# AFTER both warmup frames, before the very first measured input tick.
+	# This does not change a real match: only the QA bot drives this node.
+	var warmup_clock: float = game.match_seconds
+	assert(not is_nan(warmup_clock) and not is_inf(warmup_clock))
+	game.set_physics_process(false)
+	game.set_process(false)
+	game.match_seconds = 0.0
+	game._reset_ai_adaptation()
+	print("FOOTBALL_XI_REPLAY_WARMUP_CLOCK %.5f native_physics=%s fixed_start=%.5f" % [
+		warmup_clock, str(game.is_physics_processing()), game.match_seconds
+	])
+	assert(absf(warmup_clock) < 0.001,
+		"An XI fixture must not simulate any hidden physics before its first measured bot tick")
+	assert(game.process_mode != Node.PROCESS_MODE_DISABLED
+		and not game.is_physics_processing() and absf(game.match_seconds) < 0.001,
+		"XI bot needs real match collisions with only native script ticks paused")
 	game._set_quick_difficulty(difficulty)
 	game.kickoff_active = false
 	game.goal_restart_active = false
@@ -362,6 +431,12 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 			shooting_frames -= 1
 
 		_act(direction, sprint, press_e, press_q, press_shot)
+		# Godot marks a programmatically pressed action as 'just pressed'
+		# for the NEXT physics tick (not the tick in which action_press()
+		# was called). Submit real actions first, then enter that tick
+		# before querying them inside the unchanged _physics_process().
+		# This preserves Q/E press edges without directly selecting actors.
+		await physics_frame
 		if moving and Input.get_vector("move_left", "move_right", "move_up", "move_down").length() > 0.2:
 			movement_frames += 1
 		if press_e:
@@ -556,9 +631,6 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 				"ball_y": snappedf(game.ball.global_position.y, 0.1),
 				"score": [int(game.score[0]), int(game.score[1])],
 			})
-		# Keep action just_pressed/just_released edges on the existing proven
-		# input path. Match physics advances explicitly by STEP = 1/60.
-		await process_frame
 
 	if not active_pressure_gap.is_empty():
 		_finish_pressure_gap(pressure_gap_episodes, active_pressure_gap, TICKS, "simulation_end")

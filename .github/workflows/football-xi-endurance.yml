@@ -58,6 +58,85 @@ jobs:
             echo '::error::XI project import failed.'
             exit 1
           fi
+      # Fail fast on seeded input/replay drift before expensive cinematic
+      # scouts. All existing XI physics, pass, E and visual gates still run
+      # unchanged after this self-contained QA-only fixture.
+      - name: Autoplay XI · real input bot, pressure and handoff telemetry
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-autoplay.log"
+          set +e
+          timeout 140s "$godot" --headless --quit-after 16000 --path games/chess-football-godot --script res://tests/eleven_autoplay_player_bot.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Real-input XI autoplay bot failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_AUTOPLAY_OK' "$log"
+          python3 - "$log" "$RUNNER_TEMP/football-xi-autoplay.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          lines = Path(sys.argv[1]).read_text().splitlines()
+          prefix = 'FOOTBALL_XI_AUTOPLAY_METRICS '
+          reports = [json.loads(x.removeprefix(prefix)) for x in lines if x.startswith(prefix)]
+          assert len(reports) == 1, 'Expected one real-input autoplay report'
+          report = reports[0]
+          assert report['kind'] == 'seeded_24s_real_godot_input_bot_not_live_players'
+          audit = report['replay_audit']
+          assert audit['checked'] is True
+          assert audit['seed'] == 65113 and audit['fields_compared'] >= 12
+          assert audit['checkpoints_compared'] == 24
+          assert audit['identical'] == (len(audit['mismatched_fields']) == 0)
+          assert audit['first_ball_drift_tick'] == -1 or (
+              0 <= audit['first_ball_drift_tick'] < report['ticks_per_trial'])
+          assert audit['first_state_divergence_tick'] == -1 or (
+              0 <= audit['first_state_divergence_tick'] < report['ticks_per_trial'])
+          assert audit['max_ball_drift'] >= 0
+          assert all(field in audit['mismatched_fields'] for field in [
+              'physics_checkpoints'
+          ]) if audit['max_ball_drift'] >= 1.0 else True
+          assert [x['difficulty'] for x in report['cases']] == ['normal', 'hard']
+          assert all(x['ticks'] == report['ticks_per_trial'] for x in report['cases'])
+          assert sum(x['automatic_reassignments'] for x in report['cases']) == report['observed_automatic_reassignments']
+          for case in report['cases']:
+              causes = case['control_change_causes']
+              events = case['control_change_timeline']
+              assert len(events) == case['control_change_frames']
+              assert sum(causes.values()) == case['control_change_frames']
+              assert causes['auto_defense'] == case['automatic_reassignments']
+              assert causes['manual_q'] == case['manual_q_effective']
+              assert case['uncommanded_stable_cpu_switches'] == 0
+              gaps = case['pressure_gap_episodes']
+              assert sum(g['frames'] for g in gaps) == case['strict_gap_frames_240']
+              assert case['strict_gap_frames_240'] <= case['defensive_samples']
+              assert max((g['frames'] for g in gaps), default=0) == case['max_pressure_gap_frames']
+              assert all(g['start_tick'] < g['end_tick'] <= case['ticks']
+                         and g['end_tick']-g['start_tick'] == g['frames']
+                         and g['max_distance'] >= 240
+                         and g['ended_by'] in (
+                             'closed_to_240', 'possession_changed', 'restart', 'simulation_end'
+                         ) for g in gaps)
+              assert causes['uncommanded_stable_cpu'] == 0
+              assert all(e['cause'] in causes and
+                         0 <= e['from'] < 11 and 0 <= e['to'] < 11 and
+                         e['from'] != e['to'] for e in events)
+          Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
+          print('FOOTBALL_XI_AUTOPLAY_ARTIFACT_OK cases=2')
+          PY
+      - name: Upload XI real-input autoplay report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-xi-autoplay
+          path: ${{ runner.temp }}/football-xi-autoplay.json
+          retention-days: 7
+          if-no-files-found: warn
+
       - name: Test E cut after extended possession (no oracle tackle)
         shell: bash
         run: |
@@ -626,78 +705,3 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-      - name: Autoplay XI · real input bot, pressure and handoff telemetry
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
-          log="$RUNNER_TEMP/football-xi-autoplay.log"
-          set +e
-          timeout 140s "$godot" --headless --quit-after 16000 --path games/chess-football-godot --script res://tests/eleven_autoplay_player_bot.gd 2>&1 | tee "$log"
-          status=${PIPESTATUS[0]}
-          set -e
-          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
-            echo '::error::Real-input XI autoplay bot failed.'
-            exit 1
-          fi
-          grep -q 'FOOTBALL_XI_AUTOPLAY_OK' "$log"
-          python3 - "$log" "$RUNNER_TEMP/football-xi-autoplay.json" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          lines = Path(sys.argv[1]).read_text().splitlines()
-          prefix = 'FOOTBALL_XI_AUTOPLAY_METRICS '
-          reports = [json.loads(x.removeprefix(prefix)) for x in lines if x.startswith(prefix)]
-          assert len(reports) == 1, 'Expected one real-input autoplay report'
-          report = reports[0]
-          assert report['kind'] == 'seeded_24s_real_godot_input_bot_not_live_players'
-          audit = report['replay_audit']
-          assert audit['checked'] is True
-          assert audit['seed'] == 65113 and audit['fields_compared'] >= 12
-          assert audit['checkpoints_compared'] == 24
-          assert audit['identical'] == (len(audit['mismatched_fields']) == 0)
-          assert audit['first_ball_drift_tick'] == -1 or (
-              0 <= audit['first_ball_drift_tick'] < report['ticks_per_trial'])
-          assert audit['first_state_divergence_tick'] == -1 or (
-              0 <= audit['first_state_divergence_tick'] < report['ticks_per_trial'])
-          assert audit['max_ball_drift'] >= 0
-          assert all(field in audit['mismatched_fields'] for field in [
-              'physics_checkpoints'
-          ]) if audit['max_ball_drift'] >= 1.0 else True
-          assert [x['difficulty'] for x in report['cases']] == ['normal', 'hard']
-          assert all(x['ticks'] == report['ticks_per_trial'] for x in report['cases'])
-          assert sum(x['automatic_reassignments'] for x in report['cases']) == report['observed_automatic_reassignments']
-          for case in report['cases']:
-              causes = case['control_change_causes']
-              events = case['control_change_timeline']
-              assert len(events) == case['control_change_frames']
-              assert sum(causes.values()) == case['control_change_frames']
-              assert causes['auto_defense'] == case['automatic_reassignments']
-              assert causes['manual_q'] == case['manual_q_effective']
-              assert case['uncommanded_stable_cpu_switches'] == 0
-              gaps = case['pressure_gap_episodes']
-              assert sum(g['frames'] for g in gaps) == case['strict_gap_frames_240']
-              assert case['strict_gap_frames_240'] <= case['defensive_samples']
-              assert max((g['frames'] for g in gaps), default=0) == case['max_pressure_gap_frames']
-              assert all(g['start_tick'] < g['end_tick'] <= case['ticks']
-                         and g['end_tick']-g['start_tick'] == g['frames']
-                         and g['max_distance'] >= 240
-                         and g['ended_by'] in (
-                             'closed_to_240', 'possession_changed', 'restart', 'simulation_end'
-                         ) for g in gaps)
-              assert causes['uncommanded_stable_cpu'] == 0
-              assert all(e['cause'] in causes and
-                         0 <= e['from'] < 11 and 0 <= e['to'] < 11 and
-                         e['from'] != e['to'] for e in events)
-          Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
-          print('FOOTBALL_XI_AUTOPLAY_ARTIFACT_OK cases=2')
-          PY
-      - name: Upload XI real-input autoplay report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: football-xi-autoplay
-          path: ${{ runner.temp }}/football-xi-autoplay.json
-          retention-days: 7
-          if-no-files-found: warn
