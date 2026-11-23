@@ -182,6 +182,36 @@ func _initialize() -> void:
 		"Easy keeps its legacy timing")
 	print("FOOTBALL_XI_HARD_TACKLE_FIRST_TOUCH_READ_OK hard=0.22 expert=0.12")
 
+	# An actual running XI presser must carry angular momentum through
+	# the first E: same speed, normal movement and physical collisions,
+	# but a bounded turn rather than an immediate 60-Hz target snap.
+	_reset_duel(game, carrier, presser, "hard", "far")
+	var pivot_origin: Vector2 = presser.global_position
+	var pivot_target: Vector2 = pivot_origin + Vector2.UP * 500.0
+	presser.velocity = Vector2.LEFT * presser.base_speed
+	await physics_frame
+	presser.move_ai(DT, pivot_target, 1.0, true)
+	var committed_turn: float = absf(
+		Vector2.LEFT.angle_to(presser.velocity.normalized())
+	)
+	assert(
+		committed_turn <= presser.XI_CPU_COMMITTED_PRESS_TURN_RATE * DT + 0.005,
+		"Running Hard first presser must turn at a physically bounded rate during E"
+	)
+	assert(presser.global_position.distance_to(pivot_origin) < 18.0,
+		"No teleport or extra movement on a committed tackle approach")
+	# A regular run (or the second defender) is NOT subject to the E-only cap.
+	presser.global_position = pivot_origin
+	presser.velocity = Vector2.LEFT * presser.base_speed
+	await physics_frame
+	presser.move_ai(DT, pivot_target, 1.0, false)
+	var regular_turn: float = absf(
+		Vector2.LEFT.angle_to(presser.velocity.normalized())
+	)
+	assert(regular_turn > committed_turn + deg_to_rad(0.5),
+		"Normal pursuit must still be able to pivot without the E commitment cap")
+	print("FOOTBALL_XI_CPU_PRESS_INERTIA_OK heading=bounded normal=unchanged")
+
 	# E still needs two visible plants, but after the second plant the human
 	# can drive the exit. Exercise actual Footballer motion rather than
 	# asserting a coefficient in isolation. No extra tackle protection.
