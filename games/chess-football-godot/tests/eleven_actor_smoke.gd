@@ -19,7 +19,8 @@ func _initialize() -> void:
 	assert(live.debug_team_counts() == [5, 5])
 	var five_pitch: Rect2 = ChessFootballMath.PITCH_RECT
 	var eleven_pitch: Rect2 = Formation.ELEVEN_PITCH_RECT
-	assert(eleven_pitch.size == Vector2(4000.0, 2600.0))
+	assert(eleven_pitch == Rect2(-760.0, -562.0, 4160.0, 2704.0),
+		"XI +4% experiment must keep the field centered, with a real +8.16% area")
 	assert(eleven_pitch.get_center() == five_pitch.get_center())
 	assert(ChessFootballMath.clamp_to_pitch(Vector2(-100.0, -100.0)) == Vector2(100.0, -30.0))
 	assert(ChessFootballMath.clamp_to_pitch(Vector2(-100.0, -100.0), eleven_pitch) == Vector2(-100.0, -100.0))
