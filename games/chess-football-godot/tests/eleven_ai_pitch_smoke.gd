@@ -1397,7 +1397,22 @@ func _initialize() -> void:
 	# even if the fallen player's distance is smaller than the new owner's.
 	human_far.global_position = recovery_center + Vector2(-29.0, 0.0)
 	human_far.xi_collision_down_seconds = 0.75
+	# The previous positioning tick may have launched a legitimate physical
+	# tackle, starting this candidate's normal cooldown. Reset ONLY this
+	# independent handoff fixture, not the live selection rules.
+	human_cover.tackle_cooldown_seconds = 0.0
+	human_cover.tackle_recovery_seconds = 0.0
+	human_cover.contact_stun_seconds = 0.0
+	human_cover.action_lock_seconds = 0.0
+	human_cover.tackle_active_seconds = 0.0
 	game.xi_human_auto_switch_block_until = 0.0
+	print("FOOTBALL_XI_FALL_HANDOFF_PROBE ready=%s candidate_distance=%.2f controlled_down=%.2f active=%.2f grace=%.2f" % [
+		str(human_cover.can_tackle()),
+		human_cover.global_position.distance_to(cpu_owner.global_position),
+		human_far.xi_collision_down_seconds, human_far.tackle_active_seconds,
+		game.xi_human_auto_switch_block_until,
+	])
+	assert(human_cover.can_tackle(), "Test handoff candidate must be physically eligible")
 	assert(game._maybe_auto_select_xi_human_defender(),
 		"XI must not trap input on a fallen controlled athlete")
 	assert(game.controlled == human_cover and game.ball.carrier == cpu_owner)
