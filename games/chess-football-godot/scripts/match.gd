@@ -1586,7 +1586,7 @@ func _update_ai(delta: float) -> void:
 			# heading during a real human E and its stamina-paid exit.
 			# The cover, fresh possessions, ordinary runs, F, Normal,
 			# human defenders and keepers retain normal physical pursuit.
-			var committed_e_press := (
+			var committed_e_press: bool = (
 				match_team_size == 11 and team_id == 1
 				and player == presser and quick_difficulty in ["hard", "expert"]
 				and ball.carrier != null and ball.carrier.team_id == 0
