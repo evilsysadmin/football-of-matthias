@@ -1352,6 +1352,97 @@ func _initialize() -> void:
 	game.match_team_size = 5
 	assert(game._ai_press_target(human_far, cpu_owner) == cpu_owner.global_position)
 	game.match_team_size = 11
+
+	# A player flattened in a real XI collision is immobile in move_ai().
+	# Even when physically nearest, that body must not monopolize the two
+	# defensive roles; otherwise all healthy defenders wait off the ball.
+	var recovery_center: Vector2 = game.match_pitch.get_center()
+	game.ball.attach_to(cpu_owner)
+	cpu_owner.global_position = recovery_center
+	cpu_owner.velocity = Vector2.ZERO
+	for recovery_mate: Footballer in game.teams[0]:
+		if recovery_mate.role == "keeper":
+			continue
+		recovery_mate.global_position = recovery_center + Vector2(-960.0, 680.0)
+		recovery_mate.xi_collision_down_seconds = 0.0
+	human_far.xi_collision_down_seconds = 0.0
+	human_far.global_position = recovery_center + Vector2(-420.0, 0.0)
+	human_far.tackle_active_seconds = 0.0
+	game._select_player(human_far)
+	human_first.global_position = recovery_center + Vector2(-18.0, 0.0)
+	human_first.xi_collision_down_seconds = 0.80
+	human_cover.global_position = recovery_center + Vector2(-82.0, 0.0)
+	human_cover.tackle_cooldown_seconds = 0.0
+	human_cover.tackle_recovery_seconds = 0.0
+	human_cover.contact_stun_seconds = 0.0
+	human_cover.action_lock_seconds = 0.0
+	human_cover.tackle_active_seconds = 0.0
+	human_cover.xi_collision_down_seconds = 0.0
+	assert(human_cover.can_tackle())
+	# The two cached roles may still reference the previous (fallen) man.
+	game.ai_primary_presser_cache[0] = human_first
+	game.ai_secondary_presser_cache[0] = human_first
+	assert(game._ai_primary_presser(0) == human_cover,
+		"Fallen XI primary must immediately yield to a mobile defender")
+	assert(game._ai_secondary_presser(0, human_cover) != human_first,
+		"Fallen XI secondary must not occupy the cover slot")
+	game.ai_next_decision[int(cpu_owner.get_instance_id())] = game.match_seconds + 100.0
+	game._update_ai(0.0)
+	assert(human_cover.ai_target.distance_to(cpu_owner.global_position) < 0.1,
+		"Healthy replacement must actually aim at the live CPU carrier")
+	assert(human_first.velocity == Vector2.ZERO,
+		"Grounded XI defender remains physically unable to move")
+	# A human-controlled athlete knocked down close to the carrier is NOT
+	# a competent current defender: transfer input to a tackle-ready runner,
+	# even if the fallen player's distance is smaller than the new owner's.
+	human_far.global_position = recovery_center + Vector2(-29.0, 0.0)
+	human_far.xi_collision_down_seconds = 0.75
+	game.xi_human_auto_switch_block_until = 0.0
+	assert(game._maybe_auto_select_xi_human_defender(),
+		"XI must not trap input on a fallen controlled athlete")
+	assert(game.controlled == human_cover and game.ball.carrier == cpu_owner)
+	assert(game.xi_human_handoff_chase_owner == cpu_owner)
+	# A deliberate Q still owns its full grace period, even if the newly
+	# selected player collides with another body after that manual action.
+	human_far.xi_collision_down_seconds = 0.0
+	game._select_player(human_far)
+	human_far.xi_collision_down_seconds = 0.75
+	game.xi_human_auto_switch_block_until = game.match_seconds + game.AI_XI_HUMAN_MANUAL_SWITCH_GRACE
+	assert(not game._maybe_auto_select_xi_human_defender(),
+		"Manual switch protection survives a subsequent fall")
+	human_far.xi_collision_down_seconds = 0.0
+	# Both teams require physical defender recovery, not only the human XI.
+	# The CPU carrier has now lost possession: test CPU role cache as well.
+	var recovery_human_owner: Footballer = game.teams[0][10]
+	recovery_human_owner.global_position = recovery_center
+	recovery_human_owner.velocity = Vector2.ZERO
+	game.ball.attach_to(recovery_human_owner)
+	for cpu_mate: Footballer in game.teams[1]:
+		if cpu_mate.role == "keeper":
+			continue
+		cpu_mate.global_position = recovery_center + Vector2(900.0, 640.0)
+		cpu_mate.xi_collision_down_seconds = 0.0
+	var cpu_fallen: Footballer = game.teams[1][1]
+	var cpu_mobile: Footballer = game.teams[1][2]
+	cpu_fallen.global_position = recovery_center + Vector2(21.0, 0.0)
+	cpu_fallen.xi_collision_down_seconds = 0.85
+	cpu_mobile.global_position = recovery_center + Vector2(84.0, 0.0)
+	game.ai_primary_presser_cache[1] = cpu_fallen
+	game.ai_secondary_presser_cache[1] = cpu_fallen
+	assert(game._ai_primary_presser(1) == cpu_mobile,
+		"CPU XI must also replace the downed nearest presser")
+	assert(game._ai_secondary_presser(1, cpu_mobile) != cpu_fallen,
+		"CPU XI must never retain a grounded second defender")
+	game._update_ai(0.0)
+	assert(cpu_mobile.ai_target.distance_to(recovery_human_owner.global_position) < 0.1,
+		"CPU replacement must chase the physical human carrier")
+	assert(cpu_fallen.velocity == Vector2.ZERO)
+	# Keep the previous 5v5 role-selection behavior intact in this XI-only fix.
+	game.match_team_size = 5
+	assert(game._ai_primary_presser(1) == cpu_fallen)
+	game.match_team_size = 11
+	print("FOOTBALL_XI_FALLEN_DEFENSE_OK human=1 cpu=1 old_cache=cleared healthy_presser=1 controlled_down=handoff q_grace=kept five=unchanged")
+
 	print("FOOTBALL_XI_INTERCEPT_CONTINUITY_OK approach_60hz=45 aim_jump_lt_4=1 tackle_body=1 startup_fade=1 far_lead=1 5v5=off")
 	print("FOOTBALL_XI_HUMAN_INTERCEPT_OK observed=1 diagonal=1 bounded=1 cut_reactive=1 close_tackle=body loose=off 5v5=off")
 	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 e_hitbox_contact=1 tackle_ready_only=1 manual_override=1 owner_transfer=stop no_flicker=1 manual_q=1 fallen=off 5v5=off")
