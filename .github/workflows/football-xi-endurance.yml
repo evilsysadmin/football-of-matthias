@@ -91,7 +91,11 @@ jobs:
           assert audit['checked'] is True
           assert audit['seed'] == 65113 and audit['fields_compared'] >= 12
           assert audit['checkpoints_compared'] == 24
-          assert audit['identical'] == (len(audit['mismatched_fields']) == 0)
+          assert audit['identical'] is True and audit['mismatched_fields'] == [], (
+              'Real seeded XI replay must be exactly identical, not just self-consistent'
+          )
+          assert audit['max_ball_drift'] == 0 and audit['first_ball_drift_tick'] == -1
+          assert audit['first_state_divergence_tick'] == -1
           assert audit['first_ball_drift_tick'] == -1 or (
               0 <= audit['first_ball_drift_tick'] < report['ticks_per_trial'])
           assert audit['first_state_divergence_tick'] == -1 or (
@@ -110,6 +114,12 @@ jobs:
               assert sum(causes.values()) == case['control_change_frames']
               assert causes['auto_defense'] == case['automatic_reassignments']
               assert causes['manual_q'] == case['manual_q_effective']
+              assert case['actual_human_travel_units'] > 160.0, (
+                  'Human input must move a real XI player through physics'
+              )
+              assert case['human_possession_frames'] >= 50
+              assert case['cpu_possession_frames'] >= 50
+              assert case['tackles_launched'] >= 1
               assert case['uncommanded_stable_cpu_switches'] == 0
               gaps = case['pressure_gap_episodes']
               assert sum(g['frames'] for g in gaps) == case['strict_gap_frames_240']
