@@ -126,6 +126,39 @@ func _initialize() -> void:
 	striker.dribble_burst_seconds = striker.dribble_duration_seconds
 	game._set_quick_difficulty("hard")
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
+	# Hard is NOT given Normal's wide scripted mistake; its first E cue
+	# must be earned by a real goal-side defender already closing quickly.
+	# Verify pursuit target, lateral sign, decision fade and every guard.
+	var saved_hard_pos: Vector2 = xi_cover_player.global_position
+	var saved_hard_velocity: Vector2 = xi_cover_player.velocity
+	xi_cover_player.global_position = striker.global_position + Vector2(140.0, 8.0)
+	xi_cover_player.velocity = Vector2(-180.0, 0.0)
+	striker.dribble_direction = Vector2(1.0, 0.75).normalized()
+	var hard_cue: Vector2 = game._ai_xi_hard_committed_feint_offset(xi_cover_player, striker)
+	assert(hard_cue.y < -10.0 and hard_cue.y >= -39.0,
+		"Hard first boot read may wrong-foot a genuinely committed presser")
+	assert(game._ai_press_target(xi_cover_player, striker).is_equal_approx(
+		striker.global_position + hard_cue
+	), "Hard visible first boot must bias ordinary physical pursuit")
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds * 0.50
+	assert(game._ai_xi_hard_committed_feint_offset(xi_cover_player, striker) == Vector2.ZERO,
+		"Hard cannot chase a decoy after the first boot becomes readable")
+	striker.dribble_burst_seconds = striker.dribble_duration_seconds
+	xi_cover_player.velocity = Vector2.RIGHT * 180.0
+	assert(game._ai_xi_hard_committed_feint_offset(xi_cover_player, striker) == Vector2.ZERO,
+		"No fake pursuit when defender is moving away")
+	xi_cover_player.velocity = Vector2.LEFT * 180.0
+	xi_cover_player.global_position = striker.global_position + Vector2(230.0, 8.0)
+	assert(game._ai_xi_hard_committed_feint_offset(xi_cover_player, striker) == Vector2.ZERO,
+		"A distant defender must not be tricked without real engagement")
+	xi_cover_player.global_position = saved_hard_pos
+	xi_cover_player.velocity = saved_hard_velocity
+	game._set_quick_difficulty("expert")
+	assert(game._ai_xi_hard_committed_feint_offset(xi_cover_player, striker) == Vector2.ZERO)
+	game._set_quick_difficulty("hard")
+	game.match_team_size = 5
+	assert(game._ai_xi_hard_committed_feint_offset(xi_cover_player, striker) == Vector2.ZERO)
+	game.match_team_size = 11
 	game._set_quick_difficulty("expert")
 	assert(game._ai_xi_normal_feint_read_offset(xi_cover_player, striker) == Vector2.ZERO)
 	game._set_quick_difficulty("easy")
