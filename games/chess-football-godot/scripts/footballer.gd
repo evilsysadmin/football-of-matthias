@@ -261,11 +261,12 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		wanted_direction = _xi_cut_motion_direction()
 	if xi_feint_exit > 0.0 and direction.length_squared() > 0.04:
 		# Once the planted foot has committed, the human explicitly picks
-		# the exit lane. Turn at most 90 degrees over the remaining action:
-		# no forced auto-running lane, teleport, extra speed or tackle shield.
+		# the exit lane. Up to 135 degrees over the remaining action:
+		# the initial auto-chosen diagonal must not overrule the player's
+		# intended escape. No teleport, extra speed or tackle shield.
 		var feint_turn: float = clampf(
 			dribble_direction.angle_to(direction.normalized()),
-			-deg_to_rad(90.0), deg_to_rad(90.0)
+			-deg_to_rad(135.0), deg_to_rad(135.0)
 		)
 		wanted_direction = dribble_direction.rotated(feint_turn * xi_feint_exit)
 	elif xi_cut_exit > 0.0 and direction.length_squared() > 0.04:
