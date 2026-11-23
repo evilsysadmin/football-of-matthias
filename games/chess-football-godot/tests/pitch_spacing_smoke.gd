@@ -72,9 +72,12 @@ func _initialize() -> void:
 				Formation.home_position(5, team_id, index, pitch)
 			) < 0.01)
 	var full_pitch: Rect2 = Formation.ELEVEN_PITCH_RECT
-	assert(full_pitch.size == Vector2(4000.0, 2600.0))
+	assert(full_pitch == Rect2(-680.0, -562.0, 4000.0, 2704.0))
 	assert(full_pitch.get_center() == pitch.get_center())
-	assert(absf(full_pitch.size.x / full_pitch.size.y - 105.0 / 68.0) < 0.01)
+	assert(is_equal_approx(full_pitch.size.y / 2600.0, 1.04))
+	assert(full_pitch.size.x == 4000.0,
+		"Width-only A/B must not silently make forward passes longer")
+	assert(absf(full_pitch.size.x / full_pitch.size.y - 105.0 / 71.0) < 0.01)
 	for team_id in range(2):
 		var positions: Array[Vector2] = []
 		for index in range(11):
