@@ -26,6 +26,11 @@ var movement_multiplier: float = 1.0
 var stamina_drain_multiplier: float = 1.0
 const MOVE_ACCELERATION := 1650.0
 const MOVE_DECELERATION := 2150.0
+# XI CPU primary presser: a full-speed defender cannot reverse his hips
+# instantly as E changes lanes. This is a turning-rate cap on REAL movement,
+# not slower pace, a missed-tackle roll, or any change to physical hitboxes.
+const XI_CPU_COMMITTED_PRESS_TURN_RATE := deg_to_rad(170.0)
+const XI_CPU_COMMITTED_PRESS_MIN_SPEED := 100.0
 # XI human ball control: faster first steps and pivots, never a higher top speed.
 # Off-ball actors, CPU players and 5v5 retain their original kinematics.
 const XI_CARRY_ACCELERATION := 2250.0
@@ -349,7 +354,7 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	_sync_facing()
 	_sync_locomotion(actual_sprint or dribbling)
 
-func move_ai(delta: float, target: Vector2, intensity: float = 1.0) -> void:
+func move_ai(delta: float, target: Vector2, intensity: float = 1.0, committed_press: bool = false) -> void:
 	if xi_collision_down_seconds > 0.0:
 		velocity = Vector2.ZERO
 		return
@@ -380,7 +385,24 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0) -> void:
 	var acceleration := MOVE_ACCELERATION if desired.length_squared() > 0.001 else MOVE_DECELERATION
 	if role == "keeper":
 		acceleration *= KEEPER_AI_ACCELERATION_MULTIPLIER
-	velocity = velocity.move_toward(desired, acceleration * delta)
+	var previous_velocity: Vector2 = velocity
+	var next_velocity: Vector2 = velocity.move_toward(desired, acceleration * delta)
+	if (
+		committed_press and match_pitch == Formation.ELEVEN_PITCH_RECT
+		and team_id == 1 and role != "keeper" and not has_ball
+		and previous_velocity.length() >= XI_CPU_COMMITTED_PRESS_MIN_SPEED
+		and next_velocity.length_squared() > 1.0
+	):
+		# The incoming sprint has physical angular inertia while chasing an
+		# E touch. Preserve the normal acceleration and speed magnitude;
+		# cap only how far the moving body can rotate in one actual tick.
+		var maximum_turn: float = XI_CPU_COMMITTED_PRESS_TURN_RATE * delta
+		var target_turn: float = previous_velocity.angle_to(next_velocity)
+		if absf(target_turn) > maximum_turn:
+			next_velocity = previous_velocity.normalized().rotated(
+				clampf(target_turn, -maximum_turn, maximum_turn)
+			) * next_velocity.length()
+	velocity = next_velocity
 	if velocity.length() < 1.0:
 		velocity = Vector2.ZERO
 	move_and_slide()
