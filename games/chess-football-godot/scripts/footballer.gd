@@ -14,6 +14,9 @@ var match_pitch: Rect2 = ChessFootballMath.PITCH_RECT
 # Player identities come from the canonical 54-player scouting snapshot.
 var scouting_player_id: String = ""
 var scouting_player_name: String = ""
+# The physical shirt number is identity-owned, not squad_index/position.
+# Read from the canonical roster at match setup; transfers will retain it.
+var shirt_number: int = 0
 var scouting_pace: int = 75
 var scouting_endurance: int = 75
 var scouting_passing: int = 75
@@ -146,6 +149,7 @@ func _apply_match_scouting(p_team_size: int = 5) -> void:
 	var profile: Dictionary = MatchScouting.starter(team_id, squad_index, p_team_size)
 	scouting_player_id = String(profile.get("id", ""))
 	scouting_player_name = String(profile.get("name", ""))
+	shirt_number = int(profile.get("shirtNumber", 0))
 	var stats: Dictionary = profile.get("scouting", {})
 	scouting_pace = int(stats.get("pace", 75))
 	scouting_endurance = int(stats.get("stamina", 75))
