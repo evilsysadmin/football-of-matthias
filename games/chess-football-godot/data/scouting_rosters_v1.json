@@ -16,8 +16,7 @@
           "shooting": 20,
           "tackling": 39,
           "keeping": 85
-        },
-        "shirtNumber": 1
+        }
       },
       {
         "id": "fc-matthias-def-1",
@@ -33,8 +32,7 @@
           "shooting": 34,
           "tackling": 84,
           "keeping": 12
-        },
-        "shirtNumber": 2
+        }
       },
       {
         "id": "fc-matthias-med-1",
@@ -50,8 +48,7 @@
           "shooting": 62,
           "tackling": 62,
           "keeping": 10
-        },
-        "shirtNumber": 6
+        }
       },
       {
         "id": "fc-matthias-med-2",
@@ -67,8 +64,7 @@
           "shooting": 69,
           "tackling": 76,
           "keeping": 9
-        },
-        "shirtNumber": 7
+        }
       },
       {
         "id": "fc-matthias-del-1",
@@ -84,8 +80,7 @@
           "shooting": 92,
           "tackling": 32,
           "keeping": 8
-        },
-        "shirtNumber": 9
+        }
       },
       {
         "id": "fc-matthias-por-2",
@@ -101,8 +96,7 @@
           "shooting": 16,
           "tackling": 31,
           "keeping": 88
-        },
-        "shirtNumber": 12
+        }
       },
       {
         "id": "fc-matthias-def-2",
@@ -118,8 +112,7 @@
           "shooting": 48,
           "tackling": 74,
           "keeping": 7
-        },
-        "shirtNumber": 3
+        }
       },
       {
         "id": "fc-matthias-med-3",
@@ -135,8 +128,7 @@
           "shooting": 57,
           "tackling": 49,
           "keeping": 11
-        },
-        "shirtNumber": 8
+        }
       },
       {
         "id": "fc-matthias-del-2",
@@ -152,8 +144,7 @@
           "shooting": 79,
           "tackling": 43,
           "keeping": 6
-        },
-        "shirtNumber": 10
+        }
       }
     ],
     "real-enroque": [
@@ -171,8 +162,7 @@
           "shooting": 17,
           "tackling": 36,
           "keeping": 88
-        },
-        "shirtNumber": 1
+        }
       },
       {
         "id": "real-enroque-def-1",
@@ -188,8 +178,7 @@
           "shooting": 40,
           "tackling": 79,
           "keeping": 8
-        },
-        "shirtNumber": 2
+        }
       },
       {
         "id": "real-enroque-med-1",
@@ -205,8 +194,7 @@
           "shooting": 65,
           "tackling": 51,
           "keeping": 8
-        },
-        "shirtNumber": 6
+        }
       },
       {
         "id": "real-enroque-med-2",
@@ -222,8 +210,7 @@
           "shooting": 56,
           "tackling": 63,
           "keeping": 12
-        },
-        "shirtNumber": 7
+        }
       },
       {
         "id": "real-enroque-del-1",
@@ -239,8 +226,7 @@
           "shooting": 91,
           "tackling": 38,
           "keeping": 5
-        },
-        "shirtNumber": 9
+        }
       },
       {
         "id": "real-enroque-por-2",
@@ -256,8 +242,7 @@
           "shooting": 20,
           "tackling": 36,
           "keeping": 80
-        },
-        "shirtNumber": 12
+        }
       },
       {
         "id": "real-enroque-def-2",
@@ -273,8 +258,7 @@
           "shooting": 28,
           "tackling": 85,
           "keeping": 10
-        },
-        "shirtNumber": 3
+        }
       },
       {
         "id": "real-enroque-med-3",
@@ -290,8 +274,7 @@
           "shooting": 61,
           "tackling": 53,
           "keeping": 7
-        },
-        "shirtNumber": 8
+        }
       },
       {
         "id": "real-enroque-del-2",
@@ -307,8 +290,7 @@
           "shooting": 74,
           "tackling": 35,
           "keeping": 6
-        },
-        "shirtNumber": 10
+        }
       }
     ],
     "atletico-torreon": [
@@ -326,8 +308,7 @@
           "shooting": 15,
           "tackling": 48,
           "keeping": 84
-        },
-        "shirtNumber": 1
+        }
       },
       {
         "id": "atletico-torreon-def-1",
@@ -343,8 +324,7 @@
           "shooting": 29,
           "tackling": 88,
           "keeping": 8
-        },
-        "shirtNumber": 2
+        }
       },
       {
         "id": "atletico-torreon-med-1",
@@ -360,8 +340,7 @@
           "shooting": 46,
           "tackling": 84,
           "keeping": 8
-        },
-        "shirtNumber": 6
+        }
       },
       {
         "id": "atletico-torreon-med-2",
@@ -377,8 +356,7 @@
           "shooting": 57,
           "tackling": 73,
           "keeping": 10
-        },
-        "shirtNumber": 7
+        }
       },
       {
         "id": "atletico-torreon-del-1",
@@ -394,8 +372,7 @@
           "shooting": 82,
           "tackling": 51,
           "keeping": 6
-        },
-        "shirtNumber": 9
+        }
       },
       {
         "id": "atletico-torreon-por-2",
@@ -411,8 +388,7 @@
           "shooting": 16,
           "tackling": 32,
           "keeping": 78
-        },
-        "shirtNumber": 12
+        }
       },
       {
         "id": "atletico-torreon-def-2",
@@ -428,8 +404,7 @@
           "shooting": 40,
           "tackling": 75,
           "keeping": 7
-        },
-        "shirtNumber": 3
+        }
       },
       {
         "id": "atletico-torreon-med-3",
@@ -445,8 +420,7 @@
           "shooting": 47,
           "tackling": 78,
           "keeping": 8
-        },
-        "shirtNumber": 8
+        }
       },
       {
         "id": "atletico-torreon-del-2",
@@ -462,8 +436,7 @@
           "shooting": 73,
           "tackling": 58,
           "keeping": 5
-        },
-        "shirtNumber": 10
+        }
       }
     ],
     "union-alfil": [
@@ -481,8 +454,7 @@
           "shooting": 18,
           "tackling": 42,
           "keeping": 78
-        },
-        "shirtNumber": 1
+        }
       },
       {
         "id": "union-alfil-def-1",
@@ -498,8 +470,7 @@
           "shooting": 35,
           "tackling": 77,
           "keeping": 8
-        },
-        "shirtNumber": 2
+        }
       },
       {
         "id": "union-alfil-med-1",
@@ -515,8 +486,7 @@
           "shooting": 54,
           "tackling": 52,
           "keeping": 5
-        },
-        "shirtNumber": 6
+        }
       },
       {
         "id": "union-alfil-med-2",
@@ -532,8 +502,7 @@
           "shooting": 67,
           "tackling": 59,
           "keeping": 7
-        },
-        "shirtNumber": 7
+        }
       },
       {
         "id": "union-alfil-del-1",
@@ -549,8 +518,7 @@
           "shooting": 84,
           "tackling": 40,
           "keeping": 5
-        },
-        "shirtNumber": 9
+        }
       },
       {
         "id": "union-alfil-por-2",
@@ -566,8 +534,7 @@
           "shooting": 14,
           "tackling": 29,
           "keeping": 82
-        },
-        "shirtNumber": 12
+        }
       },
       {
         "id": "union-alfil-def-2",
@@ -583,8 +550,7 @@
           "shooting": 39,
           "tackling": 70,
           "keeping": 6
-        },
-        "shirtNumber": 3
+        }
       },
       {
         "id": "union-alfil-med-3",
@@ -600,8 +566,7 @@
           "shooting": 48,
           "tackling": 61,
           "keeping": 8
-        },
-        "shirtNumber": 8
+        }
       },
       {
         "id": "union-alfil-del-2",
@@ -617,8 +582,7 @@
           "shooting": 74,
           "tackling": 30,
           "keeping": 6
-        },
-        "shirtNumber": 10
+        }
       }
     ],
     "deportivo-gambito": [
@@ -636,8 +600,7 @@
           "shooting": 20,
           "tackling": 29,
           "keeping": 69
-        },
-        "shirtNumber": 1
+        }
       },
       {
         "id": "deportivo-gambito-def-1",
@@ -653,8 +616,7 @@
           "shooting": 49,
           "tackling": 59,
           "keeping": 8
-        },
-        "shirtNumber": 2
+        }
       },
       {
         "id": "deportivo-gambito-med-1",
@@ -670,8 +632,7 @@
           "shooting": 62,
           "tackling": 35,
           "keeping": 7
-        },
-        "shirtNumber": 6
+        }
       },
       {
         "id": "deportivo-gambito-med-2",
@@ -687,8 +648,7 @@
           "shooting": 75,
           "tackling": 38,
           "keeping": 8
-        },
-        "shirtNumber": 7
+        }
       },
       {
         "id": "deportivo-gambito-del-1",
@@ -704,8 +664,7 @@
           "shooting": 84,
           "tackling": 24,
           "keeping": 5
-        },
-        "shirtNumber": 9
+        }
       },
       {
         "id": "deportivo-gambito-por-2",
@@ -721,8 +680,7 @@
           "shooting": 14,
           "tackling": 31,
           "keeping": 73
-        },
-        "shirtNumber": 12
+        }
       },
       {
         "id": "deportivo-gambito-def-2",
@@ -738,8 +696,7 @@
           "shooting": 35,
           "tackling": 64,
           "keeping": 5
-        },
-        "shirtNumber": 3
+        }
       },
       {
         "id": "deportivo-gambito-med-3",
@@ -755,8 +712,7 @@
           "shooting": 54,
           "tackling": 34,
           "keeping": 7
-        },
-        "shirtNumber": 8
+        }
       },
       {
         "id": "deportivo-gambito-del-2",
@@ -772,8 +728,7 @@
           "shooting": 78,
           "tackling": 37,
           "keeping": 5
-        },
-        "shirtNumber": 10
+        }
       }
     ],
     "peones-del-norte": [
@@ -791,8 +746,7 @@
           "shooting": 15,
           "tackling": 45,
           "keeping": 76
-        },
-        "shirtNumber": 1
+        }
       },
       {
         "id": "peones-del-norte-def-1",
@@ -808,8 +762,7 @@
           "shooting": 24,
           "tackling": 80,
           "keeping": 7
-        },
-        "shirtNumber": 2
+        }
       },
       {
         "id": "peones-del-norte-med-1",
@@ -825,8 +778,7 @@
           "shooting": 46,
           "tackling": 75,
           "keeping": 8
-        },
-        "shirtNumber": 6
+        }
       },
       {
         "id": "peones-del-norte-med-2",
@@ -842,8 +794,7 @@
           "shooting": 50,
           "tackling": 53,
           "keeping": 7
-        },
-        "shirtNumber": 7
+        }
       },
       {
         "id": "peones-del-norte-del-1",
@@ -859,8 +810,7 @@
           "shooting": 80,
           "tackling": 39,
           "keeping": 6
-        },
-        "shirtNumber": 9
+        }
       },
       {
         "id": "peones-del-norte-por-2",
@@ -876,8 +826,7 @@
           "shooting": 16,
           "tackling": 38,
           "keeping": 79
-        },
-        "shirtNumber": 12
+        }
       },
       {
         "id": "peones-del-norte-def-2",
@@ -893,8 +842,7 @@
           "shooting": 31,
           "tackling": 70,
           "keeping": 7
-        },
-        "shirtNumber": 3
+        }
       },
       {
         "id": "peones-del-norte-med-3",
@@ -910,8 +858,7 @@
           "shooting": 49,
           "tackling": 57,
           "keeping": 8
-        },
-        "shirtNumber": 8
+        }
       },
       {
         "id": "peones-del-norte-del-2",
@@ -927,8 +874,7 @@
           "shooting": 76,
           "tackling": 35,
           "keeping": 5
-        },
-        "shirtNumber": 10
+        }
       }
     ]
   },
@@ -962,8 +908,7 @@
             "shooting": 39,
             "tackling": 82,
             "keeping": 8
-          },
-          "shirtNumber": 4
+          }
         },
         {
           "id": "fc-matthias-def-4",
@@ -979,8 +924,7 @@
             "shooting": 35,
             "tackling": 81,
             "keeping": 7
-          },
-          "shirtNumber": 5
+          }
         },
         {
           "id": "fc-matthias-del-3",
@@ -996,8 +940,7 @@
             "shooting": 81,
             "tackling": 35,
             "keeping": 6
-          },
-          "shirtNumber": 11
+          }
         }
       ]
     },
@@ -1030,8 +973,7 @@
             "shooting": 31,
             "tackling": 78,
             "keeping": 8
-          },
-          "shirtNumber": 4
+          }
         },
         {
           "id": "real-enroque-def-4",
@@ -1047,8 +989,7 @@
             "shooting": 30,
             "tackling": 86,
             "keeping": 7
-          },
-          "shirtNumber": 5
+          }
         },
         {
           "id": "real-enroque-del-3",
@@ -1064,8 +1005,7 @@
             "shooting": 79,
             "tackling": 33,
             "keeping": 4
-          },
-          "shirtNumber": 11
+          }
         }
       ]
     },
@@ -1098,8 +1038,7 @@
             "shooting": 27,
             "tackling": 93,
             "keeping": 6
-          },
-          "shirtNumber": 4
+          }
         },
         {
           "id": "atletico-torreon-def-4",
@@ -1115,8 +1054,7 @@
             "shooting": 32,
             "tackling": 87,
             "keeping": 8
-          },
-          "shirtNumber": 5
+          }
         },
         {
           "id": "atletico-torreon-del-3",
@@ -1132,8 +1070,7 @@
             "shooting": 76,
             "tackling": 65,
             "keeping": 6
-          },
-          "shirtNumber": 11
+          }
         }
       ]
     },
@@ -1166,8 +1103,7 @@
             "shooting": 42,
             "tackling": 71,
             "keeping": 4
-          },
-          "shirtNumber": 4
+          }
         },
         {
           "id": "union-alfil-def-4",
@@ -1183,8 +1119,7 @@
             "shooting": 37,
             "tackling": 79,
             "keeping": 7
-          },
-          "shirtNumber": 5
+          }
         },
         {
           "id": "union-alfil-del-3",
@@ -1200,8 +1135,7 @@
             "shooting": 80,
             "tackling": 39,
             "keeping": 6
-          },
-          "shirtNumber": 11
+          }
         }
       ]
     },
@@ -1234,8 +1168,7 @@
             "shooting": 35,
             "tackling": 67,
             "keeping": 7
-          },
-          "shirtNumber": 4
+          }
         },
         {
           "id": "deportivo-gambito-def-4",
@@ -1251,8 +1184,7 @@
             "shooting": 44,
             "tackling": 58,
             "keeping": 6
-          },
-          "shirtNumber": 5
+          }
         },
         {
           "id": "deportivo-gambito-del-3",
@@ -1268,8 +1200,7 @@
             "shooting": 83,
             "tackling": 22,
             "keeping": 5
-          },
-          "shirtNumber": 11
+          }
         }
       ]
     },
@@ -1302,8 +1233,7 @@
             "shooting": 35,
             "tackling": 79,
             "keeping": 7
-          },
-          "shirtNumber": 4
+          }
         },
         {
           "id": "peones-del-norte-def-4",
@@ -1319,8 +1249,7 @@
             "shooting": 28,
             "tackling": 84,
             "keeping": 6
-          },
-          "shirtNumber": 5
+          }
         },
         {
           "id": "peones-del-norte-del-3",
@@ -1336,8 +1265,7 @@
             "shooting": 74,
             "tackling": 41,
             "keeping": 5
-          },
-          "shirtNumber": 11
+          }
         }
       ]
     }
