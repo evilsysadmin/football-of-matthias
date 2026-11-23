@@ -239,9 +239,13 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	assert(packed != null)
 	var game = packed.instantiate()
 	game.match_team_size = 11
-	# Prevent automatic match updates at the earliest possible point.
-	# Entering the scene triggers _ready() and a full actor setup; the QA
-	# fixture, not the engine's incidental render pace, owns all game ticks.
+	# Godot can re-enable script callbacks while a new scene enters the
+	# tree, even after set_physics_process(false). Disable the ENTIRE
+	# fixture subtree before _ready() so the first match cannot advance
+	# 0.15 seconds while subsequent seeded replays advance zero.
+	# Direct bot calls to _physics_process(STEP) and player._process(STEP)
+	# still drive physical gameplay under the exact same 60 Hz input path.
+	game.process_mode = Node.PROCESS_MODE_DISABLED
 	game.set_process(false)
 	game.set_physics_process(false)
 	root.add_child(game)
@@ -273,7 +277,10 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	print("FOOTBALL_XI_REPLAY_WARMUP_CLOCK %.5f native_physics=%s fixed_start=%.5f" % [
 		warmup_clock, str(game.is_physics_processing()), game.match_seconds
 	])
-	assert(not game.is_physics_processing() and absf(game.match_seconds) < 0.001,
+	assert(absf(warmup_clock) < 0.001,
+		"An XI fixture must not simulate any hidden physics before its first measured bot tick")
+	assert(game.process_mode == Node.PROCESS_MODE_DISABLED
+		and not game.is_physics_processing() and absf(game.match_seconds) < 0.001,
 		"XI bot must own the complete replay clock after rendering warmup")
 	game._set_quick_difficulty(difficulty)
 	game.kickoff_active = false
