@@ -319,6 +319,58 @@ jobs:
             exit 1
           fi
           grep -q 'chess-football godot smoke: OK' "$log"
+      - name: XI · numbered shirts on real rear-facing 3D athletes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/chess-football-review"
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/xi-rear-dorsals.log"
+          set +e
+          timeout 75s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/xi_rear_shirt_numbers_visual.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          for mode in BROADCAST TACTICAL; do
+            file="$(sed -n "s/^FOOTBALL_XI_DORSALS_CAPTURE_${mode}=//p" "$log" | tail -1)"
+            detail="$(sed -n "s/^FOOTBALL_XI_DORSALS_DETAIL_${mode}=//p" "$log" | tail -1)"
+            if [[ -n "$file" && -s "$file" ]]; then
+              cp "$file" "$RUNNER_TEMP/chess-football-review/xi-rear-dorsals-${mode,,}.png"
+            fi
+            if [[ -n "$detail" && -s "$detail" ]]; then
+              cp "$detail" "$RUNNER_TEMP/chess-football-review/xi-rear-dorsals-detail-${mode,,}.png"
+            fi
+          done
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI identity dorsals/back shirt render failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_DORSALS_OK catalog=72 teams=2 live=22 unique_per_club=1 identity_bound=1 back_only=1 views=2 front_side_unpainted=1 atlas_immutable=1 authority_unchanged=1' "$log"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-rear-dorsals-broadcast.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-rear-dorsals-tactical.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-rear-dorsals-detail-broadcast.png"
+          test -s "$RUNNER_TEMP/chess-football-review/xi-rear-dorsals-detail-tactical.png"
+      - name: XI directional frame and grounded boots at both camera pitches
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-direction-ground.log"
+          set +e
+          timeout 45s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/xi_direction_ground_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          for kind in SOURCE RENDERED; do
+            probe="$(sed -n "s/^FOOTBALL_XI_DORSAL_EMPTY_${kind}=//p" "$log" | tail -1)"
+            if [[ -n "$probe" && -s "$probe" ]]; then
+              mkdir -p "$RUNNER_TEMP/chess-football-review"
+              cp "$probe" "$RUNNER_TEMP/chess-football-review/xi-dorsal-empty-${kind,,}.png"
+            fi
+          done
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::XI direction or boot-ground contact failed'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_DIRECTION_GROUND_OK clubs=2 views=4 cameras=2 boot_gap_px_lt_4' "$log"
       - name: Future 11v11 · 22 real actors move on full-size pitch
         shell: bash
         run: |
@@ -989,21 +1041,6 @@ jobs:
             exit 1
           fi
           grep -q 'FOOTBALL_XI_HUMAN_SUPPORT_OK two_outlets=true open_lane=true stable_roles=true real_movement=true loss_reset=true legacy_5v5=true cpu_unchanged=true' "$log"
-      - name: XI directional frame and grounded boots at both camera pitches
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
-          log="$RUNNER_TEMP/football-xi-direction-ground.log"
-          set +e
-          timeout 45s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/xi_direction_ground_smoke.gd 2>&1 | tee "$log"
-          status=${PIPESTATUS[0]}
-          set -e
-          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
-            echo '::error::XI direction or boot-ground contact failed'
-            exit 1
-          fi
-          grep -q 'FOOTBALL_XI_DIRECTION_GROUND_OK clubs=2 views=4 cameras=2 boot_gap_px_lt_4' "$log"
       - name: Staged R2 lateral-run parity and rollback smoke
         shell: bash
         run: |

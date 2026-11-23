@@ -4,6 +4,10 @@ extends RefCounted
 # (nine per club). This Godot-only optional 4-3-3 adds three NEW players
 # per club without presenting an unversioned manager roster migration.
 const ROSTER_PATH := "res://data/scouting_rosters_v1.json"
+# Separate Godot presentation extension: manager's canonical 54 profiles
+# remain byte-for-byte identical. Transfer-aware roster writes can later
+# migrate this identity-keyed property through an explicit contract.
+const SHIRT_NUMBERS_PATH := "res://data/shirt_numbers_v1.json"
 const QUICK_MATCH_CLUBS := ["fc-matthias", "real-enroque"]
 const FIVE_ROLES := ["POR", "DEF", "MED", "MED", "DEL"]
 const ELEVEN_ROLES := ["POR", "DEF", "DEF", "DEF", "DEF", "MED", "MED", "MED", "DEL", "DEL", "DEL"]
@@ -11,6 +15,23 @@ const ATTRIBUTES := ["pace", "stamina", "technique", "passing", "shooting", "tac
 
 static var _clubs: Dictionary = {}
 static var _eleven: Dictionary = {}
+static var _shirt_numbers: Dictionary = {}
+
+static func _load_shirt_numbers() -> Dictionary:
+	if not _shirt_numbers.is_empty():
+		return _shirt_numbers
+	var parsed: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(SHIRT_NUMBERS_PATH)
+	)
+	if not (parsed is Dictionary) or int(parsed.get("version", 0)) != 1:
+		push_error("Invalid Football identity shirt number catalog")
+		return {}
+	var numbers: Variant = parsed.get("numbersByPlayerId")
+	if not (numbers is Dictionary) or numbers.size() != 72:
+		push_error("Incomplete Football shirt number catalog")
+		return {}
+	_shirt_numbers = numbers
+	return _shirt_numbers
 
 static func _load_clubs() -> Dictionary:
 	if not _clubs.is_empty():
@@ -70,6 +91,18 @@ static func starter(team_id: int, squad_index: int, team_size: int = 5) -> Dicti
 		return {}
 	if String(player.get("role", "")) != String(expected_roles[squad_index]) or String(player.get("id", "")).is_empty():
 		return {}
+	# A shirt belongs to a roster identity, NEVER to the active formation
+	# slot. Future lineup reshuffles and transfers must carry/assign this
+	# explicit profile property, not regenerate squad_index + 1.
+	var number_lookup: Dictionary = _load_shirt_numbers()
+	var shirt_number: Variant = number_lookup.get(String(player.get("id", "")))
+	# JSON numeric scalars arrive as FLOAT in Godot even for integral
+	# number literals. Reject fractions/nonfinite values, not valid 1..99.
+	if typeof(shirt_number) not in [TYPE_INT, TYPE_FLOAT]:
+		return {}
+	var numbered: float = float(shirt_number)
+	if is_nan(numbered) or is_inf(numbered) or numbered < 1.0 or numbered > 99.0 or floorf(numbered) != numbered:
+		return {}
 	for attribute in ATTRIBUTES:
 		var value: Variant = stats.get(attribute)
 		if typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT:
@@ -77,4 +110,8 @@ static func starter(team_id: int, squad_index: int, team_size: int = 5) -> Dicti
 		var rating := float(value)
 		if is_nan(rating) or is_inf(rating) or rating < 1.0 or rating > 99.0 or floorf(rating) != rating:
 			return {}
-	return player
+	# Caller gets a resolved match profile without mutating shared source
+	# JSON, cached manager data or the snapshot's byte-integrity digest.
+	var resolved: Dictionary = player.duplicate()
+	resolved["shirtNumber"] = int(shirt_number)
+	return resolved

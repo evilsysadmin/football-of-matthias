@@ -170,6 +170,23 @@ var body_scale_cache: Dictionary = {}
 # Lighting is already disabled for billboards. The remaining brightness jump
 # comes from shadows baked differently into the authored view families.
 var tone_gain_cache: Dictionary = {}
+# Derived per-player rear-facing textures, cached on actual source frame ID
+# and physical roster number. Original local and signed R2 atlases remain
+# immutable. No extra per-player Label3D draw calls or text over faces.
+var rear_shirt_frame_cache: Dictionary = {}
+const REAR_SHIRT_FRAME_CACHE_LIMIT := 640
+const SHIRT_DIGITS := {
+	"0": "111101101101111",
+	"1": "010110010010111",
+	"2": "111001111100111",
+	"3": "111001111001111",
+	"4": "101101111001001",
+	"5": "111100111001111",
+	"6": "111100111101111",
+	"7": "111001010010010",
+	"8": "111101111101111",
+	"9": "111101111001111",
+}
 var ball_node: MeshInstance3D
 var ball_shadow: MeshInstance3D
 var keeper_catch_rigs: Dictionary = {}
@@ -2038,6 +2055,103 @@ static func xi_tactical_foot_anchor_offset(
 	return xi_rotated_foot_anchor_offset(view_camera, frame, pixel_size, scale_y, 0.0, true)
 
 
+# Paint dark ink into an IMAGE COPY of the current authenticated rear
+# raster frame. The digit pixels sit inside the visible white jersey torso
+# itself, so they move/scale with the runner and cannot float off the shirt.
+# Front/side/pass frames and all source atlas ImageTextures remain untouched.
+# This is presentation only; neither roster scoring nor ball physics reads it.
+func _xi_numbered_rear_frame(
+	player: Footballer, source: Texture2D, animation: StringName
+) -> Texture2D:
+	if source == null or player.shirt_number < 1 or player.shirt_number > 99:
+		return source
+	var name := String(animation)
+	if not (name.ends_with("_back") or name.ends_with("_back_diagonal")):
+		return source
+	var key := str(source.get_instance_id()) + ":" + str(player.shirt_number)
+	var cached: Texture2D = rear_shirt_frame_cache.get(key)
+	if cached != null:
+		return cached
+	var source_image: Image = source.get_image()
+	if source_image == null or source_image.is_empty():
+		return source
+	# Godot resource images can share CPU pixel storage with their source.
+	# Always perform an explicit deep copy before setting ANY jersey pixel:
+	# subsequent frame retrieval must still read the unchanged atlas pixels.
+	var image: Image = source_image.duplicate() as Image
+	if image.get_format() != Image.FORMAT_RGBA8:
+		image.convert(Image.FORMAT_RGBA8)
+	var used: Rect2i = image.get_used_rect()
+	if used.size.y < 28 or used.size.x < 20:
+		return source
+	var glyph_scale: int = clampi(roundi(float(used.size.y) / 46.0), 2, 4)
+	var digits := str(player.shirt_number)
+	var ink_width: int = digits.length() * 3 * glyph_scale + (digits.length() - 1) * glyph_scale
+	var initial_x: int = used.position.x + (used.size.x - ink_width) / 2
+	# Some running frames tilt the jersey within the image. Search a small
+	# torso-only region for a white, opaque backing before printing: never
+	# paint empty padding, hair, or skin by assuming one fixed anchor.
+	var best_score: int = -1
+	var x_left: int = initial_x
+	var y_top: int = used.position.y + roundi(float(used.size.y) * 0.33) - (5 * glyph_scale) / 2
+	for torso_fraction in [0.26, 0.30, 0.34, 0.38, 0.42, 0.46]:
+		for horizontal_shift in [-8, -4, 0, 4, 8]:
+			var candidate_x: int = initial_x + horizontal_shift
+			var candidate_y: int = used.position.y + roundi(
+				float(used.size.y) * torso_fraction
+			) - (5 * glyph_scale) / 2
+			var candidate_score: int = 0
+			for digit_index in range(digits.length()):
+				var sample_glyph: String = SHIRT_DIGITS.get(digits.substr(digit_index, 1), "")
+				for row in range(5):
+					for col in range(3):
+						if sample_glyph.substr(row * 3 + col, 1) != "1":
+							continue
+						var test_x: int = candidate_x + (digit_index * 4 + col) * glyph_scale + glyph_scale / 2
+						var test_y: int = candidate_y + row * glyph_scale + glyph_scale / 2
+						if test_x < 0 or test_x >= image.get_width() or test_y < 0 or test_y >= image.get_height():
+							continue
+						var sample: Color = image.get_pixel(test_x, test_y)
+						if sample.a >= 0.30:
+							candidate_score += 1
+							if minf(sample.r, minf(sample.g, sample.b)) >= 0.60:
+								candidate_score += 4
+			if candidate_score > best_score:
+				best_score = candidate_score
+				x_left = candidate_x
+				y_top = candidate_y
+	var painted_pixels := 0
+	var ink := Color(0.025, 0.070, 0.155, 1.0)
+	for index in range(digits.length()):
+		var glyph: String = SHIRT_DIGITS.get(digits.substr(index, 1), "")
+		if glyph.length() != 15:
+			continue
+		var digit_x: int = x_left + index * 4 * glyph_scale
+		for row in range(5):
+			for col in range(3):
+				if glyph.substr(row * 3 + col, 1) != "1":
+					continue
+				for sy in range(glyph_scale):
+					for sx in range(glyph_scale):
+						var x: int = digit_x + col * glyph_scale + sx
+						var y: int = y_top + row * glyph_scale + sy
+						if x < 0 or x >= image.get_width() or y < 0 or y >= image.get_height():
+							continue
+						var under: Color = image.get_pixel(x, y)
+						# Keep the original alpha: the digit is actual ink on
+						# a pre-existing torso pixel, not a new silhouette.
+						if under.a >= 0.30:
+							image.set_pixel(x, y, Color(ink.r, ink.g, ink.b, under.a))
+							painted_pixels += 1
+	if painted_pixels == 0:
+		return source
+	var result := ImageTexture.create_from_image(image)
+	if rear_shirt_frame_cache.size() >= REAR_SHIRT_FRAME_CACHE_LIMIT:
+		rear_shirt_frame_cache.clear()
+	rear_shirt_frame_cache[key] = result
+	return result
+
+
 func _xi_frame_texture(_player: Footballer, driver: AnimatedSprite3D) -> Texture2D:
 	var frames := driver.sprite_frames
 	if frames.has_animation(driver.animation):
@@ -2242,10 +2356,10 @@ func _build_player_proxies() -> void:
 			active_disc.visible = false
 			root.add_child(active_disc)
 
-			# Shared diegetic foot ring: during corners/throws show touch
-			# receivers, and during XI Space charge mark only the ACTUAL
-			# directional pass recipient. No extra pitch meshes or physics
-			# authority; stays hidden outside these explicit player decisions.
+			# Only during a playable human corner/throw: show which outfield
+			# teammates can receive a tap. This is passive 3D decoration, never
+			# a new input or match-state authority. Keep it separate from the
+			# existing amber controlled-player ring.
 			var receiver_disc := MeshInstance3D.new()
 			receiver_disc.name = "SetPieceReceiverDisc"
 			var receiver_mesh := TorusMesh.new()
@@ -2735,10 +2849,13 @@ func sync_presentation(delta: float, mode: String) -> void:
 			if xi_quad != null:
 				var panel: QuadMesh = xi_quad.mesh
 				var canvas: StandardMaterial3D = xi_quad.material_override
-				var current_frame: Texture2D = _xi_frame_texture(player, sprite)
+				var source_frame: Texture2D = _xi_frame_texture(player, sprite)
+				var current_frame: Texture2D = _xi_numbered_rear_frame(
+					player, source_frame, sprite.animation
+				)
 				if canvas.albedo_texture != current_frame:
 					canvas.albedo_texture = current_frame
-				var frame_size := Vector2(current_frame.get_width(), current_frame.get_height()) * sprite.pixel_size
+				var frame_size := Vector2(source_frame.get_width(), source_frame.get_height()) * sprite.pixel_size
 				if panel.size != frame_size:
 					panel.size = frame_size
 				var flip_u: bool = sprite.flip_h
@@ -2762,7 +2879,7 @@ func sync_presentation(delta: float, mode: String) -> void:
 				# frame bottom) pinned above the contact decal at every depth.
 				# The sprite driver stays hidden in XI; only this quad is offset.
 				var body_offset := xi_rotated_foot_anchor_offset(
-					camera, current_frame, sprite.pixel_size, sprite.scale.y,
+					camera, source_frame, sprite.pixel_size, sprite.scale.y,
 					sprite.rotation.z, tactical_billboard
 				)
 				var wanted_position := sprite.position + body_offset
