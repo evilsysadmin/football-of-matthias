@@ -116,6 +116,14 @@ func _initialize() -> void:
 					var numbered_pixels: PackedByteArray = material.albedo_texture.get_image().get_data()
 					var source_pixels: PackedByteArray = actual_frame.get_image().get_data()
 					if numbered_pixels == source_pixels:
+						var source_png: String = "user://xi-dorsal-empty-source.png"
+						var rendered_png: String = "user://xi-dorsal-empty-rendered.png"
+						assert(actual_frame.get_image().save_png(source_png) == OK)
+						assert(material.albedo_texture.get_image().save_png(rendered_png) == OK)
+						print("FOOTBALL_XI_DORSAL_EMPTY_SOURCE=" +
+							ProjectSettings.globalize_path(source_png))
+						print("FOOTBALL_XI_DORSAL_EMPTY_RENDERED=" +
+							ProjectSettings.globalize_path(rendered_png))
 						print("FOOTBALL_XI_DORSAL_EMPTY_PIXELS mode=%s team=%d shirt=%d animation=%s source=%d used=%s" % [
 							mode, team_id, player.shirt_number, String(sprite.animation),
 							actual_frame.get_instance_id(), str(actual_frame.get_image().get_used_rect())
