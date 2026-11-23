@@ -2106,6 +2106,30 @@ func _build_xi_quad_bodies() -> void:
 			quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			proxy.add_child(quad)
 			xi_raster_meshes[key] = quad
+			# The shirt number is a lightweight, unshaded 3D print placed ON
+			# the raster torso, not a floating player-name HUD. It follows
+			# that body's depth compensation and animation bob and is hidden
+			# in front/side views. Never rewrite approved/CDN atlas pixels.
+			# The visible glyph is owned by this player's persistent roster
+			# identity; substitutions and future lineup changes must not
+			# regenerate it from squad_index.
+			if player.shirt_number >= 1 and player.shirt_number <= 99:
+				var shirt_print := Label3D.new()
+				shirt_print.name = "RearShirtNumber"
+				shirt_print.text = str(player.shirt_number)
+				shirt_print.font_size = 30
+				shirt_print.pixel_size = 0.0075
+				shirt_print.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				shirt_print.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				shirt_print.modulate = Color(0.97, 0.97, 0.93)
+				shirt_print.outline_size = 3
+				shirt_print.outline_modulate = Color(0.035, 0.046, 0.063)
+				shirt_print.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+				shirt_print.shaded = false
+				shirt_print.no_depth_test = true
+				shirt_print.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				shirt_print.visible = false
+				proxy.add_child(shirt_print)
 			# One visible body per actor: use the bundled canonical raster even
 			# when optional R2 is offline. Keep the legacy sculpt hidden so
 			# switching R2 frames never exposes a second body or a mannequin.
@@ -2768,6 +2792,23 @@ func sync_presentation(delta: float, mode: String) -> void:
 					xi_quad.scale = sprite.scale
 				if canvas.albedo_color != sprite.modulate:
 					canvas.albedo_color = sprite.modulate
+				# Only print on ACTUAL back/back-diagonal raster views. Pass,
+				# contact, front and side animations must not grow a number
+				# floating off the player's chest or above the head.
+				var shirt_print := proxy.get_node_or_null("RearShirtNumber") as Label3D
+				if shirt_print != null:
+					var animation_name: String = String(sprite.animation)
+					shirt_print.visible = (
+						animation_name.ends_with("_back")
+						or animation_name.ends_with("_back_diagonal")
+					)
+					if shirt_print.visible:
+						# Track the moving/rotating raster torso in both
+						# broadcast and overhead lenses; never touch physics.
+						shirt_print.position = xi_quad.position + Vector3(
+							0.0, 0.23 * xi_quad.scale.y, 0.075
+						)
+						shirt_print.scale = xi_quad.scale
 			# The existing secondary motion includes deliberate running bob,
 			# which stays independent from depth and untouched here.
 			var is_controlled: bool = player == match_node.controlled
