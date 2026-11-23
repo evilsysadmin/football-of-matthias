@@ -182,6 +182,37 @@ func _initialize() -> void:
 		"Easy keeps its legacy timing")
 	print("FOOTBALL_XI_HARD_TACKLE_FIRST_TOUCH_READ_OK hard=0.22 expert=0.12")
 
+	# A truly committed Hard presser may lunge at a visible E touch
+	# that is just outside the real hitbox. The same ball and collisions
+	# remain authoritative: a missed launch pays ordinary recovery,
+	# while Normal, cover and ordinary runs never gain the fake contact.
+	_reset_duel(game, carrier, presser, "hard", "far")
+	carrier.global_position = XI.get_center()
+	presser.global_position = carrier.global_position + Vector2(75.0, 46.0)
+	presser.velocity = Vector2.LEFT * presser.base_speed
+	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
+	carrier.dribble_burst_seconds = 0.06
+	game.ball.global_position = carrier.global_position + Vector2(36.0, 4.0)
+	game.ball.possession_seconds = 0.40
+	var miss_hitbox: Dictionary = game._tackle_hitbox(
+		presser, game._tackle_contact_target(carrier)
+	)
+	assert(not bool(miss_hitbox["inside"]) and not bool(miss_hitbox["contact"]),
+		"Near-miss fixture must never overlap the actual tackle hitbox")
+	assert(game._ai_xi_tackle_commit_ready(presser, carrier, false),
+		"Hard primary must be allowed to physically commit a readable near miss")
+	assert(not game._ai_xi_tackle_commit_ready(presser, carrier, true),
+		"The second defender must keep covering without speculative tackles")
+	game._set_quick_difficulty("expert")
+	assert(not game._ai_xi_tackle_commit_ready(presser, carrier, false),
+		"Expert retains the original clean-hitbox commitment contract")
+	game._set_quick_difficulty("hard")
+	assert(not game._try_tackle(presser),
+		"An anticipatory launch outside the hitbox must not award fake contact")
+	assert(presser.tackle_active() and game.ball.carrier == carrier,
+		"Hard presser must spend a real tackle with no free ball theft")
+	print("FOOTBALL_XI_HARD_LUNGE_NEARMISS_OK physical=1 no_ghost_contact=1")
+
 	# E still needs two visible plants, but after the second plant the human
 	# can drive the exit. Exercise actual Footballer motion rather than
 	# asserting a coefficient in isolation. No extra tackle protection.
