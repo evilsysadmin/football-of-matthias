@@ -359,6 +359,13 @@ jobs:
           timeout 45s "$godot" --headless --quit-after 450 --path games/chess-football-godot --script res://tests/xi_direction_ground_smoke.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
+          for kind in SOURCE RENDERED; do
+            probe="$(sed -n "s/^FOOTBALL_XI_DORSAL_EMPTY_${kind}=//p" "$log" | tail -1)"
+            if [[ -n "$probe" && -s "$probe" ]]; then
+              mkdir -p "$RUNNER_TEMP/chess-football-review"
+              cp "$probe" "$RUNNER_TEMP/chess-football-review/xi-dorsal-empty-${kind,,}.png"
+            fi
+          done
           if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
             echo '::error::XI direction or boot-ground contact failed'
             exit 1
