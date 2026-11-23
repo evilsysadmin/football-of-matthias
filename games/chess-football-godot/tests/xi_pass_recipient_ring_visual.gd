@@ -32,6 +32,7 @@ func _initialize() -> void:
 	game.kickoff_active = false
 	game.goal_restart_active = false
 	game.set_piece_active = false
+	game.last_goal_text = ""
 	var carrier: Footballer = game.teams[0][10]
 	var target: Footballer = game.teams[0][6]
 	var decoy: Footballer = game.teams[0][5]
@@ -56,6 +57,9 @@ func _initialize() -> void:
 	assert(game._xi_pass_charge_receiver() == target)
 	assert(game._xi_pass_charge_label().contains(target.scouting_player_name.left(18)))
 	for mode in ["broadcast", "tactical"]:
+		game.camera_mode = mode
+		game._refresh_hud()
+		stage._sync_camera(1.0, mode)
 		stage.sync_presentation(0.0, mode)
 		assert(_ring(stage, target).visible)
 		assert(not _ring(stage, carrier).visible)
@@ -69,6 +73,14 @@ func _initialize() -> void:
 		assert(image.save_png(path) == OK)
 		print("FOOTBALL_XI_PASS_RING_CAPTURE_" + mode.to_upper() + "=" +
 			ProjectSettings.globalize_path(path))
+		var center_px: Vector2 = stage.screen_position_for_player(target)
+		var left := clampi(int(center_px.x) - 240, 0, image.get_width() - 480)
+		var top := clampi(int(center_px.y) - 160, 0, image.get_height() - 320)
+		var crop: Image = image.get_region(Rect2i(left, top, 480, 320))
+		var cropped_path: String = "user://xi-pass-recipient-detail-" + mode + ".png"
+		assert(crop.save_png(cropped_path) == OK)
+		print("FOOTBALL_XI_PASS_RING_DETAIL_" + mode.to_upper() + "=" +
+			ProjectSettings.globalize_path(cropped_path))
 
 	# Rotating the real pass intent outside the target cone must hide
 	# the same ring as the caption; no ghost teammate is highlighted.
