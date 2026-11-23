@@ -152,6 +152,7 @@ jobs:
           grep -q 'FOOTBALL_XI_ATTACK_REGATE_INPUT_OK' "$log"
           python3 - "$log" "$RUNNER_TEMP/football-xi-attacking-e.json" <<'PY'
           import json
+          import os
           import sys
           from pathlib import Path
 
@@ -198,6 +199,26 @@ jobs:
                           0 <= a['repeat_loss_frame'] < 48)
                      for a in audit)
           outcomes = ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
+          # The first Hard/feint/late win needs its own E and no-E replay,
+          # not merely the legacy Hard/cut/early drift audit.
+          earned = report['earned_e_replay_audit']
+          assert [(a['seed'], a['variant'], a['difficulty'],
+                   a['opening'], a['approach']) for a in earned] == [
+              (67123, 'e', 'hard', 'feint', 'late'),
+              (67123, 'run_without_e', 'hard', 'feint', 'late'),
+          ]
+          assert all(
+              a['original_outcome_1_2s'] in outcomes
+              and a['repeated_outcome_1_2s'] in outcomes
+              and a['retention_reproducible'] == (
+                  (a['original_outcome_1_2s'] == 'retained') ==
+                  (a['repeated_outcome_1_2s'] == 'retained')
+              )
+              and -1 <= a['original_first_loss_1_2s'] < 72
+              and -1 <= a['repeated_first_loss_1_2s'] < 72
+              and a['first_cpu_tackles'] >= 0 and a['repeat_cpu_tackles'] >= 0
+              for a in earned
+          )
           assert all(
               p['e_outcome'] in outcomes and p['run_outcome'] in outcomes
               and p['e_outcome_1_2s'] in outcomes and p['run_outcome_1_2s'] in outcomes
@@ -242,7 +263,48 @@ jobs:
                   for t in tacklers
               )
           Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
-          print('FOOTBALL_XI_ATTACK_REGATE_ARTIFACT_OK cases=24 pairs=12 seeded_replays=2 real_input=1 early_middle_late=1')
+          # A report of 12 outcomes is not a claim of a 12-game win rate.
+          # Surface observed control pairs and the independent earned-E
+          # replay, so a single lucky result is not mistaken for progress.
+          if os.environ.get('GITHUB_STEP_SUMMARY'):
+              pairs = report['pairs']
+              earned = report['earned_e_replay_audit']
+              e_08 = sum(p['e_outcome'] == 'retained' for p in pairs)
+              no_e_08 = sum(p['run_outcome'] == 'retained' for p in pairs)
+              e_12 = sum(p['e_outcome_1_2s'] == 'retained' for p in pairs)
+              no_e_12 = sum(p['run_outcome_1_2s'] == 'retained' for p in pairs)
+              earned_pairs = sum(
+                  p['e_outcome_1_2s'] == 'retained'
+                  and p['run_outcome_1_2s'] != 'retained'
+                  for p in pairs
+              )
+              repeat_earned = (
+                  earned[0]['original_outcome_1_2s'] == 'retained'
+                  and earned[0]['repeated_outcome_1_2s'] == 'retained'
+                  and earned[1]['original_outcome_1_2s'] != 'retained'
+                  and earned[1]['repeated_outcome_1_2s'] != 'retained'
+              )
+              with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
+                  summary.write(
+                      '### XI regate E · 22 jugadores / pares reales a 60 Hz\n'
+                      f'- Posesión del portador a 0,8 s: E **{e_08}/12**, '
+                      f'correr sin E **{no_e_08}/12**\n'
+                      f'- Posesión del portador a 1,2 s: E **{e_12}/12**, '
+                      f'correr sin E **{no_e_12}/12**\n'
+                      f'- Pares donde E retiene y control no: **{earned_pairs}/12**\n'
+                      f'- Hard/feint/late, resultado E original/replay: '
+                      f'**{earned[0]["original_outcome_1_2s"]} / '
+                      f'{earned[0]["repeated_outcome_1_2s"]}**\n'
+                      f'- Hard/feint/late, resultado control original/replay: '
+                      f'**{earned[1]["original_outcome_1_2s"]} / '
+                      f'{earned[1]["repeated_outcome_1_2s"]}**\n'
+                      f'- Victoria reproducida del caso auditado: '
+                      f'**{"sí" if repeat_earned else "no"}**\n\n'
+                      '_Son 12 escenarios controlados, no una tasa de éxito '
+                      'de jugadores reales. Consultar JSON para pérdidas '
+                      'por fotograma y divergencias de replay.\n'
+                  )
+          print('FOOTBALL_XI_ATTACK_REGATE_ARTIFACT_OK cases=24 pairs=12 seeded_replays=4 real_input=1 early_middle_late=1')
           PY
       - name: Upload XI open-play attacking E bot telemetry
         if: always()
