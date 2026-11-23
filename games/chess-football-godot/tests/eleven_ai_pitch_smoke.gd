@@ -1458,6 +1458,94 @@ func _initialize() -> void:
 	game.match_team_size = 11
 	print("FOOTBALL_XI_FALLEN_DEFENSE_OK human=1 cpu=1 old_cache=cleared healthy_presser=1 controlled_down=handoff q_grace=kept five=unchanged")
 
+
+	# Real XI defensive shape: the TWO closest teammates retain pressing
+	# roles, while a local third man narrows a dangerous lane without being
+	# recruited into an instant tackle or abandoning the whole formation.
+	var compact_owner: Footballer = game.teams[1][4]
+	var compact_screen: Footballer = game.teams[0][5]
+	var compact_primary: Footballer = game.teams[0][2]
+	var compact_cover: Footballer = game.teams[0][3]
+	var compact_control: Footballer = game.teams[0][10]
+	var compact_centre: Vector2 = game.match_pitch.get_center()
+	compact_owner.global_position = compact_centre + Vector2(-180.0, 0.0)
+	compact_owner.velocity = Vector2.ZERO
+	game.ball.attach_to(compact_owner)
+	for compact_rival: Footballer in game.teams[1]:
+		if compact_rival != compact_owner:
+			compact_rival.global_position = compact_centre + Vector2(1150.0, 780.0)
+	for compact_teammate: Footballer in game.teams[0]:
+		if compact_teammate.role != "keeper":
+			compact_teammate.global_position = compact_centre + Vector2(-1100.0, 780.0)
+			compact_teammate.xi_collision_down_seconds = 0.0
+	compact_primary.global_position = compact_owner.global_position + Vector2(-72.0, 0.0)
+	compact_cover.global_position = compact_owner.global_position + Vector2(-125.0, 40.0)
+	compact_screen.global_position = compact_owner.global_position + Vector2(-430.0, 160.0)
+	compact_screen.home_position = compact_owner.global_position + Vector2(-400.0, 160.0)
+	game._select_player(compact_control)
+	assert(game._ai_primary_presser(0) == compact_primary)
+	assert(game._ai_secondary_presser(0, compact_primary) == compact_cover)
+	var compact_legacy: Vector2 = ChessFootballMath.clamp_to_pitch(
+		compact_screen.home_position.lerp(
+			compact_owner.global_position, game.AI_DEFENSIVE_SHIFT_RATIO
+		), XI
+	)
+	var compact_target: Vector2 = game._ai_xi_human_compact_target(
+		compact_screen, compact_owner
+	)
+	assert(compact_target.distance_to(compact_owner.global_position) <
+		compact_legacy.distance_to(compact_owner.global_position) - 45.0,
+		"An available XI midfielder must actually tighten a dangerous passing lane")
+	assert(compact_target.distance_to(compact_owner.global_position) > 210.0,
+		"Local shape support is NOT another instant presser or automatic tackle")
+	game.ai_next_decision[int(compact_owner.get_instance_id())] = game.match_seconds + 100.0
+	game._update_ai(0.0)
+	assert(compact_screen.ai_target.distance_to(compact_target) < 0.1,
+		"Real XI human-side AI must use its bounded midfield compactness target")
+	# Match movement is untouched: normal AI acceleration, stamina and
+	# existing tackle reach apply. A ball held on the far opponent half
+	# must NOT pull this midfielder out of their ordinary 4-3-3 lane.
+	compact_owner.global_position = compact_centre + Vector2(490.0, 0.0)
+	var safe_target: Vector2 = game._ai_xi_human_compact_target(
+		compact_screen, compact_owner
+	)
+	var safe_legacy: Vector2 = ChessFootballMath.clamp_to_pitch(
+		compact_screen.home_position.lerp(
+			compact_owner.global_position, game.AI_DEFENSIVE_SHIFT_RATIO
+		), XI
+	)
+	assert(safe_target.is_equal_approx(safe_legacy),
+		"Do not swarm a harmless CPU possession in the opposite half")
+	# Likewise the legacy 5v5 behavior must be exactly the original shift.
+	compact_owner.global_position = compact_centre + Vector2(-180.0, 0.0)
+	game.match_team_size = 5
+	assert(game._ai_xi_human_compact_target(compact_screen, compact_owner).is_equal_approx(
+		compact_legacy
+	), "Legacy 5v5 support shape must remain identical")
+	game.match_team_size = 11
+	# Move the ball across midfield at 60 Hz with a fixed home lane. The
+	# danger blend must fade continuously rather than snap at an invisible
+	# half-pitch threshold, or create a target teleport.
+	var previous_compact_target: Vector2 = Vector2.ZERO
+	var max_compact_target_step: float = 0.0
+	for compact_frame in range(61):
+		compact_owner.global_position = compact_centre + Vector2(
+			-150.0 + float(compact_frame) * 7.5, 0.0
+		)
+		var smooth_target: Vector2 = game._ai_xi_human_compact_target(
+			compact_screen, compact_owner
+		)
+		assert(XI.has_point(smooth_target))
+		if compact_frame > 0:
+			max_compact_target_step = maxf(
+				max_compact_target_step,
+				smooth_target.distance_to(previous_compact_target)
+			)
+		previous_compact_target = smooth_target
+	assert(max_compact_target_step < 14.0,
+		"XI compactness must be smooth crossing midfield, not a tactical snap")
+	print("FOOTBALL_XI_LOCAL_COMPACT_OK real_ai=1 first_two=unchanged threat=closer far_half=hold 5v5=unchanged max_target_step=%.2f" % max_compact_target_step)
+
 	print("FOOTBALL_XI_INTERCEPT_CONTINUITY_OK approach_60hz=45 aim_jump_lt_4=1 tackle_body=1 startup_fade=1 far_lead=1 5v5=off")
 	print("FOOTBALL_XI_HUMAN_INTERCEPT_OK observed=1 diagonal=1 bounded=1 cut_reactive=1 close_tackle=body loose=off 5v5=off")
 	print("FOOTBALL_XI_HUMAN_DEFENSE_OK close_press=1 cover=1 auto_handoff=1 live_chase_60hz=1 e_hitbox_contact=1 tackle_ready_only=1 manual_override=1 owner_transfer=stop no_flicker=1 manual_q=1 fallen=off 5v5=off")

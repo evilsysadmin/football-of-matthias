@@ -15,6 +15,10 @@ const TICKS := 1440
 # Only contiguous live possession by the SAME CPU actor counts as an
 # exposed defensive gap. Brief passes, set pieces and loose balls split it.
 const PRESSURE_GAP_DISTANCE := 240.0
+# The XI carrier's field half matters: a deep opponent-half possession
+# legitimately lets the human 4-3-3 keep its shape. A dangerous lane near
+# midfield or OUR goal must be reported separately, not conflated with it.
+const DANGER_ZONE_EDGE_X_OFFSET := 260.0
 const SCENARIOS := [
 	{"seed": 65113, "difficulty": "normal"},
 	{"seed": 65117, "difficulty": "hard"},
@@ -39,6 +43,8 @@ func _initialize() -> void:
 		"manual_q_effective", "automatic_reassignments", "tackles_launched",
 		"shot_inputs", "shot_releases", "strict_gap_frames_240",
 		"pressure_gap_episodes", "score", "physics_checkpoints",
+		"danger_zone_cpu_possession_frames", "danger_zone_gap_frames_240",
+		"far_zone_gap_frames_240", "max_danger_zone_gap_streak",
 	]
 	var replay_mismatches: Array[String] = []
 	for field in replay_fields:
@@ -123,6 +129,13 @@ func _initialize() -> void:
 			"Sum every consecutive same-carrier pressure gap exactly once")
 		assert(int(run["strict_gap_frames_240"]) <= int(run["defensive_samples"]),
 			"Every strict pressure gap must be part of observed live CPU possession")
+		assert(int(run["danger_zone_gap_frames_240"]) + int(run["far_zone_gap_frames_240"]) ==
+			int(run["strict_gap_frames_240"]),
+			"Classify every real gap frame into the correct field zone exactly once")
+		assert(int(run["danger_zone_gap_frames_240"]) <= int(run["danger_zone_cpu_possession_frames"]),
+			"Threat-zone gaps cannot exceed real CPU possession in that zone")
+		assert(int(run["max_danger_zone_gap_streak"]) <= int(run["danger_zone_gap_frames_240"]),
+			"Danger streaks must describe observed physical ball ownership")
 		assert(observed_max == int(run["max_pressure_gap_frames"]),
 			"Reported longest defensive gap must match measured episodes")
 		assert(int(run["control_change_frames"]) == run["control_change_timeline"].size(),
@@ -256,6 +269,11 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	var within_120_frames := 0
 	var unattended_240_frames := 0
 	var strict_gap_frames_240 := 0
+	var danger_zone_cpu_possession_frames := 0
+	var danger_zone_gap_frames_240 := 0
+	var far_zone_gap_frames_240 := 0
+	var danger_zone_gap_streak := 0
+	var max_danger_zone_gap_streak := 0
 	var pressure_gap_episodes: Array[Dictionary] = []
 	var active_pressure_gap: Dictionary = {}
 	var auto_reassignments := 0
@@ -448,6 +466,29 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 					nearest_eligible_distance = separation
 					nearest_eligible = defender
 			assert(nearest_eligible != null)
+		# Do not label responsible midfield shape as passive defending.
+		# Measure continuous, physically uncontrolled pressure separately
+		# when the CPU carrier reaches a genuine human-side threat lane.
+		if same_live_cpu_carrier:
+			var dangerous_position: bool = (
+				carrier.global_position.x <= XI.get_center().x + DANGER_ZONE_EDGE_X_OFFSET
+			)
+			if dangerous_position:
+				danger_zone_cpu_possession_frames += 1
+				if nearest_eligible_distance > PRESSURE_GAP_DISTANCE:
+					danger_zone_gap_frames_240 += 1
+					danger_zone_gap_streak += 1
+					max_danger_zone_gap_streak = maxi(
+						max_danger_zone_gap_streak, danger_zone_gap_streak
+					)
+				else:
+					danger_zone_gap_streak = 0
+			else:
+				danger_zone_gap_streak = 0
+				if nearest_eligible_distance > PRESSURE_GAP_DISTANCE:
+					far_zone_gap_frames_240 += 1
+		else:
+			danger_zone_gap_streak = 0
 		if not active_pressure_gap.is_empty():
 			var original_carrier: Footballer = active_pressure_gap["carrier"]
 			if not same_live_cpu_carrier or carrier != original_carrier or nearest_eligible_distance <= PRESSURE_GAP_DISTANCE:
@@ -540,6 +581,10 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		"close_pressure_frames_120": within_120_frames,
 		"unattended_frames_240": unattended_240_frames,
 		"strict_gap_frames_240": strict_gap_frames_240,
+		"danger_zone_cpu_possession_frames": danger_zone_cpu_possession_frames,
+		"danger_zone_gap_frames_240": danger_zone_gap_frames_240,
+		"far_zone_gap_frames_240": far_zone_gap_frames_240,
+		"max_danger_zone_gap_streak": max_danger_zone_gap_streak,
 		"max_pressure_gap_frames": max_pressure_gap_frames,
 		"pressure_gap_episodes": pressure_gap_episodes,
 		"min_defender_distance": snappedf(min_defender_distance, 0.1) if defending_frames > 0 else -1.0,

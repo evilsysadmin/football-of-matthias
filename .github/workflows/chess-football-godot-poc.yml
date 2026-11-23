@@ -417,6 +417,7 @@ jobs:
           fi
           grep -q 'FOOTBALL_XI_AI_OK' "$log"
           grep -q 'FOOTBALL_XI_FALLEN_DEFENSE_OK human=1 cpu=1 old_cache=cleared healthy_presser=1 controlled_down=handoff q_grace=kept five=unchanged' "$log"
+          grep -q 'FOOTBALL_XI_LOCAL_COMPACT_OK real_ai=1 first_two=unchanged threat=closer far_half=hold 5v5=unchanged' "$log"
       - name: XI · measured defensive duels (unguarded vs contain)
         shell: bash
         run: |
