@@ -355,6 +355,8 @@ jobs:
           outcomes = ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
           actual_e = 0
           paired_wins = []
+          trigger_drifts = []
+          matched_at_trigger = 0
           for i in range(0, len(rows), 2):
               e, control = rows[i:i+2]
               assert e['variant'] == 'e' and control['variant'] == 'run_without_e'
@@ -372,10 +374,17 @@ jobs:
               assert -1 <= control['first_loss_after_trigger'] < 72
               assert e['cpu_tackle_attempts'] >= 0
               assert control['cpu_tackle_attempts'] >= 0
-              assert abs(e['rival_distance_at_trigger'] -
-                         control['rival_distance_at_trigger']) < 1.0
+              assert abs(e['rival_distance_at_start'] -
+                         control['rival_distance_at_start']) < 0.1
+              drift = abs(e['rival_distance_at_trigger'] -
+                          control['rival_distance_at_trigger'])
+              trigger_drifts.append(round(drift, 1))
+              matched_at_trigger += int(drift < 1.0)
               actual_e += int(e['e_executed'])
-              if (e['e_executed'] and
+              # Do not count an E-only victory as counterfactual proof
+              # if the supposedly matched pair already drifted in the
+              # whole XI simulation before E was pressed.
+              if (drift < 1.0 and e['e_executed'] and
                       e['outcome_1_2s_after_trigger'] == 'retained' and
                       control['outcome_1_2s_after_trigger'] != 'retained'):
                   paired_wins.append({
@@ -385,6 +394,8 @@ jobs:
           assert actual_e >= 12, 'E sweep must actually exercise pressured E'
           assert sum(x['cpu_tackle_attempts'] for x in rows) > 0
           report['accepted_e_inputs'] = actual_e
+          report['trigger_pair_drift_units'] = trigger_drifts
+          report['matched_at_trigger_under_1_unit'] = matched_at_trigger
           report['physically_earned_pairs'] = paired_wins
           Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
           if os.environ.get('GITHUB_STEP_SUMMARY'):
@@ -397,9 +408,12 @@ jobs:
                   summary.write(
                       '### XI E · Timing de entrada / 22 futbolistas\n'
                       f'- E ejecutados físicamente: **{actual_e}/24**\n'
+                      f'- Pares todavía equivalentes al pulsar E (<1 unidad): '
+                      f'**{matched_at_trigger}/24**; máxima deriva '
+                      f'**{max(trigger_drifts):.1f} unidades**\n'
                       f'- Retenciones E 1,2s tras trigger: **{kept}/24**\n'
                       f'- Retenciones control sin E: **{controls}/24**\n'
-                      f'- Parejas donde E mejora control: **{paired}/24**\n'
+                      f'- Parejas comparables donde E mejora control: **{paired}/24**\n'
                       '- Escenarios Hard: t=0,8,16 frames, distancias 148/185, '
                       'ambas bandas, cut y feint; no son tasas de éxito humano.\n'
                   )
