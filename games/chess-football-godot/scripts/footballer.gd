@@ -260,9 +260,14 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		# across the line before a bounded, steerable exit. No teleport.
 		wanted_direction = _xi_cut_motion_direction()
 	if xi_feint_exit > 0.0 and direction.length_squared() > 0.04:
-		wanted_direction = dribble_direction.lerp(
-			direction.normalized(), xi_feint_exit * 0.80
-		).normalized()
+		# Once the planted foot has committed, the human explicitly picks
+		# the exit lane. Turn at most 90 degrees over the remaining action:
+		# no forced auto-running lane, teleport, extra speed or tackle shield.
+		var feint_turn: float = clampf(
+			dribble_direction.angle_to(direction.normalized()),
+			-deg_to_rad(90.0), deg_to_rad(90.0)
+		)
+		wanted_direction = dribble_direction.rotated(feint_turn * xi_feint_exit)
 	elif xi_cut_exit > 0.0 and direction.length_squared() > 0.04:
 		# The cut sells its planted foot first; then the human may guide the
 		# exit by at most 45 degrees. No U-turn, speed bonus or tackle immunity.
@@ -566,7 +571,7 @@ func _xi_feint_exit_ratio() -> float:
 		dribble_burst_seconds / maxf(dribble_duration_seconds, 0.001),
 		0.0, 1.0
 	)
-	return smoothstep(0.55, 0.92, progress)
+	return smoothstep(0.40, 0.86, progress)
 
 
 # Three genuine physical beats in XI: a brief running-foot plant, a
