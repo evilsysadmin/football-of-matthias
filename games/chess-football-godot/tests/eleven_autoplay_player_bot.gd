@@ -240,15 +240,21 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	var game = packed.instantiate()
 	game.match_team_size = 11
 	root.add_child(game)
-	await process_frame
-	await process_frame
+	# Disable live match and player timers IMMEDIATELY on insertion, BEFORE
+	# yielding to any render/physics frame. The previous two warmup frames
+	# sometimes advanced match_seconds by different amounts across runs,
+	# despite an identical seeded game. That leaked into the Q timeline's
+	# reported match clock even after physical states matched exactly.
 	game.set_process(false)
 	game.set_physics_process(false)
-	# The player clocks are advanced by the simulated match step, not by
-	# how quickly the CI host renders an otherwise headless frame.
+	# These timers are advanced explicitly by each bot simulation step.
 	for team in game.teams:
 		for player: Footballer in team:
 			player.set_process(false)
+	await process_frame
+	await process_frame
+	assert(absf(game.match_seconds) < 0.001,
+		"Autoplay setup must not advance live match clock during render warmup")
 	game._set_quick_difficulty(difficulty)
 	game.kickoff_active = false
 	game.goal_restart_active = false
