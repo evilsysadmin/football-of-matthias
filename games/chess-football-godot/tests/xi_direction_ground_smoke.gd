@@ -99,7 +99,24 @@ func _initialize() -> void:
 				assert(material.texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST)
 				assert(material.alpha_scissor_threshold < 0.05)
 				var actual_frame: Texture2D = stage._xi_frame_texture(player, sprite)
-				assert(actual_frame != null and material.albedo_texture == actual_frame)
+				assert(actual_frame != null)
+				# The identity-owned jersey is the ONLY deliberate exception
+				# to exact source texture identity. Rear-facing frames use
+				# a rendered COPY, with same bounds/boots/alpha silhouette;
+				# every front, side and non-rear action remains untouched.
+				var rear_ink: bool = (
+					String(sprite.animation).ends_with("_back")
+					or String(sprite.animation).ends_with("_back_diagonal")
+				)
+				if rear_ink and player.shirt_number > 0:
+					assert(material.albedo_texture != actual_frame)
+					assert(material.albedo_texture.get_size() == actual_frame.get_size())
+					assert(material.albedo_texture.get_image().get_used_rect() ==
+						actual_frame.get_image().get_used_rect())
+					assert(material.albedo_texture.get_image().get_data() !=
+						actual_frame.get_image().get_data())
+				else:
+					assert(material.albedo_texture == actual_frame)
 				assert(quad.scale == sprite.scale)
 				var frame_foot := ChessFootballSpriteBank.frame_bottom(actual_frame)
 				var half_height := float(actual_frame.get_height()) * 0.5
