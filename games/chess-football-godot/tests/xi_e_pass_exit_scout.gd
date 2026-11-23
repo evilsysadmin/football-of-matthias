@@ -223,6 +223,37 @@ func _initialize() -> void:
 					if rows.size() % 12 == 0:
 						print("FOOTBALL_XI_E_PASS_PROGRESS arms=%d/48" % rows.size())
 	assert(rows.size() == 48)
+	# The first candidate E-only completion is feint/148/upper/Space at t=20.
+	# Re-run this EXACT fixture twice in addition to the original pair.
+	# Report discrepancies instead of manufacturing an earned advantage
+	# from one seeded run (the wider XI simulation can drift across scenes).
+	var candidate: Dictionary = {
+		"seed": 69219, "mode": "feint", "distance": 148.0,
+		"side": -1.0, "pass_frame": 20,
+	}
+	var original_e: Dictionary = {}
+	var original_control: Dictionary = {}
+	for index in range(0, rows.size(), 2):
+		var e: Dictionary = rows[index]
+		if (
+			e["mode"] == candidate["mode"]
+			and e["distance"] == candidate["distance"]
+			and e["side"] == "upper"
+			and e["pass_start_frame"] == candidate["pass_frame"]
+		):
+			original_e = e
+			original_control = rows[index + 1]
+	assert(not original_e.is_empty() and not original_control.is_empty())
+	var candidate_replays: Array[Dictionary] = []
+	for iteration in range(2):
+		var repeated_e: Dictionary = await _play(candidate, true)
+		var repeated_control: Dictionary = await _play(candidate, false)
+		candidate_replays.append({
+			"iteration": iteration + 1,
+			"e": repeated_e,
+			"run_without_e": repeated_control,
+		})
+	assert(candidate_replays.size() == 2)
 	print("FOOTBALL_XI_E_PASS_SCOUT " + JSON.stringify({
 		"kind": "paired_real_xi_22_player_e_or_run_then_actual_space_pass_not_human_win_rate",
 		"arms": rows.size(),
@@ -231,6 +262,8 @@ func _initialize() -> void:
 		"charge_frames": CHARGE_FRAMES,
 		"simulation_frames": FRAMES,
 		"rows": rows,
+		"candidate_original": {"e": original_e, "run_without_e": original_control},
+		"candidate_replays": candidate_replays,
 	}))
 	print("FOOTBALL_XI_E_PASS_SCOUT_OK pairs=24 arms=48 real_space=true")
 	quit(0)
