@@ -2072,9 +2072,13 @@ func _xi_numbered_rear_frame(
 	var cached: Texture2D = rear_shirt_frame_cache.get(key)
 	if cached != null:
 		return cached
-	var image: Image = source.get_image()
-	if image == null or image.is_empty():
+	var source_image: Image = source.get_image()
+	if source_image == null or source_image.is_empty():
 		return source
+	# Godot resource images can share CPU pixel storage with their source.
+	# Always perform an explicit deep copy before setting ANY jersey pixel:
+	# subsequent frame retrieval must still read the unchanged atlas pixels.
+	var image: Image = source_image.duplicate() as Image
 	if image.get_format() != Image.FORMAT_RGBA8:
 		image.convert(Image.FORMAT_RGBA8)
 	var used: Rect2i = image.get_used_rect()
