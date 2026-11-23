@@ -3627,10 +3627,47 @@ func _ai_xi_tackle_commit_ready(
 	):
 		return false
 	var hitbox: Dictionary = _tackle_hitbox(tackler, _tackle_contact_target(victim))
-	return (
+	if (
 		bool(hitbox.get("inside", false))
 		and not bool(hitbox.get("foul", false))
 		and (not is_cover or bool(hitbox.get("clean", false)))
+	):
+		return true
+	return _ai_xi_hard_anticipatory_lunge(tackler, victim, is_cover, hitbox)
+
+
+# A Hard primary presser may commit an early real-foot lunge when a readable
+# XI E touch opens a narrow sidestep. His velocity must point TOWARDS the
+# actual ball, the contact is still just outside the legal hitbox, and the
+# approach itself stays inside the original 94-unit tackle attempt radius.
+# Existing start_tackle() locks the launch heading and pays full recovery;
+# the ball can only be won by ordinary subsequent physical contact.
+# The cover, Expert/Normal/Easy, keeper, F and standard 5v5 are unchanged.
+func _ai_xi_hard_anticipatory_lunge(
+	tackler: Footballer, victim: Footballer, is_cover: bool, hitbox: Dictionary
+) -> bool:
+	if (
+		match_team_size != 11 or quick_difficulty != "hard" or is_cover
+		or tackler.team_id != 1 or victim.team_id != 0
+		or ball.carrier != victim or victim.dribble_mode not in ["cut", "feint"]
+		or bool(hitbox.get("foul", false)) or not tackler.can_tackle()
+		or tackler.velocity.length() < 125.0
+		or not (
+			victim.dribble_active()
+			or victim.xi_cut_exit_run_seconds > 0.0
+			or victim.xi_feint_exit_run_seconds > 0.0
+		)
+		or victim.dribble_duration_seconds - victim.dribble_burst_seconds < 0.10
+	):
+		return false
+	var heading: Vector2 = tackler.velocity.normalized()
+	var to_ball: Vector2 = _tackle_contact_target(victim) - tackler.global_position
+	var forward: float = to_ball.dot(heading)
+	var lateral: float = absf(heading.cross(to_ball))
+	return (
+		forward >= 18.0 and forward <= TACKLE_HITBOX_FORWARD + 30.0
+		and lateral > TACKLE_HITBOX_HALF_WIDTH
+		and lateral <= TACKLE_HITBOX_HALF_WIDTH + 17.0
 	)
 
 
