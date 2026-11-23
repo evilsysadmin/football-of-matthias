@@ -239,28 +239,32 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	assert(packed != null)
 	var game = packed.instantiate()
 	game.match_team_size = 11
-	root.add_child(game)
-	# Disable live match and player timers IMMEDIATELY on insertion, BEFORE
-	# yielding to any render/physics frame. The previous two warmup frames
-	# sometimes advanced match_seconds by different amounts across runs,
-	# despite an identical seeded game. That leaked into the Q timeline's
-	# reported match clock even after physical states matched exactly.
+	# Prevent automatic match updates at the earliest possible point.
+	# Entering the scene triggers _ready() and a full actor setup; the QA
+	# fixture, not the engine's incidental render pace, owns all game ticks.
 	game.set_process(false)
 	game.set_physics_process(false)
+	root.add_child(game)
 	assert(not game.is_physics_processing(),
 		"XI bot must suspend native live match updates before any warmup frames")
-	# _ready() may have spent enough initialization time for a native
-	# physics tick to run already. Do not make an accidental startup clock
-	# offset part of this 24-second simulation's Q timeline.
-	game.match_seconds = 0.0
+	# _ready() and scene insertion may cost a native tick. We will establish
+	# the fixture's canonical clock only AFTER the render warmup is complete.
 	# These timers are advanced explicitly by each bot simulation step.
 	for team in game.teams:
 		for player: Footballer in team:
 			player.set_process(false)
 	await process_frame
 	await process_frame
-	assert(absf(game.match_seconds) < 0.001,
-		"Autoplay setup must not advance live match clock during render warmup")
+	# The first tick in this QA run begins NOW, not at scene insertion.
+	# Record the warmup offset but never let it contaminate the replay's
+	# Q switch clock or any per-possession time-based decision.
+	var warmup_clock: float = game.match_seconds
+	assert(not is_nan(warmup_clock) and not is_inf(warmup_clock))
+	game.match_seconds = 0.0
+	game._reset_ai_adaptation()
+	assert(not game.is_physics_processing() and absf(game.match_seconds) < 0.001,
+		"XI bot must own the complete replay clock after rendering warmup")
+	print("FOOTBALL_XI_REPLAY_WARMUP_CLOCK %.5f" % warmup_clock)
 	game._set_quick_difficulty(difficulty)
 	game.kickoff_active = false
 	game.goal_restart_active = false
