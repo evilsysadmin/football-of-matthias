@@ -29,7 +29,7 @@ const MOVE_DECELERATION := 2150.0
 # XI CPU primary presser: a full-speed defender cannot reverse his hips
 # instantly as E changes lanes. This is a turning-rate cap on REAL movement,
 # not slower pace, a missed-tackle roll, or any change to physical hitboxes.
-const XI_CPU_COMMITTED_PRESS_TURN_RATE := deg_to_rad(170.0)
+const XI_CPU_COMMITTED_PRESS_TURN_RATE := 170.0 * PI / 180.0
 const XI_CPU_COMMITTED_PRESS_MIN_SPEED := 100.0
 # XI human ball control: faster first steps and pivots, never a higher top speed.
 # Off-ball actors, CPU players and 5v5 retain their original kinematics.
