@@ -355,6 +355,7 @@ jobs:
           outcomes = ('retained', 'loose', 'cpu_stolen', 'teammate', 'restart')
           actual_e = 0
           paired_wins = []
+          delayed_losses = []
           trigger_drifts = []
           matched_at_trigger = 0
           for i in range(0, len(rows), 2):
@@ -384,26 +385,50 @@ jobs:
               # Do not count an E-only victory as counterfactual proof
               # if the supposedly matched pair already drifted in the
               # whole XI simulation before E was pressed.
-              if (drift < 1.0 and e['e_executed'] and
-                      e['outcome_1_2s_after_trigger'] == 'retained' and
-                      control['outcome_1_2s_after_trigger'] != 'retained'):
+              # A carrier who lost the ball and happened to reclaim it
+              # at the sample frame did NOT retain possession uninterrupted.
+              e_kept = (e['outcome_1_2s_after_trigger'] == 'retained'
+                        and e['first_loss_after_trigger'] == -1)
+              control_kept = (
+                  control['outcome_1_2s_after_trigger'] == 'retained'
+                  and control['first_loss_after_trigger'] == -1
+              )
+              if drift < 1.0 and e['e_executed'] and e_kept and not control_kept:
                   paired_wins.append({
                       'action': e['action'], 'side': e['side'],
                       'distance': e['distance'], 'trigger': e['trigger_frame']
                   })
+              if (drift < 1.0 and e['e_executed'] and
+                      e['first_loss_after_trigger'] >= 0 and
+                      control['first_loss_after_trigger'] >= 0):
+                  delay = (e['first_loss_after_trigger'] -
+                           control['first_loss_after_trigger'])
+                  if delay >= 6:
+                      delayed_losses.append({
+                          'action': e['action'], 'side': e['side'],
+                          'distance': e['distance'], 'trigger': e['trigger_frame'],
+                          'first_loss_delayed_frames': delay,
+                      })
           assert actual_e >= 12, 'E sweep must actually exercise pressured E'
           assert sum(x['cpu_tackle_attempts'] for x in rows) > 0
           report['accepted_e_inputs'] = actual_e
           report['trigger_pair_drift_units'] = trigger_drifts
           report['matched_at_trigger_under_1_unit'] = matched_at_trigger
           report['physically_earned_pairs'] = paired_wins
+          report['meaningful_first_loss_delays'] = delayed_losses
           Path(sys.argv[2]).write_text(json.dumps(report, indent=2) + '\n')
           if os.environ.get('GITHUB_STEP_SUMMARY'):
               paired = len(paired_wins)
               kept = sum(x['outcome_1_2s_after_trigger'] == 'retained'
+                         and x['first_loss_after_trigger'] == -1
                          for x in rows[::2])
               controls = sum(x['outcome_1_2s_after_trigger'] == 'retained'
+                             and x['first_loss_after_trigger'] == -1
                              for x in rows[1::2])
+              recovered_after_loss = sum(
+                  x['outcome_1_2s_after_trigger'] == 'retained'
+                  and x['first_loss_after_trigger'] >= 0 for x in rows
+              )
               with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
                   summary.write(
                       '### XI E · Timing de entrada / 22 futbolistas\n'
@@ -411,14 +436,19 @@ jobs:
                       f'- Pares todavía equivalentes al pulsar E (<1 unidad): '
                       f'**{matched_at_trigger}/24**; máxima deriva '
                       f'**{max(trigger_drifts):.1f} unidades**\n'
-                      f'- Retenciones E 1,2s tras trigger: **{kept}/24**\n'
-                      f'- Retenciones control sin E: **{controls}/24**\n'
+                      f'- Posesiones E intactas 1,2s tras trigger: **{kept}/24**\n'
+                      f'- Posesiones control sin E intactas: **{controls}/24**\n'
+                      f'- Balones perdidos y recuperados antes del muestreo: '
+                      f'**{recovered_after_loss}** (NO son retenciones)\n'
+                      f'- E retrasa la primera pérdida >=6 frames en pares '
+                      f'comparables: **{len(delayed_losses)}**\n'
                       f'- Parejas comparables donde E mejora control: **{paired}/24**\n'
                       '- Escenarios Hard: t=0,8,16 frames, distancias 148/185, '
                       'ambas bandas, cut y feint; no son tasas de éxito humano.\n'
                   )
           print('FOOTBALL_XI_E_TIMING_ARTIFACT_OK arms=48 fixtures=24 '
-                f'accepted_e={actual_e} paired_wins={len(paired_wins)}')
+                f'accepted_e={actual_e} paired_wins={len(paired_wins)} '
+                f'delayed_losses={len(delayed_losses)}')
           PY
       - name: Upload XI E timing scout measurements
         if: always()
