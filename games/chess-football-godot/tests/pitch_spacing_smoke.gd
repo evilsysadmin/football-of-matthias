@@ -72,7 +72,10 @@ func _initialize() -> void:
 				Formation.home_position(5, team_id, index, pitch)
 			) < 0.01)
 	var full_pitch: Rect2 = Formation.ELEVEN_PITCH_RECT
-	assert(full_pitch.size == Vector2(4000.0, 2600.0))
+	assert(full_pitch == Rect2(-760.0, -562.0, 4160.0, 2704.0))
+	assert(is_equal_approx(
+		full_pitch.size.x * full_pitch.size.y / (4000.0 * 2600.0), 1.0816
+	), "Pitch expansion must be exactly +4% per axis, not a zoom trick")
 	assert(full_pitch.get_center() == pitch.get_center())
 	assert(absf(full_pitch.size.x / full_pitch.size.y - 105.0 / 68.0) < 0.01)
 	for team_id in range(2):
