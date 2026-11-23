@@ -247,6 +247,12 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	# reported match clock even after physical states matched exactly.
 	game.set_process(false)
 	game.set_physics_process(false)
+	assert(not game.is_physics_processing(),
+		"XI bot must suspend native live match updates before any warmup frames")
+	# _ready() may have spent enough initialization time for a native
+	# physics tick to run already. Do not make an accidental startup clock
+	# offset part of this 24-second simulation's Q timeline.
+	game.match_seconds = 0.0
 	# These timers are advanced explicitly by each bot simulation step.
 	for team in game.teams:
 		for player: Footballer in team:
