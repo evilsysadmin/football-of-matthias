@@ -1582,7 +1582,23 @@ func _update_ai(delta: float) -> void:
 			# Only the opposing team changes effort; human teammates remain unchanged.
 			if team_id == 1:
 				intensity = _ai_cpu_intensity(intensity)
-			player.move_ai(delta, target, intensity)
+			# Only the first XI Hard/Expert presser commits his running
+			# heading during a real human E and its stamina-paid exit.
+			# The cover, fresh possessions, ordinary runs, F, Normal,
+			# human defenders and keepers retain normal physical pursuit.
+			var committed_e_press := (
+				match_team_size == 11 and team_id == 1
+				and player == presser and quick_difficulty in ["hard", "expert"]
+				and ball.carrier != null and ball.carrier.team_id == 0
+				and ball.carrier.dribble_mode in ["cut", "feint"]
+				and (
+					ball.carrier.dribble_active()
+					or ball.carrier.xi_cut_exit_run_seconds > 0.0
+					or ball.carrier.xi_feint_exit_run_seconds > 0.0
+				)
+				and player.global_position.distance_to(ball.carrier.global_position) <= 290.0
+			)
+			player.move_ai(delta, target, intensity, committed_e_press)
 
 			if (
 				not team_has_ball
