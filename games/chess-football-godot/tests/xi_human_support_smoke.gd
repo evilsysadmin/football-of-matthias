@@ -39,11 +39,37 @@ func _initialize() -> void:
 	challenger.global_position = centre + Vector2(-630.0, 250.0)
 	game._select_player(carrier)
 	game.ball.attach_to(carrier)
-	assert(game._ai_xi_human_support_rank(lead) == 0)
+	game._ai_xi_refresh_human_support_assignment()
+	assert(game._ai_xi_human_support_rank(lead, true) == 0)
 	assert(game._ai_xi_human_support_rank(recycle) == 1)
 	assert(game._ai_xi_human_support_rank(challenger) == -1)
 	assert(game.ai_xi_human_support_slots[0] == lead)
 	assert(game.ai_xi_human_support_slots[1] == recycle)
+	# Compare repeated rank lookups with one shared assignment per batch.
+	# Positions are fixed, both paths must return identical ranks. Timing
+	# is informative only: shared runners and CI hosts vary in speed.
+	var queries: Array = []
+	for teammate: Footballer in game.teams[0]:
+		if teammate != carrier and teammate.role != "keeper":
+			queries.append(teammate)
+	var expected_ranks: Array[int] = []
+	for teammate: Footballer in queries:
+		expected_ranks.append(game._ai_xi_human_support_rank(teammate))
+	var batches := 200
+	var direct_start := Time.get_ticks_usec()
+	for batch in range(batches):
+		for index in range(queries.size()):
+			assert(game._ai_xi_human_support_rank(queries[index]) == expected_ranks[index])
+	var direct_usec := Time.get_ticks_usec() - direct_start
+	var shared_start := Time.get_ticks_usec()
+	for batch in range(batches):
+		game._ai_xi_refresh_human_support_assignment()
+		for index in range(queries.size()):
+			assert(game._ai_xi_human_support_rank(queries[index], true) == expected_ranks[index])
+	var shared_usec := Time.get_ticks_usec() - shared_start
+	print("FOOTBALL_XI_SUPPORT_ASSIGNMENT_PROFILE batches=", batches,
+		" queries_per_batch=", queries.size(), " direct_usec=", direct_usec,
+		" shared_usec=", shared_usec)
 	var lead_base: Vector2 = game._ai_support_target(lead)
 	var recycle_target: Vector2 = game._ai_support_target(recycle)
 	assert(game.match_pitch.has_point(lead_base))
@@ -63,11 +89,17 @@ func _initialize() -> void:
 	assert(game._ai_xi_human_support_rank(recycle) == 1)
 	assert(game._ai_xi_human_support_rank(challenger) == -1)
 	challenger.global_position = centre + Vector2(-190.0, 0.0)
+	# During a single AI pass, queries share the pre-movement snapshot.
+	# A later independent query must still see the improved challenger.
+	assert(game._ai_xi_human_support_rank(recycle, true) == 1)
+	assert(game._ai_xi_human_support_rank(challenger, true) == -1)
 	assert(game._ai_xi_human_support_rank(lead) == 0)
 	assert(game._ai_xi_human_support_rank(challenger) == 1)
 	challenger.sent_off = true
-	assert(game._ai_xi_human_support_rank(challenger) == -1)
-	assert(game._ai_xi_human_support_rank(recycle) == 1)
+	# Even within a snapshot an unavailable selected outlet is invalid.
+	assert(game._ai_xi_human_support_rank(challenger, true) == -1)
+	assert(game._ai_xi_human_support_rank(recycle, true) == 1)
+	print("FOOTBALL_XI_SUPPORT_SNAPSHOT_OK shared=true refresh=true invalidation=true")
 	challenger.sent_off = false
 	challenger.global_position = centre + Vector2(-630.0, 250.0)
 
@@ -236,15 +268,18 @@ func _initialize() -> void:
 	assert(game.ai_xi_human_support_slots == [null, null])
 	assert(game.ai_xi_human_lane_memory.is_empty())
 	assert(game._ai_xi_human_support_rank(lead) == -1)
+	assert(game._ai_xi_human_support_rank(lead, true) == -1)
 	# Legacy 5v5 keeps its established off-ball support path.
 	game.ball.attach_to(carrier)
 	game.match_team_size = 5
 	assert(game._ai_xi_human_support_rank(lead) == -1)
+	assert(game._ai_xi_human_support_rank(lead, true) == -1)
 	assert(game._ai_support_target(lead) != lead_base)
 	game.match_team_size = 11
 	# CPU has independent, unchanged role/lane memory and direction.
 	game.ball.attach_to(game.teams[1][10])
 	assert(game._ai_xi_human_support_rank(lead) == -1)
+	assert(game._ai_xi_human_support_rank(lead, true) == -1)
 	assert(game._ai_xi_support_rank(game.teams[1][5]) >= -1)
 	assert(game.ai_xi_support_rank_slots.size() == 2)
 	assert(game.ai_xi_human_support_slots == [null, null])
@@ -268,6 +303,23 @@ func _initialize() -> void:
 	assert(lead.global_position.distance_to(arrival_target) <= 9.0)
 	assert(lead.velocity.length() < 1.0)
 	print("FOOTBALL_XI_SUPPORT_ARRIVAL overshoot=", overshoot, " peak_speed=", peak_speed)
+
+	# A requested snapshot reuse cannot carry assignments or lane memory
+	# across a real human possession handoff, even before the next update.
+	game._select_player(carrier)
+	game.ball.attach_to(carrier)
+	game._ai_xi_human_support_rank(carrier)
+	assert(game.ai_xi_human_support_owner == carrier)
+	game.ai_xi_human_lane_memory[int(lead.get_instance_id())] = {"owner": int(carrier.get_instance_id()), "side": 1.0}
+	game.ai_xi_human_recycle_memory = {"actor": int(recycle.get_instance_id()), "direction": 1.0}
+	game._select_player(recycle)
+	game.ball.attach_to(recycle)
+	assert(game._ai_xi_human_support_rank(recycle, true) == -1)
+	assert(game.ai_xi_human_support_owner == recycle)
+	assert(not (recycle in game.ai_xi_human_support_slots))
+	assert(game.ai_xi_human_lane_memory.is_empty())
+	assert(game.ai_xi_human_recycle_memory.is_empty())
+	print("FOOTBALL_XI_SUPPORT_SNAPSHOT_HANDOFF_OK possession=true memory_reset=true")
 
 	print("FOOTBALL_XI_HUMAN_SUPPORT_OK two_outlets=true open_lane=true stable_roles=true real_movement=true loss_reset=true legacy_5v5=true cpu_unchanged=true")
 	quit(0)
