@@ -131,5 +131,25 @@ func _initialize() -> void:
 	assert(game.ai_xi_support_rank_slots.size() == 2)
 	assert(game.ai_xi_human_support_slots == [null, null])
 
+	# A sprinting support runner must arrive under its own inertia, not
+	# run through a stationary outlet and turn back. No position writes
+	# after this fixture: real CharacterBody2D movement at 60 Hz.
+	var arrival_target: Vector2 = centre + Vector2(470.0, 300.0)
+	lead.global_position = arrival_target - Vector2(240.0, 0.0)
+	lead.velocity = Vector2.ZERO
+	lead.debug_set_stamina(100.0)
+	var overshoot := 0.0
+	var peak_speed := 0.0
+	for tick in range(100):
+		await physics_frame
+		lead.move_ai(STEP, arrival_target, 1.0)
+		overshoot = maxf(overshoot, lead.global_position.x - arrival_target.x)
+		peak_speed = maxf(peak_speed, lead.velocity.length())
+	assert(peak_speed > lead.base_speed, "Arrival must preserve the distant sprint")
+	assert(overshoot <= 8.0, "XI support must brake before running through its outlet")
+	assert(lead.global_position.distance_to(arrival_target) <= 9.0)
+	assert(lead.velocity.length() < 1.0)
+	print("FOOTBALL_XI_SUPPORT_ARRIVAL overshoot=", overshoot, " peak_speed=", peak_speed)
+
 	print("FOOTBALL_XI_HUMAN_SUPPORT_OK two_outlets=true open_lane=true stable_roles=true real_movement=true loss_reset=true legacy_5v5=true cpu_unchanged=true")
 	quit(0)

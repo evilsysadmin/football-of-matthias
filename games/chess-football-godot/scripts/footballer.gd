@@ -381,6 +381,12 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0) -> void:
 		desired = offset.normalized() * base_speed * sprint_boost * effective_intensity * recovery_scale * keeper_boost
 		if has_ball and role != "keeper":
 			desired *= technique_control_multiplier
+		elif match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper":
+			# Brake within the physical stopping distance of an off-ball
+			# target rather than sprinting through it and turning back.
+			# Far-away pressure/support, carriers, keepers and 5v5 are unchanged.
+			var arrival_speed := sqrt(2.0 * MOVE_ACCELERATION * maxf(0.0, offset.length() - 8.0))
+			desired = desired.limit_length(arrival_speed)
 	var acceleration := MOVE_ACCELERATION if desired.length_squared() > 0.001 else MOVE_DECELERATION
 	if role == "keeper":
 		acceleration *= KEEPER_AI_ACCELERATION_MULTIPLIER
