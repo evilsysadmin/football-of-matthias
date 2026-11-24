@@ -94,6 +94,87 @@ func _initialize() -> void:
 	assert(game._ai_support_target(lead) == lead_base)
 	assert(game.ai_xi_human_lane_memory.is_empty())
 
+	# The lead outlet can read a defender already crossing a clear lane.
+	# Same initial position, opposite observed velocities; no future input.
+	var normal: Vector2 = (lead_base - centre).normalized().orthogonal()
+	rival_marker.global_position = centre.lerp(lead_base, 0.6) + normal * 160.0
+	rival_marker.velocity = -normal * 300.0
+	var static_gap: float = game._ai_xi_human_lane_clearance(lead_base)
+	var incoming_gap: float = game._ai_xi_human_lane_clearance(lead_base, true)
+	assert(static_gap >= game.AI_XI_HUMAN_LANE_MARKED)
+	assert(incoming_gap < game.AI_XI_HUMAN_LANE_SAFE)
+	assert(static_gap - incoming_gap <= game.AI_XI_HUMAN_LANE_READ_MAX_DISTANCE + 0.01)
+	var anticipatory_target: Vector2 = game._ai_support_target(lead)
+	assert(anticipatory_target != lead_base)
+	assert(game._ai_xi_human_lane_clearance(anticipatory_target, true) >= game.AI_XI_HUMAN_LANE_SAFE)
+	# Exercise the actual runner and the crossing defender using their
+	# CharacterBody2D movement, not position writes inside the loop.
+	# This isolates the two-player positioning interaction from other AI.
+	var lead_start: Vector2 = lead.global_position
+	var lead_start_velocity: Vector2 = lead.velocity
+	var marker_start: Vector2 = rival_marker.global_position
+	var marker_destination: Vector2 = centre.lerp(lead_base, 0.6)
+	var max_prediction_step := 0.0
+	for tick in range(12):
+		await physics_frame
+		var before_step: Vector2 = lead.global_position
+		var predicted_outlet: Vector2 = game._ai_support_target(lead)
+		lead.move_ai(STEP, predicted_outlet, 0.83, true)
+		rival_marker.move_ai(STEP, marker_destination, 1.0)
+		max_prediction_step = maxf(max_prediction_step, lead.global_position.distance_to(before_step))
+	assert(lead.global_position.distance_to(anticipatory_target) <
+		lead_start.distance_to(anticipatory_target) - 15.0)
+	assert(rival_marker.global_position.distance_to(marker_start) > 20.0)
+	assert(max_prediction_step < 10.0)
+	assert(game.ball.carrier == carrier and game.controlled == carrier)
+	print("FOOTBALL_XI_LANE_READ_MOTION lead=", lead.global_position.distance_to(lead_start),
+		" defender=", rival_marker.global_position.distance_to(marker_start), " max_step=", max_prediction_step)
+	# Restore the separate directional/threshold fixture.
+	lead.global_position = lead_start
+	lead.velocity = lead_start_velocity
+	rival_marker.global_position = marker_start
+	rival_marker.velocity = normal * 300.0
+	assert(is_equal_approx(game._ai_xi_human_lane_clearance(lead_base, true), static_gap))
+	assert(game._ai_support_target(lead) == lead_base)
+	# Slow movement or a fallen defender cannot be extrapolated into a
+	# threat. A currently blocked lane must remain blocked even if the
+	# defender appears to be moving away: the forecast never clears it.
+	rival_marker.velocity = -normal * 79.0
+	assert(is_equal_approx(game._ai_xi_human_lane_clearance(lead_base, true), static_gap))
+	rival_marker.velocity = -normal * 300.0
+	rival_marker.xi_collision_down_seconds = 0.5
+	assert(is_equal_approx(game._ai_xi_human_lane_clearance(lead_base, true), static_gap))
+	rival_marker.xi_collision_down_seconds = 0.0
+	rival_marker.global_position = centre.lerp(lead_base, 0.6)
+	rival_marker.velocity = normal * 300.0
+	assert(game._ai_xi_human_lane_clearance(lead_base, true) < 0.01)
+	rival_marker.velocity = Vector2.ZERO
+	rival_marker.global_position = centre + Vector2(1450.0, 800.0)
+	assert(game.ai_xi_human_lane_memory.is_empty())
+	print("FOOTBALL_XI_LANE_READ_OK static=", static_gap, " crossing=", incoming_gap)
+
+	# Safety outlet uses the same bounded read without becoming another
+	# forward runner. Test the identical defender position with opposite
+	# velocities and then restore the independent static recycle fixture.
+	var recycle_normal: Vector2 = (recycle_target - centre).normalized().orthogonal()
+	if recycle_normal.y * (recycle_target.y - centre.y) < 0.0:
+		recycle_normal = -recycle_normal
+	rival_marker.global_position = centre.lerp(recycle_target, 0.6) + recycle_normal * 160.0
+	rival_marker.velocity = -recycle_normal * 300.0
+	assert(game._ai_xi_human_lane_clearance(recycle_target) >= game.AI_XI_HUMAN_LANE_MARKED)
+	assert(game._ai_xi_human_lane_clearance(recycle_target, true) < game.AI_XI_HUMAN_LANE_SAFE)
+	var anticipated_recycle: Vector2 = game._ai_support_target(recycle)
+	assert(anticipated_recycle != recycle_target)
+	assert(is_equal_approx(anticipated_recycle.x, recycle_target.x))
+	assert(signf(anticipated_recycle.y - centre.y) == signf(recycle_target.y - centre.y))
+	assert(game._ai_xi_human_lane_clearance(anticipated_recycle, true) >= game.AI_XI_HUMAN_LANE_SAFE)
+	rival_marker.velocity = recycle_normal * 300.0
+	assert(game._ai_support_target(recycle) == recycle_target)
+	assert(game.ai_xi_human_recycle_memory.is_empty())
+	rival_marker.velocity = Vector2.ZERO
+	rival_marker.global_position = centre + Vector2(1450.0, 800.0)
+	print("FOOTBALL_XI_RECYCLE_READ_OK forecast=true same_flank=true same_depth=true")
+
 	# The second outlet remains behind the ball and on its original flank,
 	# but it must not wait inside a marked passing corridor.
 	rival_marker.global_position = recycle_target
