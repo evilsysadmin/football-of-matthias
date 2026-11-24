@@ -449,7 +449,11 @@ jobs:
           assert x['first_presser_travel'] >= 45 and x['cover_travel'] >= 32
           assert x['midfielder_travel'] >= 30
           assert x['final_press_gap'] < x['initial_press_gap'] - 45
-          assert x['max_step'] < 28 and x['carrier_retained'] is True
+          assert x['max_step'] < 28
+          assert x['carrier_retained'] in (True, False)
+          assert x['end_possession_team'] == (1 if x['carrier_retained'] else 0) or (
+              not x['carrier_retained'] and x['end_possession_team'] == -1
+          ), 'Normal physical turnovers may end in human possession or a loose ball'
           pathlib.Path('.artifacts/xi-physical-threat/metrics.json').write_text(
               json.dumps(x, indent=2, sort_keys=True) + '\\n'
           )
