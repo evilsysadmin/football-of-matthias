@@ -175,6 +175,9 @@ const AI_XI_HUMAN_LANE_SAFE := 110.0
 const AI_XI_HUMAN_LANE_GAIN := 38.0
 const AI_XI_HUMAN_LANE_HOLD := 98.0
 const AI_XI_HUMAN_LANE_SWITCH := 36.0
+const AI_XI_HUMAN_LANE_READ_SECONDS := 0.30
+const AI_XI_HUMAN_LANE_READ_MAX_DISTANCE := 80.0
+const AI_XI_HUMAN_LANE_READ_MIN_SPEED := 80.0
 const AI_XI_HUMAN_RECYCLE_LATERAL_STEP := 140.0
 const AI_XI_HUMAN_RECYCLE_MIN_WIDTH := 40.0
 # XI human byline attacks: one existing outlet attacks the penalty spot,
@@ -2641,7 +2644,7 @@ func _ai_xi_human_support_rank(player: Footballer) -> int:
 
 # Score both space at the receiving boot and the ACTUAL passing corridor.
 # A clear receiver behind a defender is not a free, safe triangle.
-func _ai_xi_human_lane_clearance(destination: Vector2) -> float:
+func _ai_xi_human_lane_clearance(destination: Vector2, anticipate: bool = false) -> float:
 	var origin: Vector2 = ball.carrier.global_position
 	var corridor: Vector2 = destination - origin
 	var length_sq: float = corridor.length_squared()
@@ -2649,23 +2652,35 @@ func _ai_xi_human_lane_clearance(destination: Vector2) -> float:
 	for rival in teams[1]:
 		if rival.sent_off:
 			continue
-		var endpoint: float = rival.global_position.distance_to(destination)
-		clearance = minf(clearance, endpoint)
-		if length_sq < 1.0:
-			continue
-		var progress: float = clampf(
-			(rival.global_position - origin).dot(corridor) / length_sq,
-			0.0, 1.0
-		)
-		# A defender pressing the carrier is not blocking every receiving
-		# corridor. From 16% onward, however, the lane is truly contested.
-		if progress <= 0.16:
-			continue
-		var corridor_gap: float = rival.global_position.distance_to(
-			origin + corridor * progress
-		)
-		clearance = minf(clearance, corridor_gap)
+		var position_now: Vector2 = rival.global_position
+		clearance = minf(clearance, _ai_xi_lane_point_gap(position_now, origin, corridor, length_sq, destination))
+		# Forecast only observed movement over a short bounded horizon.
+		# This is a positioning choice, never an interception or pickup buff.
+		if (
+			anticipate and rival.xi_collision_down_seconds <= 0.0
+			and rival.velocity.length_squared() >= AI_XI_HUMAN_LANE_READ_MIN_SPEED * AI_XI_HUMAN_LANE_READ_MIN_SPEED
+		):
+			var projected: Vector2 = ChessFootballMath.clamp_to_pitch(
+				position_now + (rival.velocity * AI_XI_HUMAN_LANE_READ_SECONDS).limit_length(
+					AI_XI_HUMAN_LANE_READ_MAX_DISTANCE
+				), match_pitch
+			)
+			clearance = minf(clearance, _ai_xi_lane_point_gap(projected, origin, corridor, length_sq, destination))
 	return clearance
+
+
+func _ai_xi_lane_point_gap(
+	point: Vector2, origin: Vector2, corridor: Vector2, length_sq: float, destination: Vector2
+) -> float:
+	var endpoint: float = point.distance_to(destination)
+	if length_sq < 1.0:
+		return endpoint
+	var progress: float = clampf((point - origin).dot(corridor) / length_sq, 0.0, 1.0)
+	# A defender pressing the carrier is not blocking every receiving
+	# corridor. From 16% onward, however, the lane is truly contested.
+	if progress <= 0.16:
+		return endpoint
+	return minf(endpoint, point.distance_to(origin + corridor * progress))
 
 
 func _ai_xi_human_open_support_target(
@@ -2675,7 +2690,7 @@ func _ai_xi_human_open_support_target(
 	var remembered: Dictionary = ai_xi_human_lane_memory.get(key, {})
 	var owner_id: int = int(ball.carrier.get_instance_id())
 	var has_lane: bool = int(remembered.get("owner", -1)) == owner_id
-	var baseline: float = _ai_xi_human_lane_clearance(base_target)
+	var baseline: float = _ai_xi_human_lane_clearance(base_target, true)
 	if baseline >= AI_XI_HUMAN_LANE_MARKED:
 		ai_xi_human_lane_memory.erase(key)
 		return base_target
@@ -2691,7 +2706,7 @@ func _ai_xi_human_open_support_target(
 		)
 		if not match_pitch.has_point(candidate):
 			continue
-		var clearance: float = _ai_xi_human_lane_clearance(candidate)
+		var clearance: float = _ai_xi_human_lane_clearance(candidate, true)
 		var score: float = clearance - absf(
 			candidate.y - player.home_position.y
 		) * 0.035
@@ -2727,7 +2742,7 @@ func _ai_xi_human_open_support_target(
 # wider option on the SAME flank. Retain the original depth and never
 # recruit a third player or manufacture an available receiving lane.
 func _ai_xi_human_open_recycle_target(player: Footballer, base_target: Vector2) -> Vector2:
-	var baseline: float = _ai_xi_human_lane_clearance(base_target)
+	var baseline: float = _ai_xi_human_lane_clearance(base_target, true)
 	var origin: Vector2 = ball.carrier.global_position
 	var flank: float = signf(base_target.y - origin.y)
 	if baseline >= AI_XI_HUMAN_LANE_MARKED or is_zero_approx(flank):
@@ -2753,7 +2768,7 @@ func _ai_xi_human_open_recycle_target(player: Footballer, base_target: Vector2) 
 			continue
 		if (candidate.y - origin.y) * flank < AI_XI_HUMAN_RECYCLE_MIN_WIDTH:
 			continue
-		var clearance: float = _ai_xi_human_lane_clearance(candidate)
+		var clearance: float = _ai_xi_human_lane_clearance(candidate, true)
 		var minimum: float = (
 			AI_XI_HUMAN_LANE_HOLD if is_equal_approx(direction, remembered_direction)
 			else AI_XI_HUMAN_LANE_SAFE
@@ -2765,6 +2780,7 @@ func _ai_xi_human_open_recycle_target(player: Footballer, base_target: Vector2) 
 			return candidate
 	ai_xi_human_recycle_memory.clear()
 	return base_target
+
 
 func _ai_support_target(player: Footballer):
 	if ball.carrier == null:
