@@ -107,11 +107,10 @@ func _initialize() -> void:
 		active_ticks += 1
 		if carrier.global_position.x < previous_carrier.x - 0.2:
 			goalward_frames += 1
-		largest_step = maxf(largest_step,
-			carrier.global_position.distance_to(previous_carrier),
-			first.global_position.distance_to(previous_first),
-			cover.global_position.distance_to(previous_cover),
-			screen.global_position.distance_to(previous_screen))
+		largest_step = maxf(largest_step, carrier.global_position.distance_to(previous_carrier))
+		largest_step = maxf(largest_step, first.global_position.distance_to(previous_first))
+		largest_step = maxf(largest_step, cover.global_position.distance_to(previous_cover))
+		largest_step = maxf(largest_step, screen.global_position.distance_to(previous_screen))
 		previous_carrier = carrier.global_position
 		previous_first = first.global_position
 		previous_cover = cover.global_position
