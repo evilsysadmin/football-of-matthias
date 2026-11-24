@@ -418,6 +418,59 @@ jobs:
           grep -q 'FOOTBALL_XI_AI_OK' "$log"
           grep -q 'FOOTBALL_XI_FALLEN_DEFENSE_OK human=1 cpu=1 old_cache=cleared healthy_presser=1 controlled_down=handoff q_grace=kept five=unchanged' "$log"
           grep -q 'FOOTBALL_XI_LOCAL_COMPACT_OK real_ai=1 first_two=unchanged threat=closer far_half=hold 5v5=unchanged' "$log"
+      - name: XI · physical 60 Hz pressure when CPU attacks our half
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-xi-physical-threat.log"
+          set +e
+          timeout 45s "$godot" --headless --quit-after 540 --path games/chess-football-godot --script res://tests/xi_defensive_threat_60hz_smoke.gd 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]] || grep -Eq 'SCRIPT ERROR:|Assertion failed|ERROR: Failed to load script|Parse Error:' "$log"; then
+            echo '::error::Real 60 Hz XI defensive threat reaction failed.'
+            exit 1
+          fi
+          grep -q 'FOOTBALL_XI_THREAT_60HZ_OK real_actors=22 cpu_goalward=1 press_physical=1 cover_physical=1 midfield_physical=1 no_teleport=1' "$log"
+          mkdir -p .artifacts/xi-physical-threat
+          python3 - "$log" "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json
+          import pathlib
+          import sys
+          lines = pathlib.Path(sys.argv[1]).read_text().splitlines()
+          prefix = "FOOTBALL_XI_THREAT_METRICS "
+          records = [json.loads(line[len(prefix):]) for line in lines if line.startswith(prefix)]
+          assert len(records) == 1, "Exactly one real 60 Hz threat measurement required"
+          x = records[0]
+          assert x['kind'] == '60hz_real_22_player_defensive_threat_not_full_match'
+          assert x['ticks'] >= 38 and x['goalward_frames'] >= 20
+          assert x['cpu_carrier_travel'] >= 40
+          assert x['first_presser_travel'] >= 45 and x['cover_travel'] >= 32
+          assert x['midfielder_travel'] >= 30
+          assert x['final_press_gap'] < x['initial_press_gap'] - 45
+          assert x['max_step'] < 28 and x['carrier_retained'] is True
+          pathlib.Path('.artifacts/xi-physical-threat/metrics.json').write_text(
+              json.dumps(x, indent=2, sort_keys=True) + '\\n'
+          )
+          with pathlib.Path(sys.argv[2]).open('a') as out:
+              out.write(
+                  f"### Physical XI defensive threat\\n"
+                  f"CPU dribble {x['cpu_carrier_travel']} units; "
+                  f"press {x['first_presser_travel']}; cover {x['cover_travel']}; "
+                  f"midfield {x['midfielder_travel']}; "
+                  f"pressure gap {x['initial_press_gap']} → {x['final_press_gap']} units.\\n"
+              )
+          print('FOOTBALL_XI_THREAT_ARTIFACT_OK')
+          PY
+      - name: Upload XI 60 Hz physical defensive threat metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: football-xi-physical-threat
+          path: .artifacts/xi-physical-threat/
+          if-no-files-found: warn
+          retention-days: 7
       - name: XI · measured defensive duels (unguarded vs contain)
         shell: bash
         run: |
