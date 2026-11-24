@@ -148,5 +148,47 @@ func _initialize() -> void:
 	assert(not game._one_two_can_request() and not game.xi_one_two_armed,
 		"Manual Q must immediately cancel the planned return")
 
+	# A neutral-input XI receiver must not stop just because the early
+	# handoff transferred control before the physical first touch.
+	await process_frame
+	game._select_player(passer)
+	game.ball.attach_to(passer)
+	passer.velocity = Vector2.ZERO
+	receiver.global_position = passer.global_position + Vector2(300.0, 0.0)
+	receiver.velocity = Vector2.ZERO
+	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
+	game.pass_charge_seconds = 0.11
+	assert(game._release_charged_pass())
+	var handed_off := false
+	var first_touch := false
+	var neutral_travel := 0.0
+	for tick in range(150):
+		await physics_frame
+		game.match_seconds += STEP
+		if game.controlled == receiver:
+			var before: Vector2 = receiver.global_position
+			game._handle_human(STEP)
+			neutral_travel += receiver.global_position.distance_to(before)
+		else:
+			receiver.move_ai(STEP, game.ball.global_position + game.ball.velocity * 0.12, 1.0)
+		game.ball.tick_ball(STEP)
+		game._try_claim_loose_ball()
+		game._maybe_select_pass_receiver()
+		if game.ball.carrier != null:
+			first_touch = game.ball.carrier == receiver
+			break
+		if game.controlled == receiver:
+			handed_off = true
+	assert(handed_off and first_touch, "Early handoff must finish with a real first touch")
+	assert(neutral_travel > 10.0, "Neutral input must not brake the selected receiving runner")
+	assert(game.xi_pass_handoff_actor == null, "Possession ends the chase")
+	# New deliberate directional input wins, even during a live handoff.
+	game.ball.release(Vector2.RIGHT, 500.0)
+	game.xi_pass_handoff_actor = receiver
+	game.xi_pass_handoff_until = game.match_seconds + 0.45
+	assert(game._xi_pass_handoff_direction(Vector2.UP) == Vector2.UP)
+	assert(game.xi_pass_handoff_actor == null)
+	print("FOOTBALL_XI_PASS_HANDOFF_OK neutral_travel=", neutral_travel)
+
 	print("FOOTBALL_XI_ONE_TWO_OK real_pass=true deliberate_input=true physical_return=true normal_pass=true interceptable=true cancel=true")
 	quit(0)

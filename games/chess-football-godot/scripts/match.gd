@@ -361,6 +361,7 @@ const LOOSE_BALL_DUEL_SCORE_TIE_EPSILON := 0.01
 # ball; do not snap across the pitch as soon as Space is released.
 const PASS_RECEIVER_HANDOFF_RADIUS := 120.0
 const PASS_RECEIVER_LEAD_SECONDS := 0.12
+const XI_PASS_HANDOFF_CHASE_SECONDS := 0.45
 # Conservative XI-only human passing lead: moving teammates receive into
 # their run, without magnetism, automatic catches or altered CPU passes.
 const XI_HUMAN_PASS_LEAD_SECONDS := 0.30
@@ -504,6 +505,8 @@ var pass_aim_direction: Vector2 = Vector2.RIGHT
 var pass_directional_charge: bool = false
 var pass_select_receiver_on_release: bool = true
 var pending_human_pass_receiver: Footballer = null
+var xi_pass_handoff_actor: Footballer = null
+var xi_pass_handoff_until: float = 0.0
 var desktop_pass_input_active: bool = false
 var xi_one_two_passer: Footballer = null
 var xi_one_two_receiver: Footballer = null
@@ -588,6 +591,8 @@ func _physics_process(delta: float) -> void:
 		_clear_one_two()
 	camera_hint_seconds = maxf(0.0, camera_hint_seconds - delta)
 	action_feedback_seconds = maxf(0.0, action_feedback_seconds - delta)
+	if goal_restart_active or kickoff_active or set_piece_active:
+		xi_pass_handoff_actor = null
 	if goal_restart_active:
 		_update_goal_restart(delta)
 		_update_3d_presentation(delta)
@@ -1134,6 +1139,28 @@ func _xi_human_handoff_chase_direction(input_direction: Vector2) -> Vector2:
 	return to_owner.normalized()
 
 
+func _xi_pass_handoff_direction(input_direction: Vector2) -> Vector2:
+	if xi_pass_handoff_actor == null:
+		return input_direction
+	if (
+		match_team_size != 11 or controlled != xi_pass_handoff_actor
+		or controlled.sent_off or controlled.xi_collision_down_seconds > 0.0
+		or match_seconds >= xi_pass_handoff_until or ball.carrier != null
+		or ball.airborne() or kickoff_active or goal_restart_active or set_piece_active
+		or input_direction.length_squared() > 0.01
+		or Input.is_action_just_pressed("change_player")
+		or Input.is_action_just_pressed("tackle")
+		or Input.is_action_just_pressed("special_move")
+		or Input.is_action_pressed("pass_ball") or Input.is_action_pressed("shoot_ball")
+	):
+		xi_pass_handoff_actor = null
+		return input_direction
+	var target: Vector2 = ChessFootballMath.clamp_to_pitch(
+		ball.global_position + ball.velocity * PASS_RECEIVER_LEAD_SECONDS, match_pitch
+	)
+	return controlled.global_position.direction_to(target)
+
+
 func _handle_human(delta: float) -> void:
 	if Input.is_action_just_pressed("toggle_view"):
 		_toggle_camera_mode()
@@ -1143,7 +1170,10 @@ func _handle_human(delta: float) -> void:
 	_restore_outfield_control_after_keeper_release()
 	var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var chase_direction: Vector2 = _xi_human_handoff_chase_direction(direction)
-	var finishing_handoff: bool = xi_human_handoff_chase_actor == controlled
+	chase_direction = _xi_pass_handoff_direction(chase_direction)
+	var finishing_handoff: bool = (
+		xi_human_handoff_chase_actor == controlled or xi_pass_handoff_actor == controlled
+	)
 	# Keep the existing runner's real sprint momentum only during the short
 	# handoff, and stop as soon as the player supplies their own direction.
 	controlled.move_human(
@@ -4429,6 +4459,9 @@ func _maybe_select_pass_receiver() -> void:
 	):
 		pending_human_pass_receiver = null
 		_select_player(receiver)
+		if match_team_size == 11 and receiver.role != "keeper" and controlled == receiver:
+			xi_pass_handoff_actor = receiver
+			xi_pass_handoff_until = match_seconds + XI_PASS_HANDOFF_CHASE_SECONDS
 
 
 func _restore_outfield_control_after_keeper_release() -> void:
@@ -4488,6 +4521,7 @@ func _nearest_player_to_ball(team_id: int) -> Footballer:
 func _select_player(player: Footballer) -> void:
 	if player == null or player.sent_off or player.xi_collision_down_seconds > 0.0:
 		return
+	xi_pass_handoff_actor = null
 	# Explicit/manual or possession-driven selection overrides a queued pass.
 	if pending_human_pass_receiver != null and player != pending_human_pass_receiver:
 		pending_human_pass_receiver = null
