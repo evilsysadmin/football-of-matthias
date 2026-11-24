@@ -90,6 +90,8 @@ func _initialize() -> void:
 	var largest_step: float = 0.0
 	var active_ticks := 0
 	var goalward_frames := 0
+	var automatic_handoffs := 0
+	var selected_before: Footballer = human
 	var previous_carrier: Vector2 = initial_owner
 	var previous_first: Vector2 = first_start
 	var previous_cover: Vector2 = cover_start
@@ -118,8 +120,20 @@ func _initialize() -> void:
 		assert(XI.grow(4.0).has_point(first.global_position))
 		assert(XI.grow(4.0).has_point(cover.global_position))
 		assert(XI.grow(4.0).has_point(screen.global_position))
-		assert(game.controlled == human,
-			"The distant human controller must not be arbitrarily reassigned")
+		# The normal physical-auto-handoff is expected once an eligible
+		# defender truly reaches the CPU carrier. Validate its owner, radius
+		# and real momentum instead of falsely treating that useful feature
+		# as an uncommanded selection change.
+		if game.controlled != selected_before and game.ball.carrier == carrier:
+			assert(game.controlled.team_id == 0 and game.controlled.role != "keeper")
+			assert(game.controlled.global_position.distance_to(carrier.global_position) <
+				game.AI_XI_HUMAN_AUTO_SWITCH_RADIUS + 24.0,
+				"Auto-handoff must be earned by real nearby physical pressure")
+			assert(game.xi_human_handoff_chase_actor == game.controlled)
+			assert(game.xi_human_handoff_chase_owner == carrier)
+			automatic_handoffs += 1
+		selected_before = game.controlled
+		assert(automatic_handoffs <= 1, "A short duel must not cause player-control ping-pong")
 
 	var first_travel: float = first_start.distance_to(first.global_position)
 	var cover_travel: float = cover_start.distance_to(cover.global_position)
@@ -131,6 +145,7 @@ func _initialize() -> void:
 		"ticks": active_ticks,
 		"cpu_carrier_travel": snappedf(carrier_travel, 0.1),
 		"goalward_frames": goalward_frames,
+		"automatic_handoffs": automatic_handoffs,
 		"first_presser_travel": snappedf(first_travel, 0.1),
 		"cover_travel": snappedf(cover_travel, 0.1),
 		"midfielder_travel": snappedf(screen_travel, 0.1),
