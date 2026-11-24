@@ -175,6 +175,8 @@ const AI_XI_HUMAN_LANE_SAFE := 110.0
 const AI_XI_HUMAN_LANE_GAIN := 38.0
 const AI_XI_HUMAN_LANE_HOLD := 98.0
 const AI_XI_HUMAN_LANE_SWITCH := 36.0
+const AI_XI_HUMAN_RECYCLE_LATERAL_STEP := 140.0
+const AI_XI_HUMAN_RECYCLE_MIN_WIDTH := 40.0
 # XI human byline attacks: one existing outlet attacks the penalty spot,
 # the second offers a genuine cutback at the edge of the area. Both must
 # RUN into place with real stamina; no auto pass, catch or scoring boost.
@@ -430,6 +432,7 @@ var ai_xi_support_rank_slots: Array = [null, null]
 var ai_xi_human_support_owner: Footballer = null
 var ai_xi_human_support_slots: Array = [null, null]
 var ai_xi_human_lane_memory: Dictionary = {}
+var ai_xi_human_recycle_memory: Dictionary = {}
 # Real cut -> physical outplay -> one forward runner, possession-scoped.
 # Never a speed/ball buff: its target is fixed from real pitch geometry,
 # and the runner uses the ordinary stamina-draining AI sprint.
@@ -1570,6 +1573,7 @@ func _update_ai(delta: float) -> void:
 		ai_xi_human_support_owner = null
 		ai_xi_human_support_slots = [null, null]
 		ai_xi_human_lane_memory.clear()
+		ai_xi_human_recycle_memory.clear()
 	for team_id in range(2):
 		var team_has_ball: bool = ball.carrier != null and ball.carrier.team_id == team_id
 		var loose_target: Vector2 = _ai_loose_ball_pursuit_point()
@@ -2560,6 +2564,7 @@ func _ai_xi_human_support_rank(player: Footballer) -> int:
 		ai_xi_human_support_owner = ball.carrier
 		ai_xi_human_support_slots = [null, null]
 		ai_xi_human_lane_memory.clear()
+		ai_xi_human_recycle_memory.clear()
 	var selected: Array = []
 	var byline: bool = _xi_human_byline_attack()
 	for slot in range(2):
@@ -2615,6 +2620,11 @@ func _ai_xi_human_support_rank(player: Footballer) -> int:
 			selected.append(best)
 	ai_xi_human_support_slots = [selected[0] if selected.size() > 0 else null,
 		selected[1] if selected.size() > 1 else null]
+	# A replacement or a byline phase must not inherit a former recycle lane.
+	if byline or ai_xi_human_support_slots[1] == null or (
+		int(ai_xi_human_recycle_memory.get("actor", -1)) != int(ai_xi_human_support_slots[1].get_instance_id())
+	):
+		ai_xi_human_recycle_memory.clear()
 	# Retired first outlets cannot resurrect an old side-run when they
 	# become the recycle runner later in the same possession.
 	for stored_key in ai_xi_human_lane_memory.keys():
@@ -2712,6 +2722,50 @@ func _ai_xi_human_open_support_target(
 	return base_target
 
 
+# The second outlet is a safety valve, not another forward run. If its
+# normal triangle is marked, try the shorter inward pass first, then a
+# wider option on the SAME flank. Retain the original depth and never
+# recruit a third player or manufacture an available receiving lane.
+func _ai_xi_human_open_recycle_target(player: Footballer, base_target: Vector2) -> Vector2:
+	var baseline: float = _ai_xi_human_lane_clearance(base_target)
+	var origin: Vector2 = ball.carrier.global_position
+	var flank: float = signf(base_target.y - origin.y)
+	if baseline >= AI_XI_HUMAN_LANE_MARKED or is_zero_approx(flank):
+		ai_xi_human_recycle_memory.clear()
+		return base_target
+	var actor_id: int = int(player.get_instance_id())
+	var remembered_direction: float = 0.0
+	if (
+		int(ai_xi_human_recycle_memory.get("actor", -1)) == actor_id
+		and is_equal_approx(float(ai_xi_human_recycle_memory.get("flank", 0.0)), flank)
+	):
+		remembered_direction = float(ai_xi_human_recycle_memory.get("direction", 0.0))
+	# A small marker wobble must not undo an otherwise useful lateral run.
+	# Retain only a viable, materially clearer corridor; a blocked lane
+	# loses its protection immediately. The base opens at the marked threshold.
+	for direction: float in [remembered_direction, -flank, flank]:
+		if is_zero_approx(direction):
+			continue
+		var candidate: Vector2 = base_target + Vector2(
+			0.0, direction * AI_XI_HUMAN_RECYCLE_LATERAL_STEP
+		)
+		if not match_pitch.has_point(candidate):
+			continue
+		if (candidate.y - origin.y) * flank < AI_XI_HUMAN_RECYCLE_MIN_WIDTH:
+			continue
+		var clearance: float = _ai_xi_human_lane_clearance(candidate)
+		var minimum: float = (
+			AI_XI_HUMAN_LANE_HOLD if is_equal_approx(direction, remembered_direction)
+			else AI_XI_HUMAN_LANE_SAFE
+		)
+		if clearance >= minimum and clearance - baseline >= AI_XI_HUMAN_LANE_GAIN:
+			ai_xi_human_recycle_memory = {
+				"actor": actor_id, "flank": flank, "direction": direction
+			}
+			return candidate
+	ai_xi_human_recycle_memory.clear()
+	return base_target
+
 func _ai_support_target(player: Footballer):
 	if ball.carrier == null:
 		return player.home_position
@@ -2760,7 +2814,7 @@ func _ai_support_target(player: Footballer):
 			# provides the safe recycle. Other teammates keep their lanes.
 			return (
 				_ai_xi_human_open_support_target(player, triangle)
-				if human_rank == 0 else triangle
+				if human_rank == 0 else _ai_xi_human_open_recycle_target(player, triangle)
 			)
 	# Exactly two nearby XI CPU teammates create actual short passing
 	# triangles (one ahead and one recycling behind). Everyone else keeps
