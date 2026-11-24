@@ -49,9 +49,15 @@ func _initialize() -> void:
 		var real_ai_frames: Dictionary = {}
 		var real_ai_swings: Array[float] = []
 		var peak_ai_speed := 0.0
+		var real_running_steps := 0
 		for _step in range(32):
 			game._update_keeper_ai(keeper, 1.0 / 60.0)
 			peak_ai_speed = maxf(peak_ai_speed, keeper.velocity.length())
+			# Sample the 2D animation WHILE the real goalkeeper is moving.
+			# Checking only the final frame flakes when the keeper reaches
+			# the destination and legitimately returns to idle.
+			if keeper.velocity.length() > 15.0 and keeper.visual.animation in [&"run", &"sprint"]:
+				real_running_steps += 1
 			presenter.sync_presentation(1.0 / 60.0, "broadcast")
 			var live_sprite: AnimatedSprite3D = presenter.player_sprites[keeper.get_instance_id()]
 			if String(live_sprite.animation).begins_with("run"):
@@ -69,11 +75,16 @@ func _initialize() -> void:
 		# A tracking keeper may brake as it reaches the target on the
 		# final sample. Judge actual movement across the 32-frame interval.
 		assert(peak_ai_speed > 15.0, "Keeper never reached a real tracking speed")
-		assert(keeper.visual.animation in [&"run", &"sprint"])
+		assert(real_running_steps >= 3,
+			"Keeper must actually show running frames while moving, not just finish near target")
 		presenter.sync_presentation(1.0 / 60.0, "broadcast")
 		var sprite: AnimatedSprite3D = presenter.player_sprites[keeper.get_instance_id()]
 		assert(sprite != null)
-		assert(String(sprite.animation).begins_with("run") or String(sprite.animation).begins_with("sprint"))
+		# 3D motion was already observed across multiple real run frames
+		# above. At the final sample the keeper can correctly be idle.
+		assert(String(sprite.animation).begins_with("run") or
+			String(sprite.animation).begins_with("sprint") or
+			String(sprite.animation).begins_with("idle"))
 		var rendered := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
 		assert(rendered is ImageTexture)
 		assert(rendered.get_size() == Vector2(128.0, 144.0))

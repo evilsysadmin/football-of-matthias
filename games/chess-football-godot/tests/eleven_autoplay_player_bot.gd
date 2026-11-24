@@ -75,6 +75,7 @@ func _initialize() -> void:
 		"pressure_gap_episodes", "score", "physics_checkpoints",
 		"danger_zone_cpu_possession_frames", "danger_zone_gap_frames_240",
 		"far_zone_gap_frames_240", "max_danger_zone_gap_streak",
+		"actual_human_travel_units",
 	]
 	var replay_mismatches: Array[String] = []
 	for field in replay_fields:
@@ -132,7 +133,11 @@ func _initialize() -> void:
 	for run in runs:
 		assert(int(run["ticks"]) == TICKS)
 		assert(int(run["movement_frames"]) > 120,
-			"Autoplay bot must really steer the human-controlled character")
+			"Autoplay bot must issue real sustained player movement inputs")
+		assert(float(run["actual_human_travel_units"]) > 160.0,
+			"Real XI must physically move its human-controlled athlete, not just record pressed keys")
+		assert(int(run["human_possession_frames"]) >= 50,
+			"Real XI must have meaningful human possession; a mostly loose-ball replay is invalid")
 		# A fully disabled fixture might replay identically only because
 		# genuine physical duels never happened. Reject that false-green.
 		assert(int(run["cpu_possession_frames"]) >= 50,
@@ -331,6 +336,7 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	game.xi_human_auto_switch_block_until = 0.0
 
 	var movement_frames := 0
+	var actual_human_travel_units := 0.0
 	var cpu_frames := 0
 	var human_frames := 0
 	var loose_frames := 0
@@ -448,7 +454,14 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		var before_tackle: float = current.tackle_cooldown_seconds
 		var before_shot_charge: bool = game.shot_charging
 		var before_control: Footballer = current
+		var before_control_position: Vector2 = before_control.global_position
 		game._physics_process(STEP)
+		# Count only physical displacement of the actually selected athlete
+		# during the authoritative 60 Hz tick. Pressed keys without movement
+		# must never allow a vacuous replay to pass the QA liveness gate.
+		actual_human_travel_units += before_control_position.distance_to(
+			before_control.global_position
+		)
 		# Only a real Godot shot charge followed by ball release counts as
 		# a completed bot shot; issuing the key alone is not success.
 		if before_shot_charge and not game.shot_charging and game.ball.carrier != current and game.ball.last_touch_team_id == 0:
@@ -646,6 +659,7 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		"difficulty": difficulty,
 		"ticks": TICKS,
 		"movement_frames": movement_frames,
+		"actual_human_travel_units": snappedf(actual_human_travel_units, 0.1),
 		"cpu_possession_frames": cpu_frames,
 		"human_possession_frames": human_frames,
 		"loose_ball_frames": loose_frames,
