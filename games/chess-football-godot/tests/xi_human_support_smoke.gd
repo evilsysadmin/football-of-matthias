@@ -94,6 +94,42 @@ func _initialize() -> void:
 	assert(game._ai_support_target(lead) == lead_base)
 	assert(game.ai_xi_human_lane_memory.is_empty())
 
+	# The second outlet remains behind the ball and on its original flank,
+	# but it must not wait inside a marked passing corridor.
+	rival_marker.global_position = recycle_target
+	assert(game._ai_xi_human_lane_clearance(recycle_target) < 1.0)
+	var open_recycle: Vector2 = game._ai_support_target(recycle)
+	assert(game.match_pitch.has_point(open_recycle))
+	assert(is_equal_approx(open_recycle.x, recycle_target.x))
+	assert(signf(open_recycle.y - centre.y) == signf(recycle_target.y - centre.y))
+	assert(absf(open_recycle.y - recycle_target.y) >= 130.0)
+	assert(game._ai_xi_human_lane_clearance(open_recycle) >= game.AI_XI_HUMAN_LANE_SAFE)
+	assert(game._ai_support_target(lead) == lead_base)
+	# An established 105u corridor is below the 110u acquisition gate
+	# but above the 98u retention gate. Do not reverse the runner here.
+	var inward: Vector2 = (open_recycle - recycle_target).normalized()
+	rival_marker.global_position = recycle_target + inward * 35.0
+	assert(game._ai_xi_human_lane_clearance(open_recycle) < game.AI_XI_HUMAN_LANE_SAFE)
+	assert(game._ai_support_target(recycle) == open_recycle)
+	rival_marker.global_position = open_recycle
+	assert(game._ai_support_target(recycle) != open_recycle)
+	rival_marker.global_position = recycle_target
+	assert(game._ai_support_target(recycle) == open_recycle)
+	var recycle_start: Vector2 = recycle.global_position
+	for tick in range(16):
+		await physics_frame
+		recycle.move_ai(STEP, open_recycle, 0.83, true)
+	assert(recycle.global_position.distance_to(open_recycle) <
+		recycle_start.distance_to(open_recycle) - 20.0)
+	assert(game.ball.carrier == carrier and game.controlled == carrier)
+	# Reset the independent movement fixture before the existing lead test.
+	recycle.global_position = recycle_start
+	recycle.velocity = Vector2.ZERO
+	rival_marker.global_position = centre + Vector2(1450.0, 800.0)
+	assert(game._ai_support_target(recycle) == recycle_target)
+	assert(game.ai_xi_human_recycle_memory.is_empty())
+	print("FOOTBALL_XI_RECYCLE_OUTLET_OK lateral=true behind_ball=true physical=true")
+
 	# Real CharacterBody2D AI runs toward the triangle: no teleport,
 	# no stamina bypass, no ball handoff, no forced input for the carrier.
 	var initial: Vector2 = lead.global_position
@@ -115,6 +151,7 @@ func _initialize() -> void:
 	game.ball.release(Vector2.RIGHT, 420.0)
 	game._update_ai(0.0)
 	assert(game.ai_xi_human_support_owner == null)
+	assert(game.ai_xi_human_recycle_memory.is_empty())
 	assert(game.ai_xi_human_support_slots == [null, null])
 	assert(game.ai_xi_human_lane_memory.is_empty())
 	assert(game._ai_xi_human_support_rank(lead) == -1)
