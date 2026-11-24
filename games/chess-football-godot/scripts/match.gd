@@ -1638,7 +1638,14 @@ func _update_ai(delta: float) -> void:
 			# Only the opposing team changes effort; human teammates remain unchanged.
 			if team_id == 1:
 				intensity = _ai_cpu_intensity(intensity)
-			player.move_ai(delta, target, intensity)
+			# Settling into a human passing outlet is distinct from chasing a
+			# moving opponent, loose ball or a committed breakaway run.
+			var settle_at_outlet: bool = (
+				match_team_size == 11 and team_id == 0 and team_has_ball
+				and player != ball.carrier and player in ai_xi_human_support_slots
+				and player != xi_breakaway_runner and not _xi_human_byline_attack()
+			)
+			player.move_ai(delta, target, intensity, settle_at_outlet)
 
 			if (
 				not team_has_ball
