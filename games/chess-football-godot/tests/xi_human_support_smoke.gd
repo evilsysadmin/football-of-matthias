@@ -142,7 +142,7 @@ func _initialize() -> void:
 	var peak_speed := 0.0
 	for tick in range(100):
 		await physics_frame
-		lead.move_ai(STEP, arrival_target, 1.0)
+		lead.move_ai(STEP, arrival_target, 1.0, true)
 		overshoot = maxf(overshoot, lead.global_position.x - arrival_target.x)
 		peak_speed = maxf(peak_speed, lead.velocity.length())
 	assert(peak_speed > lead.base_speed, "Arrival must preserve the distant sprint")
