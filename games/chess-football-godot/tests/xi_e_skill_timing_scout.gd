@@ -102,6 +102,7 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 	var checkpoints: Dictionary = {}
 	var trigger_origin: Vector2 = original
 	var uninterrupted_frames := 0
+	var loss_geometry: Dictionary = {}
 	for tick in range(MAX_FRAMES):
 		var holding: bool = game.ball.carrier == carrier
 		var dir: Vector2 = Vector2.ZERO
@@ -118,8 +119,25 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 			nearest_at_e = carrier.global_position.distance_to(presser.global_position)
 			trigger_origin = carrier.global_position
 		var cooldowns: Array[float] = []
+		var nearest_ball_rival: Footballer = null
+		var nearest_ball_gap: float = INF
+		var before_ball: Vector2 = game.ball.global_position
+		var before_carrier: Vector2 = carrier.global_position
+		var already_active := 0
 		for rival: Footballer in game.teams[1]:
 			cooldowns.append(rival.tackle_cooldown_seconds)
+			if holding and tick >= trigger and first_loss < 0 and not rival.sent_off:
+				var gap: float = rival.global_position.distance_to(before_ball)
+				if gap < nearest_ball_gap:
+					nearest_ball_gap = gap
+					nearest_ball_rival = rival
+				if rival.tackle_active():
+					already_active += 1
+		var carrier_speed_before_tick: float = carrier.velocity.length()
+		var nearest_body_gap: float = (
+			nearest_ball_rival.global_position.distance_to(before_carrier)
+			if nearest_ball_rival != null else -1.0
+		)
 		_input(dir, press_e)
 		game._physics_process(DT)
 		for team in game.teams:
@@ -135,6 +153,24 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 			e_executed = true
 		if tick >= trigger and first_loss < 0 and game.ball.carrier != carrier:
 			first_loss = tick - trigger
+			# Observe the last still-owned frame. The closest opponent is
+			# deliberately NOT labelled as the player who made the tackle.
+			if nearest_ball_rival != null:
+				var escape_axis := Vector2(-lane.y, lane.x)
+				loss_geometry = {
+					"nearest_ball_opponent": nearest_ball_rival.squad_index,
+					"ball_gap_before_tick": snappedf(nearest_ball_gap, 0.1),
+					"same_rival_body_gap_before_tick": snappedf(nearest_body_gap, 0.1),
+					"ball_offset_across_escape_lane": snappedf(
+						(before_ball - before_carrier).dot(escape_axis), 0.1
+					),
+					"ball_offset_along_escape_lane": snappedf(
+						(before_ball - before_carrier).dot(lane), 0.1
+					),
+					"already_active_opponent_tackles": already_active,
+					"carrier_speed_before_tick": snappedf(carrier_speed_before_tick, 0.1),
+					"carrier_speed_after_tick": snappedf(carrier.velocity.length(), 0.1)
+				}
 			first_cause = (
 				"clean_tackle_pending_claim" if game.pending_tackle_player != null
 				else "body_collision" if carrier.xi_collision_guard_seconds > 0.0
@@ -180,7 +216,8 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 		"lateral_advance": lateral,
 		"cpu_tackle_attempts": actual_tackles,
 		"uninterrupted_possession_frames": uninterrupted_frames,
-		"checkpoints": checkpoints
+		"checkpoints": checkpoints,
+		"first_loss_pre_tick_geometry": loss_geometry
 	}
 	root.remove_child(game)
 	game.queue_free()
