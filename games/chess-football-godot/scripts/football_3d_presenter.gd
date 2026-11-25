@@ -2048,6 +2048,23 @@ static func xi_rotated_foot_anchor_offset(
 	return (rotated_up - Vector3.UP) * foot_extent
 
 
+# Camera-facing explicit basis with roll preserved. The up vector is
+# identical to the one used by xi_rotated_foot_anchor_offset, so the
+# authored boot baseline remains anchored when shader billboarding is off.
+static func xi_fallen_raster_basis(
+	view_camera: Camera3D, roll: float, body_scale: Vector3, tactical: bool
+) -> Basis:
+	var right_axis: Vector3 = view_camera.global_transform.basis.x.normalized()
+	var up_axis: Vector3 = view_camera.global_transform.basis.y.normalized() if tactical else Vector3.UP
+	if not tactical:
+		right_axis.y = 0.0
+		right_axis = right_axis.normalized()
+	var rolled_right: Vector3 = right_axis * cos(roll) + up_axis * sin(roll)
+	var rolled_up: Vector3 = up_axis * cos(roll) - right_axis * sin(roll)
+	var normal: Vector3 = right_axis.cross(up_axis).normalized()
+	return Basis(rolled_right * body_scale.x, rolled_up * body_scale.y, normal * body_scale.z)
+
+
 # Compatibility helper: zero-lean tactical stance uses the same anchor.
 static func xi_tactical_foot_anchor_offset(
 	view_camera: Camera3D, frame: Texture2D, pixel_size: float, scale_y: float
@@ -2869,8 +2886,13 @@ func sync_presentation(delta: float, mode: String) -> void:
 				# Broadcast uses a genuinely upright billboard; tactical
 				# faces the camera with a compensating 3D centre translation.
 				var tactical_billboard := mode == "tactical"
+				# Built-in billboard shaders rebuild the model basis and
+				# discard roll. During a knockdown use an explicit camera
+				# basis, so the visible raster really rotates with the pose.
+				var fallen_body: bool = player.xi_collision_down_seconds > 0.0
 				var wanted_billboard := (
-					BaseMaterial3D.BILLBOARD_ENABLED if tactical_billboard
+					BaseMaterial3D.BILLBOARD_DISABLED if fallen_body
+					else BaseMaterial3D.BILLBOARD_ENABLED if tactical_billboard
 					else BaseMaterial3D.BILLBOARD_FIXED_Y
 				)
 				if canvas.billboard_mode != wanted_billboard:
@@ -2885,10 +2907,15 @@ func sync_presentation(delta: float, mode: String) -> void:
 				var wanted_position := sprite.position + body_offset
 				if xi_quad.position != wanted_position:
 					xi_quad.position = wanted_position
-				if xi_quad.rotation != sprite.rotation:
-					xi_quad.rotation = sprite.rotation
-				if xi_quad.scale != sprite.scale:
-					xi_quad.scale = sprite.scale
+				if fallen_body:
+					xi_quad.basis = xi_fallen_raster_basis(
+						camera, sprite.rotation.z, sprite.scale, tactical_billboard
+					)
+				else:
+					if xi_quad.rotation != sprite.rotation:
+						xi_quad.rotation = sprite.rotation
+					if xi_quad.scale != sprite.scale:
+						xi_quad.scale = sprite.scale
 				if canvas.albedo_color != sprite.modulate:
 					canvas.albedo_color = sprite.modulate
 			# The existing secondary motion includes deliberate running bob,
@@ -4020,7 +4047,7 @@ func _sync_player_secondary_motion(
 		# exact collision timer, with no gameplay change.
 		stretch_x = lerpf(1.0, 1.04, flat)
 		stretch_y = lerpf(1.0, 0.96, flat)
-		tilt_degrees = player.contact_sway_sign * 72.0 * flat
+		tilt_degrees = -player.contact_sway_sign * 72.0 * flat
 
 	if player.contact_stun_active() and player.xi_collision_down_seconds <= 0.0:
 		var contact_weight := player.contact_stun_ratio()

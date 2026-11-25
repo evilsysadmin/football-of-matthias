@@ -382,6 +382,15 @@ func _capture_xi_contact_fall(game: Node2D, stage: ChessFootball3DPresenter, mod
 				"Fallen body must roll without compressing into a flat strip")
 			var quad: MeshInstance3D = stage.xi_raster_meshes[runner.get_instance_id()]
 			assert(quad.scale.is_equal_approx(sprite.scale))
+			var material: StandardMaterial3D = quad.material_override
+			assert(material.billboard_mode == BaseMaterial3D.BILLBOARD_DISABLED,
+				"Fallen visible quad must not discard its roll in the billboard shader")
+			var camera_right: Vector3 = stage.camera.global_transform.basis.x.normalized()
+			if mode == "broadcast":
+				camera_right.y = 0.0
+				camera_right = camera_right.normalized()
+			assert(absf(quad.basis.y.normalized().dot(camera_right)) > 0.85,
+				"The actual raster up axis must roll sideways, not only its hidden driver")
 			print("FOOTBALL_XI_FALL_ASPECT_OK camera=%s ratio=%.3f" % [mode, fallen_aspect / impact_aspect])
 		if index == 2:
 			assert(displayed_span < fallen_display_span,
@@ -423,6 +432,11 @@ func _capture_xi_contact_fall(game: Node2D, stage: ChessFootball3DPresenter, mod
 	assert(absf(recovered.rotation.z) < deg_to_rad(20.0))
 	assert(recovered_quad.rotation.is_equal_approx(recovered.rotation))
 	assert(recovered_quad.scale.is_equal_approx(recovered.scale))
+	var recovered_material: StandardMaterial3D = recovered_quad.material_override
+	assert(recovered_material.billboard_mode == (
+		BaseMaterial3D.BILLBOARD_ENABLED if mode == "tactical"
+		else BaseMaterial3D.BILLBOARD_FIXED_Y
+	), "Stand-up must restore ordinary billboard rendering")
 	print("FOOTBALL_XI_FALL_CLOCK_RECOVERY_OK camera=%s ticks=%d" % [mode, recovery_ticks])
 	runner.velocity = Vector2.ZERO
 	runner.set_process(runner_processing)
