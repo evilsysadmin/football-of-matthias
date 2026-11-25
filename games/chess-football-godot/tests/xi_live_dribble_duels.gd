@@ -264,6 +264,31 @@ func _initialize() -> void:
 	carrier.has_ball = true
 	print("FOOTBALL_XI_CUT_EXIT_STEERING_OK limited_turn=45 first_plant=locked no_speed_buff=1")
 
+	# A defender partway along a nominally clear diagonal must influence
+	# contextual E's choice. Explicit diagonals remain manual.
+	_reset_duel(game, carrier, presser, "normal", "far")
+	for rival: Footballer in game.teams[1]:
+		rival.global_position = XI.position + Vector2(150.0, 150.0)
+		rival.velocity = Vector2.ZERO
+	carrier.global_position = XI.get_center()
+	var upper: Vector2 = Vector2(0.74, -0.67).normalized()
+	presser.global_position = carrier.global_position + upper * 60.0
+	var chosen: Vector2 = game._xi_contextual_cut_direction(carrier, Vector2.RIGHT)
+	assert(chosen.y > 0.0, "Contextual cut must avoid the blocked approach")
+	assert(game._xi_contextual_cut_direction(carrier, upper).is_equal_approx(upper),
+		"Explicit diagonal input remains authoritative")
+	# Physical body collisions are part of the match tick, not just tackle
+	# contacts. Check the real consequence in a committed head-on clash.
+	presser.global_position = carrier.global_position + Vector2(35.0, 0.0)
+	carrier.velocity = Vector2.RIGHT * 220.0
+	presser.velocity = Vector2.LEFT * 180.0
+	assert(carrier.start_dribble(Vector2.RIGHT, "cut"))
+	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.50
+	var clash: String = game._update_xi_dribble_body_contacts()
+	assert(clash == "both_down" and carrier.xi_collision_down_seconds > 0.0)
+	assert(presser.xi_collision_down_seconds > 0.0 and game.ball.carrier == null)
+	print("FOOTBALL_XI_CUT_CORRIDOR_OK manual=true real_body_clash=true")
+
 	print("FOOTBALL_XI_LIVE_DRIBBLE_DUELS " + JSON.stringify({
 		"mode": "isolated_deterministic_60hz_real_godot_physics_not_live_matches",
 		"scenarios": rows.size(),
