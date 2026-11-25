@@ -1552,4 +1552,64 @@ func _initialize() -> void:
 	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 normal_cover_contains=1 easy_five_unchanged=1")
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
+	await _human_lane_guard(packed)
 	quit(0)
+
+
+func _human_lane_guard(packed: PackedScene) -> void:
+	var game = packed.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game._set_quick_difficulty("normal")
+	var centre: Vector2 = XI.get_center()
+	var owner: Footballer = game.teams[1][10]
+	var receiver: Footballer = game.teams[1][9]
+	var presser: Footballer = game.teams[0][10]
+	var cover: Footballer = game.teams[0][8]
+	var marker: Footballer = game.teams[0][6]
+	var manual: Footballer = game.teams[0][4]
+	owner.global_position = centre + Vector2(-600.0, 0.0)
+	for attacker: Footballer in game.teams[1]:
+		if attacker != owner:
+			attacker.global_position = owner.global_position + Vector2(720.0, 640.0)
+			attacker.velocity = Vector2.ZERO
+	receiver.global_position = owner.global_position + Vector2(-350.0, -165.0)
+	for defender: Footballer in game.teams[0]:
+		if defender.role != "keeper":
+			defender.global_position = centre + Vector2(-1300.0, 800.0)
+			defender.velocity = Vector2.ZERO
+	presser.global_position = owner.global_position + Vector2(-70.0, 0.0)
+	cover.global_position = owner.global_position + Vector2(-100.0, 220.0)
+	marker.global_position = owner.global_position + Vector2(-245.0, -260.0)
+	marker.home_position = marker.global_position
+	game._select_player(manual)
+	game.ball.attach_to(owner)
+	var plan: Dictionary = game._ai_xi_lane_assignment(presser, cover, 0)
+	assert(plan.get("marker") == marker and plan.get("receiver") == receiver)
+	var target: Vector2 = plan["target"]
+	assert(target.is_equal_approx(owner.global_position.lerp(receiver.global_position, 0.64) + Vector2(-18.0, 0.0)))
+	game._select_player(marker)
+	assert(game._ai_xi_lane_assignment(presser, cover, 0).get("marker") != marker)
+	game._select_player(manual)
+	marker.xi_collision_down_seconds = 0.5
+	assert(game._ai_xi_lane_assignment(presser, cover, 0).get("marker") != marker)
+	marker.xi_collision_down_seconds = 0.0
+	assert(game._ai_primary_presser(0) == presser)
+	assert(game._ai_secondary_presser(0, presser) == cover)
+	var before: Vector2 = marker.global_position
+	var manual_before: Vector2 = manual.global_position
+	game.ai_next_decision[int(owner.get_instance_id())] = game.match_seconds + 10.0
+	await physics_frame
+	game._update_ai(1.0 / 60.0)
+	assert(marker.ai_target.distance_to(target) < 0.1)
+	assert(marker.global_position.distance_to(before) < 15.0)
+	assert(manual.global_position.is_equal_approx(manual_before) and game.controlled == manual)
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_lane_assignment(presser, cover, 0).is_empty())
+	print("FOOTBALL_XI_HUMAN_LANE_GUARD_OK mirrored=true real_ai=true controlled_excluded=true fallen_excluded=true")
+	game.queue_free()
