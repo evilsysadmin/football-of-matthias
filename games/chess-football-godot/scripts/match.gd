@@ -4050,7 +4050,18 @@ func _xi_contextual_cut_direction(player: Footballer, requested: Vector2) -> Vec
 		for rival in teams[1 - player.team_id]:
 			if rival.sent_off:
 				continue
-			clearance = minf(clearance, aim.distance_to(rival.global_position))
+			# A free destination does not make a cut safe if the runner
+			# must cross a defender on the way there. Sample the planted
+			# entry and lateral exit, including observed rival movement.
+			for progress: float in [0.35, 0.65, 1.0]:
+				var point: Vector2 = player.global_position.lerp(aim, progress)
+				var rival_position: Vector2 = rival.global_position
+				clearance = minf(clearance, point.distance_to(rival_position))
+				if rival.xi_collision_down_seconds <= 0.0:
+					var forecast: Vector2 = rival_position + (
+						rival.velocity * (0.30 * progress)
+					).limit_length(80.0)
+					clearance = minf(clearance, point.distance_to(forecast))
 		# If both lanes are equally clear, make the natural inward cut.
 		var score: float = clearance - absf(aim.y - match_pitch.get_center().y) * 0.08
 		if score > best_score:

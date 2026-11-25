@@ -4015,9 +4015,12 @@ func _sync_player_secondary_motion(
 		)
 		bob = -0.14 * flat
 		lateral_sway = player.contact_sway_sign * 0.08 * flat
-		stretch_x = lerpf(1.0, 1.24, flat)
-		stretch_y = lerpf(1.0, 0.58, flat)
-		tilt_degrees = player.contact_sway_sign * 78.0 * flat
+		# Keep the painted body readable: a fall is a roll, not a
+		# compression into a paper strip. Recovery still follows the
+		# exact collision timer, with no gameplay change.
+		stretch_x = lerpf(1.0, 1.04, flat)
+		stretch_y = lerpf(1.0, 0.96, flat)
+		tilt_degrees = player.contact_sway_sign * 72.0 * flat
 
 	if player.contact_stun_active() and player.xi_collision_down_seconds <= 0.0:
 		var contact_weight := player.contact_stun_ratio()
@@ -4059,7 +4062,8 @@ func _sync_player_secondary_motion(
 	if (
 		match_node.match_team_size == 11 and player.role != "keeper"
 		and player.has_ball and player.dribble_active()
-		and animation_name not in ["dribble_cut", "dribble_burst"]
+		and player.xi_collision_down_seconds <= 0.0
+		and animation_name not in ["dribble_cut", "dribble_burst", "hero_feint", "hero_cut"]
 	):
 		var progress := 1.0 - clampf(
 			player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
