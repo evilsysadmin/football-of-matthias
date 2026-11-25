@@ -307,7 +307,9 @@ func _begin_joystick(index: int, position: Vector2) -> void:
 
 func _update_joystick(position: Vector2) -> void:
 	joystick_max_travel = maxf(joystick_max_travel, position.distance_to(joystick_start_position))
-	var offset := position - joystick_origin
+	# The drawn stick is clamped to the viewport, but the physical neutral
+	# point remains the finger's initial contact, even at screen edges.
+	var offset := position - joystick_start_position
 	if offset.length() > JOYSTICK_RADIUS:
 		offset = offset.normalized() * JOYSTICK_RADIUS
 	_apply_joystick(offset / JOYSTICK_RADIUS)
