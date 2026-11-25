@@ -327,7 +327,17 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		speed *= 0.42
 	if contact_stun_seconds > 0.0:
 		speed *= 0.32
-	var desired := wanted_direction.normalized() * speed if moving else Vector2.ZERO
+	# Input.get_vector already applies the device deadzone. Preserve its
+	# remaining magnitude for ordinary XI outfield movement so a small
+	# thumbstick deflection can walk. Digital input still has length one;
+	# committed dribbles and their paid exits keep their existing kinematics.
+	var input_strength := 1.0
+	if (
+		match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
+		and not dribbling and not cut_exit_sprint and not feint_exit_sprint
+	):
+		input_strength = minf(wanted_direction.length(), 1.0)
+	var desired := wanted_direction.normalized() * speed * input_strength if moving else Vector2.ZERO
 	var acceleration := (
 		DRIBBLE_ACCELERATION
 		if dribbling
