@@ -4596,7 +4596,7 @@ func _try_claim_loose_ball() -> void:
 			return
 		best = home if home_score < away_score else away
 	if best != null:
-		ball.attach_to(best)
+		ball.attach_to(best, match_team_size == 11)
 		if best.team_id == 0:
 			if not _maybe_complete_one_two(best):
 				_select_player(best)

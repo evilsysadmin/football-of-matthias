@@ -38,7 +38,7 @@ var xi_carry_distance: float = 0.0
 var contact_reclaim_block_player: Footballer = null
 var contact_reclaim_block_seconds: float = 0.0
 
-func attach_to(player: Footballer) -> void:
+func attach_to(player: Footballer, preserve_contact: bool = false) -> void:
 	last_release_was_shot = false
 	shot_flight_seconds = 0.0
 	reclaim_block_player = null
@@ -58,7 +58,12 @@ func attach_to(player: Footballer) -> void:
 	rotation = 0.0
 	player.has_ball = true
 	player.queue_redraw()
-	global_position = player.global_position + player.ball_anchor()
+	# A legal loose-ball claim already occurred at the authoritative world
+	# position. Let XI outfield control converge through the existing carry
+	# follow instead of teleporting across the receiving player's body.
+	if not (preserve_contact and player.match_pitch == FootballMatchFormation.ELEVEN_PITCH_RECT
+		and player.role != "keeper"):
+		global_position = player.global_position + player.ball_anchor()
 
 func release(direction: Vector2, power: float, lift_velocity: float = 0.0, is_shot: bool = false) -> void:
 	# Tracking is sound-only and resets on every release, not just touches.
