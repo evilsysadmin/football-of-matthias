@@ -237,4 +237,70 @@ func _initialize() -> void:
 	print("FOOTBALL_XI_ONE_TWO_FALL_OK receiver_keeps_ball=true")
 
 	print("FOOTBALL_XI_ONE_TWO_OK real_pass=true deliberate_input=true physical_return=true normal_pass=true interceptable=true cancel=true")
+	# A fresh match exercises the production tick ordering with all 22
+	# players available. Only the initial positions and first charged pass
+	# are arranged; no player, ball or possession is moved by the test
+	# after the pass begins.
+	game.queue_free()
+	await process_frame
+	await _live_wall(scene)
 	quit(0)
+
+
+func _live_wall(scene: PackedScene) -> void:
+	var game = scene.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	game.pending_tackle_player = null
+	for team in game.teams:
+		for player: Footballer in team:
+			player.set_process(false)
+			player.set_physics_process(false)
+			player.velocity = Vector2.ZERO
+			player.global_position = game.match_pitch.position + Vector2(
+				150.0 if player.team_id == 0 else game.match_pitch.size.x - 150.0,
+				100.0 + float(player.squad_index) * (game.match_pitch.size.y - 200.0) / 10.0
+			)
+	var passer: Footballer = game.teams[0][10]
+	var receiver: Footballer = game.teams[0][6]
+	var rival: Footballer = game.teams[1][4]
+	var start: Vector2 = game.match_pitch.get_center() + Vector2(-350.0, 0.0)
+	passer.global_position = start
+	receiver.global_position = start + Vector2(300.0, 0.0)
+	var rival_start: Vector2 = rival.global_position
+	game._select_player(passer)
+	game.ball.attach_to(passer)
+	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
+	assert(game.pass_target == receiver)
+	game.pass_charge_seconds = 0.11
+	assert(game._release_charged_pass())
+	await process_frame
+	Input.action_press("pass_ball")
+	game._physics_process(STEP)
+	assert(game.xi_one_two_armed)
+	Input.action_release("pass_ball")
+	var returned := false
+	var received := false
+	for tick in range(150):
+		await physics_frame
+		game._physics_process(STEP)
+		if game.action_feedback_text == "PARED":
+			returned = true
+		if game.ball.carrier != null:
+			received = returned and game.ball.carrier == passer
+			break
+	assert(returned and received and game.controlled == passer,
+		"Live XI tick must complete the requested wall with ordinary AI and possession")
+	assert(passer.global_position.distance_to(start) > 15.0)
+	assert(rival.global_position.distance_to(rival_start) > 1.0,
+		"The full rival AI must actually move during the combination")
+	print("FOOTBALL_XI_ONE_TWO_LIVE_OK passer_travel=", passer.global_position.distance_to(start),
+		" rival_travel=", rival.global_position.distance_to(rival_start), " real_return=true")
+	game.queue_free()
