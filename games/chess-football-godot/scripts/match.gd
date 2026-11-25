@@ -1705,6 +1705,11 @@ func _update_ai(delta: float) -> void:
 				elif player == cover:
 					target = _ai_cover_target(player, loose_target)
 					intensity = _ai_adaptive_intensity(AI_COVER_INTENSITY)
+				elif match_team_size == 11:
+					# Keep a shared transition shape while possession is
+					# undecided; the rest of the team follows the play
+					# without turning into extra ball-chasing pressers.
+					target = _ai_xi_loose_support_target(player, loose_target)
 			elif team_has_ball:
 				if ball.carrier == player:
 					target = _ai_dribble_target(player)
@@ -2094,6 +2099,16 @@ func _ai_loose_ball_pursuit_point() -> Vector2:
 		ball.velocity * AI_LOOSE_BALL_LEAD_SECONDS
 	).limit_length(AI_LOOSE_BALL_LEAD_MAX_DISTANCE)
 	return ChessFootballMath.clamp_to_pitch(ball.global_position + lead, match_pitch)
+
+
+# Same bounded transition shape for both XI sides. A loose pass does
+# not send eight supporting players back to static kickoff positions.
+# Anchoring the offset at the formation slot prevents cumulative drift.
+func _ai_xi_loose_support_target(player: Footballer, pursuit_point: Vector2) -> Vector2:
+	if match_team_size != 11 or player.role == "keeper" or ball.carrier != null:
+		return player.home_position
+	var shift: Vector2 = ((pursuit_point - player.home_position) * 0.18).limit_length(180.0)
+	return ChessFootballMath.clamp_to_pitch(player.home_position + shift, match_pitch)
 
 
 func _ai_press_role_margin(nearest_distance: float) -> float:

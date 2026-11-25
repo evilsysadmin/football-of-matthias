@@ -392,4 +392,66 @@ func _initialize() -> void:
 	print("FOOTBALL_XI_SUPPORT_SNAPSHOT_HANDOFF_OK possession=true memory_reset=true")
 
 	print("FOOTBALL_XI_HUMAN_SUPPORT_OK two_outlets=true open_lane=true stable_roles=true real_movement=true loss_reset=true legacy_5v5=true cpu_unchanged=true")
+	game.queue_free()
+	await process_frame
+	await _loose_transition_shape(scene)
 	quit(0)
+
+
+func _loose_transition_shape(scene: PackedScene) -> void:
+	var game = scene.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	for team in game.teams:
+		for player: Footballer in team:
+			player.global_position = player.home_position
+			player.velocity = Vector2.ZERO
+	var centre: Vector2 = game.match_pitch.get_center()
+	var home: Footballer = game.teams[0][1]
+	var away: Footballer = game.teams[1][1]
+	var manual: Footballer = game.teams[0][10]
+	game._select_player(manual)
+	game.ball.release(Vector2.RIGHT, 0.0)
+	game.ball.global_position = centre
+	var home_target: Vector2 = game._ai_xi_loose_support_target(home, centre)
+	var away_target: Vector2 = game._ai_xi_loose_support_target(away, centre)
+	assert(home_target.distance_to(centre) < home.home_position.distance_to(centre) - 100.0)
+	assert(away_target.distance_to(centre) < away.home_position.distance_to(centre) - 100.0)
+	assert(is_equal_approx(home_target.x + away_target.x, centre.x * 2.0))
+	assert(is_equal_approx(home_target.y, away_target.y))
+	assert(home_target.distance_to(home.home_position) <= 180.01)
+	assert(away_target.distance_to(away.home_position) <= 180.01)
+	assert(game._ai_xi_loose_support_target(home, centre) == home_target)
+	for defender: Footballer in [home, away]:
+		var first: Footballer = game._ai_primary_presser(defender.team_id)
+		var second: Footballer = game._ai_secondary_presser(defender.team_id, first)
+		assert(defender != first and defender != second)
+	var home_expected: Vector2 = game._ai_spaced_target(home, home_target)
+	var away_expected: Vector2 = game._ai_spaced_target(away, away_target)
+	var manual_start: Vector2 = manual.global_position
+	game._update_ai(0.0)
+	assert(home.ai_target.distance_to(home_expected) < 0.1)
+	assert(away.ai_target.distance_to(away_expected) < 0.1)
+	assert(manual.global_position.is_equal_approx(manual_start))
+	var home_start: Vector2 = home.global_position
+	var away_start: Vector2 = away.global_position
+	for tick in range(12):
+		await physics_frame
+		game._update_ai(STEP)
+	assert(home.global_position.distance_to(home_target) < home_start.distance_to(home_target) - 5.0)
+	assert(away.global_position.distance_to(away_target) < away_start.distance_to(away_target) - 5.0)
+	assert(game.ball.carrier == null and game.controlled == manual)
+	game.ball.attach_to(manual)
+	assert(game._ai_xi_loose_support_target(home, centre) == home.home_position)
+	game.ball.release(Vector2.RIGHT, 0.0)
+	game.match_team_size = 5
+	assert(game._ai_xi_loose_support_target(home, centre) == home.home_position)
+	print("FOOTBALL_XI_LOOSE_TRANSITION_SHAPE_OK mirrored=true real_movement=true bounded=true manual_unchanged=true legacy=true")
+	game.queue_free()
