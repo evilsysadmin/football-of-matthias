@@ -1577,6 +1577,16 @@ func _update_ai(delta: float) -> void:
 		ai_xi_human_support_slots = [null, null]
 		ai_xi_human_lane_memory.clear()
 		ai_xi_human_recycle_memory.clear()
+	# The human-controlled carrier does not move inside this AI pass.
+	# Assign the two outlets before moving any teammate, rather than
+	# reranking the squad after each earlier teammate has already moved.
+	# Standalone tactical/debug queries still refresh from live positions.
+	var reuse_human_support: bool = (
+		match_team_size == 11 and ball.carrier != null
+		and ball.carrier.team_id == 0 and ball.carrier == controlled
+	)
+	if reuse_human_support:
+		_ai_xi_refresh_human_support_assignment()
 	for team_id in range(2):
 		var team_has_ball: bool = ball.carrier != null and ball.carrier.team_id == team_id
 		var loose_target: Vector2 = _ai_loose_ball_pursuit_point()
@@ -1626,7 +1636,7 @@ func _update_ai(delta: float) -> void:
 					target = _ai_dribble_target(player)
 					intensity = _ai_adaptive_intensity(0.98)
 				else:
-					target = _ai_support_target(player)
+					target = _ai_support_target(player, reuse_human_support and team_id == 0)
 					intensity = (
 						1.0 if match_team_size == 11 and team_id == 0
 						and (
@@ -2556,13 +2566,36 @@ func _xi_human_byline_attack() -> bool:
 # Human XI: choose only TWO nearby, healthy attacking outfielders. The
 # stable role hold avoids an entire 4-3-3 swapping lanes every frame.
 # No one is teleported, no player with the ball is selected as support.
-func _ai_xi_human_support_rank(player: Footballer) -> int:
+func _ai_xi_human_support_rank(player: Footballer, reuse_assignment: bool = false) -> int:
 	if (
 		match_team_size != 11
 		or player.team_id != 0
 		or ball.carrier == null or ball.carrier.team_id != 0
 	):
 		return -1
+	# The caller can reuse only this AI pass's snapshot. Never preserve
+	# an outlet which became unavailable or belongs to a previous carrier.
+	if (
+		reuse_assignment and ai_xi_human_support_owner == ball.carrier
+		and controlled == ball.carrier
+	):
+		var valid := true
+		for outlet: Footballer in ai_xi_human_support_slots:
+			if outlet != null and (
+				outlet.sent_off or outlet.xi_collision_down_seconds > 0.0
+				or outlet == controlled
+			):
+				valid = false
+				break
+		if valid:
+			return ai_xi_human_support_slots.find(player)
+	_ai_xi_refresh_human_support_assignment()
+	return ai_xi_human_support_slots.find(player)
+
+
+# The caller has verified live human XI possession. Keep the complete
+# assignment and its memory lifecycle in one explicit operation.
+func _ai_xi_refresh_human_support_assignment() -> void:
 	if ai_xi_human_support_owner != ball.carrier:
 		ai_xi_human_support_owner = ball.carrier
 		ai_xi_human_support_slots = [null, null]
@@ -2636,10 +2669,6 @@ func _ai_xi_human_support_rank(player: Footballer) -> int:
 			or int(ai_xi_human_support_slots[0].get_instance_id()) != int(stored_key)
 		):
 			ai_xi_human_lane_memory.erase(stored_key)
-	for slot in range(2):
-		if ai_xi_human_support_slots[slot] == player:
-			return slot
-	return -1
 
 
 # Score both space at the receiving boot and the ACTUAL passing corridor.
@@ -2782,12 +2811,12 @@ func _ai_xi_human_open_recycle_target(player: Footballer, base_target: Vector2) 
 	return base_target
 
 
-func _ai_support_target(player: Footballer):
+func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false):
 	if ball.carrier == null:
 		return player.home_position
 	var forward: float = 1.0 if player.team_id == 0 else -1.0
 	if match_team_size == 11 and player.team_id == 0:
-		var human_rank: int = _ai_xi_human_support_rank(player)
+		var human_rank: int = _ai_xi_human_support_rank(player, reuse_human_assignment)
 		if human_rank >= 0:
 			if player == xi_breakaway_runner and ball.carrier == xi_breakaway_owner:
 				return xi_breakaway_target
