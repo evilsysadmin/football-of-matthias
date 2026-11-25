@@ -1060,6 +1060,7 @@ func _xi_pass_charge_receiver() -> Footballer:
 	if (
 		target == null or not is_instance_valid(target)
 		or target.sent_off or target == controlled
+		or target.xi_collision_down_seconds > 0.0
 		or target.team_id != controlled.team_id
 	):
 		return null
@@ -1520,7 +1521,8 @@ func _release_charged_pass() -> bool:
 	if valid_target and directional:
 		var offset: Vector2 = target.global_position - passer.global_position
 		valid_target = (
-			offset.length_squared() > 0.001
+			(match_team_size != 11 or target.xi_collision_down_seconds <= 0.0)
+			and offset.length_squared() > 0.001
 			and aim_direction.normalized().dot(offset.normalized()) >= PASS_MIN_TARGET_ALIGNMENT
 		)
 	if valid_target:
@@ -3751,6 +3753,10 @@ func _best_directional_pass_target(
 	var incumbent_score := -INF
 	for teammate in teams[player.team_id]:
 		if teammate.sent_off or teammate == player:
+			continue
+		# A fallen athlete cannot currently receive a ball. Do not let
+		# recipient hysteresis keep an unavailable directional outlet.
+		if xi_charged and teammate.xi_collision_down_seconds > 0.0:
 			continue
 		var offset: Vector2 = teammate.global_position - player.global_position
 		var distance := offset.length()
