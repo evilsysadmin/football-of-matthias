@@ -180,6 +180,7 @@ const AI_XI_HUMAN_LANE_READ_MAX_DISTANCE := 80.0
 const AI_XI_HUMAN_LANE_READ_MIN_SPEED := 80.0
 const AI_XI_HUMAN_RECYCLE_LATERAL_STEP := 140.0
 const AI_XI_HUMAN_RECYCLE_MIN_WIDTH := 40.0
+const AI_XI_HUMAN_RECYCLE_MIN_DEPTH := 80.0
 # XI human byline attacks: one existing outlet attacks the penalty spot,
 # the second offers a genuine cutback at the edge of the area. Both must
 # RUN into place with real stamina; no auto pass, catch or scoring boost.
@@ -1681,7 +1682,12 @@ func _update_ai(delta: float) -> void:
 				and player != lane_marker
 				and (team_has_ball or (player != presser and not contesting_cover and not human_close_cover))
 			):
-				target = _ai_spaced_target(player, target)
+				var preserve_outlet_lane: bool = (
+					match_team_size == 11 and team_id == 0 and team_has_ball
+					and player in ai_xi_human_support_slots
+					and player != xi_breakaway_runner and not _xi_human_byline_attack()
+				)
+				target = _ai_spaced_target(player, target, preserve_outlet_lane)
 			# Only the opposing team changes effort; human teammates remain unchanged.
 			if team_id == 1:
 				intensity = _ai_cpu_intensity(intensity)
@@ -2102,7 +2108,9 @@ func _ai_secondary_presser(team_id: int, primary: Footballer) -> Footballer:
 # Soft tactical spacing, not a collision force: no player teleportation,
 # no repulsion from opponents during intentional dribbles or tackles.
 # A stable role/index tie-break resolves truly coincident destinations.
-func _ai_spaced_target(player: Footballer, target: Vector2) -> Vector2:
+func _ai_spaced_target(
+	player: Footballer, target: Vector2, preserve_outlet_lane: bool = false
+) -> Vector2:
 	if player.role == "keeper" or player.has_ball:
 		return target
 	var correction := Vector2.ZERO
@@ -2119,10 +2127,39 @@ func _ai_spaced_target(player: Footballer, target: Vector2) -> Vector2:
 			else Vector2(0.0, 1.0 if player.squad_index > teammate.squad_index else -1.0)
 		)
 		correction += direction * (AI_TEAMMATE_SEPARATION_RADIUS - distance)
-	return ChessFootballMath.clamp_to_pitch(
+	var spaced: Vector2 = ChessFootballMath.clamp_to_pitch(
 		target + correction.limit_length(AI_TEAMMATE_SEPARATION_MAX_CORRECTION),
 		match_pitch
 	)
+	if (
+		not preserve_outlet_lane or spaced.is_equal_approx(target)
+		or ball.carrier == null or ball.carrier.team_id != 0
+	):
+		return spaced
+	# The generic spacing pass runs AFTER lane selection. Do not let it
+	# send an otherwise safe receiving runner straight into a marker.
+	# Prefer the full correction, then progressively smaller corrections.
+	# A retained lane can legitimately be below the acquisition threshold.
+	# Preserve its hysteresis floor too; otherwise spacing would undo it.
+	# For an already contested lead lane, keep ordinary spacing.
+	var protect_clearance: bool = _ai_xi_human_lane_clearance(target, true) >= AI_XI_HUMAN_LANE_HOLD
+	var is_recycle: bool = ai_xi_human_support_slots[1] == player
+	if not protect_clearance and not is_recycle:
+		return spaced
+	var origin: Vector2 = ball.carrier.global_position
+	var flank: float = signf(target.y - origin.y)
+	var min_depth: float = minf(maxf(origin.x - target.x, 0.0), AI_XI_HUMAN_RECYCLE_MIN_DEPTH)
+	var min_width: float = minf(absf(target.y - origin.y), AI_XI_HUMAN_RECYCLE_MIN_WIDTH)
+	for fraction: float in [1.0, 0.5, 0.25]:
+		var candidate: Vector2 = target.lerp(spaced, fraction)
+		if is_recycle and (
+			origin.x - candidate.x < min_depth
+			or (not is_zero_approx(flank) and (candidate.y - origin.y) * flank < min_width)
+		):
+			continue
+		if not protect_clearance or _ai_xi_human_lane_clearance(candidate, true) >= AI_XI_HUMAN_LANE_HOLD:
+			return candidate
+	return target
 
 
 func _ai_cpu_second_press_active(player: Footballer, threat_position: Vector2) -> bool:

@@ -103,6 +103,65 @@ func _initialize() -> void:
 	challenger.sent_off = false
 	challenger.global_position = centre + Vector2(-630.0, 250.0)
 
+	# Generic teammate spacing can push an otherwise clear outlet into a
+	# rival. Preserve as much safe separation as possible, not a teleport.
+	var spacing_normal: Vector2 = (lead_base - centre).normalized().orthogonal()
+	var challenger_start: Vector2 = challenger.global_position
+	challenger.global_position = lead_base - spacing_normal * 25.0
+	rival_marker.global_position = lead_base + spacing_normal * 160.0
+	var raw_spaced: Vector2 = game._ai_spaced_target(lead, lead_base)
+	var safe_spaced: Vector2 = game._ai_spaced_target(lead, lead_base, true)
+	assert(game._ai_xi_human_lane_clearance(lead_base, true) >= game.AI_XI_HUMAN_LANE_SAFE)
+	assert(game._ai_xi_human_lane_clearance(raw_spaced, true) < game.AI_XI_HUMAN_LANE_HOLD)
+	assert(game._ai_xi_human_lane_clearance(safe_spaced, true) >= game.AI_XI_HUMAN_LANE_HOLD)
+	assert(safe_spaced.distance_to(challenger.global_position) > lead_base.distance_to(challenger.global_position))
+	assert(safe_spaced.distance_to(lead_base) < raw_spaced.distance_to(lead_base))
+	assert(game.ball.carrier == carrier and game.controlled == carrier)
+	print("FOOTBALL_XI_SPACING_LANE_OK raw=", game._ai_xi_human_lane_clearance(raw_spaced, true),
+		" guarded=", game._ai_xi_human_lane_clearance(safe_spaced, true))
+	# A remembered 105u lane remains viable even below the 110u
+	# acquisition threshold. Spacing must not invalidate its hysteresis.
+	rival_marker.global_position = lead_base + spacing_normal * 105.0
+	var retained_gap: float = game._ai_xi_human_lane_clearance(lead_base, true)
+	assert(retained_gap >= game.AI_XI_HUMAN_LANE_HOLD)
+	assert(retained_gap < game.AI_XI_HUMAN_LANE_SAFE)
+	assert(game._ai_xi_human_lane_clearance(game._ai_spaced_target(lead, lead_base, true), true) >= game.AI_XI_HUMAN_LANE_HOLD)
+	# A genuinely contested lead lane keeps the ordinary spacing path.
+	rival_marker.global_position = lead_base + spacing_normal * 70.0
+	assert(game._ai_xi_human_lane_clearance(lead_base, true) < game.AI_XI_HUMAN_LANE_HOLD)
+	assert(game._ai_spaced_target(lead, lead_base, true).is_equal_approx(raw_spaced))
+	# No obstacle: apply the full separation instead of suppressing it.
+	rival_marker.global_position = centre + Vector2(1450.0, 800.0)
+	assert(game._ai_spaced_target(lead, lead_base, true).is_equal_approx(raw_spaced))
+	challenger.global_position = challenger_start
+	print("FOOTBALL_XI_SPACING_HYSTERESIS_OK retained=true contested_fallback=true clear_full=true")
+
+	# A nearby teammate must not push the safety outlet into the centre
+	# or too close to the carrier. Isolate spacing from role selection.
+	var saved_positions: Dictionary = {}
+	for teammate: Footballer in game.teams[0]:
+		if teammate != carrier and teammate != recycle:
+			saved_positions[teammate] = teammate.global_position
+			teammate.global_position = centre + Vector2(900.0, 900.0)
+	var safety_flank: float = signf(recycle_target.y - centre.y)
+	var narrow_outlet: Vector2 = centre + Vector2(-150.0, safety_flank * 45.0)
+	challenger.global_position = narrow_outlet + Vector2(-20.0, safety_flank * 20.0)
+	var raw_recycle: Vector2 = game._ai_spaced_target(recycle, narrow_outlet)
+	var guarded_recycle: Vector2 = game._ai_spaced_target(recycle, narrow_outlet, true)
+	assert((raw_recycle.y - centre.y) * safety_flank < game.AI_XI_HUMAN_RECYCLE_MIN_WIDTH)
+	assert((guarded_recycle.y - centre.y) * safety_flank >= game.AI_XI_HUMAN_RECYCLE_MIN_WIDTH)
+	assert(centre.x - guarded_recycle.x >= game.AI_XI_HUMAN_RECYCLE_MIN_DEPTH)
+	# An independent push directly toward the carrier tests depth alone.
+	challenger.global_position = recycle_target - Vector2(20.0, 0.0)
+	raw_recycle = game._ai_spaced_target(recycle, recycle_target)
+	guarded_recycle = game._ai_spaced_target(recycle, recycle_target, true)
+	assert(centre.x - raw_recycle.x < game.AI_XI_HUMAN_RECYCLE_MIN_DEPTH)
+	assert(centre.x - guarded_recycle.x >= game.AI_XI_HUMAN_RECYCLE_MIN_DEPTH)
+	assert(guarded_recycle.distance_to(challenger.global_position) > recycle_target.distance_to(challenger.global_position))
+	for teammate: Footballer in saved_positions:
+		teammate.global_position = saved_positions[teammate]
+	print("FOOTBALL_XI_SPACING_RECYCLE_OK flank=true depth=true")
+
 	# A rival blocking the LEAD's actual intended pass makes that runner
 	# look for another reachable, defensible corridor. No invisible catch:
 	# the defender remains on the pitch and can intercept any real pass.
