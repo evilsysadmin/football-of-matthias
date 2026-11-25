@@ -453,12 +453,12 @@ var xi_breakaway_owner: Footballer = null
 var xi_breakaway_runner: Footballer = null
 var xi_breakaway_target: Vector2 = Vector2.ZERO
 var xi_breakaway_until: float = 0.0
-# Cached only while the ball is loose; possession resets the assignments.
+# Independent caches for both teams, including loose-ball pursuit.
 var ai_primary_presser_cache: Array = [null, null]
 var ai_secondary_presser_cache: Array = [null, null]
-# Possession-scoped stability applies only to CPU XI Normal+, not the
-# existing loose-ball chase or human/5v5 defensive assignments.
+# XI Normal+ defensive roles persist only for the same opposing carrier.
 var ai_xi_defensive_role_owner: Footballer = null
+var ai_xi_human_defensive_role_owner: Footballer = null
 # Match-clock based to stay paused during overlays and never drift across F5.
 # A manual Q is authoritative for its grace window.
 var xi_human_auto_switch_block_until: float = 0.0
@@ -2112,20 +2112,24 @@ func _ai_stable_press_role(
 	cache: Array,
 ) -> Footballer:
 	var keep_xi_defensive_roles := (
-		team_id == 1
-		and match_team_size == 11
+		match_team_size == 11
 		and quick_difficulty != "easy"
 		and ball.carrier != null
-		and ball.carrier.team_id == 0
+		and ball.carrier.team_id != team_id
 	)
-	# Before looking up either role, expire BOTH slots if the carrier
-	# changes or the XI defensive phase ends. Never inherit a pairing
-	# from a prior possession, sent-off player or legacy 5v5 mode.
+	# Both sides use the same possession-scoped role stability. Expire
+	# only this team's slots when its opponent changes or possession ends.
 	var owner_for_roles: Footballer = ball.carrier if keep_xi_defensive_roles else null
-	if team_id == 1 and ai_xi_defensive_role_owner != owner_for_roles:
-		ai_primary_presser_cache[1] = null
-		ai_secondary_presser_cache[1] = null
-		ai_xi_defensive_role_owner = owner_for_roles
+	var previous_owner: Footballer = (
+		ai_xi_defensive_role_owner if team_id == 1 else ai_xi_human_defensive_role_owner
+	)
+	if previous_owner != owner_for_roles:
+		ai_primary_presser_cache[team_id] = null
+		ai_secondary_presser_cache[team_id] = null
+		if team_id == 1:
+			ai_xi_defensive_role_owner = owner_for_roles
+		else:
+			ai_xi_human_defensive_role_owner = owner_for_roles
 	var closest: Footballer = null
 	var closest_distance := INF
 	for player in teams[team_id]:
@@ -2144,9 +2148,8 @@ func _ai_stable_press_role(
 			closest_distance = distance
 			closest = player
 
-	# Possession still resets the old human/5v5/Easy chase assignment.
-	# Only the TWO XI CPU defenders can retain their current jobs while
-	# the same human carries the ball.
+	# Easy, 5v5 and own possession retain the nearest-player behavior.
+	# Only two available XI defenders keep their jobs for the same rival.
 	if ball.carrier != null and not keep_xi_defensive_roles:
 		cache[team_id] = null
 		return closest
