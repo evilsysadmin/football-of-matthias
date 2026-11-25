@@ -104,11 +104,7 @@ func tick_ball(delta: float) -> void:
 				var stride_phase := fposmod(
 					xi_carry_distance / XI_TOUCH_STRIDE_DISTANCE, 1.0
 				)
-				var forward: Vector2 = (
-					carrier.dribble_direction
-					if carrier.dribble_active()
-					else carrier.velocity.normalized()
-				)
+				var forward: Vector2 = carrier.xi_ball_touch_direction()
 				var lead := XI_TOUCH_BASE_LEAD + XI_TOUCH_PUSH_LEAD * sin(PI * stride_phase)
 				destination += forward * lead
 			# A short follow-through gives the ball its own pace on turns.
