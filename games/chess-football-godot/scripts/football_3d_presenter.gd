@@ -1038,7 +1038,7 @@ func _request_action_poses_from_r2() -> void:
 			loader.atlas_ready.connect(_on_action_pose_ready.bind(team_id, action))
 			loader.atlas_failed.connect(_on_action_pose_failed.bind(team_id, action))
 			_ci_action_pose_trace("request_start", team_id, action)
-			loader.start(meta, ChessFootballActionPosesR2.TRUSTED_ROOT)
+			loader.start(meta, ChessFootballActionPosesR2.TRUSTED_ROOT, 20.0, true)
 
 
 func _on_action_pose_failed(reason: String, team_id: int, action: StringName) -> void:

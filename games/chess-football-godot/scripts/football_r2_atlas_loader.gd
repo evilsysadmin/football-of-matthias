@@ -13,6 +13,8 @@ const MAX_DIMENSION := 4096
 
 var _started := false
 var _request_node: HTTPRequest
+var _timeout_retry_remaining := false
+var _request_timeout := REQUEST_TIMEOUT_SECONDS
 
 
 # The original shared CDN remains the default for every existing caller.
@@ -76,18 +78,28 @@ static func decode_verified_webp(
 	return image
 
 
-func start(meta: Dictionary, allowed_root: String = CDN_ROOT, timeout_seconds: float = REQUEST_TIMEOUT_SECONDS) -> void:
-	# Prevent retries or duplicate requests in one presenter lifetime.
+# Only explicitly opted-in sheets can retry a transport timeout. A bad
+# status, hash, decoded geometry or malformed metadata never gets a retry.
+static func can_retry_timeout(result: int, status: int, remaining: bool) -> bool:
+	return remaining and result == HTTPRequest.RESULT_TIMEOUT and status == 0
+
+
+func start(meta: Dictionary, allowed_root: String = CDN_ROOT, timeout_seconds: float = REQUEST_TIMEOUT_SECONDS, retry_timeout: bool = false) -> void:
+	# Prevent duplicate starts in one presenter lifetime.
 	if _started:
 		return
 	_started = true
 	if not OS.has_feature("web") or not valid_metadata(meta, allowed_root):
 		return
+	_timeout_retry_remaining = retry_timeout
+	_request_timeout = clampf(timeout_seconds, REQUEST_TIMEOUT_SECONDS, 30.0)
+	_request_once(meta.duplicate(true), allowed_root)
+
+
+func _request_once(meta: Dictionary, allowed_root: String) -> void:
 	_request_node = HTTPRequest.new()
 	_request_node.name = "AtlasHTTP"
-	# Long V5 sheets need a bounded allowance under slow software WebGL;
-	# legacy atlases keep their existing 8-second timeout.
-	_request_node.timeout = clampf(timeout_seconds, REQUEST_TIMEOUT_SECONDS, 30.0)
+	_request_node.timeout = _request_timeout
 	add_child(_request_node)
 	_request_node.request_completed.connect(
 		_on_request_completed.bind(meta.duplicate(true), allowed_root)
@@ -106,6 +118,19 @@ func _on_request_completed(
 	if _request_node != null:
 		_request_node.queue_free()
 		_request_node = null
+	# A completion can arrive while the presenter is being removed.
+	# Do not emit a stale resource or schedule work outside the tree.
+	if not is_inside_tree() or is_queued_for_deletion():
+		_timeout_retry_remaining = false
+		return
+	if can_retry_timeout(result, status, _timeout_retry_remaining):
+		_timeout_retry_remaining = false
+		# Yield before creating the next HTTPRequest; the failed node is
+		# queued for deletion. A freed presenter cannot start this retry.
+		await get_tree().create_timer(0.5).timeout
+		if is_inside_tree() and not is_queued_for_deletion():
+			_request_once(meta, allowed_root)
+		return
 	if result != HTTPRequest.RESULT_SUCCESS or status != 200:
 		atlas_failed.emit("http_result:%d_status:%d" % [result, status])
 		return
