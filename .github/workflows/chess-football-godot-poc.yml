@@ -2086,8 +2086,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Restore shared npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: football-manager-npm-${{ runner.os }}-${{ runner.arch }}-npm11.6.1-${{ hashFiles('package.json', 'frontend/package.json') }}
       - name: Install with pinned npm workspace resolver
         run: npx --yes npm@11.6.1 install --no-audit --no-fund
+      - name: Restore shared Chromium browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: football-manager-chromium-${{ runner.os }}-${{ runner.arch }}-playwright-1.64.1
       - run: npx playwright install chromium
       - name: Boot real WebAssembly in Chromium
         # The Godot Web app runs from 127.0.0.1 with a random test port.
