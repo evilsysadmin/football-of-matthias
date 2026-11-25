@@ -71,11 +71,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var handled := false
 	if event is InputEventScreenTouch:
-		handled = (
-			_touch_down(event.index, event.position)
-			if event.pressed
-			else _touch_up(event.index, event.position)
-		)
+		if event.canceled:
+			handled = _touch_cancel(event.index)
+		else:
+			handled = (
+				_touch_down(event.index, event.position)
+				if event.pressed
+				else _touch_up(event.index, event.position)
+			)
 	elif event is InputEventScreenDrag:
 		handled = _touch_drag(event.index, event.position)
 	if handled:
@@ -254,6 +257,25 @@ func _touch_up(index: int, position: Vector2) -> bool:
 		return true
 	return true
 
+# An OS/browser cancellation is not a deliberate release: never kick,
+# select or tackle on a cancelled finger. Other fingers stay active.
+func _touch_cancel(index: int) -> bool:
+	if index == joystick_touch_index:
+		_release_joystick(false)
+		return true
+	if not context_touches.has(index):
+		return false
+	var context: Dictionary = context_touches[index]
+	context_touches.erase(index)
+	var match_node = get_parent()
+	if match_node != null:
+		var kind := String(context.get("kind", ""))
+		if kind == "goal":
+			match_node.mobile_cancel_context_shot()
+		elif kind == "pass":
+			match_node.mobile_cancel_context_pass()
+	return true
+
 func _in_joystick_zone(position: Vector2) -> bool:
 	var viewport_size := get_viewport().get_visible_rect().size
 	return (
@@ -314,11 +336,15 @@ func _set_action_strength(action: String, strength: float) -> void:
 	else:
 		Input.action_release(action)
 
-func _release_joystick() -> void:
+func _release_joystick(record_tap: bool = true) -> void:
 	var now := Time.get_ticks_msec()
 	var held_msec := now - joystick_started_msec
+	if not record_tap:
+		last_quick_tap_msec = -10000
 	if (
-		not joystick_sprint_latched
+		record_tap
+		and joystick_touch_index != -1
+		and not joystick_sprint_latched
 		and held_msec <= SPRINT_QUICK_TAP_MSEC
 		and joystick_max_travel <= SPRINT_TAP_MAX_TRAVEL
 	):
@@ -361,7 +387,7 @@ func _release_all_inputs() -> void:
 				elif kind == "pass":
 					match_node.mobile_cancel_context_pass()
 	context_touches.clear()
-	_release_joystick()
+	_release_joystick(false)
 
 func debug_force_controls_visible(enabled: bool) -> void:
 	debug_force_visible = enabled

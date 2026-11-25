@@ -58,6 +58,19 @@ func _initialize() -> void:
 	assert(not Input.is_action_pressed("sprint"))
 	mobile_runner.debug_set_stamina(100.0)
 
+	# OS cancellation releases movement without creating a sprint double tap.
+	assert(controls.debug_touch_down(15, joystick_start))
+	_cancel_finger(controls, 15, joystick_start)
+	assert(not controls.debug_joystick_visible())
+	assert(not Input.is_action_pressed("sprint"))
+	assert(Input.get_action_strength("move_right") < 0.01)
+	assert(controls.debug_touch_down(16, joystick_start))
+	assert(not controls.debug_sprint_latched())
+	controls.debug_touch_move(16, joystick_start + Vector2(68.0, 0.0))
+	_cancel_finger(controls, 16, joystick_start + Vector2(68.0, 0.0))
+	assert(not Input.is_action_pressed("sprint"))
+	assert(Input.get_action_strength("move_right") < 0.01)
+
 	# With possession, a tap on open grass on the right half is a contextual
 	# dribble. No extra button: teammate/pass, rival/tackle and goal/shot keep
 	# their existing meanings.
@@ -109,6 +122,14 @@ func _initialize() -> void:
 	match_node.debug_sync_presentation()
 	var receiver_screen: Vector2 = match_node.mobile_player_screen_position(receiver)
 	assert(receiver_screen.x >= 0.0)
+	# A cancelled charged pass retains possession, even if a stale up arrives.
+	assert(controls.debug_touch_down(25, receiver_screen))
+	match_node._handle_human(0.25)
+	assert(match_node.pass_charging)
+	_cancel_finger(controls, 25, receiver_screen)
+	assert(not match_node.pass_charging and match_node.ball.carrier == passer)
+	assert(not controls.debug_touch_up(25, receiver_screen))
+	assert(match_node.ball.carrier == passer)
 	assert(controls.debug_touch_down(20, receiver_screen))
 	assert(match_node.debug_pass_charge_ratio() == 0.0)
 	assert(controls.debug_touch_up(20, receiver_screen))
@@ -173,6 +194,13 @@ func _initialize() -> void:
 	match_node.debug_sync_presentation()
 	var goal_screen: Vector2 = match_node.mobile_attack_goal_screen_position()
 	assert(goal_screen.x >= 0.0)
+	assert(controls.debug_touch_down(26, goal_screen))
+	match_node._handle_human(0.25)
+	assert(match_node.debug_shot_charge_ratio() > 0.0)
+	_cancel_finger(controls, 26, goal_screen)
+	assert(match_node.debug_shot_charge_ratio() == 0.0)
+	assert(match_node.ball.carrier == shooter)
+	assert(not controls.debug_touch_up(26, goal_screen))
 	assert(controls.debug_touch_down(23, goal_screen))
 	match_node._handle_human(0.42)
 	assert(match_node.debug_shot_charge_ratio() > 0.35)
@@ -301,3 +329,12 @@ func _initialize() -> void:
 	print("FOOTBALL_XI_TOUCH_OK players=22 joystick=1 teammate=1 pass=1 carrier_magnet=1")
 	print("chess-football mobile touch smoke: OK")
 	quit(0)
+
+
+func _cancel_finger(controls, index: int, position: Vector2) -> void:
+	var event := InputEventScreenTouch.new()
+	event.index = index
+	event.position = position
+	event.pressed = false
+	event.canceled = true
+	controls._unhandled_input(event)
