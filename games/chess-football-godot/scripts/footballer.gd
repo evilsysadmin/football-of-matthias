@@ -596,9 +596,10 @@ func _xi_cut_motion_direction() -> Vector2:
 	):
 		return dribble_direction
 	return dribble_entry_direction.lerp(
-		# Reach the lateral lane by mid-touch, not only as E finishes:
-		# a sharper planted foot makes the cut visible from match zoom.
-		dribble_direction, smoothstep(0.10, 0.52, _xi_cut_progress())
+		# The first boot still plants, but finish the lane change before
+		# the midpoint: a slow pivot leaves the attacker running straight
+		# into the defender. Normal acceleration and speed remain intact.
+		dribble_direction, smoothstep(0.08, 0.36, _xi_cut_progress())
 	).normalized()
 
 
