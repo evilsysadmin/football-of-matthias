@@ -239,9 +239,20 @@ func _initialize() -> void:
 	rival_marker.global_position = centre.lerp(lead_base, 0.6)
 	rival_marker.velocity = normal * 300.0
 	assert(game._ai_xi_human_lane_clearance(lead_base, true) < 0.01)
+	# Both forecast endpoints are away from the corridor, yet the
+	# defender's bounded path crosses it. Endpoint-only reads miss this.
+	rival_marker.global_position = centre.lerp(lead_base, 0.6) + normal * 40.0
+	rival_marker.velocity = -normal * 300.0
+	assert(game._ai_xi_human_lane_clearance(lead_base) > 39.0)
+	assert(game._ai_xi_human_lane_clearance(lead_base, true) < 0.01)
+	# An equivalent crossing within the excluded carrier-pressure zone
+	# must not be mistaken for a blocked receiving corridor.
+	rival_marker.global_position = centre.lerp(lead_base, 0.08) + normal * 40.0
+	assert(game._ai_xi_human_lane_clearance(lead_base, true) > 39.0)
 	rival_marker.velocity = Vector2.ZERO
 	rival_marker.global_position = centre + Vector2(1450.0, 800.0)
 	assert(game.ai_xi_human_lane_memory.is_empty())
+	print("FOOTBALL_XI_LANE_SWEEP_OK crossing=true carrier_pressure_excluded=true")
 	print("FOOTBALL_XI_LANE_READ_OK static=", static_gap, " crossing=", incoming_gap)
 
 	# Safety outlet uses the same bounded read without becoming another
