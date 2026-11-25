@@ -106,6 +106,11 @@ func tick_ball(delta: float) -> void:
 				)
 				var forward: Vector2 = carrier.xi_ball_touch_direction()
 				var lead := XI_TOUCH_BASE_LEAD + XI_TOUCH_PUSH_LEAD * sin(PI * stride_phase)
+				# Ordinary close control should not jump to a full running touch
+				# just above the movement threshold. Preserve authored dribbles.
+				if carrier.dribble_burst_seconds <= 0.0:
+					var full_touch_speed := maxf(37.0, carrier.base_speed * 0.6)
+					lead *= smoothstep(36.0, full_touch_speed, run_speed)
 				destination += forward * lead
 			# A short follow-through gives the ball its own pace on turns.
 			# Zero-delta debug/restart positioning must remain deterministic.
