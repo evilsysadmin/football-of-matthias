@@ -12,6 +12,7 @@ class RetryProbe extends ChessFootballR2AtlasLoader:
 func _check_timeout_lifecycle() -> void:
 	var probe := RetryProbe.new()
 	root.add_child(probe)
+	assert(probe.is_inside_tree())
 	probe._timeout_retry_remaining = true
 	var failures: Array[String] = []
 	probe.atlas_failed.connect(func(reason: String): failures.append(reason))
@@ -32,8 +33,13 @@ func _check_timeout_lifecycle() -> void:
 	root.remove_child(detached)
 	await create_timer(0.6).timeout
 	assert(detached.dispatches == 0)
+	# A late callback on an already detached node must also be harmless.
+	detached._timeout_retry_remaining = true
+	detached._on_request_completed(HTTPRequest.RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray(), {}, ChessFootballR2AtlasLoader.CDN_ROOT)
+	assert(not detached._timeout_retry_remaining)
+	assert(detached.dispatches == 0)
 	detached.free()
-	print("FOOTBALL_R2_TIMEOUT_LIFECYCLE_OK one_retry=true terminal_failure=true detached_cancel=true")
+	print("FOOTBALL_R2_TIMEOUT_LIFECYCLE_OK one_retry=true terminal_failure=true detached_cancel=true late_callback=true")
 
 
 # P0: only exact SHA-verified original-runtime R2 action sheets can install
@@ -54,6 +60,9 @@ func _synthetic_sheet() -> Image:
 
 
 func _initialize() -> void:
+	# SceneTree._initialize precedes root's first enter_tree notification.
+	await process_frame
+	assert(root.is_inside_tree())
 	await _check_timeout_lifecycle()
 	# Bounded retry is opt-in and only for a transport timeout without
 	# an HTTP response. Never retry an integrity failure or HTTP denial.

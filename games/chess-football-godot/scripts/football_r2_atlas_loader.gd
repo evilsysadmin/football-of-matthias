@@ -118,12 +118,17 @@ func _on_request_completed(
 	if _request_node != null:
 		_request_node.queue_free()
 		_request_node = null
+	# A completion can arrive while the presenter is being removed.
+	# Do not emit a stale resource or schedule work outside the tree.
+	if not is_inside_tree() or is_queued_for_deletion():
+		_timeout_retry_remaining = false
+		return
 	if can_retry_timeout(result, status, _timeout_retry_remaining):
 		_timeout_retry_remaining = false
 		# Yield before creating the next HTTPRequest; the failed node is
 		# queued for deletion. A freed presenter cannot start this retry.
 		await get_tree().create_timer(0.5).timeout
-		if is_inside_tree():
+		if is_inside_tree() and not is_queued_for_deletion():
 			_request_once(meta, allowed_root)
 		return
 	if result != HTTPRequest.RESULT_SUCCESS or status != 200:
