@@ -255,7 +255,7 @@ const AI_XI_CUT_READ_NORMAL := 0.32
 # Normal must not commit a precisely timed tackle on the same 0.45s frame
 # in every diagonal cut. Previously launched tackles remain physical.
 const AI_XI_CUT_TACKLE_READ_NORMAL := 0.50
-const AI_XI_CUT_READ_HARD := 0.22
+const AI_XI_CUT_READ_HARD := 0.16
 const AI_XI_CUT_READ_EXPERT := 0.09
 const AI_XI_SECOND_PRESS_ACTIVATION := 320.0
 # XI Normal+ second defender reads an actual goalward diagonal dribble.
@@ -1919,8 +1919,7 @@ func _ai_xi_observed_carrier_velocity(owner: Footballer) -> Vector2:
 # misleading lateral cue. The primary defender briefly reads that side, then
 # corrects as the second plant becomes visible. It still pursues a real point,
 # moves through normal CharacterBody2D physics and can make a legal tackle.
-# Hard gets a smaller wrong-footed read; Expert/Easy and ordinary runs
-# keep their historical path.
+# Never fake an observation for Hard/Expert/Easy, 5v5 or an ordinary run/cut.
 # CPU cannot know the human's new cut direction from the same 60 Hz frame
 # as the planted foot. For a short difficulty-scaled observation window it
 # chases the PRE-CUT running lane, then blends to the actual current body.
@@ -1988,7 +1987,7 @@ func _ai_xi_dribble_tackle_read_ready(victim: Footballer) -> bool:
 func _ai_xi_normal_feint_read_offset(presser: Footballer, owner: Footballer) -> Vector2:
 	if (
 		match_team_size != 11
-		or quick_difficulty not in ["normal", "hard"]
+		or quick_difficulty != "normal"
 		or presser.team_id != 1
 		or owner.team_id != 0
 		or ball.carrier != owner
@@ -2005,10 +2004,8 @@ func _ai_xi_normal_feint_read_offset(presser: Footballer, owner: Footballer) -> 
 		return Vector2.ZERO
 	# A short wrong-footed read, not an AI freeze or a tackle miss roll.
 	# The cue fades continuously through the first of the two real plants.
-	var difficulty_weight: float = 0.50 if quick_difficulty == "hard" else 1.0
 	var sideways: float = -signf(owner.dribble_direction.y) * (
-		minf(absf(owner.dribble_direction.y) * 95.0, 62.0)
-		* (1.0 - progress * 2.0) * difficulty_weight
+		minf(absf(owner.dribble_direction.y) * 95.0, 62.0) * (1.0 - progress * 2.0)
 	)
 	return Vector2(0.0, sideways)
 

@@ -264,6 +264,24 @@ func _initialize() -> void:
 	carrier.has_ball = true
 	print("FOOTBALL_XI_CUT_EXIT_STEERING_OK limited_turn=45 first_plant=locked no_speed_buff=1")
 
+	# Preserve a genuine incoming plant and complete the physical lane
+	# change early enough to avoid running into a closing defender.
+	_reset_duel(game, carrier, presser, "normal", "far")
+	carrier.velocity = Vector2.RIGHT * carrier.base_speed
+	var cut_lane := Vector2(1.0, -0.76).normalized()
+	assert(carrier.start_dribble(cut_lane, "cut"))
+	assert(carrier._xi_cut_motion_direction().is_equal_approx(Vector2.RIGHT))
+	var origin_before_cut: Vector2 = carrier.global_position
+	for tick in range(8):
+		await physics_frame
+		carrier.move_human(DT, cut_lane, false)
+		carrier._process(DT)
+	assert(carrier._xi_cut_motion_direction().is_equal_approx(cut_lane))
+	assert(carrier.global_position.y < origin_before_cut.y - 3.0)
+	assert(carrier.velocity.length() <= carrier.base_speed * carrier.DRIBBLE_SPEED_MULTIPLIER * carrier.technique_control_multiplier + 1.0)
+	assert(game.ball.carrier == carrier)
+	print("FOOTBALL_XI_CUT_EARLY_LANE_OK plant=true lane=true speed_capped=true")
+	
 	# A defender partway along a nominally clear diagonal must influence
 	# contextual E's choice. Explicit diagonals remain manual.
 	_reset_duel(game, carrier, presser, "normal", "far")

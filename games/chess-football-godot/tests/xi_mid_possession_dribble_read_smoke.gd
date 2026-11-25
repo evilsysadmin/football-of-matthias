@@ -323,28 +323,6 @@ func _initialize() -> void:
 	game.ball.release(Vector2.RIGHT, 40.0)
 	carrier.move_human(1.0 / 60.0, Vector2.RIGHT, false)
 	assert(carrier.xi_feint_exit_run_seconds == 0.0)
-	# Hard must read the first false plant, but less than Normal.
-	# Expert stays uncompromising and existing committed contact is unchanged.
-	carrier.contact_stun_seconds = 0.0
-	carrier.dribble_cooldown_seconds = 0.0
-	carrier.dribble_burst_seconds = 0.0
-	carrier.action_lock_seconds = 0.0
-	carrier.velocity = Vector2.ZERO
-	game.ball.attach_to(carrier)
-	assert(carrier.start_dribble(Vector2(1.0, 0.76), "feint"))
-	game._set_quick_difficulty("normal")
-	var normal_offset: Vector2 = game._ai_xi_normal_feint_read_offset(presser, carrier)
-	game._set_quick_difficulty("hard")
-	var hard_offset: Vector2 = game._ai_xi_normal_feint_read_offset(presser, carrier)
-	assert(hard_offset.length() > 0.0)
-	assert(hard_offset.is_equal_approx(normal_offset * 0.5))
-	assert(not game._ai_xi_dribble_tackle_read_ready(carrier))
-	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * 0.49
-	assert(game._ai_xi_normal_feint_read_offset(presser, carrier) == Vector2.ZERO)
-	carrier.dribble_burst_seconds = carrier.dribble_duration_seconds
-	game._set_quick_difficulty("expert")
-	assert(game._ai_xi_normal_feint_read_offset(presser, carrier) == Vector2.ZERO)
-	print("FOOTBALL_XI_HARD_FEINT_READ_OK hard_weight=0.5 normal_unchanged=true expert_unchanged=true")
 	print("FOOTBALL_XI_FEINT_STAMINA_EXIT_OK real_sprint=1 capped=1 needs_input=1 lost_ball_cancels=1")
 	print("FOOTBALL_XI_REAL_FEINT_BALL_CONTACT_OK torso_is_not_ball=1 clean_ball_tackle=1 burst_unchanged=1 expires=1")
 	print("FOOTBALL_XI_REAL_CUT_BALL_CONTACT_OK torso_is_not_ball=1 clean_ball_tackle=1 legacy_unchanged=1")
