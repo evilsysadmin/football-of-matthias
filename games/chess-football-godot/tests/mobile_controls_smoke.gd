@@ -71,6 +71,32 @@ func _initialize() -> void:
 	assert(not Input.is_action_pressed("sprint"))
 	assert(Input.get_action_strength("move_right") < 0.01)
 
+	# Visual clamping must not change physical neutral or sensitivity.
+	# Test the joystick after acquisition so player/goal hit testing cannot
+	# obscure the edge-specific geometry contract.
+	var edge_points: Array[Vector2] = [
+		Vector2(12.0, 600.0),
+		Vector2(132.0, controls.get_viewport().get_visible_rect().size.y - 12.0),
+	]
+	for edge: Vector2 in edge_points:
+		controls._begin_joystick(17, edge)
+		assert(controls.debug_joystick_origin().distance_to(edge) > 20.0)
+		assert(controls.debug_touch_move(17, edge))
+		for action in ["move_left", "move_right", "move_up", "move_down"]:
+			assert(Input.get_action_strength(action) < 0.01)
+		assert(not Input.is_action_pressed("sprint"))
+		assert(controls.debug_touch_move(17, edge + Vector2(36.0, 0.0)))
+		assert(is_equal_approx(Input.get_action_strength("move_right"), 0.5))
+		assert(Input.get_action_strength("move_left") < 0.01)
+		assert(not Input.is_action_pressed("sprint"))
+		assert(controls.debug_touch_move(17, edge + Vector2(0.0, -36.0)))
+		assert(is_equal_approx(Input.get_action_strength("move_up"), 0.5))
+		assert(Input.get_action_strength("move_right") < 0.01)
+		_cancel_finger(controls, 17, edge)
+		assert(not controls.debug_joystick_visible())
+		assert(Input.get_action_strength("move_up") < 0.01)
+	print("FOOTBALL_TOUCH_EDGE_NEUTRAL_OK left=true bottom=true proportional=true")
+
 	# With possession, a tap on open grass on the right half is a contextual
 	# dribble. No extra button: teammate/pass, rival/tackle and goal/shot keep
 	# their existing meanings.
