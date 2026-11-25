@@ -2813,6 +2813,15 @@ func _ai_xi_human_lane_clearance_from(
 				), match_pitch
 			)
 			clearance = minf(clearance, _ai_xi_lane_point_gap(projected, origin, corridor, length_sq, destination))
+			# The defender can cross the corridor BETWEEN the two observed
+			# endpoints. Check the bounded swept segment, excluding the same
+			# initial carrier-pressure zone as the point-gap calculation.
+			if clearance > 0.0 and length_sq >= 1.0:
+				var crossing = Geometry2D.segment_intersects_segment(
+					position_now, projected, origin + corridor * 0.16, destination
+				)
+				if crossing != null:
+					clearance = 0.0
 	return clearance
 
 
