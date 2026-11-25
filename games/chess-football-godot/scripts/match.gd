@@ -1459,7 +1459,7 @@ func _maybe_complete_one_two(receiver: Footballer) -> bool:
 	var return_point: Vector2 = _human_pass_aim_point(
 		receiver, passer, XI_ONE_TWO_RETURN_POWER
 	)
-	var direction: Vector2 = return_point - receiver.global_position
+	var direction: Vector2 = return_point - _human_pass_release_origin(receiver)
 	if direction.length_squared() < 1.0:
 		_clear_one_two()
 		return false
@@ -1523,7 +1523,7 @@ func _release_charged_pass() -> bool:
 			and aim_direction.normalized().dot(offset.normalized()) >= PASS_MIN_TARGET_ALIGNMENT
 		)
 	if valid_target:
-		release_direction = _human_pass_aim_point(passer, target, power) - passer.global_position
+		release_direction = _human_pass_aim_point(passer, target, power) - _human_pass_release_origin(passer)
 		# Keep the predicted receiver inside the original directional aim cone.
 		if directional and release_direction.normalized().dot(aim_direction.normalized()) < PASS_MIN_TARGET_ALIGNMENT:
 			release_direction = target.global_position - passer.global_position
@@ -3696,6 +3696,14 @@ func _pass_from(player: Footballer, input_direction: Vector2) -> void:
 		return
 	ball.release(target.global_position - player.global_position, 540.0 * player.pass_power_multiplier())
 
+# XI ground kicks originate at the authoritative possession ball, not
+# the body centre. Keep legacy 5v5 and hypothetical non-owner calls exact.
+func _human_pass_release_origin(passer: Footballer) -> Vector2:
+	if match_team_size == 11 and ball.carrier == passer:
+		return ball.global_position
+	return passer.global_position
+
+
 func _human_pass_aim_point(passer: Footballer, receiver: Footballer, power: float) -> Vector2:
 	var destination: Vector2 = receiver.global_position
 	if (
@@ -3707,6 +3715,7 @@ func _human_pass_aim_point(passer: Footballer, receiver: Footballer, power: floa
 	# Only a conservative fraction of travel time is used to lead a
 	# runner. The existing assistance limits remain unchanged.
 	var speed: float = maxf(minf(power * passer.pass_power_multiplier(), ball.max_speed), 1.0)
+	var origin: Vector2 = _human_pass_release_origin(passer)
 	var travelled: float = 0.0
 	var elapsed: float = 0.0
 	const STEP := 1.0 / 60.0
@@ -3719,7 +3728,7 @@ func _human_pass_aim_point(passer: Footballer, receiver: Footballer, power: floa
 			destination + (receiver.velocity * horizon).limit_length(XI_HUMAN_PASS_LEAD_DISTANCE),
 			match_pitch
 		)
-		if travelled >= passer.global_position.distance_to(projected):
+		if travelled >= origin.distance_to(projected):
 			return projected
 		speed *= ball.fast_ball_friction if speed >= FootballBall.FAST_BALL_THRESHOLD else ball.friction
 	return ChessFootballMath.clamp_to_pitch(

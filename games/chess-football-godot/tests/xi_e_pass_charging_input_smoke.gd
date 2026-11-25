@@ -117,7 +117,9 @@ func _initialize() -> void:
 	# Equal initial range, different runner trajectories and launch speeds.
 	game._cancel_pass_charge()
 	passer.global_position = start
-	passer.velocity = Vector2.ZERO
+	passer.dribble_burst_seconds = 0.0
+	passer.velocity = Vector2.RIGHT * 220.0
+	game.ball.attach_to(passer)
 	receiver.global_position = start + Vector2(160.0, 0.0)
 	var base: Vector2 = receiver.global_position
 	receiver.velocity = Vector2.ZERO
@@ -134,7 +136,31 @@ func _initialize() -> void:
 	game.match_team_size = 5
 	assert(game._human_pass_aim_point(passer, receiver, 850.0).is_equal_approx(base))
 	game.match_team_size = 11
+	# Same runner and power, but a genuine rear-foot anchor increases the
+	# flight distance. This catches forecasting from the torso instead.
+	receiver.velocity = Vector2.RIGHT * 220.0
+	passer.velocity = Vector2.LEFT * 220.0
+	game.ball.attach_to(passer)
+	var rear_lead: Vector2 = game._human_pass_aim_point(passer, receiver, 850.0)
+	assert(rear_lead.distance_to(base) > receding.distance_to(base))
+	# Release a real charged pass from an off-axis foot to a stationary
+	# receiver. The physical velocity must point from ball to receiver.
 	receiver.velocity = Vector2.ZERO
+	passer.velocity = Vector2.DOWN * 220.0
+	game.ball.attach_to(passer)
+	var kick_origin: Vector2 = game.ball.global_position
+	assert(kick_origin.distance_to(passer.global_position) > 25.0)
+	game.pass_charging = true
+	game.pass_directional_charge = true
+	game.pass_target = receiver
+	game.pass_aim_direction = Vector2.RIGHT
+	game.pass_charge_seconds = game.PASS_CHARGE_SECONDS * 0.5
+	assert(game._release_charged_pass())
+	assert(game.ball.carrier == null)
+	assert(game.ball.velocity.normalized().is_equal_approx(kick_origin.direction_to(base)))
+	assert(game.ball.global_position.is_equal_approx(kick_origin))
+	game.ball.attach_to(passer)
+	print("FOOTBALL_XI_PASS_PHYSICAL_ORIGIN_OK rear_lead=", rear_lead.distance_to(base))
 	print("FOOTBALL_XI_PASS_FORECAST_OK receding=", receding.distance_to(base),
 		" approaching=", approaching.distance_to(base), " slow=", slower.distance_to(base))
 
