@@ -87,6 +87,7 @@ var action_visual_duration_seconds: float = 0.0
 var tackle_cooldown_seconds: float = 0.0
 var tackle_recovery_seconds: float = 0.0
 var tackle_active_seconds: float = 0.0
+var tackle_contact_delay_seconds: float = 0.0
 var tackle_launch_speed_ratio: float = 0.0
 # XI tackles commit to the actual approach heading at launch. The active
 # contact hitbox cannot swivel in pursuit of a successful late E cut.
@@ -222,6 +223,7 @@ func _process(delta: float) -> void:
 	xi_feint_exit_run_seconds = maxf(0.0, xi_feint_exit_run_seconds - delta)
 	tackle_recovery_seconds = maxf(0.0, tackle_recovery_seconds - delta)
 	tackle_active_seconds = maxf(0.0, tackle_active_seconds - delta)
+	tackle_contact_delay_seconds = maxf(0.0, tackle_contact_delay_seconds - delta)
 	if tackle_active_seconds <= 0.0:
 		tackle_launch_speed_ratio = 0.0
 		tackle_aggressive = false
@@ -444,7 +446,7 @@ func can_tackle() -> bool:
 		and action_lock_seconds <= 0.0
 	)
 
-func start_tackle(aggressive: bool = false) -> bool:
+func start_tackle(aggressive: bool = false, contact_delay: float = 0.0) -> bool:
 	if not can_tackle():
 		return false
 	# Sample BEFORE the tackle launch reduces the current velocity. This
@@ -464,6 +466,7 @@ func start_tackle(aggressive: bool = false) -> bool:
 	tackle_cooldown_seconds = 1.45 if aggressive else 1.10
 	tackle_recovery_seconds = 0.68 if aggressive else 0.38
 	tackle_active_seconds = SLIDE_TACKLE_ACTIVE_SECONDS if aggressive else TACKLE_ACTIVE_SECONDS
+	tackle_contact_delay_seconds = clampf(contact_delay, 0.0, tackle_active_seconds)
 	tackle_launch_speed_ratio = clampf(
 		velocity.length() / maxf(base_speed, 1.0),
 		0.0,
@@ -662,6 +665,7 @@ func send_off() -> void:
 	tackle_cooldown_seconds = 0.0
 	tackle_recovery_seconds = 0.0
 	tackle_active_seconds = 0.0
+	tackle_contact_delay_seconds = 0.0
 	tackle_launch_speed_ratio = 0.0
 	tackle_aggressive = false
 	xi_tackle_launch_heading = Vector2.ZERO

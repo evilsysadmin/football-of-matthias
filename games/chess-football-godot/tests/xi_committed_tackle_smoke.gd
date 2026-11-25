@@ -70,6 +70,49 @@ func _initialize() -> void:
 		"Legal front-on CPU tackles must still dislodge the human carrier")
 	assert(game.pending_tackle_player == cpu_tackler)
 
+	# Hard automatic standing tackles commit their heading now, but contact
+	# is sampled again after a brief physical windup. A stationary legal
+	# target still loses the ball; a real lateral escape can avoid contact.
+	game._set_quick_difficulty("hard")
+	for dodge in [false, true]:
+		game.pending_tackle_player = null
+		game.pending_tackle_seconds = 0.0
+		human_carrier.contact_stun_seconds = 0.0
+		human_carrier.global_position = point + Vector2(0.0, 26.0 if dodge else 0.0)
+		human_carrier.velocity = Vector2.DOWN * human_carrier.base_speed if dodge else Vector2.ZERO
+		human_carrier.action_lock_seconds = 0.0
+		human_carrier.tackle_recovery_seconds = 0.0
+		human_carrier.dribble_burst_seconds = 0.0
+		human_carrier.stamina = human_carrier.STAMINA_MAX
+		human_carrier.sprint_exhausted = false
+		cpu_tackler.global_position = point + Vector2(36.0, 0.0)
+		cpu_tackler.velocity = Vector2.LEFT * cpu_tackler.base_speed
+		cpu_tackler.tackle_active_seconds = 0.0
+		cpu_tackler.tackle_cooldown_seconds = 0.0
+		cpu_tackler.action_lock_seconds = 0.0
+		cpu_tackler.tackle_recovery_seconds = 0.0
+		game.ball.attach_to(human_carrier)
+		var initial_position: Vector2 = human_carrier.global_position
+		var initial_hitbox: Dictionary = game._tackle_hitbox(cpu_tackler, initial_position)
+		assert(initial_hitbox["inside"] and initial_hitbox["contact"])
+		assert(not game._try_tackle(cpu_tackler, false, true))
+		assert(cpu_tackler.tackle_active() and game.ball.carrier == human_carrier)
+		for tick in range(4):
+			await physics_frame
+			if dodge:
+				human_carrier.move_human(DT, Vector2.DOWN, true)
+			cpu_tackler._process(DT)
+			game._update_active_tackle_contacts()
+			if tick < 3:
+				assert(game.ball.carrier == human_carrier)
+		assert((game.ball.carrier == human_carrier) == dodge)
+		if dodge:
+			var travel: float = human_carrier.global_position.distance_to(initial_position)
+			assert(travel > 8.0 and travel < 40.0)
+			assert(not game._tackle_hitbox(cpu_tackler, human_carrier.global_position)["contact"])
+			print("FOOTBALL_XI_HARD_TACKLE_PHYSICAL_ESCAPE_OK travel=", travel)
+	game._set_quick_difficulty("normal")
+	print("FOOTBALL_XI_HARD_TACKLE_WINDUP_OK ticks=4 legal_contact=true lateral_escape=true")
 	# The human E press just outside the old range waits briefly for the
 	# player to RUN into a real legal hitbox, with no instant tackle/steal.
 	var cpu_owner: Footballer = game.teams[1][10]
