@@ -95,9 +95,10 @@ func _initialize() -> void:
 	# Without a second Space, the ordinary first touch retains the ball
 	# and transfers human control to its real receiver. No automatic walls.
 	game._select_player(passer)
-	game.ball.attach_to(passer)
+	# Reset motion before placing the ball: the XI anchor depends on velocity.
 	passer.velocity = Vector2.ZERO
 	receiver.velocity = Vector2.ZERO
+	game.ball.attach_to(passer)
 	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
 	assert(game.pass_target == receiver)
 	game.pass_charge_seconds = 0.11
@@ -332,8 +333,13 @@ func _first_touch_continuity(game, passer: Footballer, receiver: Footballer, riv
 		assert(game.ball.velocity == Vector2.ZERO and game.ball.possession_seconds == 0.0)
 		# An immediate kick originates at the actual contact point.
 		if motion != Vector2.ZERO:
-			game.ball.release(Vector2.RIGHT, 400.0)
+			assert(game._begin_pass_charge(passer))
+			game.pass_charge_seconds = 0.11
+			assert(game._release_charged_pass())
 			assert(game.ball.global_position.is_equal_approx(contact))
+			var expected_direction: Vector2 = (passer.global_position - contact).normalized()
+			assert(game.ball.velocity.normalized().is_equal_approx(expected_direction),
+				"Targeted first-touch pass must aim from actual contact")
 		else:
 			var target: Vector2 = centre + receiver.ball_anchor()
 			var initial_error := contact.distance_to(target)

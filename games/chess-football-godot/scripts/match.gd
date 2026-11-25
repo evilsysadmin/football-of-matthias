@@ -1459,7 +1459,8 @@ func _maybe_complete_one_two(receiver: Footballer) -> bool:
 	var return_point: Vector2 = _human_pass_aim_point(
 		receiver, passer, XI_ONE_TWO_RETURN_POWER
 	)
-	var direction: Vector2 = return_point - receiver.global_position
+	# A first-touch return starts at the actual contact, not the torso.
+	var direction: Vector2 = return_point - ball.global_position
 	if direction.length_squared() < 1.0:
 		_clear_one_two()
 		return false
@@ -1523,7 +1524,8 @@ func _release_charged_pass() -> bool:
 			and aim_direction.normalized().dot(offset.normalized()) >= PASS_MIN_TARGET_ALIGNMENT
 		)
 	if valid_target:
-		release_direction = _human_pass_aim_point(passer, target, power) - passer.global_position
+		var origin: Vector2 = ball.global_position if match_team_size == 11 else passer.global_position
+		release_direction = _human_pass_aim_point(passer, target, power) - origin
 	if release_direction.length_squared() < 0.001:
 		release_direction = Vector2.RIGHT if passer.team_id == 0 else Vector2.LEFT
 	passer.play_action("pass", lerpf(0.58, 0.80, ratio))
