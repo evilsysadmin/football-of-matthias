@@ -1524,6 +1524,9 @@ func _release_charged_pass() -> bool:
 		)
 	if valid_target:
 		release_direction = _human_pass_aim_point(passer, target, power) - passer.global_position
+		# Keep the predicted receiver inside the original directional aim cone.
+		if directional and release_direction.normalized().dot(aim_direction.normalized()) < PASS_MIN_TARGET_ALIGNMENT:
+			release_direction = target.global_position - passer.global_position
 	if release_direction.length_squared() < 0.001:
 		release_direction = Vector2.RIGHT if passer.team_id == 0 else Vector2.LEFT
 	passer.play_action("pass", lerpf(0.58, 0.80, ratio))
@@ -3700,16 +3703,29 @@ func _human_pass_aim_point(passer: Footballer, receiver: Footballer, power: floa
 		or receiver.velocity.length_squared() < XI_HUMAN_PASS_LEAD_MIN_SPEED * XI_HUMAN_PASS_LEAD_MIN_SPEED
 	):
 		return destination
-	var distance: float = passer.global_position.distance_to(destination)
-	# A bounded fraction of travel time, not a magical intercept. The ball
-	# still travels, can be intercepted and can miss its intended recipient.
-	var lookahead: float = minf(
-		XI_HUMAN_PASS_LEAD_SECONDS, distance / maxf(power, 1.0) * 0.55
+	# Estimate ground travel using the actual launch speed and friction.
+	# Only a conservative fraction of travel time is used to lead a
+	# runner. The existing assistance limits remain unchanged.
+	var speed: float = maxf(minf(power * passer.pass_power_multiplier(), ball.max_speed), 1.0)
+	var travelled: float = 0.0
+	var elapsed: float = 0.0
+	const STEP := 1.0 / 60.0
+	const LEAD_FRACTION := 0.55
+	while elapsed * LEAD_FRACTION < XI_HUMAN_PASS_LEAD_SECONDS:
+		elapsed += STEP
+		travelled += speed * STEP
+		var horizon: float = minf(XI_HUMAN_PASS_LEAD_SECONDS, elapsed * LEAD_FRACTION)
+		var projected: Vector2 = ChessFootballMath.clamp_to_pitch(
+			destination + (receiver.velocity * horizon).limit_length(XI_HUMAN_PASS_LEAD_DISTANCE),
+			match_pitch
+		)
+		if travelled >= passer.global_position.distance_to(projected):
+			return projected
+		speed *= ball.fast_ball_friction if speed >= FootballBall.FAST_BALL_THRESHOLD else ball.friction
+	return ChessFootballMath.clamp_to_pitch(
+		destination + (receiver.velocity * XI_HUMAN_PASS_LEAD_SECONDS).limit_length(XI_HUMAN_PASS_LEAD_DISTANCE),
+		match_pitch
 	)
-	var lead: Vector2 = (receiver.velocity * lookahead).limit_length(
-		XI_HUMAN_PASS_LEAD_DISTANCE
-	)
-	return ChessFootballMath.clamp_to_pitch(destination + lead, match_pitch)
 
 
 func _best_directional_pass_target(
