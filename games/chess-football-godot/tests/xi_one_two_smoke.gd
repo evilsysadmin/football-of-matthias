@@ -95,9 +95,10 @@ func _initialize() -> void:
 	# Without a second Space, the ordinary first touch retains the ball
 	# and transfers human control to its real receiver. No automatic walls.
 	game._select_player(passer)
-	game.ball.attach_to(passer)
+	# Reset motion before placing the ball: the XI anchor depends on velocity.
 	passer.velocity = Vector2.ZERO
 	receiver.velocity = Vector2.ZERO
+	game.ball.attach_to(passer)
 	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
 	assert(game.pass_target == receiver)
 	game.pass_charge_seconds = 0.11
@@ -236,6 +237,7 @@ func _initialize() -> void:
 	passer.xi_collision_down_seconds = 0.0
 	print("FOOTBALL_XI_ONE_TWO_FALL_OK receiver_keeps_ball=true")
 
+	_first_touch_continuity(game, passer, receiver, interceptor)
 	print("FOOTBALL_XI_ONE_TWO_OK real_pass=true deliberate_input=true physical_return=true normal_pass=true interceptable=true cancel=true")
 	# A fresh match exercises the production tick ordering with all 22
 	# players available. Only the initial positions and first charged pass
@@ -304,3 +306,72 @@ func _live_wall(scene: PackedScene) -> void:
 	print("FOOTBALL_XI_ONE_TWO_LIVE_OK passer_travel=", passer.global_position.distance_to(start),
 		" rival_travel=", rival.global_position.distance_to(rival_start), " real_return=true")
 	game.queue_free()
+
+
+# A legal incoming ball must retain its exact world position when claimed.
+# Exercise the production claim path, not a direct test-only pickup.
+func _first_touch_continuity(game, passer: Footballer, receiver: Footballer, rival: Footballer) -> void:
+	game._clear_one_two()
+	var centre: Vector2 = game.match_pitch.get_center()
+	for team in game.teams:
+		for player: Footballer in team:
+			player.velocity = Vector2.ZERO
+			player.global_position = centre + Vector2(
+				500.0 if player.team_id == 0 else -500.0,
+				100.0 + float(player.squad_index) * 50.0
+			)
+	receiver.global_position = centre
+	for motion: Vector2 in [Vector2.ZERO, Vector2.LEFT, Vector2.UP, Vector2.RIGHT]:
+		game.ball.attach_to(passer)
+		game.ball.release(Vector2.RIGHT, 400.0)
+		receiver.velocity = motion * receiver.base_speed
+		var contact: Vector2 = centre + Vector2(-24.0, 0.0)
+		game.ball.global_position = contact
+		game._try_claim_loose_ball()
+		assert(game.ball.carrier == receiver and game.controlled == receiver)
+		assert(game.ball.global_position.is_equal_approx(contact), "XI claim must not snap to boot")
+		assert(game.ball.velocity == Vector2.ZERO and game.ball.possession_seconds == 0.0)
+		# An immediate kick originates at the actual contact point.
+		if motion != Vector2.ZERO:
+			assert(game._begin_pass_charge(passer))
+			game.pass_charge_seconds = 0.11
+			assert(game._release_charged_pass())
+			assert(game.ball.global_position.is_equal_approx(contact))
+			var expected_direction: Vector2 = (passer.global_position - contact).normalized()
+			assert(game.ball.velocity.normalized().is_equal_approx(expected_direction),
+				"Targeted first-touch pass must aim from actual contact")
+		else:
+			var target: Vector2 = centre + receiver.ball_anchor()
+			var initial_error := contact.distance_to(target)
+			game.ball.tick_ball(STEP)
+			assert(game.ball.global_position.distance_to(target) < initial_error)
+			assert(not game.ball.global_position.is_equal_approx(target))
+			for tick in range(12):
+				game.ball.tick_ball(STEP)
+			assert(game.ball.global_position.distance_to(target) < 1.0)
+			assert(game.ball.carrier == receiver)
+	# Equal opposing contact remains loose; preserving position cannot grant
+	# priority to the intended receiver or to a particular team.
+	game.ball.attach_to(passer)
+	game.ball.release(Vector2.RIGHT, 400.0)
+	receiver.velocity = Vector2.ZERO
+	rival.velocity = Vector2.ZERO
+	rival.global_position = centre + Vector2(0.0, 40.0)
+	game.ball.global_position = centre + Vector2(0.0, 20.0)
+	game._try_claim_loose_ball()
+	assert(game.ball.carrier == null)
+	rival.global_position = centre + Vector2(500.0, 0.0)
+	game._try_claim_loose_ball()
+	assert(game.ball.carrier == receiver)
+	# Explicit placement/restart, keeper catch and legacy 5v5 still snap.
+	game.ball.attach_to(receiver)
+	assert(game.ball.global_position.is_equal_approx(centre + receiver.ball_anchor()))
+	var keeper: Footballer = game.teams[0][0]
+	game.ball.attach_to(keeper, true)
+	assert(game.ball.global_position.is_equal_approx(keeper.global_position + keeper.ball_anchor()))
+	var pitch: Rect2 = receiver.match_pitch
+	receiver.match_pitch = ChessFootballMath.PITCH_RECT
+	game.ball.attach_to(receiver, true)
+	assert(game.ball.global_position.is_equal_approx(centre + receiver.ball_anchor()))
+	receiver.match_pitch = pitch
+	print("FOOTBALL_XI_FIRST_TOUCH_CONTINUITY_OK four_headings=true tie=true immediate_release=true legacy=true")
