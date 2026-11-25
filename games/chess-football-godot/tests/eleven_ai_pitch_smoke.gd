@@ -1612,4 +1612,44 @@ func _human_lane_guard(packed: PackedScene) -> void:
 	game._set_quick_difficulty("easy")
 	assert(game._ai_xi_lane_assignment(presser, cover, 0).is_empty())
 	print("FOOTBALL_XI_HUMAN_LANE_GUARD_OK mirrored=true real_ai=true controlled_excluded=true fallen_excluded=true")
+	# The second defender now uses the same Hard/Expert opportunity
+	# gate and clean physical hitbox as the opposing team's backup.
+	owner.velocity = Vector2.ZERO
+	owner.dribble_burst_seconds = 0.0
+	owner.xi_cut_exit_run_seconds = 0.0
+	owner.xi_feint_exit_run_seconds = 0.0
+	cover.global_position = owner.global_position + Vector2(-32.0, 0.0)
+	cover.velocity = Vector2.RIGHT * 150.0
+	cover.tackle_cooldown_seconds = 0.0
+	cover.tackle_recovery_seconds = 0.0
+	cover.tackle_active_seconds = 0.0
+	cover.action_lock_seconds = 0.0
+	cover.contact_stun_seconds = 0.0
+	game.ball.attach_to(owner)
+	game._set_quick_difficulty("normal")
+	assert(not game._ai_cpu_second_press_active(cover, owner.global_position))
+	assert(not game._ai_xi_tackle_commit_ready(cover, owner, true))
+	game._set_quick_difficulty("hard")
+	assert(game._ai_cpu_second_press_active(cover, owner.global_position))
+	assert(game._ai_xi_tackle_commit_ready(cover, owner, true))
+	cover.global_position = owner.global_position + Vector2(-82.0, 0.0)
+	assert(not game._ai_xi_tackle_commit_ready(cover, owner, true))
+	cover.global_position = owner.global_position + Vector2(-32.0, 0.0)
+	cover.velocity = Vector2.LEFT * 150.0
+	assert(not game._ai_xi_tackle_commit_ready(cover, owner, true))
+	cover.velocity = Vector2.RIGHT * 150.0
+	cover.tackle_cooldown_seconds = 0.5
+	assert(not game._ai_xi_tackle_commit_ready(cover, owner, true))
+	cover.tackle_cooldown_seconds = 0.0
+	# Keep the first presser closer but in recovery, so the second
+	# must make its own decision on a real uncontested clean contact.
+	presser.global_position = owner.global_position + Vector2(0.0, 20.0)
+	presser.tackle_cooldown_seconds = 0.5
+	assert(game._ai_primary_presser(0) == presser)
+	assert(game._ai_secondary_presser(0, presser) == cover)
+	game.ai_next_decision[int(owner.get_instance_id())] = game.match_seconds + 10.0
+	game._update_ai(0.0)
+	assert(cover.tackle_active(), "Autonomous teammate cover must commit a legal tackle")
+	assert(game.controlled == manual)
+	print("FOOTBALL_XI_HUMAN_SECOND_PRESS_OK hard=true normal_contains=true clean_only=true real_ai=true")
 	game.queue_free()

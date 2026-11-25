@@ -2247,7 +2247,7 @@ func _ai_spaced_target(
 
 func _ai_cpu_second_press_active(player: Footballer, threat_position: Vector2) -> bool:
 	return (
-		player.team_id == 1
+		(match_team_size == 11 or player.team_id == 1)
 		and quick_difficulty != "easy"
 		and (
 			match_team_size != 11
@@ -2255,7 +2255,7 @@ func _ai_cpu_second_press_active(player: Footballer, threat_position: Vector2) -
 			or quick_difficulty == "expert"
 		)
 		and ball.carrier != null
-		and ball.carrier.team_id == 0
+		and ball.carrier.team_id != player.team_id
 		and player.global_position.distance_to(threat_position) <= (
 			AI_XI_SECOND_PRESS_ACTIVATION if match_team_size == 11
 			else AI_CPU_SECOND_PRESS_ACTIVATION
@@ -3966,8 +3966,12 @@ func _ai_xi_tackle_commit_ready(
 			and ball.possession_seconds < AI_XI_NORMAL_FIRST_TOUCH_REACTION
 		):
 			return false
-	if match_team_size != 11 or tackler.team_id != 1 or quick_difficulty == "easy":
+	# Preserve legacy/manual-primary behavior, but let either XI team's
+	# autonomous second defender use the same clean-contact decision.
+	if match_team_size != 11 or quick_difficulty == "easy" or (tackler.team_id == 0 and not is_cover):
 		return true
+	if tackler.team_id == 0 and not _ai_cpu_second_press_active(tackler, victim.global_position):
+		return false
 	# Hard used to commit at 2-3 physical frames into the touch; the human
 	# could reclaim the glancing deflection well before a duel was over.
 	# See the dribbler's actual first plant before choosing a real hitbox,
@@ -3982,7 +3986,7 @@ func _ai_xi_tackle_commit_ready(
 			return false
 	if (
 		ball.carrier != victim
-		or victim.team_id != 0
+		or victim.team_id == tackler.team_id
 		or tackler.sent_off
 		or not tackler.can_tackle()
 		or tackler.global_position.distance_to(victim.global_position)
