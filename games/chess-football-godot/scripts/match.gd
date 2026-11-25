@@ -247,6 +247,8 @@ const AI_XI_NORMAL_FIRST_TOUCH_REACTION := 0.38
 # punching the ball loose on frame 2 while the attacker is still planted.
 # Shorter than Normal's first-touch read; no new state or physical buffs.
 const AI_XI_HARD_FIRST_TOUCH_READ := 0.22
+# Three 60 Hz frames from a CPU standing-tackle launch to first possible contact.
+const AI_XI_HARD_TACKLE_WINDUP_SECONDS := 0.045
 const AI_XI_EXPERT_FIRST_TOUCH_READ := 0.12
 # A NEW human E touch must be read even during an older possession.
 # This is CPU decision latency, not immunity: already-launched tackle
@@ -1782,7 +1784,7 @@ func _update_ai(delta: float) -> void:
 						_ai_xi_normal_tackle_read_due(ball.carrier, delta)
 						and _ai_xi_tackle_commit_ready(player, ball.carrier, false)
 					):
-						_try_tackle(player)
+						_try_tackle(player, false, true)
 				elif (
 					player == cover
 					and contesting_cover
@@ -1790,7 +1792,7 @@ func _update_ai(delta: float) -> void:
 						< TACKLE_ATTEMPT_RANGE * 0.72
 					and _ai_xi_tackle_commit_ready(player, ball.carrier, true)
 				):
-					_try_tackle(player)
+					_try_tackle(player, false, true)
 
 			if ball.carrier == player and team_id == 1 and _ai_decision_ready(player):
 				_ai_attack(player)
@@ -4315,7 +4317,7 @@ func _handle_contextual_special(direction: Vector2) -> void:
 			_queue_xi_human_tackle(controlled, direction, true)
 
 
-func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
+func _try_tackle(tackler: Footballer, aggressive: bool = false, automatic: bool = false) -> bool:
 	if ball.carrier == null or ball.carrier == tackler:
 		return false
 	var victim: Footballer = ball.carrier
@@ -4327,7 +4329,18 @@ func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
 		return false
 
 	var hitbox := _tackle_hitbox(tackler, _tackle_contact_target(victim), aggressive)
-	if not tackler.start_tackle(aggressive):
+	# Scope the experimental preparation beat to the moving cut/exit.
+	# A planted feint already has a separate read/response contract.
+	# Preserve that contract, ordinary running, F and manual tackles.
+	var windup: float = (
+		AI_XI_HARD_TACKLE_WINDUP_SECONDS
+		if automatic and match_team_size == 11 and quick_difficulty == "hard"
+		and tackler.team_id == 1 and victim.team_id == 0 and not aggressive
+		and victim.dribble_mode == "cut"
+		and (victim.dribble_active() or victim.xi_cut_exit_run_seconds > 0.0)
+		else 0.0
+	)
+	if not tackler.start_tackle(aggressive, windup):
 		return false
 	if tackler == controlled and match_team_size == 11:
 		_show_action_feedback("SEGADA" if aggressive else "ENTRADA")
@@ -4341,6 +4354,10 @@ func _resolve_tackle_contact(
 	hitbox: Dictionary = {},
 ) -> bool:
 	if not tackler.tackle_active() or ball.carrier != victim:
+		return false
+	# Do not resolve the launch-frame hitbox: after the preparation beat
+	# _update_active_tackle_contacts samples the LIVE geometry again.
+	if tackler.tackle_contact_delay_seconds > 0.0:
 		return false
 	if victim.team_id == tackler.team_id:
 		return false

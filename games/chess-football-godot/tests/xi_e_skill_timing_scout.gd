@@ -126,7 +126,7 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 		var already_active := 0
 		for rival: Footballer in game.teams[1]:
 			cooldowns.append(rival.tackle_cooldown_seconds)
-			if holding and tick >= trigger and first_loss < 0 and not rival.sent_off:
+			if holding and tick >= trigger and tick < trigger + FOLLOW_FRAMES and first_loss < 0 and not rival.sent_off:
 				var gap: float = rival.global_position.distance_to(before_ball)
 				if gap < nearest_ball_gap:
 					nearest_ball_gap = gap
@@ -151,7 +151,7 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 			assert(carrier.dribble_active() and carrier.dribble_mode == spec["action"],
 				"Real E input did not execute the requested XI physical action")
 			e_executed = true
-		if tick >= trigger and first_loss < 0 and game.ball.carrier != carrier:
+		if tick >= trigger and tick < trigger + FOLLOW_FRAMES and first_loss < 0 and game.ball.carrier != carrier:
 			first_loss = tick - trigger
 			# Observe the last still-owned frame. The closest opponent is
 			# deliberately NOT labelled as the player who made the tackle.
@@ -198,6 +198,10 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 		await process_frame
 	_release_keys()
 	assert(after in ["retained", "loose", "cpu_stolen", "teammate", "restart"])
+	# The first-loss statistic is censored at the same horizon as the
+	# outcome/checkpoints, even when the simulation keeps running.
+	assert(first_loss == -1 or (first_loss >= 0 and first_loss < FOLLOW_FRAMES))
+	assert(uninterrupted_frames == (FOLLOW_FRAMES if first_loss == -1 else first_loss))
 	assert((not e_executed) or use_e)
 	var result: Dictionary = {
 		"seed": int(spec["seed"]),
