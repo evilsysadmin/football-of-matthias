@@ -4329,12 +4329,15 @@ func _try_tackle(tackler: Footballer, aggressive: bool = false, automatic: bool 
 		return false
 
 	var hitbox := _tackle_hitbox(tackler, _tackle_contact_target(victim), aggressive)
-	# Only the actual Hard CPU standing-tackle AI path gets a physical
-	# preparation beat. No manual input or other difficulty is delayed.
+	# Scope the experimental preparation beat to the moving cut/exit.
+	# A planted feint already has a separate read/response contract.
+	# Preserve that contract, ordinary running, F and manual tackles.
 	var windup: float = (
 		AI_XI_HARD_TACKLE_WINDUP_SECONDS
 		if automatic and match_team_size == 11 and quick_difficulty == "hard"
 		and tackler.team_id == 1 and victim.team_id == 0 and not aggressive
+		and victim.dribble_mode == "cut"
+		and (victim.dribble_active() or victim.xi_cut_exit_run_seconds > 0.0)
 		else 0.0
 	)
 	if not tackler.start_tackle(aggressive, windup):
