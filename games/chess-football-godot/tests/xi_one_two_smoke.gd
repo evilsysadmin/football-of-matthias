@@ -54,15 +54,23 @@ func _initialize() -> void:
 	Input.action_release("pass_ball")
 	game._handle_human(STEP)
 	var returned := false
+	var run_start: Vector2 = passer.global_position
+	assert(game.xi_one_two_run_until > game.match_seconds)
 	for tick in range(150):
 		await physics_frame
 		game.match_seconds += STEP
+		game._handle_human(STEP)
 		game.ball.tick_ball(STEP)
 		game._try_claim_loose_ball()
+		game._maybe_select_pass_receiver()
+		assert(game.controlled == passer, "Requested wall retains passer until actual return")
 		if game.action_feedback_text == "PARED":
 			returned = true
 			break
 	assert(returned, "One-two must be earned by the designated physical first touch")
+	assert(passer.global_position.x > run_start.x + 15.0)
+	assert(absf(passer.global_position.y - run_start.y) > 10.0)
+	print("FOOTBALL_XI_ONE_TWO_RUN_OK travel=", passer.global_position.distance_to(run_start), " forward=", passer.global_position.x - run_start.x)
 	assert(game.ball.carrier == null and game.controlled == passer,
 		"One-two return must be an actual loose pass, not instant control")
 	assert(game.ball.velocity.x < -250.0,
@@ -72,13 +80,18 @@ func _initialize() -> void:
 	for tick in range(150):
 		await physics_frame
 		game.match_seconds += STEP
+		game._handle_human(STEP)
 		game.ball.tick_ball(STEP)
 		game._try_claim_loose_ball()
+		game._maybe_select_pass_receiver()
 		if game.ball.carrier != null:
 			received_return = game.ball.carrier == passer
 			break
 	assert(received_return, "The physical return must be receivable by the runner")
 
+	# Reset the initial fixture for independent normal-pass and interception tests.
+	passer.global_position = start
+	receiver.global_position = start + Vector2(300.0, 0.0)
 	# Without a second Space, the ordinary first touch retains the ball
 	# and transfers human control to its real receiver. No automatic walls.
 	game._select_player(passer)
@@ -115,6 +128,9 @@ func _initialize() -> void:
 	Input.action_press("pass_ball")
 	game._handle_human(STEP)
 	assert(game.xi_one_two_armed)
+	assert(game._xi_one_two_run_direction(Vector2.UP) == Vector2.UP)
+	assert(game.xi_one_two_run_until == 0.0 and game.xi_one_two_armed,
+		"Manual movement cancels only assistance, not the deliberate wall")
 	Input.action_release("pass_ball")
 	game._handle_human(STEP)
 	var intercepted := false
