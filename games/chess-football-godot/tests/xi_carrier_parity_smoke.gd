@@ -264,6 +264,31 @@ func _initialize() -> void:
 	assert(game._best_directional_pass_target(
 		agile_carrier, Vector2.UP, 0.2, long_receiver
 	) == upper_receiver, "Receiver hysteresis may not override the aiming cone")
+	# Real XI movement keeps the analogue magnitude of the input vector.
+	# Test both an off-ball runner and a carrier; no changes to full input,
+	# technique multipliers, sprint ceilings or AI movement.
+	var analog_runner: Footballer = no_ball_runner
+	var analog_origin: Vector2 = game.match_pitch.position + Vector2(400.0, 300.0)
+	analog_runner.base_speed = 250.0
+	analog_runner.dribble_burst_seconds = 0.0
+	analog_runner.xi_cut_exit_run_seconds = 0.0
+	analog_runner.xi_feint_exit_run_seconds = 0.0
+	for carrying: bool in [false, true]:
+		game.ball.attach_to(analog_runner if carrying else agile_carrier)
+		var maximum: float = analog_runner.base_speed * (
+			analog_runner.technique_control_multiplier if carrying else 1.0
+		)
+		for strength: float in [0.25, 0.5, 1.0]:
+			analog_runner.global_position = analog_origin
+			analog_runner.velocity = Vector2.ZERO
+			analog_runner.move_human(0.25, Vector2.RIGHT * strength, false)
+			assert(absf(analog_runner.velocity.length() - maximum * strength) < 0.1,
+				"XI analogue input must proportionally control real movement speed")
+		analog_runner.global_position = analog_origin
+		analog_runner.velocity = Vector2.ZERO
+		analog_runner.move_human(0.25, Vector2(1.0, 1.0).normalized(), false)
+		assert(absf(analog_runner.velocity.length() - maximum) < 0.1)
+	print("FOOTBALL_XI_ANALOG_MOVEMENT_OK off_ball=true carry=true digital_diagonal=true")
 	# 5v5 is a historical test fixture: preserve its old physics/ball anchor.
 	var small = scene.instantiate()
 	small.match_team_size = 5
