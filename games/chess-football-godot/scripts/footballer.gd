@@ -760,6 +760,17 @@ func keeper_save_ratio() -> float:
 		return 0.0
 	return clampf(keeper_save_seconds / keeper_save_total, 0.0, 1.0)
 
+# Shared by the physical ball anchor and the stride lead. Never send
+# the stride touch toward the final cut lane before the planted boot turns.
+func xi_ball_touch_direction() -> Vector2:
+	var forward: Vector2 = dribble_direction if dribble_active() else velocity
+	if dribble_active() and dribble_mode == "cut":
+		forward = _xi_cut_motion_direction()
+	if forward.length_squared() < 0.001:
+		return Vector2(-1.0 if visual != null and visual.flip_h else 1.0, 0.0)
+	return forward.normalized()
+
+
 func ball_anchor() -> Vector2:
 	var facing := -1.0 if visual != null and visual.flip_h else 1.0
 	# Keep legacy 5v5 and keeper catches untouched.
@@ -772,14 +783,7 @@ func ball_anchor() -> Vector2:
 	# the legs or beside a runner travelling vertically/diagonally.
 	# This is the authoritative 2D ball anchor so its shadow, 3D rendering,
 	# possession and release location agree; no visual/physics split.
-	var forward: Vector2 = dribble_direction if dribble_active() else velocity
-	if dribble_active() and dribble_mode == "cut":
-		# Ball and planted body follow the same gradual lane change.
-		forward = _xi_cut_motion_direction()
-	if forward.length_squared() < 0.001:
-		forward = Vector2(facing, 0.0)
-	else:
-		forward = forward.normalized()
+	var forward: Vector2 = xi_ball_touch_direction()
 	var touch_distance := 37.0
 	if dribble_active():
 		touch_distance += dribble_touch_distance * dribble_touch_ratio()

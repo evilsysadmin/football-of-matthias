@@ -170,6 +170,38 @@ func _initialize() -> void:
 	carrier.match_pitch = ChessFootballMath.PITCH_RECT
 	assert(carrier.start_dribble(Vector2.RIGHT, "cut"))
 	assert(carrier.xi_cut_exit_run_seconds == 0.0)
+	# The stride extension must follow the planted boot, not the final
+	# requested lane. Test the real authoritative ball at each cut phase.
+	carrier.match_pitch = game.match_pitch
+	carrier.global_position = centre
+	carrier.velocity = Vector2.RIGHT * carrier.base_speed
+	carrier.contact_stun_seconds = 0.0
+	carrier.tackle_recovery_seconds = 0.0
+	carrier.dribble_burst_seconds = 0.0
+	carrier.dribble_cooldown_seconds = 0.0
+	carrier.action_lock_seconds = 0.0
+	game.ball.attach_to(carrier)
+	var desired_lane := Vector2(1.0, 0.76).normalized()
+	assert(carrier.start_dribble(desired_lane, "cut"))
+	for progress: float in [0.0, 0.22, 0.40, 0.80]:
+		carrier.dribble_burst_seconds = carrier.dribble_duration_seconds * (1.0 - progress)
+		game.ball.xi_carry_distance = game.ball.XI_TOUCH_STRIDE_DISTANCE * 0.5
+		var touch_dir: Vector2 = carrier.xi_ball_touch_direction()
+		assert(touch_dir.is_equal_approx(carrier._xi_cut_motion_direction()))
+		if progress == 0.0:
+			assert(touch_dir.is_equal_approx(Vector2.RIGHT))
+		if progress >= 0.40:
+			assert(touch_dir.is_equal_approx(desired_lane))
+		game.ball.tick_ball(0.0)
+		var expected_offset: Vector2 = (
+			carrier.ball_anchor() + touch_dir * (
+				game.ball.XI_TOUCH_BASE_LEAD + game.ball.XI_TOUCH_PUSH_LEAD
+			)
+		).limit_length(84.0)
+		assert(game.ball.global_position.is_equal_approx(centre + expected_offset),
+			"Physical stride and planted ball anchor must share one heading")
+		assert(game.ball.carrier == carrier)
+	print("FOOTBALL_XI_CUT_STRIDE_DIRECTION_OK phases=4 real_ball=true")
 	# An XI cut carries a REAL physical ball out onto the outside foot.
 	# A CPU boot through the torso must not steal the ball on the other side.
 	# Use the actual FootballBall tick and its stride phase, not a fake spot.
