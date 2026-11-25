@@ -206,5 +206,35 @@ func _initialize() -> void:
 	assert(game.xi_pass_handoff_actor == null)
 	print("FOOTBALL_XI_PASS_HANDOFF_OK neutral_travel=", neutral_travel)
 
+	# A fall between the request and real reception must not force a
+	# return to an incapacitated passer. Ordinary possession still works.
+	await process_frame
+	game._select_player(passer)
+	passer.global_position = start
+	receiver.global_position = start + Vector2(300.0, 0.0)
+	passer.velocity = Vector2.ZERO
+	receiver.velocity = Vector2.ZERO
+	game.ball.attach_to(passer)
+	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
+	assert(game.pass_target == receiver)
+	game.pass_charge_seconds = 0.11
+	assert(game._release_charged_pass())
+	assert(game._try_arm_one_two())
+	passer.xi_collision_down_seconds = 1.0
+	var fall_receive := false
+	for tick in range(150):
+		await physics_frame
+		game.match_seconds += STEP
+		game.ball.tick_ball(STEP)
+		game._try_claim_loose_ball()
+		game._maybe_select_pass_receiver()
+		if game.ball.carrier != null:
+			fall_receive = game.ball.carrier == receiver
+			break
+	assert(fall_receive and game.controlled == receiver)
+	assert(not game.xi_one_two_armed and game.xi_one_two_run_until == 0.0)
+	passer.xi_collision_down_seconds = 0.0
+	print("FOOTBALL_XI_ONE_TWO_FALL_OK receiver_keeps_ball=true")
+
 	print("FOOTBALL_XI_ONE_TWO_OK real_pass=true deliberate_input=true physical_return=true normal_pass=true interceptable=true cancel=true")
 	quit(0)

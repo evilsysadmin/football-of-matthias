@@ -595,12 +595,7 @@ func _physics_process(delta: float) -> void:
 		_update_3d_presentation(0.0)
 		return
 	match_seconds += delta
-	if xi_one_two_passer != null and (
-		match_seconds > xi_one_two_finish_until
-		or kickoff_active or goal_restart_active or set_piece_active
-		or (ball.carrier != null and ball.carrier != xi_one_two_receiver)
-	):
-		_clear_one_two()
+	_expire_one_two_if_invalid()
 	camera_hint_seconds = maxf(0.0, camera_hint_seconds - delta)
 	action_feedback_seconds = maxf(0.0, action_feedback_seconds - delta)
 	if goal_restart_active or kickoff_active or set_piece_active:
@@ -1346,20 +1341,36 @@ func _clear_one_two() -> void:
 	xi_one_two_run_target = Vector2.ZERO
 
 
+func _one_two_actors_available() -> bool:
+	return (
+		is_instance_valid(xi_one_two_passer)
+		and is_instance_valid(xi_one_two_receiver)
+		and xi_one_two_passer != xi_one_two_receiver
+		and xi_one_two_passer.team_id == 0 and xi_one_two_receiver.team_id == 0
+		and not xi_one_two_passer.sent_off and not xi_one_two_receiver.sent_off
+		and xi_one_two_passer.xi_collision_down_seconds <= 0.0
+		and xi_one_two_receiver.xi_collision_down_seconds <= 0.0
+	)
+
+
+func _expire_one_two_if_invalid() -> void:
+	if xi_one_two_passer != null and (
+		match_team_size != 11 or not _one_two_actors_available()
+		or controlled != xi_one_two_passer
+		or match_seconds > xi_one_two_finish_until
+		or kickoff_active or goal_restart_active or set_piece_active
+		or (ball.carrier != null and ball.carrier != xi_one_two_receiver)
+	):
+		_clear_one_two()
+
+
 func _one_two_can_request() -> bool:
 	return (
 		match_team_size == 11
 		and not xi_one_two_armed
-		and xi_one_two_passer != null
-		and is_instance_valid(xi_one_two_passer)
-		and xi_one_two_receiver != null
-		and is_instance_valid(xi_one_two_receiver)
+		and _one_two_actors_available()
 		and controlled == xi_one_two_passer
-		and not xi_one_two_receiver.sent_off
-		and not xi_one_two_passer.sent_off
 		and xi_one_two_passer.role != "keeper"
-		and xi_one_two_passer.xi_collision_down_seconds <= 0.0
-		and xi_one_two_receiver.xi_collision_down_seconds <= 0.0
 		and ball != null and ball.carrier == null
 		and not kickoff_active and not goal_restart_active and not set_piece_active
 		and match_seconds <= xi_one_two_request_until
@@ -1431,10 +1442,10 @@ func _maybe_complete_one_two(receiver: Footballer) -> bool:
 	var valid := (
 		xi_one_two_armed
 		and match_team_size == 11
-		and passer != null and is_instance_valid(passer)
+		and _one_two_actors_available()
 		and receiver == xi_one_two_receiver
-		and controlled == passer and passer != receiver
-		and not passer.sent_off and not receiver.sent_off
+		and controlled == passer
+		and ball.carrier == receiver
 		and not kickoff_active and not goal_restart_active and not set_piece_active
 		and match_seconds <= xi_one_two_finish_until
 		and passer.global_position.distance_to(receiver.global_position)
@@ -4639,6 +4650,7 @@ func _maybe_auto_select_xi_human_defender() -> bool:
 
 
 func _maybe_select_pass_receiver() -> void:
+	_expire_one_two_if_invalid()
 	var receiver := pending_human_pass_receiver
 	if receiver == null:
 		return
@@ -4647,7 +4659,7 @@ func _maybe_select_pass_receiver() -> void:
 	# actual human ball carrier through _try_claim_loose_ball.
 	if (
 		not is_instance_valid(receiver)
-		or receiver.sent_off
+		or receiver.sent_off or receiver.xi_collision_down_seconds > 0.0
 		or ball.carrier != null
 		or controlled == null
 		or controlled.team_id != 0
