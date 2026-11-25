@@ -181,6 +181,31 @@ func _initialize() -> void:
 	carrier.dribble_cooldown_seconds = 0.0
 	carrier.action_lock_seconds = 0.0
 	game.ball.attach_to(carrier)
+	# Ordinary walking touches grow continuously from the stationary anchor.
+	# Keep phase fixed and use the actual authoritative ball, including at rest.
+	var full_touch_speed := maxf(37.0, carrier.base_speed * 0.6)
+	var previous_lead := -1.0
+	for speed: float in [0.0, 36.0, 36.1, (36.0 + full_touch_speed) * 0.5, full_touch_speed, carrier.base_speed]:
+		carrier.velocity = Vector2.RIGHT * speed
+		game.ball.xi_carry_distance = game.ball.XI_TOUCH_STRIDE_DISTANCE * 0.5
+		game.ball.tick_ball(0.0)
+		var extension: Vector2 = game.ball.global_position - centre - carrier.ball_anchor()
+		var measured_lead := extension.dot(carrier.xi_ball_touch_direction())
+		assert(measured_lead >= previous_lead - 0.01, "Ordinary touch must grow monotonically")
+		if speed <= 36.0:
+			assert(absf(measured_lead) < 0.01, "Stationary ball must stay at the boot")
+		elif speed == 36.1:
+			assert(measured_lead < 1.0, "No abrupt full stride at walking threshold")
+		elif is_equal_approx(speed, (36.0 + full_touch_speed) * 0.5):
+			assert(is_equal_approx(measured_lead, 15.5), "Half-speed blend must yield half stride")
+		else:
+			assert(is_equal_approx(measured_lead, 31.0), "Running touch must remain unchanged")
+		assert(game.ball.carrier == carrier)
+		previous_lead = measured_lead
+	game.ball.xi_carry_distance = 0.0
+	carrier.velocity = Vector2.RIGHT * carrier.base_speed
+	game.ball.tick_ball(0.0)
+	print("FOOTBALL_XI_SPEED_SCALED_TOUCH_OK")
 	var desired_lane := Vector2(1.0, 0.76).normalized()
 	assert(carrier.start_dribble(desired_lane, "cut"))
 	for progress: float in [0.0, 0.22, 0.40, 0.80]:
