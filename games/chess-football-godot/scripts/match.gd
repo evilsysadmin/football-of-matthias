@@ -1669,10 +1669,7 @@ func _update_ai(delta: float) -> void:
 		var loose_target: Vector2 = _ai_loose_ball_pursuit_point()
 		var presser: Footballer = _ai_primary_presser(team_id)
 		var cover: Footballer = _ai_secondary_presser(team_id, presser)
-		var lane_assignment: Dictionary = (
-			_ai_xi_lane_assignment(presser, cover)
-			if team_id == 1 else {}
-		)
+		var lane_assignment: Dictionary = _ai_xi_lane_assignment(presser, cover, team_id)
 		var lane_marker: Footballer = lane_assignment.get("marker")
 		var pass_receiver: Footballer = _ai_live_pass_receiver() if team_id == 1 else null
 		for player in teams[team_id]:
@@ -1801,29 +1798,37 @@ func _update_ai(delta: float) -> void:
 
 # One reachable *off-ball* defender guards the most plausible forward
 # pass; the presser and cover retain their existing jobs. Nothing is added
-# on Easy, 5v5, loose balls, CPU possession or an exhausted defence with
-# no credible marker. Assignment uses real positions; movement remains
-# normal CharacterBody2D movement and the ordinary CPU intensity.
+# on Easy, 5v5, loose balls or a defence with no credible marker.
+# Both teams use the same mirrored geometry. The controlled player
+# is never assigned; movement remains ordinary CharacterBody2D physics.
 func _ai_xi_lane_assignment(
-	presser: Footballer, cover: Footballer
+	presser: Footballer, cover: Footballer, defending_team: int = 1
 ) -> Dictionary:
 	if (
 		match_team_size != 11
 		or quick_difficulty == "easy"
 		or ball.carrier == null
-		or ball.carrier.team_id != 0
+		or ball.carrier.team_id == defending_team
 	):
 		return {}
 	var owner: Footballer = ball.carrier
+	var forward: float = 1.0 if owner.team_id == 0 else -1.0
+	var byline: bool = (
+		_xi_human_byline_attack() if owner.team_id == 0 else (
+			owner.global_position.x <= match_pitch.position.x + XI_BYLINE_ATTACK_DEPTH
+			and absf(owner.global_position.y - match_pitch.get_center().y) >= XI_BYLINE_ATTACK_WIDE
+		)
+	)
 	var best_marker: Footballer = null
 	var best_target := Vector2.ZERO
 	var best_receiver: Footballer = null
 	var best_score := INF
-	for receiver in teams[0]:
+	for receiver in teams[owner.team_id]:
 		if (
 			receiver == owner
 			or receiver.sent_off
 			or receiver.role == "keeper"
+			or receiver.xi_collision_down_seconds > 0.0
 		):
 			continue
 		var offset: Vector2 = receiver.global_position - owner.global_position
@@ -1831,13 +1836,13 @@ func _ai_xi_lane_assignment(
 		# spot. Read that actual receiver/corridor too, instead of letting
 		# all defenders ignore a perfectly visible dangerous cutback.
 		var cutback_lane: bool = (
-			_xi_human_byline_attack()
-			and receiver.global_position.x < owner.global_position.x - 75.0
+			byline
+			and offset.x * forward < -75.0
 			and absf(receiver.global_position.y - match_pitch.get_center().y) < 430.0
 			and offset.length() <= XI_BYLINE_PASS_MAX_DISTANCE
 		)
 		if not cutback_lane and (
-			offset.x < AI_XI_LANE_MIN_FORWARD
+			offset.x * forward < AI_XI_LANE_MIN_FORWARD
 			or offset.length() > AI_XI_LANE_MAX_PASS_LENGTH
 		):
 			continue
@@ -1845,7 +1850,7 @@ func _ai_xi_lane_assignment(
 		# rather than marking the ball again or chasing a distant winger.
 		var point: Vector2 = ChessFootballMath.clamp_to_pitch(
 			owner.global_position.lerp(receiver.global_position, 0.64)
-			+ Vector2(18.0, 0.0), match_pitch
+			+ Vector2(18.0 * forward, 0.0), match_pitch
 		)
 		if (
 			(presser != null and point.distance_to(presser.global_position)
@@ -1854,10 +1859,12 @@ func _ai_xi_lane_assignment(
 				< AI_XI_LANE_PRESS_SEPARATION)
 		):
 			continue
-		for defender in teams[1]:
+		for defender in teams[defending_team]:
 			if (
 				defender.sent_off
 				or defender.role == "keeper"
+				or defender == controlled
+				or defender.xi_collision_down_seconds > 0.0
 				or defender == presser
 				or defender == cover
 			):
@@ -1872,7 +1879,7 @@ func _ai_xi_lane_assignment(
 			# Prefer reachable lanes near assigned positions. Dangerous
 			# forward options win ties without sending the whole line chasing.
 			var score_value: float = (
-				arrival + home_drift * 0.18 - offset.x * 0.12
+				arrival + home_drift * 0.18 - offset.x * forward * 0.12
 			)
 			if score_value < best_score:
 				best_score = score_value
