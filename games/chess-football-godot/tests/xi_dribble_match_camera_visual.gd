@@ -39,7 +39,7 @@ func _initialize() -> void:
 		stage._sync_camera(1.0, mode)
 		var gameplay_camera: Transform3D = stage.camera.global_transform
 		var gameplay_fov: float = stage.camera.fov
-		var sheet := Image.create(CELL.x * PROGRESS.size(), CELL.y * 2, false, Image.FORMAT_RGBA8)
+		var sheet := Image.create(CELL.x * PROGRESS.size(), CELL.y * 3, false, Image.FORMAT_RGBA8)
 		sheet.fill(Color("#15392f"))
 		for direction_id in range(2):
 			var direction: Vector2 = (
@@ -104,6 +104,7 @@ func _initialize() -> void:
 			assert(images[0].get_data() != images[1].get_data())
 			assert(images[1].get_data() != images[2].get_data())
 			actor.dribble_burst_seconds = 0.0
+		await _capture_collision_recovery(match_node, stage, actor, center, mode, sheet)
 		assert(sheet.save_png("user://xi-feint-match-camera-" + mode + ".png") == OK)
 		print("FOOTBALL_XI_FEINT_MATCH_CAMERA_CAPTURE_" + mode.to_upper() + "=" +
 			ProjectSettings.globalize_path("user://xi-feint-match-camera-" + mode + ".png"))
@@ -111,3 +112,85 @@ func _initialize() -> void:
 	assert(is_equal_approx(match_node.match_seconds, initial_time))
 	print("FOOTBALL_XI_FEINT_MATCH_CAMERA_OK cameras=2 directions=2 phases=3 native_pixels=1 ball_shadow_aligned=1 authority_unchanged=1")
 	quit(0)
+
+
+# Third row: real body-contact fall, then advance the authoritative actor
+# timer at 60 Hz. Capture native camera pixels with no resizing. No fall
+# timer or pose is fabricated by the presentation test.
+func _capture_collision_recovery(game: Node, stage: ChessFootball3DPresenter,
+	actor: Footballer, center: Vector2, mode: String, sheet: Image) -> void:
+	var rival: Footballer = game.teams[1][4]
+	var key: int = actor.get_instance_id()
+	var driver: AnimatedSprite3D = stage.player_sprites[key]
+	var quad: MeshInstance3D = stage.xi_raster_meshes[key]
+	var actor_processing := actor.is_processing()
+	var rival_processing := rival.is_processing()
+	actor.set_process(false)
+	rival.set_process(false)
+	actor.global_position = center
+	rival.global_position = center + Vector2(35.0, 0.0)
+	actor.velocity = Vector2.ZERO
+	rival.velocity = Vector2.ZERO
+	actor.dribble_burst_seconds = 0.0
+	actor.dribble_cooldown_seconds = 0.0
+	actor.action_lock_seconds = 0.0
+	game._select_player(actor)
+	game.ball.attach_to(actor)
+	stage.sync_presentation(0.0, mode)
+	await _capture_collision_cell(game, stage, actor, sheet, 0)
+	actor.velocity = Vector2.RIGHT * 220.0
+	rival.velocity = Vector2.LEFT * 180.0
+	assert(actor.start_dribble(Vector2.RIGHT, "cut"))
+	# Advance the actual action clock to its contact window.
+	while actor.dribble_burst_seconds > actor.dribble_duration_seconds * 0.50:
+		actor._process(1.0 / 60.0)
+	assert(game._update_xi_dribble_body_contacts() == "both_down")
+	assert(game.ball.carrier == null and actor.xi_collision_down_seconds > 0.0)
+	var ticks := 0
+	while actor.xi_collision_down_ratio() > 0.50:
+		actor._process(1.0 / 60.0)
+		rival._process(1.0 / 60.0)
+		ticks += 1
+	stage.sync_presentation(0.0, mode)
+	assert(absf(driver.rotation.z) > deg_to_rad(45.0))
+	assert(driver.scale.y / driver.scale.x > 0.75, "Fall must not compress athlete into a strip")
+	assert(quad.scale.is_equal_approx(driver.scale))
+	await _capture_collision_cell(game, stage, actor, sheet, 1)
+	while actor.xi_collision_down_seconds > 0.0 and ticks < 120:
+		actor._process(1.0 / 60.0)
+		rival._process(1.0 / 60.0)
+		ticks += 1
+	assert(actor.xi_collision_down_seconds == 0.0)
+	var before: Vector2 = actor.global_position
+	await physics_frame
+	actor.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+	assert(actor.velocity.x > 0.0)
+	stage.sync_presentation(1.0 / 60.0, mode)
+	assert(absf(driver.rotation.z) < deg_to_rad(20.0), "Recovered body must be upright")
+	assert(quad.rotation.is_equal_approx(driver.rotation))
+	assert(quad.scale.is_equal_approx(driver.scale))
+	await _capture_collision_cell(game, stage, actor, sheet, 2)
+	print("FOOTBALL_XI_COLLISION_RECOVERY_VISUAL_OK mode=", mode,
+		" recovery_ticks=", ticks, " recovered_velocity=", actor.velocity.length(),
+		" displacement=", actor.global_position.distance_to(before))
+	# Restore the next camera's independent initial fixture.
+	actor.xi_collision_guard_seconds = 0.0
+	rival.xi_collision_guard_seconds = 0.0
+	rival.global_position = Vector2(-9999, -9999)
+	actor.set_process(actor_processing)
+	rival.set_process(rival_processing)
+
+
+func _capture_collision_cell(game: Node, stage: ChessFootball3DPresenter,
+	actor: Footballer, sheet: Image, column: int) -> void:
+	await process_frame
+	await RenderingServer.frame_post_draw
+	var frame := game.get_viewport().get_texture().get_image()
+	assert(frame != null and frame.get_size() == Vector2i(1280, 720))
+	var body_center: Vector2 = stage.camera.unproject_position(
+		stage.player_nodes[actor.get_instance_id()].global_position + Vector3.UP * 0.75
+	)
+	var left := clampi(int(body_center.x) - CELL.x / 2, 0, frame.get_width() - CELL.x)
+	var top := clampi(int(body_center.y) - CELL.y / 2, 0, frame.get_height() - CELL.y)
+	var crop := frame.get_region(Rect2i(left, top, CELL.x, CELL.y))
+	sheet.blit_rect(crop, Rect2i(Vector2i.ZERO, CELL), Vector2i(column * CELL.x, 2 * CELL.y))
