@@ -379,6 +379,9 @@ const XI_ONE_TWO_REQUEST_SECONDS := 0.90
 const XI_ONE_TWO_FINISH_SECONDS := 3.20
 const XI_ONE_TWO_RETURN_MAX_DISTANCE := 900.0
 const XI_ONE_TWO_RETURN_POWER := 670.0
+const XI_ONE_TWO_RUN_SECONDS := 0.55
+const XI_ONE_TWO_RUN_FORWARD := 120.0
+const XI_ONE_TWO_RUN_WIDTH := 110.0
 const PASS_MIN_POWER := 560.0
 const PASS_MAX_POWER := 1180.0
 const PASS_SHORT_MAX_RATIO := 0.24
@@ -520,6 +523,8 @@ var xi_one_two_receiver: Footballer = null
 var xi_one_two_request_until: float = 0.0
 var xi_one_two_finish_until: float = 0.0
 var xi_one_two_armed: bool = false
+var xi_one_two_run_target := Vector2.ZERO
+var xi_one_two_run_until: float = 0.0
 var pending_tackle_player: Footballer = null
 var pending_tackle_seconds: float = 0.0
 
@@ -1178,6 +1183,7 @@ func _handle_human(delta: float) -> void:
 	var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var chase_direction: Vector2 = _xi_human_handoff_chase_direction(direction)
 	chase_direction = _xi_pass_handoff_direction(chase_direction)
+	chase_direction = _xi_one_two_run_direction(chase_direction)
 	var finishing_handoff: bool = (
 		xi_human_handoff_chase_actor == controlled or xi_pass_handoff_actor == controlled
 	)
@@ -1336,6 +1342,8 @@ func _clear_one_two() -> void:
 	xi_one_two_request_until = 0.0
 	xi_one_two_finish_until = 0.0
 	xi_one_two_armed = false
+	xi_one_two_run_until = 0.0
+	xi_one_two_run_target = Vector2.ZERO
 
 
 func _one_two_can_request() -> bool:
@@ -1348,6 +1356,10 @@ func _one_two_can_request() -> bool:
 		and is_instance_valid(xi_one_two_receiver)
 		and controlled == xi_one_two_passer
 		and not xi_one_two_receiver.sent_off
+		and not xi_one_two_passer.sent_off
+		and xi_one_two_passer.role != "keeper"
+		and xi_one_two_passer.xi_collision_down_seconds <= 0.0
+		and xi_one_two_receiver.xi_collision_down_seconds <= 0.0
 		and ball != null and ball.carrier == null
 		and not kickoff_active and not goal_restart_active and not set_piece_active
 		and match_seconds <= xi_one_two_request_until
@@ -1358,8 +1370,57 @@ func _try_arm_one_two() -> bool:
 	if not _one_two_can_request():
 		return false
 	xi_one_two_armed = true
+	# Plan a bounded forward diagonal from real positions. If neither
+	# diagonal is a viable return lane, do not invent a safe run.
+	var origin: Vector2 = xi_one_two_receiver.global_position
+	var start: Vector2 = xi_one_two_passer.global_position
+	var best_gap: float = -1.0
+	for side: float in [-1.0, 1.0]:
+		var candidate: Vector2 = ChessFootballMath.clamp_to_pitch(
+			start + Vector2(XI_ONE_TWO_RUN_FORWARD, side * XI_ONE_TWO_RUN_WIDTH),
+			match_pitch
+		)
+		if candidate.x - start.x < 40.0 or candidate.distance_to(origin) < 100.0:
+			continue
+		var gap: float = _ai_xi_human_lane_clearance_from(origin, candidate, true)
+		if gap >= AI_XI_HUMAN_LANE_SAFE and gap > best_gap:
+			best_gap = gap
+			xi_one_two_run_target = candidate
+	if best_gap >= 0.0:
+		xi_one_two_run_until = match_seconds + XI_ONE_TWO_RUN_SECONDS
 	_show_action_feedback("PARED PEDIDA")
 	return true
+
+
+func _xi_one_two_run_direction(input_direction: Vector2) -> Vector2:
+	if xi_one_two_run_until <= 0.0:
+		return input_direction
+	if (
+		not xi_one_two_armed or controlled != xi_one_two_passer
+		or controlled == null or controlled.sent_off
+		or controlled.xi_collision_down_seconds > 0.0
+		or not is_instance_valid(xi_one_two_receiver)
+		or xi_one_two_receiver.sent_off or xi_one_two_receiver.xi_collision_down_seconds > 0.0
+		or match_seconds >= xi_one_two_run_until or ball.carrier != null
+		or kickoff_active or goal_restart_active or set_piece_active
+		or input_direction.length_squared() > 0.01
+		or Input.is_action_just_pressed("change_player")
+		or Input.is_action_just_pressed("tackle")
+		or Input.is_action_just_pressed("special_move")
+		or Input.is_action_pressed("shoot_ball")
+	):
+		xi_one_two_run_until = 0.0
+		return input_direction
+	if controlled.global_position.distance_to(xi_one_two_run_target) <= 12.0:
+		xi_one_two_run_until = 0.0
+		return input_direction
+	# Stop assistance if the planned corridor becomes genuinely blocked.
+	if _ai_xi_human_lane_clearance_from(
+		xi_one_two_receiver.global_position, xi_one_two_run_target, true
+	) < AI_XI_HUMAN_LANE_HOLD:
+		xi_one_two_run_until = 0.0
+		return input_direction
+	return controlled.global_position.direction_to(xi_one_two_run_target)
 
 
 func _maybe_complete_one_two(receiver: Footballer) -> bool:
@@ -2711,7 +2772,12 @@ func _ai_xi_refresh_human_support_assignment() -> void:
 # Score both space at the receiving boot and the ACTUAL passing corridor.
 # A clear receiver behind a defender is not a free, safe triangle.
 func _ai_xi_human_lane_clearance(destination: Vector2, anticipate: bool = false) -> float:
-	var origin: Vector2 = ball.carrier.global_position
+	return _ai_xi_human_lane_clearance_from(ball.carrier.global_position, destination, anticipate)
+
+
+func _ai_xi_human_lane_clearance_from(
+	origin: Vector2, destination: Vector2, anticipate: bool = false
+) -> float:
 	var corridor: Vector2 = destination - origin
 	var length_sq: float = corridor.length_squared()
 	var clearance: float = 500.0
@@ -4587,6 +4653,16 @@ func _maybe_select_pass_receiver() -> void:
 		or controlled.team_id != 0
 	):
 		pending_human_pass_receiver = null
+		return
+	# An explicitly requested wall needs the original passer to retain
+	# control until the intended receiver earns a real first touch.
+	if (
+		xi_one_two_armed and receiver == xi_one_two_receiver
+		and controlled == xi_one_two_passer
+		and match_seconds <= xi_one_two_finish_until
+		and not controlled.sent_off and controlled.xi_collision_down_seconds <= 0.0
+		and receiver.xi_collision_down_seconds <= 0.0
+	):
 		return
 	if ball.flight_height > 24.0:
 		return
