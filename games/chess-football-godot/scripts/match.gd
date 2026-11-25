@@ -247,8 +247,8 @@ const AI_XI_NORMAL_FIRST_TOUCH_REACTION := 0.38
 # punching the ball loose on frame 2 while the attacker is still planted.
 # Shorter than Normal's first-touch read; no new state or physical buffs.
 const AI_XI_HARD_FIRST_TOUCH_READ := 0.22
-# Four 60 Hz frames from a CPU standing-tackle launch to the first possible contact.
-const AI_XI_HARD_TACKLE_WINDUP_SECONDS := 0.06
+# Three 60 Hz frames from a CPU standing-tackle launch to first possible contact.
+const AI_XI_HARD_TACKLE_WINDUP_SECONDS := 0.045
 const AI_XI_EXPERT_FIRST_TOUCH_READ := 0.12
 # A NEW human E touch must be read even during an older possession.
 # This is CPU decision latency, not immunity: already-launched tackle

@@ -142,6 +142,9 @@ func _initialize() -> void:
 			int(counts["recovered"]) + int(counts["foul"]) == 12)
 	assert(actual_tackle_attempts > 0, "Duel matrix must exercise real CPU tackles")
 	var playability_errors: Array[String] = _xi_regate_playability_errors(rows)
+	if not playability_errors.is_empty():
+		# Preserve the individual physical outcomes on a red gate as well.
+		print("FOOTBALL_XI_DRIBBLE_MATRIX_FAILED_ROWS " + JSON.stringify(rows))
 	assert(playability_errors.is_empty(),
 		"XI E physical-playability regression: " + JSON.stringify(playability_errors))
 	# Prove the gate detects deliberately broken gameplay, not just valid JSON.

@@ -97,13 +97,13 @@ func _initialize() -> void:
 		assert(initial_hitbox["inside"] and initial_hitbox["contact"])
 		assert(not game._try_tackle(cpu_tackler, false, true))
 		assert(cpu_tackler.tackle_active() and game.ball.carrier == human_carrier)
-		for tick in range(4):
+		for tick in range(3):
 			await physics_frame
 			if dodge:
 				human_carrier.move_human(DT, Vector2.DOWN, true)
 			cpu_tackler._process(DT)
 			game._update_active_tackle_contacts()
-			if tick < 3:
+			if tick < 2:
 				assert(game.ball.carrier == human_carrier)
 		assert((game.ball.carrier == human_carrier) == dodge)
 		if dodge:
@@ -112,7 +112,7 @@ func _initialize() -> void:
 			assert(not game._tackle_hitbox(cpu_tackler, human_carrier.global_position)["contact"])
 			print("FOOTBALL_XI_HARD_TACKLE_PHYSICAL_ESCAPE_OK travel=", travel)
 	game._set_quick_difficulty("normal")
-	print("FOOTBALL_XI_HARD_TACKLE_WINDUP_OK ticks=4 legal_contact=true lateral_escape=true")
+	print("FOOTBALL_XI_HARD_TACKLE_WINDUP_OK ticks=3 legal_contact=true lateral_escape=true")
 	# The human E press just outside the old range waits briefly for the
 	# player to RUN into a real legal hitbox, with no instant tackle/steal.
 	var cpu_owner: Footballer = game.teams[1][10]
