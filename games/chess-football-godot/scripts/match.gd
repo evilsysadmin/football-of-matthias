@@ -2550,6 +2550,7 @@ func _ai_xi_support_rank(player: Footballer) -> int:
 			if (
 				teammate == ball.carrier
 				or teammate.sent_off
+				or teammate.xi_collision_down_seconds > 0.0
 				or teammate.role == "keeper"
 				or teammate in chosen
 			):
@@ -3292,6 +3293,7 @@ func _ai_live_pass_receiver() -> Footballer:
 		ai_intended_pass_receiver == null
 		or not is_instance_valid(ai_intended_pass_receiver)
 		or ai_intended_pass_receiver.sent_off
+		or (match_team_size == 11 and ai_intended_pass_receiver.xi_collision_down_seconds > 0.0)
 		or match_seconds > ai_intended_pass_until
 		or ball.carrier != null
 	):
@@ -3656,6 +3658,8 @@ func _best_ai_pass_target(
 	var second_progress: float = 0.0
 	for teammate in teams[player.team_id]:
 		if teammate == player or teammate.sent_off or teammate.role == "keeper":
+			continue
+		if match_team_size == 11 and teammate.xi_collision_down_seconds > 0.0:
 			continue
 		var destination: Vector2 = teammate.global_position
 		if match_team_size == 11:
