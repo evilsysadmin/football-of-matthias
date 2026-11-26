@@ -15,31 +15,34 @@ const PINNED := {
 }
 
 static func sheet_meta(team_id: int, action: StringName) -> Dictionary:
-	if team_id not in [0, 1] or action not in ACTIONS:
+	if team_id not in [0, 1] or (action not in ACTIONS and action != &"run_front_diagonal"):
 		return {}
 	var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://optional_dense_v1.json"))
 	if not manifest is Dictionary:
 		return {}
 	if manifest.get("cdn_base") != TRUSTED_ROOT.trim_suffix("/") or manifest.get("enabled_actions") != ["pass", "shoot"]:
 		return {}
-	var filename: String = TEAMS[team_id] + "_" + String(action) + "_16_v1.webp"
+	var count: int = 24 if action == &"run_front_diagonal" else 16
+	if count == 24 and manifest.get("enabled_diagonal") != true:
+		return {}
+	var filename: String = TEAMS[team_id] + "_" + String(action) + "_%d_v1.webp" % count
 	for entry in manifest.get("entries", []):
 		if entry.get("file") != filename:
 			continue
-		if entry.get("sha256") != PINNED[filename] or entry.get("team") != TEAMS[team_id] or entry.get("animation") != String(action) or entry.get("columns") != 16 or entry.get("rows") != 1:
+		if entry.get("sha256") != PINNED[filename] or entry.get("team") != TEAMS[team_id] or entry.get("animation") != String(action) or entry.get("columns") != count or entry.get("rows") != 1:
 			return {}
 		var meta := {"url": TRUSTED_ROOT + filename, "sha256": PINNED[filename],
-			"cell": {"width": 128, "height": 144}, "columns": 16, "rows": 1}
+			"cell": {"width": 128, "height": 144}, "columns": count, "rows": 1}
 		return meta if ChessFootballR2AtlasLoader.valid_metadata(meta, TRUSTED_ROOT) else {}
 	return {}
 
 
-static func frames_from_image(image: Image) -> Array[Texture2D]:
+static func frames_from_image(image: Image, count: int = 16) -> Array[Texture2D]:
 	var textures: Array[Texture2D] = []
-	if image == null or image.get_size() != Vector2i(2048, 144):
+	if count not in [16, 24] or image == null or image.get_size() != Vector2i(CELL.x * count, CELL.y):
 		return textures
 	var regions: Array[Image] = []
-	for col in range(16):
+	for col in range(count):
 		var region := image.get_region(Rect2i(col * 128, 0, 128, 144))
 		var bounds := region.get_used_rect()
 		if bounds.position.x < 4 or bounds.end.x > 124 or bounds.position.y < 4 or bounds.position.y > 32 or bounds.end.y < 129 or bounds.end.y > 139 or bounds.size.x < 38:
