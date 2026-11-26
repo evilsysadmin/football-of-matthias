@@ -24,6 +24,17 @@ func _initialize() -> void:
 	game.set_physics_process(false)
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	assert(stage != null and stage.xi_raster_meshes.size() == 22)
+	# A normal match must never opt into the incomplete V5/dense generation.
+	# Direct private installer calls below are explicit art preview tests.
+	assert(not stage.complete_xi_art_release_ready())
+	assert(not stage._allow_xi_art_preview())
+	assert(stage._hero_v5_loaded.is_empty() and stage._dense_kick_loaded.is_empty() and stage._dense_diagonal_loaded.is_empty())
+	for club in range(2):
+		for athlete: Footballer in game.teams[club]:
+			var driver: AnimatedSprite3D = stage.player_sprites[athlete.get_instance_id()]
+			assert(not driver.sprite_frames.has_animation(&"hero_feint"))
+			assert(not driver.sprite_frames.has_animation(&"hero_cut"))
+	print("FOOTBALL_XI_PUBLIC_ART_HOLD_OK both_clubs=true")
 	for club in range(2):
 		for family in ChessFootballHeroV5R2.FAMILIES:
 			var verified_meta: Dictionary = ChessFootballHeroV5R2.sheet_meta(club, family)

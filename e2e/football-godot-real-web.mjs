@@ -714,11 +714,26 @@ try {
   }
   console.log('CHESS_FOOTBALL_REAL_WEB_READY OK');
 
-  // XI is deliberately unavailable in the public app. The explicit local
-  // probe plus loopback origin are required even when the fragment is present.
-  // Reboot the SAME exported WASM in Chromium, not a native/mock game.
-  // Hash-only navigation does NOT reload a document: leave the page first.
+  // First boot XI with the ordinary art policy, without the explicit art
+  // preview flag. The incomplete generation must NOT enter either club.
   await page.goto('about:blank');
+  const artHoldReceipt = page.waitForEvent('console', {
+    predicate: line => line.text().includes('FOOTBALL_XI_ART_POLICY legacy incomplete_directional_family'),
+    timeout: 90000
+  });
+  await page.goto(url + '#football-ci-eleven=1', {waitUntil: 'domcontentloaded', timeout: 30000});
+  await artHoldReceipt;
+  await page.waitForFunction(() => window.__chessFootballWebReady === true, null, {timeout: 60000});
+  await page.waitForFunction(() => window.__chessFootballActionPoseReceipts.some(r => r.team_size === 11 && r.sheets === 8), null, {timeout: 60000});
+  const held = await page.evaluate(() => ({hero: window.__chessFootballHeroV5Receipts.length, kicks: window.__chessFootballDenseKicksInstalled, diagonal: window.__chessFootballDenseDiagonalInstalled}));
+  if (held.hero || held.kicks || held.diagonal || messages.some(m => m.includes('FOOTBALL_ATLAS bundled_verified file=')) || failures.length) {
+    throw new Error('Incomplete art activated during normal XI boot: ' + JSON.stringify(held) + ' ' + failures.slice(0, 8).join('; '));
+  }
+  console.log('FOOTBALL_XI_PUBLIC_ART_HOLD_OK clubs=2 partial_generation_installs=0');
+  // Keep testing the exact candidate assets in the same WASM, with an
+  // explicit localhost-only preview opt-in that cannot enable live staging.
+  await page.goto('about:blank');
+  await page.addInitScript(() => { window.__chessFootballPartialArtPreview = true; });
   await page.goto(url + '#football-ci-eleven=1', {
     waitUntil: 'domcontentloaded', timeout: 30000
   });

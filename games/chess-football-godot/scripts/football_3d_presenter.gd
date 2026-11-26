@@ -1442,6 +1442,23 @@ func _apply_verified_keeper_catch_frames(textures: Array[Texture2D], team_id: in
 	tone_gain_cache.clear()
 
 
+# Public art-generation hold: the approved V5/dense assets currently cover
+# front and front-diagonal locomotion only. Do not enable partial new art
+# in live matches (including kicks/dribbles). Replace this hold only with an
+# atomic complete-bank installer for both clubs, after all five directions
+# and actions have passed visual review. Preserve preview assets/tests.
+static func complete_xi_art_release_ready() -> bool:
+	return false
+
+
+func _allow_xi_art_preview() -> bool:
+	if not OS.has_feature("web"):
+		return false
+	return bool(JavaScriptBridge.eval(
+		"location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true && window.__chessFootballPartialArtPreview === true",
+		true))
+
+
 func setup(p_match: Node) -> void:
 	match_node = p_match
 	var pitch: Rect2 = match_node.match_pitch
@@ -1467,8 +1484,12 @@ func setup(p_match: Node) -> void:
 	_request_action_poses_from_r2()
 	_request_keeper_catch_atlases_from_r2()
 	_request_motion_v4_from_r2()
-	_request_hero_v5_from_r2()
-	_request_dense_kicks_from_r2()
+	if match_node.match_team_size == 11:
+		if complete_xi_art_release_ready() or _allow_xi_art_preview():
+			_request_hero_v5_from_r2()
+			_request_dense_kicks_from_r2()
+		elif OS.has_feature("web"):
+			print("FOOTBALL_XI_ART_POLICY legacy incomplete_directional_family")
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
