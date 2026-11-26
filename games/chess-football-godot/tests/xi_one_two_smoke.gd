@@ -246,7 +246,62 @@ func _initialize() -> void:
 	game.queue_free()
 	await process_frame
 	await _live_wall(scene)
+	await process_frame
+	await _autonomous_teammate(scene)
 	quit(0)
+
+
+func _autonomous_teammate(scene: PackedScene) -> void:
+	var game = scene.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	game._set_quick_difficulty("normal")
+	var centre: Vector2 = game.match_pitch.get_center()
+	for team in game.teams:
+		for player: Footballer in team:
+			player.velocity = Vector2.ZERO
+			player.global_position = centre + Vector2(
+				-1200.0 if player.team_id == 0 else 1200.0,
+				-900.0 + float(player.squad_index) * 160.0
+			)
+	var owner: Footballer = game.teams[0][3]
+	var receiver: Footballer = game.teams[0][6]
+	var manual: Footballer = game.teams[0][8]
+	owner.global_position = centre
+	receiver.global_position = centre + Vector2(310.0, 0.0)
+	game._select_player(owner)
+	game.ball.attach_to(owner)
+	game.ball.tick_ball(0.8)
+	game._update_ai(0.0)
+	assert(game.ball.carrier == owner, "AI may not kick for the selected human")
+	game._select_player(manual)
+	game.ball.attach_to(owner)
+	game._update_ai(0.0)
+	assert(game.ball.carrier == owner, "Fresh first touch is not an automatic kick")
+	game.ball.tick_ball(0.8)
+	assert(game._best_ai_pass_target(owner) == receiver)
+	game._update_ai(0.0)
+	assert(game.ball.carrier == null and not game.ball.last_release_was_shot)
+	assert(game.ai_intended_pass_receiver == receiver and game.controlled == manual)
+	assert(game.ball.velocity.dot(receiver.global_position - owner.global_position) > 0.0)
+	game._update_ai(0.0)
+	assert(receiver.ai_target.distance_to(game._ai_loose_ball_pursuit_point()) < 0.1)
+	# Explicitly select the owner again: even an aged, clear possession
+	# must not authorize AI to execute the human's next action.
+	game._select_player(owner)
+	game.ball.attach_to(owner)
+	game.ball.tick_ball(1.0)
+	game._update_ai(0.0)
+	assert(game.ball.carrier == owner and game.controlled == owner)
+	print("FOOTBALL_XI_AUTONOMOUS_TEAMMATE_OK real_pass=true receiver_chase=true manual_excluded=true fresh_touch_protected=true")
+	game.queue_free()
 
 
 func _live_wall(scene: PackedScene) -> void:

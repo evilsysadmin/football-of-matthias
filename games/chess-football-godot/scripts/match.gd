@@ -1673,7 +1673,9 @@ func _update_ai(delta: float) -> void:
 		var cover: Footballer = _ai_secondary_presser(team_id, presser)
 		var lane_assignment: Dictionary = _ai_xi_lane_assignment(presser, cover, team_id)
 		var lane_marker: Footballer = lane_assignment.get("marker")
-		var pass_receiver: Footballer = _ai_live_pass_receiver() if team_id == 1 else null
+		var pass_receiver: Footballer = _ai_live_pass_receiver()
+		if pass_receiver != null and pass_receiver.team_id != team_id:
+			pass_receiver = null
 		for player in teams[team_id]:
 			if player.sent_off:
 				continue
@@ -1754,6 +1756,7 @@ func _update_ai(delta: float) -> void:
 			if (
 				ball.carrier != player
 				and player != pending_human_pass_receiver
+				and not (team_id == 0 and player == pass_receiver)
 				and player != lane_marker
 				and (team_has_ball or (player != presser and not contesting_cover and not human_close_cover))
 			):
@@ -1795,8 +1798,27 @@ func _update_ai(delta: float) -> void:
 				):
 					_try_tackle(player, false, true)
 
-			if ball.carrier == player and team_id == 1 and _ai_decision_ready(player):
+			if ball.carrier == player and _ai_outfield_attack_allowed(player) and _ai_decision_ready(player):
 				_ai_attack(player)
+
+
+func _ai_outfield_attack_allowed(player: Footballer) -> bool:
+	if player == controlled or player.sent_off or player.role == "keeper":
+		return false
+	if player.team_id == 1:
+		return true
+	# Normal claims hand control to the human receiver. If the user
+	# deliberately selects another footballer, the unselected carrier
+	# can play autonomously after a brief physical first-touch window.
+	# Never kick during the requested wall or a dead-ball transition.
+	return (
+		match_team_size == 11
+		and ball.carrier == player
+		and player.xi_collision_down_seconds <= 0.0
+		and not kickoff_active and not goal_restart_active and not set_piece_active
+		and not pause_menu_open and not xi_one_two_armed
+		and ball.possession_seconds >= AI_XI_PASS_CLOSE_DELAY
+	)
 
 # One reachable *off-ball* defender guards the most plausible forward
 # pass; the presser and cover retain their existing jobs. Nothing is added
@@ -3567,17 +3589,13 @@ func _ai_attack(player: Footballer) -> void:
 	# an otherwise unproductive sideways/recycling pass.
 	var pressured := pressure_distance < (
 		AI_XI_PASS_CLOSE_PRESS_RADIUS
-		if match_team_size == 11 and player.team_id == 1
-		else (
-			AI_XI_PASS_PRESSURE_RADIUS
-			if match_team_size == 11 else _ai_adaptive_pressure_radius()
-		)
+		if match_team_size == 11 else _ai_adaptive_pressure_radius()
 	)
 	var useful_gain := forward_gain > (
 		AI_XI_PASS_FORWARD_GAIN if match_team_size == 11 else _ai_adaptive_forward_pass_gain()
 	)
 	if pressured or useful_gain:
-		if match_team_size == 11 and player.team_id == 1:
+		if match_team_size == 11:
 			var setup_seconds: float = _ai_xi_pass_setup_seconds(
 				player, pressure_distance, forward_gain
 			)
