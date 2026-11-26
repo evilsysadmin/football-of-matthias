@@ -412,11 +412,14 @@ async function bridgeVerifiedStagingActionPosesR2(page) {
         createHash('sha256').update(data).digest('hex') !== expectedHash) {
       throw new Error('Action R2 bytes/geometry/SHA invalid: ' + url);
     }
-    await page.route(url, route => route.fulfill({
-      status: 200, contentType: 'image/webp',
-      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
-      body: data
-    }));
+    await page.route(url, route => {
+      console.log('FOOTBALL_WEB_CI_ACTION_POSES_R2_REQUESTED', key);
+      return route.fulfill({
+        status: 200, contentType: 'image/webp',
+        headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+        body: data
+      });
+    });
     console.log('FOOTBALL_WEB_CI_ACTION_POSES_R2_VERIFIED', key, data.length);
   }
   if (expected.size) throw new Error('Missing an action R2 sheet');
@@ -560,10 +563,14 @@ try {
     }
   });
   // Distinguish a successful localhost R2 bridge from a Web/decoder timeout.
-  // Log only the four public V5 URLs; never leak gameplay state or identifiers.
+  // Log only pinned public V5 and action atlas responses.
   page.on('response', (response) => {
     if (response.url().startsWith('https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v5/')) {
       console.log('FOOTBALL_WEB_CI_HERO_V5_HTTP', response.status(), response.url().split('/').at(-1));
+    }
+    if (response.url().startsWith('https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v2/') &&
+        response.url().endsWith('_poses_v2.webp')) {
+      console.log('FOOTBALL_WEB_CI_ACTION_POSES_R2_HTTP', response.status(), response.url().split('/').at(-1));
     }
   });
   page.on('requestfailed', (request) => {
