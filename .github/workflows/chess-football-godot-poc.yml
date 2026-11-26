@@ -102,6 +102,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/football-art-venv"
           "$RUNNER_TEMP/football-art-venv/bin/python" -m pip install --disable-pip-version-check --no-deps Pillow==12.0.0
           "$RUNNER_TEMP/football-art-venv/bin/python" -m unittest discover -s scripts -p 'test_football_directional_art_gate.py' -v
+          "$RUNNER_TEMP/football-art-venv/bin/python" -m unittest discover -s scripts -p 'test_football_dense_diagonal_gate.py' -v
           "$RUNNER_TEMP/football-art-venv/bin/python" scripts/football_directional_art_gate.py references \
             --source-dir "$RUNNER_TEMP" \
             --output-dir "$RUNNER_TEMP/chess-football-review"
