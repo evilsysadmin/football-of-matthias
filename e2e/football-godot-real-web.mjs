@@ -425,11 +425,9 @@ async function bridgeVerifiedStagingActionPosesR2(page) {
   if (expected.size) throw new Error('Missing an action R2 sheet');
 }
 
-// CI-only bridge. The actual Cloudflare CORS rule correctly permits staging
-// but NOT http://127.0.0.1:random; never expand that production allowlist.
-// Fetch each exact V5 object with the real staging Origin, verify byte-for-byte
-// its immutable approval SHA and dimensions, then route ONLY those four URLs.
-async function bridgeVerifiedHeroV5R2(page) {
+// Independently verify the approved upstream objects, then prohibit browser
+// downloads: the exported PCK must install those exact V5 textures offline.
+async function assertBundledHeroV5R2(page) {
   if (process.env.CI !== 'true') throw new Error('Hero V5 bridge is CI-only');
   const meta = JSON.parse(readFileSync('games/chess-football-godot/optional_hero_v5.json', 'utf8'));
   if (meta.enabled !== true) return;
@@ -479,12 +477,8 @@ async function bridgeVerifiedHeroV5R2(page) {
       throw new Error('V5 byte, SHA or frame layout mismatch: ' + url);
     }
     await page.route(url, (route) => {
-      console.log('FOOTBALL_WEB_CI_HERO_V5_REQUESTED', entry.file);
-      return route.fulfill({
-        status: 200, contentType: 'image/webp',
-        headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
-        body: data
-      });
+      failures.push('UNEXPECTED EXTERNAL V5 ATLAS REQUEST: ' + entry.file);
+      return route.abort('blockedbyclient');
     });
     console.log('FOOTBALL_WEB_CI_HERO_V5_VERIFIED', entry.file,
       'bytes=' + data.length, 'sha=' + record[0], 'staging_cors=' + cors);
@@ -492,7 +486,7 @@ async function bridgeVerifiedHeroV5R2(page) {
   if (expected.size) throw new Error('Missing V5 hero sheet(s) for one club');
 }
 
-async function bridgeVerifiedDenseKicksR2(page) {
+async function assertBundledDenseR2(page) {
   if (process.env.CI !== 'true') throw new Error('Dense kicks bridge is CI-only');
   const base = 'https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/dense-v1';
   const origin = 'https://staging.football.shadowops.dpdns.org';
@@ -511,7 +505,10 @@ async function bridgeVerifiedDenseKicksR2(page) {
     if (response.status !== 200 || !response.headers.get('content-type')?.includes('image/webp') || (cors !== '*' && cors !== origin)) throw new Error('Dense R2 HTTP/CORS: ' + name);
     const data = Buffer.from(await response.arrayBuffer());
     if (data.length < 25 || data.length > 4194304 || createHash('sha256').update(data).digest('hex') !== sha) throw new Error('Dense R2 SHA: ' + name);
-    await page.route(url, route => route.fulfill({status: 200, contentType: 'image/webp', headers: {'Access-Control-Allow-Origin': '*'}, body: data}));
+    await page.route(url, route => {
+      failures.push('UNEXPECTED EXTERNAL DENSE ATLAS REQUEST: ' + name);
+      return route.abort('blockedbyclient');
+    });
   }
 }
 
@@ -542,8 +539,8 @@ try {
     await bridgeVerifiedStagingPassShootR2(page);
     await bridgeVerifiedStagingCarryDribbleR2(page);
     await bridgeVerifiedStagingActionPosesR2(page);
-    await bridgeVerifiedHeroV5R2(page);
-    await bridgeVerifiedDenseKicksR2(page);
+    await assertBundledHeroV5R2(page);
+    await assertBundledDenseR2(page);
   }
   await page.addInitScript(() => {
     window.__chessFootballWebReady = false;
@@ -776,6 +773,14 @@ try {
   console.log('FOOTBALL_XI_REAL_WEB_DENSE_KICKS_INSTALLED_OK clubs=2 sheets=4 frames=16');
   await page.waitForFunction(() => window.__chessFootballDenseDiagonalInstalled === true, null, {timeout: 60000});
   console.log('FOOTBALL_XI_REAL_WEB_DENSE_DIAGONAL_INSTALLED_OK clubs=2 sheets=2 frames=24');
+  const bundled = new Set(messages.flatMap(message => {
+    const match = message.match(/FOOTBALL_ATLAS bundled_verified file=([a-z0-9_]+\.webp)/);
+    return match ? [match[1]] : [];
+  }));
+  if (process.env.FOOTBALL_CI_KEEPER_R2_BRIDGE === '1' && (bundled.size !== 10 || failures.length)) {
+    throw new Error('Expected ten SHA-verified bundled V5/dense sheets and zero runtime failures: ' + JSON.stringify([...bundled]) + ' ' + failures.slice(0, 8).join('; '));
+  }
+  console.log('FOOTBALL_XI_BUNDLED_ATLASES_OK sheets=' + bundled.size);
   // The first 5v5 boot already exercised Playwright's real canvas.click.
   // After a full WASM reboot in software WebGL, locator.click can hang in
   // actionability/scroll checks during ReadPixels GPU stalls despite a real,

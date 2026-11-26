@@ -10,6 +10,7 @@ const CDN_ROOT := "https://assets.chess-studio.shadowops.dpdns.org/football/atla
 const REQUEST_TIMEOUT_SECONDS := 8.0
 const MAX_PAYLOAD_BYTES := 4194304
 const MAX_DIMENSION := 4096
+const BUNDLED_ATLAS_DIR := "res://assets/players/runtime_atlases/"
 
 var _started := false
 var _request_node: HTTPRequest
@@ -101,7 +102,26 @@ func start(meta: Dictionary, allowed_root: String = CDN_ROOT, timeout_seconds: f
 		return
 	_timeout_retry_remaining = retry_root(allowed_root)
 	_request_timeout = clampf(timeout_seconds, REQUEST_TIMEOUT_SECONDS, 30.0)
+	# Released Web builds package these exact approved bytes inside the PCK.
+	# The iframe's origin differs from the staging page; browser CORS must
+	# not decide whether a verified V5/dense animation appears on screen.
+	var filename: String = String(meta["url"]).get_file()
+	var local_path: String = BUNDLED_ATLAS_DIR + filename + ".bin"
+	if retry_root(allowed_root) and String(meta["url"]) == allowed_root + filename and FileAccess.file_exists(local_path):
+		call_deferred("_load_bundled", local_path, meta.duplicate(true), allowed_root)
+		return
 	_request_once(meta.duplicate(true), allowed_root)
+
+
+func _load_bundled(path: String, meta: Dictionary, allowed_root: String) -> void:
+	if not is_inside_tree() or is_queued_for_deletion():
+		return
+	var image := decode_verified_webp(FileAccess.get_file_as_bytes(path), meta, allowed_root)
+	if image == null:
+		atlas_failed.emit("bundled_integrity_or_decode_rejected")
+		return
+	print("FOOTBALL_ATLAS bundled_verified file=%s" % String(meta["url"]).get_file())
+	atlas_ready.emit(image)
 
 
 func _request_once(meta: Dictionary, allowed_root: String) -> void:
