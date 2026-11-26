@@ -900,6 +900,7 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 		return
 	var targets: Array[AnimatedSprite3D] = []
 	var names: Array[StringName] = [&"idle_front", &"run_front", &"sprint_front", &"run_front_diagonal", &"sprint_front_diagonal"]
+	var prior_cycles: Dictionary = {}
 	for player in match_node.teams[team_id]:
 		if player.role == "keeper":
 			continue
@@ -911,6 +912,13 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 				return
 			if sprite.sprite_frames.get_frame_count(name) not in [1, 8, 12, 24]:
 				return
+		# Capture actual counts and fallback frame BEFORE clearing the bank.
+		# Async arrivals need not occur in the same order for every view.
+		if sprite.animation in names:
+			var id: int = player.get_instance_id()
+			var count: int = sprite.sprite_frames.get_frame_count(sprite.animation)
+			var phase: float = float(outfield_visual_phases.get(id, float(sprite.frame)))
+			prior_cycles[id] = fposmod(phase, float(count)) / float(count)
 		targets.append(sprite)
 	if targets.size() != match_node.match_team_size - 1:
 		return
@@ -934,13 +942,8 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 			continue
 		var id: int = player.get_instance_id()
 		var driver := player_sprites[id] as AnimatedSprite3D
-		if driver.animation in names:
-			var old_phase: float = float(outfield_visual_phases.get(id, float(driver.frame)))
-			var old_count: int = 8
-			# Phase is a normalized cycle clock, not a gameplay timer.
-			if driver.animation != &"idle_front":
-				old_count = 24 if _motion_v4_loaded.has("%d:run" % team_id) else (12 if _run_v3_r2_loaded.has(team_id) else 8)
-			var new_phase: float = fposmod(old_phase * 16.0 / float(old_count), 16.0)
+		if prior_cycles.has(id):
+			var new_phase: float = float(prior_cycles[id]) * 16.0
 			outfield_visual_phases[id] = new_phase
 			driver.frame = clampi(int(floorf(new_phase)), 0, 15)
 	_hero_v5_loaded[key] = true

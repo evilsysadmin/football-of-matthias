@@ -79,8 +79,38 @@ func _initialize() -> void:
 		var old_fps: float = sprite.sprite_frames.get_animation_speed(&"run_front")
 		stage._apply_hero_v5_locomotion([], club)
 		assert(not stage._hero_v5_loaded.has("%d:locomotion" % club))
+		# Simulate a partially upgraded directional bank: the old idle may
+		# have one pose, or a separately installed animated idle. Capture
+		# the real count, not a club-wide V3/V4 arrival flag.
+		var idle_actor: Footballer = game.teams[club][2]
+		var idle_driver: AnimatedSprite3D = stage.player_sprites[idle_actor.get_instance_id()]
+		idle_driver.play(&"idle_front")
+		idle_driver.pause()
+		idle_driver.frame = 0
+		stage.outfield_visual_phases[idle_actor.get_instance_id()] = 0.0
+		# A run bank with no cached phase must preserve the visible frame
+		# before SpriteFrames.clear resets it.
+		sprite.play(&"run_front_diagonal")
+		sprite.pause()
+		var old_diag_count: int = sprite.sprite_frames.get_frame_count(&"run_front_diagonal")
+		sprite.frame = 5
+		stage.outfield_visual_phases.erase(runner.get_instance_id())
+		# Another actor uses a genuine fractional phase with a distinct count.
+		var mixed_actor: Footballer = game.teams[club][3]
+		var mixed_driver: AnimatedSprite3D = stage.player_sprites[mixed_actor.get_instance_id()]
+		var mixed_bank: SpriteFrames = mixed_driver.sprite_frames
+		mixed_bank.clear(&"run_front_diagonal")
+		for pose in range(12):
+			mixed_bank.add_frame(&"run_front_diagonal", runs[32 + pose])
+		mixed_driver.play(&"run_front_diagonal")
+		mixed_driver.pause()
+		stage.outfield_visual_phases[mixed_actor.get_instance_id()] = 8.25
 		stage._apply_hero_v5_locomotion(runs, club)
 		assert(stage._hero_v5_loaded.has("%d:locomotion" % club))
+		assert(is_equal_approx(float(stage.outfield_visual_phases[runner.get_instance_id()]), 5.0 * 16.0 / float(old_diag_count)))
+		assert(is_equal_approx(float(stage.outfield_visual_phases[mixed_actor.get_instance_id()]), 11.0))
+		assert(mixed_driver.frame == 11 and idle_driver.frame == 0)
+		print("FOOTBALL_XI_ASYNC_ATLAS_PHASE_OK club=%d actual_count=true fallback_frame=true" % club)
 		assert(sprite.sprite_frames.get_frame_count(&"idle_front") == 16)
 		assert(sprite.sprite_frames.get_frame_texture(&"idle_front", 0) == runs[0])
 		for anim in [&"run_front", &"sprint_front"]:
