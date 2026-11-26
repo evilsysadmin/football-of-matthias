@@ -1,5 +1,52 @@
 extends SceneTree
 
+# Exercise the real completion/timer logic without making network requests.
+class RetryProbe extends ChessFootballR2AtlasLoader:
+	var dispatches := 0
+
+	func _request_once(_meta: Dictionary, _allowed_root: String) -> void:
+		dispatches += 1
+
+
+func _check_timeout_lifecycle() -> void:
+	var root_url := ChessFootballDenseV1R2.TRUSTED_ROOT
+	assert(ChessFootballR2AtlasLoader.retry_root(root_url))
+	assert(ChessFootballR2AtlasLoader.retry_root(ChessFootballHeroV5R2.TRUSTED_ROOT))
+	assert(not ChessFootballR2AtlasLoader.retry_root(ChessFootballR2AtlasLoader.CDN_ROOT))
+	assert(not ChessFootballR2AtlasLoader.retry_root(ChessFootballActionPosesR2.TRUSTED_ROOT))
+	assert(not ChessFootballR2AtlasLoader.retry_root("https://other.example/atlases/v5/"))
+	assert(ChessFootballR2AtlasLoader.can_retry_timeout(HTTPRequest.RESULT_TIMEOUT, 0, true))
+	assert(not ChessFootballR2AtlasLoader.can_retry_timeout(HTTPRequest.RESULT_TIMEOUT, 0, false))
+	assert(not ChessFootballR2AtlasLoader.can_retry_timeout(HTTPRequest.RESULT_SUCCESS, 403, true))
+	assert(not ChessFootballR2AtlasLoader.can_retry_timeout(HTTPRequest.RESULT_TIMEOUT, 200, true))
+	assert(not ChessFootballR2AtlasLoader.can_retry_timeout(HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED, 0, true))
+	var probe := RetryProbe.new()
+	root.add_child(probe)
+	probe._timeout_retry_remaining = true
+	var failures: Array[String] = []
+	probe.atlas_failed.connect(func(reason: String): failures.append(reason))
+	probe._on_request_completed(HTTPRequest.RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray(), {}, root_url)
+	assert(probe.dispatches == 0 and failures.is_empty())
+	await create_timer(0.65).timeout
+	assert(probe.dispatches == 1 and failures.is_empty())
+	probe._on_request_completed(HTTPRequest.RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray(), {}, root_url)
+	assert(failures.size() == 1 and failures[0].begins_with("http_result:"))
+	await create_timer(0.65).timeout
+	assert(probe.dispatches == 1 and failures.size() == 1)
+	probe.queue_free()
+	var detached := RetryProbe.new()
+	root.add_child(detached)
+	detached._timeout_retry_remaining = true
+	detached._on_request_completed(HTTPRequest.RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray(), {}, root_url)
+	root.remove_child(detached)
+	await create_timer(0.65).timeout
+	assert(detached.dispatches == 0)
+	detached._timeout_retry_remaining = true
+	detached._on_request_completed(HTTPRequest.RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray(), {}, root_url)
+	assert(not detached._timeout_retry_remaining and detached.dispatches == 0)
+	detached.free()
+	print("FOOTBALL_R2_TIMEOUT_LIFECYCLE_OK one_retry=true terminal_failure=true detached_cancel=true")
+
 # P0: only exact SHA-verified original-runtime R2 action sheets can install
 # in XI. The slide's oversized painted ground shadow is removed from middle
 # poses after decode while the opaque boot contact and all physics survive.
@@ -18,6 +65,8 @@ func _synthetic_sheet() -> Image:
 
 
 func _initialize() -> void:
+	await process_frame
+	await _check_timeout_lifecycle()
 	# The scrape is bounded, reversible and tied only to the action clock.
 	assert(ChessFootball3DPresenter.xi_slide_scrape_weight(0.64, 0.64) == 0.0)
 	assert(is_equal_approx(ChessFootball3DPresenter.xi_slide_scrape_weight(0.64, 0.32), 1.0))
