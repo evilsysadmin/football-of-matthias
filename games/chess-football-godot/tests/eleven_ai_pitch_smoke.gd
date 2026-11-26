@@ -1704,6 +1704,33 @@ func _human_lane_guard(packed: PackedScene) -> void:
 	game._set_quick_difficulty("easy")
 	assert(game._ai_xi_lane_assignment(presser, cover, 0).is_empty())
 	print("FOOTBALL_XI_HUMAN_LANE_GUARD_OK mirrored=true real_ai=true controlled_excluded=true fallen_excluded=true")
+	# A primary teammate must contain instead of wasting the tackle
+	# animation and recovery at a distance outside the real hitbox.
+	game._set_quick_difficulty("normal")
+	presser.global_position = owner.global_position + Vector2(-82.0, 0.0)
+	presser.velocity = Vector2.RIGHT * 150.0
+	presser.tackle_cooldown_seconds = 0.0
+	presser.tackle_recovery_seconds = 0.0
+	presser.tackle_active_seconds = 0.0
+	presser.action_lock_seconds = 0.0
+	presser.contact_stun_seconds = 0.0
+	assert(game._ai_primary_presser(0) == presser)
+	assert(not game._ai_xi_tackle_commit_ready(presser, owner, false))
+	game._update_ai(0.0)
+	assert(not presser.tackle_active() and presser.tackle_cooldown_seconds == 0.0)
+	assert(game.ball.carrier == owner and game.controlled == manual)
+	presser.global_position = owner.global_position + Vector2(-32.0, 0.0)
+	presser.velocity = Vector2.RIGHT * 150.0
+	assert(game._ai_xi_tackle_commit_ready(presser, owner, false))
+	presser.velocity = Vector2.LEFT * 150.0
+	assert(not game._ai_xi_tackle_commit_ready(presser, owner, false))
+	presser.velocity = Vector2.RIGHT * 150.0
+	presser.tackle_cooldown_seconds = 0.5
+	assert(not game._ai_xi_tackle_commit_ready(presser, owner, false))
+	presser.tackle_cooldown_seconds = 0.0
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_tackle_commit_ready(presser, owner, false))
+	print("FOOTBALL_XI_SHARED_PRIMARY_CONTAIN_OK no_wasted_tackle=true legal_contact=true wrong_heading=false cooldown=false manual_unchanged=true")
 	# The second defender now uses the same Hard/Expert opportunity
 	# gate and clean physical hitbox as the opposing team's backup.
 	owner.velocity = Vector2.ZERO
