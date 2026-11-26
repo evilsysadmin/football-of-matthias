@@ -3688,7 +3688,12 @@ func _ai_attack(player: Footballer) -> void:
 			pass_power = clampf(190.0 + distance * 2.25, PASS_MIN_POWER, PASS_MAX_POWER)
 			ai_intended_pass_receiver = target
 			ai_intended_pass_until = match_seconds + AI_XI_PASS_RECEIVER_SECONDS
-		var kick_direction: Vector2 = pass_destination - player.global_position
+		# XI releases from the actual first-touch ball position, just as
+		# the manual charged pass does. Keep 5v5 and release errors intact.
+		var kick_origin: Vector2 = ball.global_position if match_team_size == 11 else player.global_position
+		var kick_direction: Vector2 = pass_destination - kick_origin
+		if kick_direction.length_squared() < 0.001:
+			kick_direction = Vector2.RIGHT if player.team_id == 0 else Vector2.LEFT
 		if match_team_size == 11 and player.team_id == 1:
 			# One release-time error: once kicked, the physical ball keeps
 			# its real trajectory. Do not modify target selection or teammates.
