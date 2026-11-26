@@ -157,6 +157,7 @@ var xi_actor_models: Dictionary = {}
 # All XI athletes (including when optional R2 is unavailable) must use
 # their canonical local raster. No geometric proxy on the playing field.
 var player_run_views: Dictionary = {}
+var player_run_mirrors: Dictionary = {}
 # Keeper run/action poses tick independently in the visible 3D runtime.
 # Hidden authoritative 2D AnimatedSprite2D nodes are not a reliable clock.
 var keeper_visual_phases: Dictionary = {}
@@ -2822,8 +2823,16 @@ func sync_presentation(delta: float, mode: String) -> void:
 						player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
 						0.0, 1.0
 					)
+					var base_mirror: bool = player.visual.flip_h
+					if match_node.match_team_size == 11 and (
+						_keeper_locomotion(wanted_animation) or String(wanted_animation).begins_with("idle")
+					):
+						base_mirror = ChessFootballRunDirection.mirror_for_velocity(
+							player.velocity, run_view, bool(player_run_mirrors.get(key, base_mirror))
+						)
+						player_run_mirrors[key] = base_mirror
 					sprite.flip_h = xi_feint_pivot_mirror(
-						player.visual.flip_h, match_node.match_team_size,
+						base_mirror, match_node.match_team_size,
 						run_view, player.role,
 						player.has_ball and match_node.ball.carrier == player,
 						player.dribble_active(), player.dribble_mode,
