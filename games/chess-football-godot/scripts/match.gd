@@ -4038,11 +4038,12 @@ func _ai_xi_tackle_commit_ready(
 			and ball.possession_seconds < AI_XI_NORMAL_FIRST_TOUCH_REACTION
 		):
 			return false
-	# Preserve legacy/manual-primary behavior, but let either XI team's
-	# autonomous second defender use the same clean-contact decision.
-	if match_team_size != 11 or quick_difficulty == "easy" or (tackler.team_id == 0 and not is_cover):
+	# Both XI teams' autonomous defenders must see actual legal contact
+	# before committing. Manual tackles do not call this decision gate.
+	# Easy and legacy 5v5 keep their original timing/behavior.
+	if match_team_size != 11 or quick_difficulty == "easy":
 		return true
-	if tackler.team_id == 0 and not _ai_cpu_second_press_active(tackler, victim.global_position):
+	if tackler.team_id == 0 and is_cover and not _ai_cpu_second_press_active(tackler, victim.global_position):
 		return false
 	# Hard used to commit at 2-3 physical frames into the touch; the human
 	# could reclaim the glancing deflection well before a duel was over.
