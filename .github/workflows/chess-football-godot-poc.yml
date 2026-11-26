@@ -1477,7 +1477,7 @@ jobs:
           log="$RUNNER_TEMP/football-pass-shoot-r2-visual.log"
           export FOOTBALL_PASS_SHOOT_PREVIEW_DIR="$RUNNER_TEMP/football-pass-shoot-r2"
           set +e
-          timeout 85s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/pass_shoot_r2_visual.gd 2>&1 | tee "$log"
+          timeout 150s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/pass_shoot_r2_visual.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           for mode in broadcast tactical; do
@@ -1501,6 +1501,11 @@ jobs:
           fi
           grep -q 'FOOTBALL_PASS_SHOOT_REAL_GODOT_REVIEW_OK teams=2 actions=2 phases=3 cameras=2' "$log"
           test "$(grep -c '^FOOTBALL_XI_ACTION_TIMELINE_OK team=' "$log")" -eq 4
+          grep -q 'FOOTBALL_DENSE_KICKS_VISUAL_OK teams=2 actions=2 frames=16' "$log"
+          test "$(grep -c '^FOOTBALL_DENSE_ACTION_TIMELINE_OK team=.*frames=16' "$log")" -eq 4
+          dense="$(sed -n 's/^FOOTBALL_PASS_SHOOT_CAPTURE_DENSE_TIMELINE_BROADCAST=//p' "$log" | tail -1)"
+          test -n "$dense" && test -s "$dense"
+          cp "$dense" "$RUNNER_TEMP/chess-football-review/dense-kicks-timeline-broadcast.png"
           test -s "$RUNNER_TEMP/chess-football-review/pass-shoot-timeline-broadcast.png"
           for mode in broadcast tactical; do
             for phase in before after; do
