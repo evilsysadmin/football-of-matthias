@@ -2334,22 +2334,26 @@ func _ai_xi_diagonal_cover_lead(player: Footballer, threat_position: Vector2) ->
 # Unlike the CPU's strategic cover, do not drift back toward a distant home
 # lane or get pushed away by teammate separation at the final challenge.
 # Outfielders who are neither the first nor second presser help seal nearby
-# midfield lanes when the CPU attacks OUR half. A smooth danger/proximity
+# midfield lanes when the opponent attacks their half. A smooth danger/proximity
 # blend prevents a formation snap on crossing midfield. The maximum extra
 # shift is only 17% of the existing home-to-carrier vector: this is NOT a
 # third chasing presser, a speed boost, or an automatic tackling permission.
 func _ai_xi_human_compact_target(player: Footballer, owner: Footballer) -> Vector2:
 	var ratio: float = AI_DEFENSIVE_SHIFT_RATIO
 	if (
-		match_team_size == 11 and player.team_id == 0
-		and owner != null and owner.team_id == 1
+		match_team_size == 11
+		and owner != null and owner.team_id != player.team_id
 		and ball.carrier == owner
 	):
+		# Reflect the same danger coordinate in the defending team's
+		# direction. Existing home-team geometry remains unchanged.
 		var centre_x: float = match_pitch.get_center().x
+		var defending_forward: float = 1.0 if player.team_id == 0 else -1.0
+		var relative_threat_x: float = (owner.global_position.x - centre_x) * defending_forward
 		var threat_weight: float = 1.0 - smoothstep(
-			centre_x + AI_XI_HUMAN_COMPACT_FULL_THREAT_X,
-			centre_x + AI_XI_HUMAN_COMPACT_NO_THREAT_X,
-			owner.global_position.x
+			AI_XI_HUMAN_COMPACT_FULL_THREAT_X,
+			AI_XI_HUMAN_COMPACT_NO_THREAT_X,
+			relative_threat_x
 		)
 		var home_distance: float = player.home_position.distance_to(owner.global_position)
 		var proximity_weight: float = 1.0 - smoothstep(
