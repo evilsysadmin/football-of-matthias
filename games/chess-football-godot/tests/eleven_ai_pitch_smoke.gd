@@ -1611,7 +1611,76 @@ func _initialize() -> void:
 	await _human_lane_guard(packed)
 	await process_frame
 	await _human_defensive_role_stability(packed)
+	await process_frame
+	await _mirrored_compact_shape(packed)
 	quit(0)
+
+
+func _mirrored_compact_shape(packed: PackedScene) -> void:
+	var game = packed.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	game._set_quick_difficulty("normal")
+	var centre: Vector2 = XI.get_center()
+	var home_screen: Footballer = game.teams[0][5]
+	var away_screen: Footballer = game.teams[1][5]
+	var home_owner: Footballer = game.teams[0][10]
+	var away_owner: Footballer = game.teams[1][10]
+	home_screen.home_position = centre + Vector2(-580.0, 160.0)
+	away_screen.home_position = centre + Vector2(580.0, 160.0)
+	for dx: float in [-180.0, -100.0, 0.0, 130.0, 260.0, 490.0]:
+		away_owner.global_position = centre + Vector2(dx, 0.0)
+		home_owner.global_position = centre + Vector2(-dx, 0.0)
+		game.ball.attach_to(away_owner)
+		var home_target: Vector2 = game._ai_xi_human_compact_target(home_screen, away_owner)
+		game.ball.attach_to(home_owner)
+		var away_target: Vector2 = game._ai_xi_human_compact_target(away_screen, home_owner)
+		assert(is_equal_approx(home_target.x + away_target.x, centre.x * 2.0))
+		assert(is_equal_approx(home_target.y, away_target.y))
+		var legacy: Vector2 = away_screen.home_position.lerp(
+			home_owner.global_position, game.AI_DEFENSIVE_SHIFT_RATIO
+		)
+		if dx == -180.0:
+			assert(away_target.distance_to(home_owner.global_position) <
+				legacy.distance_to(home_owner.global_position) - 45.0)
+		elif dx >= 260.0:
+			assert(away_target.is_equal_approx(legacy))
+	# The live away midfield screen must use the same mirrored target.
+	home_owner.global_position = centre + Vector2(180.0, 0.0)
+	game._select_player(home_owner)
+	game.ball.attach_to(home_owner)
+	for player: Footballer in game.teams[0]:
+		if player != home_owner:
+			player.global_position = centre + Vector2(-1150.0, 780.0)
+			player.velocity = Vector2.ZERO
+	for player: Footballer in game.teams[1]:
+		if player.role != "keeper":
+			player.global_position = centre + Vector2(1100.0, 780.0)
+			player.velocity = Vector2.ZERO
+	var first: Footballer = game.teams[1][2]
+	var second: Footballer = game.teams[1][3]
+	first.global_position = home_owner.global_position + Vector2(72.0, 0.0)
+	second.global_position = home_owner.global_position + Vector2(125.0, 40.0)
+	away_screen.global_position = home_owner.global_position + Vector2(430.0, 160.0)
+	assert(game._ai_primary_presser(1) == first)
+	assert(game._ai_secondary_presser(1, first) == second)
+	var expected: Vector2 = game._ai_xi_human_compact_target(away_screen, home_owner)
+	game._update_ai(0.0)
+	assert(away_screen.ai_target.distance_to(expected) < 0.1)
+	assert(game.controlled == home_owner)
+	game.match_team_size = 5
+	assert(game._ai_xi_human_compact_target(away_screen, home_owner).is_equal_approx(
+		away_screen.home_position.lerp(home_owner.global_position, game.AI_DEFENSIVE_SHIFT_RATIO)
+	))
+	print("FOOTBALL_XI_SHARED_COMPACT_OK mirrored=true live_ai=true far_half_hold=true legacy=true")
+	game.queue_free()
 
 
 func _human_defensive_role_stability(packed: PackedScene) -> void:
