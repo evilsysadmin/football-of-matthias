@@ -84,6 +84,8 @@ jobs:
         run: python3 scripts/check_football_idle_r2.py
       - name: Verify R2 pass/shoot objects and staging CORS (fail closed)
         run: python3 scripts/check_football_pass_shoot_r2.py
+      - name: Verify six published dense V1 WebPs (HTTP CORS SHA geometry)
+        run: python3 scripts/check_football_dense_v1_r2.py
       - name: Verify R2 carry/dribble objects and staging CORS (fail closed)
         run: python3 scripts/check_football_carry_dribble_r2.py
       # Probe the NEW canonical-style v2 candidates independently. v1 is
@@ -1161,6 +1163,15 @@ jobs:
             exit 1
           fi
           grep -q 'football optional R2 pass/shoot sheets, atomic frames and fallback: OK' "$log"
+      - name: Install verified dense V1 kick banks in real XI scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-dense-kicks.log"
+          timeout 55s "$godot" --headless --quit-after 420 --path games/chess-football-godot --script res://tests/dense_kicks_r2_smoke.gd 2>&1 | tee "$log"
+          if grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|Failed to load script' "$log"; then exit 1; fi
+          grep -q 'FOOTBALL_DENSE_KICKS_NATIVE_OK' "$log"
       - name: Optional R2 carry/dribble visual-only state and fallback contract
         shell: bash
         run: |

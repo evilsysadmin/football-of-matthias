@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "bucket": "football",
+  "prefix": "atlases/dense-v1/",
+  "cdn_base": "https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/dense-v1",
+  "cell": {
+    "width": 128,
+    "height": 144
+  },
+  "enabled_actions": [
+    "pass",
+    "shoot"
+  ],
+  "entries": [
+    {
+      "team": "fc_matthias",
+      "animation": "pass",
+      "columns": 16,
+      "rows": 1,
+      "file": "fc_matthias_pass_16_v1.webp",
+      "sha256": "85f06fb25ce9f688d948cdec8d16e35a8b8b9ccc2c31dfe9df63e0bdc6195086"
+    },
+    {
+      "team": "fc_matthias",
+      "animation": "shoot",
+      "columns": 16,
+      "rows": 1,
+      "file": "fc_matthias_shoot_16_v1.webp",
+      "sha256": "02657c4c59bbeeea7403cd6dc66cf95d75d24a81553a19c61f60842047e5da60"
+    },
+    {
+      "team": "fc_matthias",
+      "animation": "run_front_diagonal",
+      "columns": 24,
+      "rows": 1,
+      "file": "fc_matthias_run_front_diagonal_24_v1.webp",
+      "sha256": "c900c992044056b7e36d42c8e42c8e7aea00d4fa9e01cab2f96a79d12992a01d"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "pass",
+      "columns": 16,
+      "rows": 1,
+      "file": "real_enroque_pass_16_v1.webp",
+      "sha256": "b5a78aaf2b77f254389f87e17ba612677ff89a1d7441791906ade247a1fc4ad0"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "shoot",
+      "columns": 16,
+      "rows": 1,
+      "file": "real_enroque_shoot_16_v1.webp",
+      "sha256": "2a61e6dd266c1c25499c9e26d4ac6581acd9f614901cc24589b24ff1213925a6"
+    },
+    {
+      "team": "real_enroque",
+      "animation": "run_front_diagonal",
+      "columns": 24,
+      "rows": 1,
+      "file": "real_enroque_run_front_diagonal_24_v1.webp",
+      "sha256": "e95bed24beeeadf4f2abd53ec090411dd0798d29be045db6bb502cde2689c0dd"
+    }
+  ]
+}
