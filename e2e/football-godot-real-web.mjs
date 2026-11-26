@@ -492,6 +492,27 @@ async function bridgeVerifiedHeroV5R2(page) {
   if (expected.size) throw new Error('Missing V5 hero sheet(s) for one club');
 }
 
+async function bridgeVerifiedDenseKicksR2(page) {
+  if (process.env.CI !== 'true') throw new Error('Dense kicks bridge is CI-only');
+  const base = 'https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/dense-v1';
+  const origin = 'https://staging.football.shadowops.dpdns.org';
+  const expected = new Map([
+    ['fc_matthias_pass_16_v1.webp', '85f06fb25ce9f688d948cdec8d16e35a8b8b9ccc2c31dfe9df63e0bdc6195086'],
+    ['fc_matthias_shoot_16_v1.webp', '02657c4c59bbeeea7403cd6dc66cf95d75d24a81553a19c61f60842047e5da60'],
+    ['real_enroque_pass_16_v1.webp', 'b5a78aaf2b77f254389f87e17ba612677ff89a1d7441791906ade247a1fc4ad0'],
+    ['real_enroque_shoot_16_v1.webp', '2a61e6dd266c1c25499c9e26d4ac6581acd9f614901cc24589b24ff1213925a6'],
+  ]);
+  for (const [name, sha] of expected) {
+    const url = base + '/' + name;
+    const response = await fetch(url, {headers: {Origin: origin}, signal: AbortSignal.timeout(20000)});
+    const cors = response.headers.get('access-control-allow-origin');
+    if (response.status !== 200 || !response.headers.get('content-type')?.includes('image/webp') || (cors !== '*' && cors !== origin)) throw new Error('Dense R2 HTTP/CORS: ' + name);
+    const data = Buffer.from(await response.arrayBuffer());
+    if (data.length < 25 || data.length > 4194304 || createHash('sha256').update(data).digest('hex') !== sha) throw new Error('Dense R2 SHA: ' + name);
+    await page.route(url, route => route.fulfill({status: 200, contentType: 'image/webp', headers: {'Access-Control-Allow-Origin': '*'}, body: data}));
+  }
+}
+
 const server = createServer((req, res) => {
   try {
     let path = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
@@ -520,6 +541,7 @@ try {
     await bridgeVerifiedStagingCarryDribbleR2(page);
     await bridgeVerifiedStagingActionPosesR2(page);
     await bridgeVerifiedHeroV5R2(page);
+    await bridgeVerifiedDenseKicksR2(page);
   }
   await page.addInitScript(() => {
     window.__chessFootballWebReady = false;
@@ -529,6 +551,7 @@ try {
     window.__chessFootballInputSamples = [];
     window.__chessFootballActionPoseReceipts = [];
     window.__chessFootballHeroV5Receipts = [];
+    window.__chessFootballDenseKicksInstalled = false;
     window.addEventListener('message', (event) => {
       if (event.data?.source !== 'chess-football-godot') return;
       if (event.data.type === 'ready') window.__chessFootballWebReady = true;
@@ -537,6 +560,9 @@ try {
       }
       if (event.data.type === 'ci-hero-v5-installed' || event.data.type === 'ci-hero-v5-progress') {
         window.__chessFootballHeroV5Receipts.push(event.data);
+      }
+      if (event.data.type === 'ci-dense-kicks-installed' && event.data.team_size === 11 && event.data.sheets === 4) {
+        window.__chessFootballDenseKicksInstalled = true;
       }
       if (event.data.type === 'ci-keyboard-sample') {
         window.__chessFootballInputSamples.push(event.data);
@@ -740,6 +766,8 @@ try {
     throw error;
   }
   console.log('FOOTBALL_XI_REAL_WEB_HERO_V5_INSTALLED_OK clubs=2 families=2 sheets=4');
+  await page.waitForFunction(() => window.__chessFootballDenseKicksInstalled === true, null, {timeout: 60000});
+  console.log('FOOTBALL_XI_REAL_WEB_DENSE_KICKS_INSTALLED_OK clubs=2 sheets=4 frames=16');
   // The first 5v5 boot already exercised Playwright's real canvas.click.
   // After a full WASM reboot in software WebGL, locator.click can hang in
   // actionability/scroll checks during ReadPixels GPU stalls despite a real,

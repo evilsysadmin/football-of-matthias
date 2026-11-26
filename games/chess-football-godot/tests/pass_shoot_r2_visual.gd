@@ -65,7 +65,23 @@ func _initialize() -> void:
 	# captures eight chronological, IN-GAME viewport frames per action/club.
 	var timeline: Image = await _render_action_timeline(game, stage, targets)
 	await _save(timeline, "TIMELINE_BROADCAST", "football-actions-timeline-broadcast.png")
+	# Install the new authored banks only after preserving the legacy
+	# visual evidence above. Inspect actual chronological viewport poses.
+	var dense_dir := OS.get_environment("RUNNER_TEMP").path_join("football-dense-v1")
+	for team_id in range(2):
+		for action in ACTIONS:
+			var meta := ChessFootballDenseV1R2.sheet_meta(team_id, action)
+			assert(not meta.is_empty())
+			var decoded := ChessFootballR2AtlasLoader.decode_verified_webp(
+				FileAccess.get_file_as_bytes(dense_dir.path_join(String(meta["url"]).get_file())),
+				meta, ChessFootballDenseV1R2.TRUSTED_ROOT)
+			assert(decoded != null)
+			stage._on_dense_kick_ready(decoded, team_id, action)
+		assert(stage._dense_kick_loaded.has(team_id))
+	var dense_timeline: Image = await _render_action_timeline(game, stage, targets, 16)
+	await _save(dense_timeline, "DENSE_TIMELINE_BROADCAST", "football-dense-kicks-timeline.png")
 	assert(game.score == saved_score)
+	print("FOOTBALL_DENSE_KICKS_VISUAL_OK teams=2 actions=2 frames=16")
 	print("FOOTBALL_PASS_SHOOT_REAL_GODOT_REVIEW_OK teams=2 actions=2 phases=3 cameras=2")
 	quit(0)
 
@@ -137,9 +153,10 @@ func _capture(game: Node, stage: ChessFootball3DPresenter,
 # immediately fails when frames 6/7 disappear before the action lock ends.
 func _render_action_timeline(
 	game: Node, stage: ChessFootball3DPresenter,
-	targets: Array[Footballer]
+	targets: Array[Footballer], count: int = 8
 ) -> Image:
-	var matrix := Image.create(CROP.x * 8, CROP.y * 4, false, Image.FORMAT_RGBA8)
+	var strips: int = ceili(float(count) / 8.0)
+	var matrix := Image.create(CROP.x * 8, CROP.y * 4 * strips, false, Image.FORMAT_RGBA8)
 	matrix.fill(Color("#103a2d"))
 	for team_id in range(2):
 		var actor: Footballer = targets[team_id]
@@ -175,12 +192,14 @@ func _render_action_timeline(
 				var shot: Image = await _capture_timeline_pose(game, stage, actor)
 				matrix.blit_rect(
 					shot, Rect2i(Vector2i.ZERO, CROP),
-					Vector2i(frame * CROP.x, (team_id * ACTIONS.size() + action_index) * CROP.y)
+					Vector2i((frame % 8) * CROP.x,
+						((team_id * ACTIONS.size() + action_index) * strips + floori(float(frame) / 8.0)) * CROP.y)
 				)
-			assert(seen.size() == 8 and last == 7,
-				"Fast XI action must display all eight authored pass/shoot poses")
-			print("FOOTBALL_XI_ACTION_TIMELINE_OK team=%d action=%s frames=%d duration=0.58" %
-				[team_id, String(action), seen.size()])
+			assert(seen.size() == count and last == count - 1,
+				"Fast XI action must display every authored pass/shoot pose")
+			var marker := "FOOTBALL_XI_ACTION_TIMELINE_OK" if count == 8 else "FOOTBALL_DENSE_ACTION_TIMELINE_OK"
+			print("%s team=%d action=%s frames=%d duration=0.58" %
+				[marker, team_id, String(action), seen.size()])
 		actor.action_lock_seconds = 0.0
 		actor.global_position = Vector2(-9999.0, -9999.0)
 	return matrix

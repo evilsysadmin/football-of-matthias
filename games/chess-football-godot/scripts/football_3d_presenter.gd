@@ -207,6 +207,8 @@ var _motion_v4_loaded: Dictionary = {}
 var _hero_v5_loaded: Dictionary = {}
 # Authored action replacement becomes active per-club only after full verification.
 var _pass_shoot_r2_loaded: Dictionary = {}
+var _dense_kick_loaded: Dictionary = {}
+var _dense_kick_pending: Dictionary = {}
 # Verified side-view carrier animations. Never alter the 2D ball or physics.
 var _carry_dribble_r2_loaded: Dictionary = {}
 # Independent v2 action sheet state: one verified replacement per club/action.
@@ -609,7 +611,7 @@ func _on_pass_shoot_ready(image: Image, team_id: int) -> void:
 
 
 func _apply_verified_pass_shoot_frames(textures: Array[Texture2D], team_id: int) -> void:
-	if _motion_v4_loaded.has("%d:pass_shoot" % team_id):
+	if _motion_v4_loaded.has("%d:pass_shoot" % team_id) or _dense_kick_loaded.has(team_id):
 		return
 	if team_id not in [0, 1] or textures.size() != 16:
 		return
@@ -634,6 +636,66 @@ func _apply_verified_pass_shoot_frames(textures: Array[Texture2D], team_id: int)
 				frames.set_frame(animation, index, textures[row * 8 + index])
 	_pass_shoot_r2_loaded[team_id] = true
 	tone_gain_cache.clear()
+
+
+# New immutable kick sheets: two requests per club, atomic installation.
+func _request_dense_kicks_from_r2() -> void:
+	if not OS.has_feature("web") or match_node.match_team_size != 11:
+		return
+	for team_id in range(2):
+		for action in ChessFootballDenseV1R2.ACTIONS:
+			var meta := ChessFootballDenseV1R2.sheet_meta(team_id, action)
+			if meta.is_empty():
+				continue
+			var loader := ChessFootballR2AtlasLoader.new()
+			add_child(loader)
+			loader.atlas_ready.connect(_on_dense_kick_ready.bind(team_id, action))
+			loader.start(meta, ChessFootballDenseV1R2.TRUSTED_ROOT, 30.0)
+
+
+func _on_dense_kick_ready(image: Image, team_id: int, action: StringName) -> void:
+	if team_id not in [0, 1] or action not in ChessFootballDenseV1R2.ACTIONS or _dense_kick_loaded.has(team_id):
+		return
+	var textures := ChessFootballDenseV1R2.frames_from_image(image)
+	if textures.size() != 16:
+		return
+	var pending: Dictionary = _dense_kick_pending.get(team_id, {})
+	pending[action] = textures
+	_dense_kick_pending[team_id] = pending
+	if not pending.has(&"pass") or not pending.has(&"shoot"):
+		return
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var driver := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if driver == null or driver.sprite_frames == null:
+			return
+		for name in ChessFootballDenseV1R2.ACTIONS:
+			if not driver.sprite_frames.has_animation(name) or driver.sprite_frames.get_frame_count(name) not in [8, 16]:
+				return
+		targets.append(driver.sprite_frames)
+	if targets.size() != match_node.match_team_size - 1:
+		return
+	for bank in targets:
+		for name in ChessFootballDenseV1R2.ACTIONS:
+			var count: int = bank.get_frame_count(name)
+			var fps: float = bank.get_animation_speed(name)
+			bank.clear(name)
+			bank.set_animation_loop(name, false)
+			bank.set_animation_speed(name, fps * 16.0 / float(count))
+			for texture: Texture2D in pending[name]:
+				bank.add_frame(name, texture)
+	_dense_kick_loaded[team_id] = true
+	_dense_kick_pending.erase(team_id)
+	_pass_shoot_r2_loaded[team_id] = true
+	tone_gain_cache.clear()
+	body_scale_cache.clear()
+	if OS.has_feature("web") and _dense_kick_loaded.size() == 2:
+		JavaScriptBridge.eval(
+			"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) window.parent.postMessage({source:'chess-football-godot', type:'ci-dense-kicks-installed', team_size:11, sheets:4}, '*');",
+			true
+		)
 
 
 # Download at most one carry/dribble atlas per club, never one per actor.
@@ -778,7 +840,7 @@ func _apply_motion_v4_run(textures: Array[Texture2D], team_id: int) -> void:
 
 func _apply_motion_v4_pass_shoot(textures: Array[Texture2D], team_id: int) -> void:
 	var key := "%d:pass_shoot" % team_id
-	if team_id not in [0, 1] or _motion_v4_loaded.has(key) or textures.size() != 32:
+	if team_id not in [0, 1] or _motion_v4_loaded.has(key) or _dense_kick_loaded.has(team_id) or textures.size() != 32:
 		return
 	var targets: Array[SpriteFrames] = []
 	for player in match_node.teams[team_id]:
@@ -1281,6 +1343,7 @@ func setup(p_match: Node) -> void:
 	_request_keeper_catch_atlases_from_r2()
 	_request_motion_v4_from_r2()
 	_request_hero_v5_from_r2()
+	_request_dense_kicks_from_r2()
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
