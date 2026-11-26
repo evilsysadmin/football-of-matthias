@@ -686,6 +686,23 @@ func _on_dense_kick_ready(image: Image, team_id: int, action: StringName) -> voi
 			bank.set_animation_speed(name, fps * 16.0 / float(count))
 			for texture: Texture2D in pending[name]:
 				bank.add_frame(name, texture)
+	# SpriteFrames.clear() resets the visible frame. Restore active kicks
+	# immediately from their authoritative action clock, not the old
+	# eight-pose index. Never restart or prolong a gameplay action.
+	for player: Footballer in match_node.teams[team_id]:
+		if player.role == "keeper" or player.action_lock_seconds <= 0.0:
+			continue
+		var id: int = player.get_instance_id()
+		var driver: AnimatedSprite3D = player_sprites[id]
+		var action_name: StringName = driver.animation
+		if action_name not in ChessFootballDenseV1R2.ACTIONS or player.action_visual_duration_seconds <= 0.0:
+			continue
+		var phase: float = xi_complete_action_phase(
+			16, player.action_visual_duration_seconds, player.action_lock_seconds)
+		outfield_visual_names[id] = action_name
+		outfield_visual_phases[id] = phase
+		driver.pause()
+		driver.frame = int(phase)
 	_dense_kick_loaded[team_id] = true
 	_dense_kick_pending.erase(team_id)
 	_pass_shoot_r2_loaded[team_id] = true
