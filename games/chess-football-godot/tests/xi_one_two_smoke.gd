@@ -301,6 +301,33 @@ func _autonomous_teammate(scene: PackedScene) -> void:
 	game._update_ai(0.0)
 	assert(game.ball.carrier == owner and game.controlled == owner)
 	print("FOOTBALL_XI_AUTONOMOUS_TEAMMATE_OK real_pass=true receiver_chase=true manual_excluded=true fresh_touch_protected=true")
+	# An autonomous carrier can wait for a genuine lead runner, just
+	# like the opposing AI. Pressure, timeout and manual control win.
+	game._select_player(manual)
+	game.ball.attach_to(owner)
+	receiver.global_position = centre + Vector2(0.0, 100.0)
+	receiver.velocity = Vector2.ZERO
+	assert(game._ai_xi_human_support_rank(receiver) == 0)
+	var outlet: Vector2 = game._ai_support_target(receiver)
+	assert(outlet.distance_to(receiver.global_position) > game.AI_XI_SUPPORT_RUN_WAIT_DISTANCE)
+	receiver.velocity = receiver.global_position.direction_to(outlet) * 150.0
+	game.ball.tick_ball(0.4)
+	assert(game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 100.0))
+	receiver.velocity *= -1.0
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	receiver.velocity *= -1.0
+	receiver.xi_collision_down_seconds = 0.5
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	receiver.xi_collision_down_seconds = 0.0
+	game._select_player(receiver)
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	game._select_player(owner)
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	game._select_player(manual)
+	game.ball.tick_ball(1.0)
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	print("FOOTBALL_XI_SHARED_SUPPORT_WAIT_OK runner=true pressure_cancel=true timeout=true manual_excluded=true")
 	game.queue_free()
 
 
