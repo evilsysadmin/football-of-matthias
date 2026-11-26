@@ -97,6 +97,55 @@ func _initialize() -> void:
 				"Renderer must not mutate authoritative 2D actor state")
 			samples.append(player)
 
+	# All four diagonals must use the correct mirror from the real velocity,
+	# even when the hidden 2D actor has a stale direction. Nearly vertical
+	# jitter cannot repeatedly flip the visible shirt/body.
+	for team_id in range(2):
+		var athlete: Footballer = game.teams[team_id][5]
+		var key: int = athlete.get_instance_id()
+		var visible: AnimatedSprite3D = stage.player_sprites[key]
+		athlete.action_lock_seconds = 0.0
+		athlete.last_sprinting = false
+		for heading: Vector2 in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
+			athlete.velocity = heading.normalized() * athlete.base_speed
+			athlete.visual.flip_h = heading.x > 0.0
+			stage.sync_presentation(0.0, "broadcast")
+			assert(visible.animation == (&"run_front_diagonal" if heading.y > 0.0 else &"run_back_diagonal"))
+			assert(visible.flip_h == (heading.x < 0.0))
+			assert(athlete.visual.flip_h == (heading.x > 0.0), "3D must not change the 2D authority")
+		for wobble: float in [22.0, -22.0, 25.0, -25.0]:
+			athlete.velocity = Vector2(wobble, -athlete.base_speed)
+			athlete.visual.flip_h = wobble < 0.0
+			stage.sync_presentation(0.0, "broadcast")
+			assert(visible.animation == &"run_back")
+			assert(visible.flip_h, "Near-vertical motion must hold the previous mirror")
+		athlete.velocity = Vector2.ZERO
+		stage.sync_presentation(0.0, "broadcast")
+		assert(visible.flip_h)
+	print("FOOTBALL_XI_DIAGONAL_MIRROR_OK teams=2 four_diagonals=true vertical_hold=true authority_unchanged=true")
+	# A dribble can use the ordinary directional runner in its lead-in
+	# and exit. Its base mirror must still follow the action/ball contact
+	# convention rather than the free-run mirror cached above.
+	var dribbler: Footballer = game.teams[1][5]
+	var dribbler_key: int = dribbler.get_instance_id()
+	var dribbler_sprite: AnimatedSprite3D = stage.player_sprites[dribbler_key]
+	game.ball.attach_to(dribbler)
+	dribbler.velocity = Vector2(1.0, 1.0).normalized() * dribbler.base_speed
+	dribbler.visual.play(&"run")
+	dribbler.visual.flip_h = true
+	dribbler.dribble_mode = "feint"
+	dribbler.dribble_direction = Vector2(1.0, 1.0).normalized()
+	dribbler.dribble_duration_seconds = dribbler.XI_DRIBBLE_FEINT_SECONDS
+	dribbler.dribble_burst_seconds = dribbler.dribble_duration_seconds * 0.96
+	stage.player_run_mirrors[dribbler_key] = false
+	stage.sync_presentation(0.0, "broadcast")
+	assert(dribbler_sprite.flip_h == dribbler.visual.flip_h,
+		"Free-run mirroring must not leak into dribble preparation")
+	dribbler.dribble_burst_seconds = 0.0
+	game.ball.release(Vector2.ZERO, 0.0)
+	dribbler.velocity = Vector2.ZERO
+	print("FOOTBALL_XI_DIAGONAL_DRIBBLE_MIRROR_OK action_owns_mirror=true")
+
 	# A moving player retains locked tackle/shot animation, and a player
 	# that actually stops returns to idle even with a stale hidden run.
 	var sample: Footballer = samples[0]

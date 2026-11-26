@@ -28,6 +28,16 @@ static func view_for_velocity(velocity: Vector2, previous: String = "side") -> S
 		return vertical_sign
 	return vertical_sign + "_diagonal"
 
+# Preserve horizontal facing through a nearly vertical run or a stop.
+# A real side/diagonal movement, not an old hidden sprite, selects the
+# authored left/right mirror. Pure front/back views retain the last side.
+static func mirror_for_velocity(velocity: Vector2, view: String, previous: bool) -> bool:
+	if velocity.length_squared() < HOLD_SPEED_SQUARED or absf(velocity.x) < 18.0:
+		return previous
+	if view not in ["side", "front_diagonal", "back_diagonal"]:
+		return previous
+	return velocity.x < 0.0
+
 static func animation_for(base_animation: StringName, view: String) -> StringName:
 	if base_animation not in [&"idle", &"run", &"sprint"] or view == "side":
 		return base_animation
