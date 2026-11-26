@@ -445,6 +445,12 @@ func _initialize() -> void:
 	second_outlet.sent_off = true
 	assert(game._best_ai_pass_target(passer, 0.0) == receiver)
 	second_outlet.sent_off = false
+	receiver.xi_collision_down_seconds = 0.5
+	assert(game._best_ai_pass_target(passer) == second_outlet)
+	receiver.xi_collision_down_seconds = 0.0
+	second_outlet.xi_collision_down_seconds = 0.5
+	assert(game._best_ai_pass_target(passer, 0.0) == receiver)
+	second_outlet.xi_collision_down_seconds = 0.0
 	second_outlet.global_position = second_outlet_home
 	second_outlet.velocity = second_outlet_velocity
 	game._set_quick_difficulty("normal")
@@ -571,8 +577,21 @@ func _initialize() -> void:
 	assert(game._ai_xi_support_rank(role_challenger) == -1)
 	assert(game._ai_xi_support_rank(role_primary) == 0)
 	role_challenger.sent_off = false
+	role_primary.xi_collision_down_seconds = 0.5
+	assert(game._ai_xi_support_rank(role_primary) == -1)
+	assert(not (role_primary in game.ai_xi_support_rank_slots))
+	role_primary.xi_collision_down_seconds = 0.0
 	# Releasing the ball or giving it to a rival resets both assignments.
 	game.ball.release(Vector2.LEFT, 300.0)
+	game.ai_intended_pass_receiver = role_primary
+	game.ai_intended_pass_until = game.match_seconds + 1.0
+	assert(game._ai_live_pass_receiver() == role_primary)
+	role_primary.xi_collision_down_seconds = 0.5
+	assert(game._ai_live_pass_receiver() == null)
+	assert(game.ai_intended_pass_receiver == null)
+	role_primary.xi_collision_down_seconds = 0.0
+	assert(game._ai_live_pass_receiver() == null)
+	print("FOOTBALL_XI_AI_AVAILABLE_RECEIVER_OK choice=true support=true live_cancel=true")
 	game._update_ai(0.0)
 	assert(game.ai_xi_support_rank_owner == null)
 	assert(game.ai_xi_support_rank_slots == [null, null])
