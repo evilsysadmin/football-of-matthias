@@ -142,6 +142,32 @@ func _initialize() -> void:
 	receiver.velocity = Vector2.ZERO
 	print("FOOTBALL_XI_PASS_FORECAST_OK receding=", receding.distance_to(base), " approaching=", approaching.distance_to(base), " slow=", slower.distance_to(base))
 
+	# A close teammate may be ahead of the torso but behind the actual
+	# carried ball. The charge target, live hint and release must agree.
+	passer.dribble_burst_seconds = 0.0
+	passer.action_lock_seconds = 0.0
+	game.ball.attach_to(passer)
+	game.ball.global_position = start
+	receiver.global_position = start + Vector2(40.0, 0.0)
+	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
+	assert(game.pass_target == receiver)
+	assert(game._xi_pass_charge_receiver() == receiver)
+	game.ball.global_position = start + Vector2(60.0, 0.0)
+	assert(game._best_directional_pass_target(passer, Vector2.RIGHT, 0.0, receiver) == null)
+	assert(game._xi_pass_charge_receiver() == null)
+	assert(game._xi_pass_charge_label().contains("LIBRE"))
+	assert(game._release_charged_pass())
+	assert(game.ball.carrier == null)
+	assert(game.ball.velocity.normalized().is_equal_approx(Vector2.RIGHT))
+	assert(game.pending_human_pass_receiver == null)
+	assert(game.xi_one_two_receiver == null)
+	game.ball.attach_to(passer)
+	game.match_team_size = 5
+	game.ball.global_position = start + Vector2(60.0, 0.0)
+	assert(game._best_directional_pass_target(passer, Vector2.RIGHT, 0.0, receiver) == receiver)
+	game.match_team_size = 11
+	print("FOOTBALL_XI_PASS_CONTACT_TARGET_OK charge=true hint=true release=true legacy=true")
+
 	# Once targeting is no longer deliberate, the cue must not invent
 	# a named receiver. 5v5 keeps the historical bare meter name.
 	passer.dribble_burst_seconds = 0.0

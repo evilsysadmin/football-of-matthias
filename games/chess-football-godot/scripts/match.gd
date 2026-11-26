@@ -1064,7 +1064,7 @@ func _xi_pass_charge_receiver() -> Footballer:
 		or target.team_id != controlled.team_id
 	):
 		return null
-	var to_target: Vector2 = target.global_position - controlled.global_position
+	var to_target: Vector2 = target.global_position - _xi_directional_pass_origin(controlled)
 	if (
 		to_target.length_squared() < 0.001
 		or pass_aim_direction.normalized().dot(to_target.normalized())
@@ -1519,7 +1519,7 @@ func _release_charged_pass() -> bool:
 	# A directional Space pass obeys the input even if a teammate crosses
 	# behind the passer during the charge; direct touch-target passes are unchanged.
 	if valid_target and directional:
-		var offset: Vector2 = target.global_position - passer.global_position
+		var offset: Vector2 = target.global_position - _xi_directional_pass_origin(passer)
 		valid_target = (
 			(match_team_size != 11 or target.xi_collision_down_seconds <= 0.0)
 			and offset.length_squared() > 0.001
@@ -3854,6 +3854,14 @@ func _human_pass_aim_point(passer: Footballer, receiver: Footballer, power: floa
 		destination + (receiver.velocity * XI_HUMAN_PASS_LEAD_SECONDS).limit_length(XI_HUMAN_PASS_LEAD_DISTANCE), match_pitch)
 
 
+# Only a live XI carrier has an authoritative foot contact. Legacy
+# directional callers and other actors retain their centre-based origin.
+func _xi_directional_pass_origin(player: Footballer) -> Vector2:
+	if match_team_size == 11 and ball != null and ball.carrier == player:
+		return ball.global_position
+	return player.global_position
+
+
 func _best_directional_pass_target(
 	player: Footballer, input_direction: Vector2,
 	charge_ratio: float = -1.0, current_target: Footballer = null
@@ -3865,6 +3873,7 @@ func _best_directional_pass_target(
 	if wanted.length_squared() < 0.001:
 		wanted = Vector2.RIGHT if player.team_id == 0 else Vector2.LEFT
 	var xi_charged := match_team_size == 11 and charge_ratio >= 0.0
+	var origin: Vector2 = _xi_directional_pass_origin(player) if xi_charged else player.global_position
 	var preferred_distance := lerpf(
 		XI_HUMAN_PASS_SHORT_TARGET_DISTANCE,
 		XI_HUMAN_PASS_LONG_TARGET_DISTANCE,
@@ -3880,7 +3889,7 @@ func _best_directional_pass_target(
 		# recipient hysteresis keep an unavailable directional outlet.
 		if xi_charged and teammate.xi_collision_down_seconds > 0.0:
 			continue
-		var offset: Vector2 = teammate.global_position - player.global_position
+		var offset: Vector2 = teammate.global_position - origin
 		var distance := offset.length()
 		if distance < 1.0:
 			continue
