@@ -1,15 +1,19 @@
 extends SceneTree
 
 # Offline candidate review only: no Web export flag, no R2 requests, no
-# public installation. Run with the six local candidate sheets plus exact
-# approved V5 and dense originals, using the normal Godot scene and mesh.
-# godot --path games/chess-football-godot --resolution 1280x720 --script res://scripts/review_xi_directional_candidates.gd -- CANDIDATES V5 DENSE OUTPUT
+# public installation. Strict review requires eight local Dense-style sheets
+# plus the two approved Dense front-diagonal originals. An optional V5 dir
+# explicitly enables comparison with the OLD frontal art, never parity proof.
+# godot --path games/chess-football-godot --resolution 1280x720 --script res://scripts/review_xi_directional_candidates.gd -- CANDIDATES DENSE OUTPUT [V5_COMPARISON]
 const VIEWS := ["side", "front", "front_diagonal", "back", "back_diagonal"]
 const MOVES := [Vector2.RIGHT, Vector2.DOWN, Vector2(1, 1), Vector2.UP, Vector2(1, -1)]
 const CLUBS := ["fc_matthias", "real_enroque"]
-const EXPECTED := [24, 16, 24, 24, 24]
+const EXPECTED := [24, 24, 24, 24, 24]
 
-static func build_preview_bank(original: SpriteFrames, rows: Dictionary) -> SpriteFrames:
+static func expected_count(view: String, compare_v5: bool = false) -> int:
+	return 16 if view == "front" and compare_v5 else 24
+
+static func build_preview_bank(original: SpriteFrames, rows: Dictionary, compare_v5: bool = false) -> SpriteFrames:
 	# Build the entire replacement on a copy. Any missing/invalid view leaves
 	# the original untouched. This helper is not an approval or release gate.
 	if original == null or rows.size() != VIEWS.size():
@@ -17,7 +21,7 @@ static func build_preview_bank(original: SpriteFrames, rows: Dictionary) -> Spri
 	for i in range(VIEWS.size()):
 		var view: String = VIEWS[i]
 		var row: Variant = rows.get(view)
-		if not row is Array or row.size() != EXPECTED[i]:
+		if not row is Array or row.size() != expected_count(view, compare_v5):
 			return null
 		for texture in row:
 			if not texture is Texture2D or texture.get_size() != Vector2(128, 144):
@@ -43,20 +47,23 @@ static func build_preview_bank(original: SpriteFrames, rows: Dictionary) -> Spri
 
 func _load_club(club: int, args: PackedStringArray) -> Dictionary:
 	var rows := {}
-	var v5meta := ChessFootballHeroV5R2.sheet_meta(club, "locomotion")
-	var v5 := ChessFootballR2AtlasLoader.decode_verified_webp(
-		FileAccess.get_file_as_bytes(args[1].path_join(String(v5meta.get("url", "")).get_file())),
-		v5meta, ChessFootballHeroV5R2.TRUSTED_ROOT)
-	var original := ChessFootballHeroV5R2.frames_from_image(v5, "locomotion")
-	if original.size() != 48:
-		return {}
-	rows["front"] = original.slice(16, 32)
+	var compare_v5 := args.size() == 4
+	if compare_v5:
+		var v5meta := ChessFootballHeroV5R2.sheet_meta(club, "locomotion")
+		var v5 := ChessFootballR2AtlasLoader.decode_verified_webp(
+			FileAccess.get_file_as_bytes(args[3].path_join(String(v5meta.get("url", "")).get_file())),
+			v5meta, ChessFootballHeroV5R2.TRUSTED_ROOT)
+		var original := ChessFootballHeroV5R2.frames_from_image(v5, "locomotion")
+		if original.size() != 48:
+			return {}
+		rows["front"] = original.slice(16, 32)
 	var meta := ChessFootballDenseV1R2.sheet_meta(club, &"run_front_diagonal")
 	var diagonal := ChessFootballR2AtlasLoader.decode_verified_webp(
-		FileAccess.get_file_as_bytes(args[2].path_join(String(meta.get("url", "")).get_file())),
+		FileAccess.get_file_as_bytes(args[1].path_join(String(meta.get("url", "")).get_file())),
 		meta, ChessFootballDenseV1R2.TRUSTED_ROOT)
 	rows["front_diagonal"] = ChessFootballDenseV1R2.frames_from_image(diagonal, 24)
-	for view in ["side", "back", "back_diagonal"]:
+	var candidate_views := ["side", "back", "back_diagonal"] if compare_v5 else ["side", "front", "back", "back_diagonal"]
+	for view in candidate_views:
 		var file: String = CLUBS[club] + "_run_" + view + "_24_candidate_v3.webp"
 		var raw := FileAccess.get_file_as_bytes(args[0].path_join(file))
 		var image := Image.new()
@@ -72,11 +79,14 @@ func _load_club(club: int, args: PackedStringArray) -> Dictionary:
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
-	if args.size() != 4 or DisplayServer.get_name() == "headless":
-		printerr("Expected windowed Godot and -- CANDIDATES V5 DENSE OUTPUT")
+	if args.size() not in [3, 4] or DisplayServer.get_name() == "headless":
+		printerr("Expected windowed Godot and -- CANDIDATES DENSE OUTPUT [V5_COMPARISON]")
 		quit(2)
 		return
-	if DirAccess.make_dir_recursive_absolute(args[3]) != OK:
+	var compare_v5 := args.size() == 4
+	if compare_v5:
+		print("FOOTBALL_XI_PREVIEW_MODE mixed_v5_front_comparison_not_parity")
+	if DirAccess.make_dir_recursive_absolute(args[2]) != OK:
 		quit(2)
 		return
 	var scene := load("res://main.tscn") as PackedScene
@@ -102,7 +112,7 @@ func _initialize() -> void:
 			if athlete.role == "keeper":
 				continue
 			var driver: AnimatedSprite3D = stage.player_sprites[athlete.get_instance_id()]
-			var bank := build_preview_bank(driver.sprite_frames, rows)
+			var bank := build_preview_bank(driver.sprite_frames, rows, compare_v5)
 			if bank == null:
 				quit(1)
 				return
@@ -141,7 +151,7 @@ func _initialize() -> void:
 					var id: int = player.get_instance_id()
 					var driver: AnimatedSprite3D = stage.player_sprites[id]
 					var wanted := ChessFootballRunDirection.animation_for(&"run", VIEWS[i])
-					if driver.animation != wanted or driver.sprite_frames.get_frame_count(wanted) != EXPECTED[i]:
+					if driver.animation != wanted or driver.sprite_frames.get_frame_count(wanted) != expected_count(VIEWS[i], compare_v5):
 						printerr("Wrong visible bank ", club, " ", VIEWS[i], " ", driver.animation)
 						quit(1)
 						return
@@ -153,8 +163,8 @@ func _initialize() -> void:
 			await process_frame
 			await RenderingServer.frame_post_draw
 			var capture := game.get_viewport().get_texture().get_image()
-			if capture.save_png(args[3].path_join("%s-%02d.png" % [mode, tick])) != OK:
+			if capture.save_png(args[2].path_join("%s-%s-%02d.png" % ["mixed-v5" if compare_v5 else "dense", mode, tick])) != OK:
 				quit(1)
 				return
-	print("FOOTBALL_XI_CANDIDATE_PREVIEW_OK clubs=2 views=5 captures=48 review_only=true")
+	print("FOOTBALL_XI_CANDIDATE_PREVIEW_OK clubs=2 views=5 captures=48 review_only=true mixed_v5_front=" + str(compare_v5))
 	quit(0)

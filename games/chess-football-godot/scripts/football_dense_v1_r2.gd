@@ -37,18 +37,29 @@ static func sheet_meta(team_id: int, action: StringName) -> Dictionary:
 	return {}
 
 
-static func frames_from_image(image: Image, count: int = 16) -> Array[Texture2D]:
-	var textures: Array[Texture2D] = []
-	if count not in [16, 24] or image == null or image.get_size() != Vector2i(CELL.x * count, CELL.y):
-		return textures
-	var regions: Array[Image] = []
+# Shared by production decode and offline art review. Empty means only
+# the geometry passed, not that gait, anatomy or art have been approved.
+static func frame_geometry_error(image: Image, count: int = 16) -> String:
+	if count not in [16, 24]:
+		return "unsupported_frame_count"
+	if image == null or image.get_size() != Vector2i(CELL.x * count, CELL.y):
+		return "invalid_sheet_dimensions"
 	for col in range(count):
-		var region := image.get_region(Rect2i(col * 128, 0, 128, 144))
+		var region := image.get_region(Rect2i(col * CELL.x, 0, CELL.x, CELL.y))
 		var bounds := region.get_used_rect()
 		if bounds.position.x < 4 or bounds.end.x > 124 or bounds.position.y < 4 or bounds.position.y > 32 or bounds.end.y < 129 or bounds.end.y > 139 or bounds.size.x < 38:
-			return []
-		regions.append(region)
-	for region in regions:
+			return "frame=%d bounds=%s" % [col + 1, str(bounds)]
+	return ""
+
+
+static func frames_from_image(image: Image, count: int = 16) -> Array[Texture2D]:
+	var textures: Array[Texture2D] = []
+	var error := frame_geometry_error(image, count)
+	if not error.is_empty():
+		return textures
+	# Complete geometry validation precedes any texture allocation.
+	for col in range(count):
+		var region := image.get_region(Rect2i(col * CELL.x, 0, CELL.x, CELL.y))
 		var texture := ImageTexture.create_from_image(region)
 		ChessFootballSpriteBank._register_frame_bottom(texture, region)
 		textures.append(texture)

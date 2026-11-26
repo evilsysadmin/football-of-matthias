@@ -18,6 +18,19 @@ func _initialize() -> void:
 	blank_kick.fill(Color.TRANSPARENT)
 	var blank_diagonal := Image.create(24 * 128, 144, false, Image.FORMAT_RGBA8)
 	blank_diagonal.fill(Color.TRANSPARENT)
+	assert(ChessFootballDenseV1R2.frame_geometry_error(blank_diagonal, 24).begins_with("frame=1 "))
+	assert(ChessFootballDenseV1R2.frame_geometry_error(blank_diagonal, 16) == "invalid_sheet_dimensions")
+	assert(ChessFootballDenseV1R2.frame_geometry_error(blank_diagonal, 20) == "unsupported_frame_count")
+	var geometry := Image.create(24 * 128, 144, false, Image.FORMAT_RGBA8)
+	geometry.fill(Color.TRANSPARENT)
+	for i in range(24):
+		geometry.fill_rect(Rect2i(i * 128 + 4, 10, 90, 124), Color.WHITE)
+	assert(ChessFootballDenseV1R2.frame_geometry_error(geometry, 24).is_empty())
+	# A single one-pixel violation in a later frame rejects the whole sheet.
+	geometry.set_pixel(15 * 128 + 3, 80, Color.WHITE)
+	assert(ChessFootballDenseV1R2.frame_geometry_error(geometry, 24).begins_with("frame=16 "))
+	assert(ChessFootballDenseV1R2.frames_from_image(geometry, 24).is_empty())
+	print("FOOTBALL_DENSE_FRAME_GEOMETRY_OK one_pixel_margin=true exact_cell=true")
 	for club in range(2):
 		var actor: Footballer = game.teams[club][1]
 		var sprite: AnimatedSprite3D = stage.player_sprites[actor.get_instance_id()]
