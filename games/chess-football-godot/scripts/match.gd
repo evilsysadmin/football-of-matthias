@@ -2988,6 +2988,13 @@ func _ai_xi_human_open_recycle_target(player: Footballer, base_target: Vector2) 
 	return base_target
 
 
+# A shared flank contract keeps the base passing triangle open.
+# The leading runner may still adjust its path to avoid actual markers.
+func _ai_xi_triangle_side(lead_home_y: float, carrier_y: float, rank: int) -> float:
+	var lead_side: float = 1.0 if lead_home_y >= carrier_y else -1.0
+	return lead_side if rank == 0 else -lead_side
+
+
 func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false):
 	if ball.carrier == null:
 		return player.home_position
@@ -3020,10 +3027,7 @@ func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false
 				lead_outlet.home_position.y if lead_outlet != null
 				else player.home_position.y
 			)
-			var lead_side: float = (
-				1.0 if lead_home_y >= ball.carrier.global_position.y else -1.0
-			)
-			var side: float = lead_side if human_rank == 0 else -lead_side
+			var side: float = _ai_xi_triangle_side(lead_home_y, ball.carrier.global_position.y, human_rank)
 			var triangle: Vector2 = ChessFootballMath.clamp_to_pitch(
 				ball.carrier.global_position + Vector2(
 					AI_XI_HUMAN_SUPPORT_FORWARD if human_rank == 0
@@ -3043,8 +3047,12 @@ func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false
 	# the existing 4-3-3 lanes; they must run, never teleport, into support.
 	var rank := _ai_xi_support_rank(player)
 	if rank >= 0:
-		var primary_side := 1.0 if player.home_position.y >= ball.carrier.global_position.y else -1.0
-		var side := primary_side if rank == 0 else -primary_side
+		# Use the leading outlet's flank for BOTH slots, not the
+		# recycling player's own home lane. Opposite homes used to
+		# produce two targets on the same side of the carrier.
+		var lead: Footballer = ai_xi_support_rank_slots[0]
+		var lead_home_y: float = lead.home_position.y if lead != null else player.home_position.y
+		var side: float = _ai_xi_triangle_side(lead_home_y, ball.carrier.global_position.y, rank)
 		var triangle_target: Vector2 = ChessFootballMath.clamp_to_pitch(
 			ball.carrier.global_position + Vector2(
 				forward * (175.0 if rank == 0 else -145.0),

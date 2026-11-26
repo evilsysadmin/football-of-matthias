@@ -561,6 +561,23 @@ func _initialize() -> void:
 	game.ai_xi_support_rank_slots = [null, null]
 	assert(game._ai_xi_support_rank(role_primary) == 0)
 	assert(game._ai_xi_support_rank(role_secondary) == 1)
+	# Opposite formation homes used to put BOTH CPU outlets on the
+	# same flank. Check both signs while preserving actual assignments.
+	var saved_primary_home: Vector2 = role_primary.home_position
+	var saved_secondary_home: Vector2 = role_secondary.home_position
+	for flank: float in [-1.0, 1.0]:
+		role_primary.home_position.y = role_anchor.y + flank * 350.0
+		role_secondary.home_position.y = role_anchor.y - flank * 350.0
+		var lead_triangle: Vector2 = game._ai_support_target(role_primary)
+		var recycle_triangle: Vector2 = game._ai_support_target(role_secondary)
+		assert(signf(lead_triangle.y - role_anchor.y) == flank)
+		assert(signf(recycle_triangle.y - role_anchor.y) == -flank)
+		assert(lead_triangle.x < role_anchor.x and recycle_triangle.x > role_anchor.x)
+		assert(game._ai_xi_triangle_side(role_primary.home_position.y, role_anchor.y, 0) == flank)
+		assert(game._ai_xi_triangle_side(role_primary.home_position.y, role_anchor.y, 1) == -flank)
+	role_primary.home_position = saved_primary_home
+	role_secondary.home_position = saved_secondary_home
+	print("FOOTBALL_XI_SHARED_TRIANGLE_FLANK_OK opposite=true both_directions=true")
 	role_challenger.global_position = role_anchor + Vector2(-240.0, 0.0)
 	assert(game._ai_xi_support_rank(role_primary) == 0)
 	assert(game._ai_xi_support_rank(role_secondary) == 1)
