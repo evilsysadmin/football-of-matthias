@@ -3268,7 +3268,9 @@ static func xi_outfield_stride_advance(
 		return 0.0
 	var cycle_travel_px := 180.0 if sprinting else 168.0
 	var stride_fps := travel_speed * float(frame_count) / cycle_travel_px
-	return delta * minf(stride_fps, base_fps * 1.35)
+	# Match the off-ball visual clock: a slow renderer must not skip
+	# authored carrier stride poses either, especially with dense atlases.
+	return minf(delta * minf(stride_fps, base_fps * 1.35), 0.99)
 
 
 # Draw every original pass/shot pose in its actual lock window. For a

@@ -279,6 +279,40 @@ func _initialize() -> void:
 			if player.role != "keeper":
 				assert((visual_indices[player.get_instance_id()] as Dictionary).size() == 12,
 					"At 15 FPS every one of the 20 XI runners must show all 12 poses")
+	# The ball carrier needs the same guarantee at low refresh, with
+	# actual diagonal locomotion and the existing verified V3 bank.
+	for team_id in range(2):
+		var carrier: Footballer = game.teams[team_id][10]
+		game.ball.attach_to(carrier)
+		var key: int = carrier.get_instance_id()
+		var driver: AnimatedSprite3D = stage.player_sprites[key]
+		var material: StandardMaterial3D = stage.xi_raster_meshes[key].material_override
+		carrier.action_lock_seconds = 0.0
+		carrier.velocity = Vector2(1.0, -1.0).normalized() * carrier.base_speed * carrier.SPRINT_SPEED_MULTIPLIER
+		carrier.last_sprinting = true
+		carrier._sync_locomotion(true)
+		stage.outfield_visual_names.erase(key)
+		stage.outfield_visual_phases.erase(key)
+		var seen: Dictionary = {}
+		var last: int = -1
+		for tick in range(48):
+			stage.sync_presentation(1.0 / 15.0, "broadcast")
+			assert(driver.animation == &"sprint_back_diagonal")
+			assert(driver.sprite_frames.get_frame_count(driver.animation) == 12)
+			if last >= 0:
+				assert((driver.frame - last + 12) % 12 <= 1)
+			last = driver.frame
+			seen[last] = true
+			_assert_current_gait_frame(stage, carrier, driver, material)
+		assert(seen.size() == 12)
+		assert(game.ball.carrier == carrier)
+	# Future denser artwork must obey the same contract; this tests
+	# timing only and does not claim that 24 new poses exist yet.
+	for count: int in [8, 12, 16, 24]:
+		assert(stage.xi_outfield_stride_advance(335.0, 1.0 / 15.0, count, 30.0, true) < 1.0)
+		var normal_advance: float = stage.xi_outfield_stride_advance(250.0, 1.0 / 60.0, count, 30.0, false)
+		assert(is_equal_approx(normal_advance, 250.0 * float(count) / 168.0 / 60.0))
+	print("FOOTBALL_XI_CARRIER_SLOW_FPS_OK clubs=2 diagonal=true frames=12 no_skips=true future_counts=true")
 	print("FOOTBALL_XI_OFFBALL_SLOW_FPS_OK players=20 teams=2 views=5 fps=15 frames=12 no_skipped_poses=1")
 	print("FOOTBALL_XI_OFFBALL_GAIT_OK teams=2 noncarriers=20 poses=12 visual_source=velocity legacy_5v5=unchanged")
 	quit(0)
