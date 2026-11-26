@@ -18,6 +18,17 @@ func _initialize() -> void:
 		var keeper: AnimatedSprite3D = stage.player_sprites[game.teams[club][0].get_instance_id()]
 		var keeper_before := keeper.sprite_frames.get_frame_texture(&"shoot", 0)
 		var run_before := sprite.sprite_frames.get_frame_texture(&"run", 0)
+		# A pass and a shot can be in flight when the second R2 sheet
+		# arrives. Exercise both active action clocks independently.
+		var shooter: Footballer = game.teams[club][2]
+		var shot_driver: AnimatedSprite3D = stage.player_sprites[shooter.get_instance_id()]
+		actor.play_action("pass", 0.58)
+		shooter.play_action("shoot", 0.82)
+		actor.action_lock_seconds = 0.58 * 0.40
+		shooter.action_lock_seconds = 0.82 * 0.20
+		stage._sync_visible_animation(actor.get_instance_id(), actor, sprite, &"pass", 0.0)
+		stage._sync_visible_animation(shooter.get_instance_id(), shooter, shot_driver, &"shoot", 0.0)
+		assert(sprite.frame == 4 and shot_driver.frame == 6)
 		for action in ChessFootballDenseV1R2.ACTIONS:
 			var meta := ChessFootballDenseV1R2.sheet_meta(club, action)
 			assert(not meta.is_empty())
@@ -30,6 +41,14 @@ func _initialize() -> void:
 				assert(sprite.sprite_frames.get_frame_count(&"pass") == 8)
 				assert(not stage._dense_kick_loaded.has(club))
 		assert(stage._dense_kick_loaded.has(club))
+		assert(sprite.animation == &"pass" and sprite.frame == 9)
+		assert(shot_driver.animation == &"shoot" and shot_driver.frame == 12)
+		assert(float(stage.outfield_visual_phases[actor.get_instance_id()]) == 9.0)
+		assert(float(stage.outfield_visual_phases[shooter.get_instance_id()]) == 12.0)
+		assert(is_equal_approx(actor.action_lock_seconds, 0.58 * 0.40))
+		assert(is_equal_approx(shooter.action_lock_seconds, 0.82 * 0.20))
+		actor.action_lock_seconds = 0.0
+		shooter.action_lock_seconds = 0.0
 		for teammate: Footballer in game.teams[club]:
 			if teammate.role == "keeper":
 				continue
