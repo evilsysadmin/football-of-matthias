@@ -395,7 +395,54 @@ func _initialize() -> void:
 	game.queue_free()
 	await process_frame
 	await _loose_transition_shape(scene)
+	await process_frame
+	await _mirrored_cutback_shape(scene)
 	quit(0)
+
+
+func _mirrored_cutback_shape(scene: PackedScene) -> void:
+	var game = scene.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	var centre: Vector2 = game.match_pitch.get_center()
+	var owner: Footballer = game.teams[1][10]
+	var home_owner: Footballer = game.teams[0][10]
+	var lead: Footballer = game.teams[1][5]
+	var recycle: Footballer = game.teams[1][6]
+	for flank: float in [-1.0, 1.0]:
+		owner.global_position = Vector2(game.match_pitch.position.x + 250.0, centre.y + flank * 650.0)
+		home_owner.global_position = Vector2(game.match_pitch.end.x - 250.0, owner.global_position.y)
+		for teammate: Footballer in game.teams[1]:
+			if teammate != owner:
+				teammate.global_position = centre + Vector2(1100.0, 700.0)
+				teammate.velocity = Vector2.ZERO
+		lead.global_position = owner.global_position + Vector2(170.0, -flank * 80.0)
+		recycle.global_position = owner.global_position + Vector2(310.0, -flank * 110.0)
+		game.ball.attach_to(owner)
+		assert(game._ai_xi_support_rank(lead) == 0)
+		assert(game._ai_xi_support_rank(recycle) == 1)
+		for rank in range(2):
+			var runner: Footballer = lead if rank == 0 else recycle
+			var target: Vector2 = game._ai_support_target(runner)
+			var reflected: Vector2 = game._ai_xi_cutback_target(home_owner, rank)
+			assert(target.is_equal_approx(game._ai_xi_cutback_target(owner, rank)))
+			assert(is_equal_approx(target.x + reflected.x, centre.x * 2.0))
+			assert(is_equal_approx(target.y, reflected.y))
+			assert(game.match_pitch.has_point(target))
+			assert(target.x > owner.global_position.x)
+	owner.global_position = centre
+	assert(not game._ai_xi_away_cutback_available(lead))
+	game.match_team_size = 5
+	assert(not game._ai_xi_away_cutback_available(lead))
+	print("FOOTBALL_XI_SHARED_CUTBACK_OK mirrored=true both_flanks=true two_outlets=true midfield_off=true legacy_off=true")
+	game.queue_free()
 
 
 func _loose_transition_shape(scene: PackedScene) -> void:

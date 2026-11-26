@@ -3013,6 +3013,30 @@ func _ai_xi_triangle_side(lead_home_y: float, carrier_y: float, rank: int) -> fl
 	return lead_side if rank == 0 else -lead_side
 
 
+# Identical receiving geometry for a wide attack toward either goal.
+func _ai_xi_cutback_target(owner: Footballer, rank: int) -> Vector2:
+	var flank: float = 1.0 if owner.global_position.y >= match_pitch.get_center().y else -1.0
+	var depth: float = XI_BYLINE_SPOT_DEPTH if rank == 0 else XI_BYLINE_EDGE_DEPTH
+	return Vector2(
+		match_pitch.end.x - depth if owner.team_id == 0 else match_pitch.position.x + depth,
+		match_pitch.get_center().y + flank * (
+			XI_BYLINE_SPOT_CENTRE_OFFSET if rank == 0 else -XI_BYLINE_EDGE_CENTRE_OFFSET
+		)
+	)
+
+
+func _ai_xi_away_cutback_available(player: Footballer) -> bool:
+	return (
+		match_team_size == 11 and ball.carrier != null
+		and ball.carrier.team_id == 1 and player.team_id == 1
+		and not kickoff_active and not goal_restart_active and not set_piece_active
+		and player.role in ["midfielder", "wing", "forward"]
+		and player.global_position.distance_to(ball.carrier.global_position) <= XI_BYLINE_SUPPORT_REACH
+		and ball.carrier.global_position.x <= match_pitch.position.x + XI_BYLINE_ATTACK_DEPTH
+		and absf(ball.carrier.global_position.y - match_pitch.get_center().y) >= XI_BYLINE_ATTACK_WIDE
+	)
+
+
 func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false):
 	if ball.carrier == null:
 		return player.home_position
@@ -3023,19 +3047,7 @@ func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false
 			if player == xi_breakaway_runner and ball.carrier == xi_breakaway_owner:
 				return xi_breakaway_target
 			if _xi_human_byline_attack():
-				var flank: float = (
-					1.0 if ball.carrier.global_position.y >= match_pitch.get_center().y
-					else -1.0
-				)
-				var cutback: Vector2 = Vector2(
-					match_pitch.end.x - (
-						XI_BYLINE_SPOT_DEPTH if human_rank == 0 else XI_BYLINE_EDGE_DEPTH
-					),
-					match_pitch.get_center().y + flank * (
-						XI_BYLINE_SPOT_CENTRE_OFFSET if human_rank == 0
-						else -XI_BYLINE_EDGE_CENTRE_OFFSET
-					)
-				)
+				var cutback: Vector2 = _ai_xi_cutback_target(ball.carrier, human_rank)
 				return (
 					_ai_xi_human_open_support_target(player, cutback)
 					if human_rank == 0 else cutback
@@ -3065,6 +3077,9 @@ func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false
 	# the existing 4-3-3 lanes; they must run, never teleport, into support.
 	var rank := _ai_xi_support_rank(player)
 	if rank >= 0:
+		if _ai_xi_away_cutback_available(player):
+			ai_xi_support_lane_memory.erase(int(player.get_instance_id()))
+			return _ai_xi_cutback_target(ball.carrier, rank)
 		# Use the leading outlet's flank for BOTH slots, not the
 		# recycling player's own home lane. Opposite homes used to
 		# produce two targets on the same side of the carrier.
