@@ -1642,7 +1642,7 @@ func _update_ai(delta: float) -> void:
 	if (
 		match_team_size != 11
 		or ball.carrier == null
-		or ball.carrier.team_id != 1
+		or ball.carrier == controlled
 		or ai_xi_no_safe_pass_owner != ball.carrier
 	):
 		ai_xi_no_safe_pass_owner = null
@@ -2487,7 +2487,7 @@ func _ai_dribble_target(player: Footballer) -> Vector2:
 	var ordinary_target: Vector2 = ChessFootballMath.clamp_to_pitch(target, match_pitch)
 	if (
 		match_team_size == 11
-		and player.team_id == 1
+		and player != controlled
 		and ball.carrier == player
 		and ai_xi_no_safe_pass_owner == player
 	):
@@ -2504,7 +2504,7 @@ func _ai_xi_no_pass_lane_clearance(player: Footballer, target: Vector2) -> float
 	if squared < 1.0:
 		return 0.0
 	var nearest: float = INF
-	for rival in teams[0]:
+	for rival in teams[1 - player.team_id]:
 		if rival.sent_off:
 			continue
 		var offset: Vector2 = rival.global_position - player.global_position
@@ -2518,8 +2518,9 @@ func _ai_xi_no_pass_lane_clearance(player: Footballer, target: Vector2) -> float
 
 func _ai_xi_no_pass_escape_target(player: Footballer, ordinary_target: Vector2) -> Vector2:
 	var origin: Vector2 = player.global_position
+	var forward: float = 1.0 if player.team_id == 0 else -1.0
 	var forward_target: Vector2 = ChessFootballMath.clamp_to_pitch(
-		origin + Vector2(-AI_XI_NO_PASS_ESCAPE_FORWARD, 0.0), match_pitch
+		origin + Vector2(forward * AI_XI_NO_PASS_ESCAPE_FORWARD, 0.0), match_pitch
 	)
 	var forward_clearance: float = _ai_xi_no_pass_lane_clearance(player, forward_target)
 	if forward_clearance >= AI_XI_NO_PASS_FORWARD_CLEARANCE:
@@ -2532,7 +2533,7 @@ func _ai_xi_no_pass_escape_target(player: Footballer, ordinary_target: Vector2) 
 	var retained_clearance: float = -INF
 	for side in [-1.0, 1.0]:
 		var candidate: Vector2 = origin + Vector2(
-			-AI_XI_NO_PASS_ESCAPE_FORWARD, side * AI_XI_NO_PASS_ESCAPE_LATERAL
+			forward * AI_XI_NO_PASS_ESCAPE_FORWARD, side * AI_XI_NO_PASS_ESCAPE_LATERAL
 		)
 		# Reject a diagonal across the touchline instead of clamping it
 		# into a stall on the boundary. Both options still advance upfield.
@@ -3629,10 +3630,12 @@ func _ai_attack(player: Footballer) -> void:
 
 	var target := _best_ai_pass_target(player)
 	if target == null:
-		if match_team_size == 11 and player.team_id == 1:
+		if match_team_size == 11 and player != controlled:
+			if ai_xi_no_safe_pass_owner != player:
+				ai_xi_no_pass_escape_side = 0.0
 			ai_xi_no_safe_pass_owner = player
 		return
-	if match_team_size == 11 and player.team_id == 1:
+	if match_team_size == 11:
 		ai_xi_no_safe_pass_owner = null
 		ai_xi_no_pass_escape_side = 0.0
 	var pass_destination: Vector2 = target.global_position
@@ -4886,6 +4889,9 @@ func _select_player(player: Footballer) -> void:
 		controlled.set_active(false)
 	controlled = player
 	controlled.set_active(true)
+	if ai_xi_no_safe_pass_owner == controlled:
+		ai_xi_no_safe_pass_owner = null
+		ai_xi_no_pass_escape_side = 0.0
 
 func _resolve_goal_frame_collision(
 	previous_position: Vector2,

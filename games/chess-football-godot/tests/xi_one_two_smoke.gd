@@ -328,6 +328,43 @@ func _autonomous_teammate(scene: PackedScene) -> void:
 	game.ball.tick_ball(1.0)
 	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
 	print("FOOTBALL_XI_SHARED_SUPPORT_WAIT_OK runner=true pressure_cancel=true timeout=true manual_excluded=true")
+	# No safe pass and a blocked forward corridor: the autonomous home
+	# carrier must reuse the mirrored diagonal escape, not run into traffic.
+	for teammate: Footballer in game.teams[0]:
+		if teammate != owner:
+			teammate.global_position = centre + Vector2(-1200.0, 800.0)
+			teammate.velocity = Vector2.ZERO
+	for rival: Footballer in game.teams[1]:
+		rival.global_position = centre + Vector2(1200.0, 800.0)
+		rival.velocity = Vector2.ZERO
+	var blocker: Footballer = game.teams[1][4]
+	owner.global_position = centre
+	owner.velocity = Vector2.ZERO
+	blocker.global_position = centre + Vector2(140.0, 0.0)
+	game.ball.attach_to(owner)
+	assert(game._best_ai_pass_target(owner) == null)
+	game._ai_attack(owner)
+	assert(game.ball.carrier == owner and game.ai_xi_no_safe_pass_owner == owner)
+	var escape: Vector2 = game._ai_dribble_target(owner)
+	assert(escape.x > centre.x + 140.0 and absf(escape.y - centre.y) >= 160.0)
+	assert(game.match_pitch.has_point(escape))
+	var side: float = game.ai_xi_no_pass_escape_side
+	blocker.global_position.y += 9.0
+	assert(signf(game._ai_dribble_target(owner).y - centre.y) == side)
+	# A manual takeover discards the plan synchronously.
+	game._select_player(owner)
+	assert(game.ai_xi_no_safe_pass_owner == null and game.ai_xi_no_pass_escape_side == 0.0)
+	game._select_player(manual)
+	game._ai_attack(owner)
+	assert(game.ai_xi_no_safe_pass_owner == owner)
+	# When a real outlet returns, retire the old run even during setup.
+	blocker.global_position = centre + Vector2(1200.0, 800.0)
+	receiver.global_position = centre + Vector2(310.0, 0.0)
+	receiver.velocity = Vector2.ZERO
+	assert(game._best_ai_pass_target(owner) == receiver)
+	game._ai_attack(owner)
+	assert(game.ai_xi_no_safe_pass_owner == null and game.ai_xi_no_pass_escape_side == 0.0)
+	print("FOOTBALL_XI_SHARED_ESCAPE_OK mirrored=true stable=true manual_reset=true outlet_reset=true")
 	game.queue_free()
 
 
