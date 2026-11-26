@@ -23,6 +23,7 @@ def main():
     assert meta["cdn_base"] == BASE and meta["prefix"] == "atlases/dense-v1/"
     assert meta["cell"] == {"width": 128, "height": 144}
     assert meta["enabled_actions"] == ["pass", "shoot"]
+    assert meta["enabled_diagonal"] is True
     assert len(meta["entries"]) == len(EXPECTED)
     assert {e["file"] for e in meta["entries"]} == set(EXPECTED)
     output = Path(os.environ["RUNNER_TEMP"]) / "football-dense-v1"

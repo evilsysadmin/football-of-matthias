@@ -209,6 +209,7 @@ var _hero_v5_loaded: Dictionary = {}
 var _pass_shoot_r2_loaded: Dictionary = {}
 var _dense_kick_loaded: Dictionary = {}
 var _dense_kick_pending: Dictionary = {}
+var _dense_diagonal_loaded: Dictionary = {}
 # Verified side-view carrier animations. Never alter the 2D ball or physics.
 var _carry_dribble_r2_loaded: Dictionary = {}
 # Independent v2 action sheet state: one verified replacement per club/action.
@@ -1030,6 +1031,71 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 	_emit_hero_v5_ci_receipt()
 	body_scale_cache.clear()
 	tone_gain_cache.clear()
+	_request_dense_diagonal_from_r2(team_id)
+
+
+func _request_dense_diagonal_from_r2(team_id: int) -> void:
+	# Chain behind V5: the older loaders can no longer replace this
+	# direction, and no additional startup requests compete with V5.
+	if not OS.has_feature("web") or match_node.match_team_size != 11:
+		return
+	var meta := ChessFootballDenseV1R2.sheet_meta(team_id, &"run_front_diagonal")
+	if meta.is_empty():
+		return
+	var loader := ChessFootballR2AtlasLoader.new()
+	add_child(loader)
+	loader.atlas_ready.connect(_on_dense_diagonal_ready.bind(team_id))
+	loader.start(meta, ChessFootballDenseV1R2.TRUSTED_ROOT, 30.0)
+
+
+func _on_dense_diagonal_ready(image: Image, team_id: int) -> void:
+	if team_id not in [0, 1] or match_node.match_team_size != 11 or _dense_diagonal_loaded.has(team_id):
+		return
+	if not _hero_v5_loaded.has("%d:locomotion" % team_id):
+		return
+	var textures := ChessFootballDenseV1R2.frames_from_image(image, 24)
+	if textures.size() != 24:
+		return
+	var names: Array[StringName] = [&"run_front_diagonal", &"sprint_front_diagonal"]
+	var targets: Array[AnimatedSprite3D] = []
+	for athlete: Footballer in match_node.teams[team_id]:
+		if athlete.role == "keeper":
+			continue
+		var driver := player_sprites.get(athlete.get_instance_id()) as AnimatedSprite3D
+		if driver == null or driver.sprite_frames == null:
+			return
+		for name in names:
+			if not driver.sprite_frames.has_animation(name) or driver.sprite_frames.get_frame_count(name) != 16:
+				return
+		targets.append(driver)
+	if targets.size() != match_node.match_team_size - 1:
+		return
+	for athlete: Footballer in match_node.teams[team_id]:
+		if athlete.role == "keeper":
+			continue
+		var id: int = athlete.get_instance_id()
+		var driver: AnimatedSprite3D = player_sprites[id]
+		var bank := driver.sprite_frames
+		var active: StringName = driver.animation
+		var phase: float = fposmod(float(outfield_visual_phases.get(id, float(driver.frame))), 16.0)
+		for name in names:
+			var fps: float = bank.get_animation_speed(name)
+			bank.clear(name)
+			bank.set_animation_loop(name, true)
+			bank.set_animation_speed(name, fps * 1.5)
+			for texture in textures:
+				bank.add_frame(name, texture)
+		if active in names:
+			outfield_visual_phases[id] = phase * 1.5
+			driver.frame = floori(phase * 1.5)
+	_dense_diagonal_loaded[team_id] = true
+	body_scale_cache.clear()
+	tone_gain_cache.clear()
+	if OS.has_feature("web") and _dense_diagonal_loaded.size() == 2:
+		JavaScriptBridge.eval(
+			"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) window.parent.postMessage({source:'chess-football-godot', type:'ci-dense-diagonal-installed', team_size:11, sheets:2}, '*');",
+			true
+		)
 
 
 func _apply_hero_v5_dribbles(textures: Array[Texture2D], team_id: int) -> void:

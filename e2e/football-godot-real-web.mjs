@@ -501,6 +501,8 @@ async function bridgeVerifiedDenseKicksR2(page) {
     ['fc_matthias_shoot_16_v1.webp', '02657c4c59bbeeea7403cd6dc66cf95d75d24a81553a19c61f60842047e5da60'],
     ['real_enroque_pass_16_v1.webp', 'b5a78aaf2b77f254389f87e17ba612677ff89a1d7441791906ade247a1fc4ad0'],
     ['real_enroque_shoot_16_v1.webp', '2a61e6dd266c1c25499c9e26d4ac6581acd9f614901cc24589b24ff1213925a6'],
+    ['fc_matthias_run_front_diagonal_24_v1.webp', 'c900c992044056b7e36d42c8e42c8e7aea00d4fa9e01cab2f96a79d12992a01d'],
+    ['real_enroque_run_front_diagonal_24_v1.webp', 'e95bed24beeeadf4f2abd53ec090411dd0798d29be045db6bb502cde2689c0dd'],
   ]);
   for (const [name, sha] of expected) {
     const url = base + '/' + name;
@@ -552,6 +554,7 @@ try {
     window.__chessFootballActionPoseReceipts = [];
     window.__chessFootballHeroV5Receipts = [];
     window.__chessFootballDenseKicksInstalled = false;
+    window.__chessFootballDenseDiagonalInstalled = false;
     window.addEventListener('message', (event) => {
       if (event.data?.source !== 'chess-football-godot') return;
       if (event.data.type === 'ready') window.__chessFootballWebReady = true;
@@ -563,6 +566,9 @@ try {
       }
       if (event.data.type === 'ci-dense-kicks-installed' && event.data.team_size === 11 && event.data.sheets === 4) {
         window.__chessFootballDenseKicksInstalled = true;
+      }
+      if (event.data.type === 'ci-dense-diagonal-installed' && event.data.team_size === 11 && event.data.sheets === 2) {
+        window.__chessFootballDenseDiagonalInstalled = true;
       }
       if (event.data.type === 'ci-keyboard-sample') {
         window.__chessFootballInputSamples.push(event.data);
@@ -768,6 +774,8 @@ try {
   console.log('FOOTBALL_XI_REAL_WEB_HERO_V5_INSTALLED_OK clubs=2 families=2 sheets=4');
   await page.waitForFunction(() => window.__chessFootballDenseKicksInstalled === true, null, {timeout: 60000});
   console.log('FOOTBALL_XI_REAL_WEB_DENSE_KICKS_INSTALLED_OK clubs=2 sheets=4 frames=16');
+  await page.waitForFunction(() => window.__chessFootballDenseDiagonalInstalled === true, null, {timeout: 60000});
+  console.log('FOOTBALL_XI_REAL_WEB_DENSE_DIAGONAL_INSTALLED_OK clubs=2 sheets=2 frames=24');
   // The first 5v5 boot already exercised Playwright's real canvas.click.
   // After a full WASM reboot in software WebGL, locator.click can hang in
   // actionability/scroll checks during ReadPixels GPU stalls despite a real,

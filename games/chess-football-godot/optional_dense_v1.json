@@ -60,5 +60,6 @@
       "file": "real_enroque_run_front_diagonal_24_v1.webp",
       "sha256": "e95bed24beeeadf4f2abd53ec090411dd0798d29be045db6bb502cde2689c0dd"
     }
-  ]
+  ],
+  "enabled_diagonal": true
 }
