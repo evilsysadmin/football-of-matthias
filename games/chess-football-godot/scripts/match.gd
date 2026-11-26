@@ -3448,12 +3448,22 @@ func _ai_xi_should_wait_for_support(
 ) -> bool:
 	if (
 		match_team_size != 11
-		or player.team_id != 1
 		or ball.carrier != player
+		or player == controlled
+		or receiver == null or receiver == controlled
+		or receiver.team_id != player.team_id
+		or receiver.sent_off or receiver.xi_collision_down_seconds > 0.0
 		or pressure_distance < AI_XI_PASS_PRESSURE_RADIUS
 		or ball.possession_seconds >= AI_XI_SUPPORT_RUN_WAIT_MAX_SECONDS
-		or _ai_xi_support_rank(receiver) != 0
 	):
+		return false
+	# Both autonomous carriers can read their actual lead outlet.
+	# Manual passes never enter this decision path.
+	var rank: int = (
+		_ai_xi_support_rank(receiver) if player.team_id == 1
+		else _ai_xi_human_support_rank(receiver)
+	)
+	if rank != 0:
 		return false
 	var target: Vector2 = _ai_support_target(receiver)
 	var remaining: Vector2 = target - receiver.global_position
