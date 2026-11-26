@@ -13,6 +13,8 @@ const MAX_DIMENSION := 4096
 
 var _started := false
 var _request_node: HTTPRequest
+var _timeout_retry_remaining := false
+var _request_timeout := REQUEST_TIMEOUT_SECONDS
 
 
 # The original shared CDN remains the default for every existing caller.
@@ -76,18 +78,36 @@ static func decode_verified_webp(
 	return image
 
 
+# Limit retries to the dedicated, SHA-pinned V5 and dense packs. Older
+# banks retain their existing behavior; HTTP errors and integrity failures
+# never retry. Compare full origins, not suffixes.
+static func retry_root(allowed_root: String) -> bool:
+	return allowed_root in [
+		"https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/v5/",
+		"https://pub-cda6a24cd2f94f7eaaf4d112351bf526.r2.dev/atlases/dense-v1/",
+	]
+
+
+static func can_retry_timeout(result: int, status: int, remaining: bool) -> bool:
+	return remaining and result == HTTPRequest.RESULT_TIMEOUT and status == 0
+
+
 func start(meta: Dictionary, allowed_root: String = CDN_ROOT, timeout_seconds: float = REQUEST_TIMEOUT_SECONDS) -> void:
-	# Prevent retries or duplicate requests in one presenter lifetime.
+	# Prevent duplicate starts in one presenter lifetime.
 	if _started:
 		return
 	_started = true
 	if not OS.has_feature("web") or not valid_metadata(meta, allowed_root):
 		return
+	_timeout_retry_remaining = retry_root(allowed_root)
+	_request_timeout = clampf(timeout_seconds, REQUEST_TIMEOUT_SECONDS, 30.0)
+	_request_once(meta.duplicate(true), allowed_root)
+
+
+func _request_once(meta: Dictionary, allowed_root: String) -> void:
 	_request_node = HTTPRequest.new()
 	_request_node.name = "AtlasHTTP"
-	# Concurrent action sheets and long V5 sheets can request a bounded
-	# allowance under slow software WebGL; legacy atlases keep 8 seconds.
-	_request_node.timeout = clampf(timeout_seconds, REQUEST_TIMEOUT_SECONDS, 30.0)
+	_request_node.timeout = _request_timeout
 	add_child(_request_node)
 	_request_node.request_completed.connect(
 		_on_request_completed.bind(meta.duplicate(true), allowed_root)
@@ -106,6 +126,19 @@ func _on_request_completed(
 	if _request_node != null:
 		_request_node.queue_free()
 		_request_node = null
+	if not is_inside_tree() or is_queued_for_deletion():
+		_timeout_retry_remaining = false
+		return
+	if can_retry_timeout(result, status, _timeout_retry_remaining):
+		_timeout_retry_remaining = false
+		# Give the failed request node time to exit; never retry a detached
+		# presenter or grant more than one additional attempt.
+		if OS.has_feature("web"):
+			print("FOOTBALL_ATLAS retry_timeout file=%s" % String(meta.get("url", "")).get_file())
+		await get_tree().create_timer(0.5).timeout
+		if is_inside_tree() and not is_queued_for_deletion():
+			_request_once(meta, allowed_root)
+		return
 	if result != HTTPRequest.RESULT_SUCCESS or status != 200:
 		atlas_failed.emit("http_result:%d_status:%d" % [result, status])
 		return
