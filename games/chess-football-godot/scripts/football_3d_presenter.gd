@@ -3415,6 +3415,17 @@ func _sync_visible_animation(
 	if previous != wanted or sprite.animation != wanted:
 		var keep_run_phase := _keeper_locomotion(previous) and _keeper_locomotion(wanted)
 		var keep_idle_phase := String(previous).begins_with("idle") and String(wanted).begins_with("idle")
+		if (
+			match_node.match_team_size == 11 and not is_keeper
+			and (keep_run_phase or keep_idle_phase)
+			and previous != wanted and frames.has_animation(previous)
+		):
+			# V5 front/diagonal poses and other authored directions can
+			# have different frame counts. Preserve fraction of the gait
+			# cycle, not the old raw frame index, when turning.
+			var previous_count: int = frames.get_frame_count(previous)
+			if previous_count > 0 and previous_count != count:
+				phase = fposmod(phase, float(previous_count)) * float(count) / float(previous_count)
 		if not keep_run_phase and not keep_idle_phase:
 			phase = 0.0
 			if not is_keeper and _keeper_locomotion(wanted):
