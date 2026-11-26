@@ -103,6 +103,85 @@ func _initialize() -> void:
 		assert(bank.get_frame_texture(&"run_back_diagonal", 0) == back_before)
 		assert(bank.get_frame_texture(&"run", 0) == run_before)
 		assert(game.ball.carrier == owner)
+	await _dense_diagonal_live(game, stage)
 	print("FOOTBALL_DENSE_DIAGONAL_NATIVE_OK clubs=2 frames=24 phase=true precedence=true")
 	print("FOOTBALL_DENSE_KICKS_NATIVE_OK teams=2 frames=16 atomic=true")
 	quit(0)
+
+
+# Use the actual SHA-verified new bank, physical CharacterBody2D motion
+# and visible QuadMesh material, not just a synthetic clock or index test.
+func _dense_diagonal_live(game: Node2D, stage: ChessFootball3DPresenter) -> void:
+	const DT := 1.0 / 60.0
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	for team in game.teams:
+		for athlete: Footballer in team:
+			athlete.set_process(false)
+			athlete.set_physics_process(false)
+			athlete.global_position = Vector2(-9999.0, -9999.0)
+			athlete.velocity = Vector2.ZERO
+			athlete.action_lock_seconds = 0.0
+	for club in range(2):
+		for carries_ball in [true, false]:
+			game.ball.release(Vector2.ZERO, 0.0)
+			var runner: Footballer = game.teams[club][6]
+			var key: int = runner.get_instance_id()
+			var driver: AnimatedSprite3D = stage.player_sprites[key]
+			var material: StandardMaterial3D = stage.xi_raster_meshes[key].material_override
+			var direction := Vector2(1.0 if carries_ball else -1.0, 1.0).normalized()
+			var origin: Vector2 = game.match_pitch.get_center()
+			runner.global_position = origin
+			runner.velocity = Vector2.ZERO
+			runner.action_lock_seconds = 0.0
+			runner.dribble_burst_seconds = 0.0
+			runner.contact_stun_seconds = 0.0
+			runner.tackle_recovery_seconds = 0.0
+			if carries_ball:
+				game._select_player(runner)
+				game.ball.attach_to(runner)
+			else:
+				game._select_player(game.teams[1 - club][1])
+			stage.outfield_visual_names.erase(key)
+			stage.outfield_visual_phases.erase(key)
+			stage.player_run_views[key] = "front_diagonal"
+			var target := origin + direction * 1100.0
+			var sample_every: int = 1 if carries_ball else 4
+			var seen: Dictionary = {}
+			var textures: Dictionary = {}
+			var previous := -1
+			for tick in range(156):
+				await physics_frame
+				if carries_ball:
+					runner.move_human(DT, direction, false)
+					game.ball.tick_ball(DT)
+				else:
+					runner.move_ai(DT, target, 0.70)
+				# Ignore acceleration startup; still advance the real
+				# presentation at the specified cadence.
+				if tick % sample_every != 0:
+					continue
+				stage.sync_presentation(DT * float(sample_every), "broadcast")
+				if tick < 12:
+					continue
+				assert(driver.animation == &"run_front_diagonal")
+				assert(driver.flip_h == (direction.x < 0.0))
+				assert(driver.sprite_frames.get_frame_count(driver.animation) == 24)
+				var current: int = driver.frame
+				if previous >= 0:
+					assert((current - previous + 24) % 24 <= 1)
+				previous = current
+				var texture: Texture2D = driver.sprite_frames.get_frame_texture(driver.animation, current)
+				assert(material.albedo_texture == texture)
+				seen[current] = true
+				textures[texture.get_instance_id()] = true
+			assert(seen.size() == 24 and textures.size() == 24,
+				"Actual dense diagonal must display all 24 poses")
+			assert(runner.global_position.distance_to(origin) > 180.0)
+			assert((game.ball.carrier == runner) == carries_ball)
+			print("FOOTBALL_DENSE_DIAGONAL_LIVE_OK club=%d carrier=%s fps=%d frames=%d" %
+				[club, str(carries_ball), 60 / sample_every, seen.size()])
+			runner.global_position = Vector2(-9999.0, -9999.0)
+			runner.velocity = Vector2.ZERO
+	game.ball.release(Vector2.ZERO, 0.0)
