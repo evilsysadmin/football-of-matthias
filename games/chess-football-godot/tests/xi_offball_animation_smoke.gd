@@ -123,6 +123,28 @@ func _initialize() -> void:
 		stage.sync_presentation(0.0, "broadcast")
 		assert(visible.flip_h)
 	print("FOOTBALL_XI_DIAGONAL_MIRROR_OK teams=2 four_diagonals=true vertical_hold=true authority_unchanged=true")
+	# A dribble can use the ordinary directional runner in its lead-in
+	# and exit. Its base mirror must still follow the action/ball contact
+	# convention rather than the free-run mirror cached above.
+	var dribbler: Footballer = game.teams[1][5]
+	var dribbler_key: int = dribbler.get_instance_id()
+	var dribbler_sprite: AnimatedSprite3D = stage.player_sprites[dribbler_key]
+	game.ball.attach_to(dribbler)
+	dribbler.velocity = Vector2(1.0, 1.0).normalized() * dribbler.base_speed
+	dribbler.visual.play(&"run")
+	dribbler.visual.flip_h = true
+	dribbler.dribble_mode = "feint"
+	dribbler.dribble_direction = Vector2(1.0, 1.0).normalized()
+	dribbler.dribble_duration_seconds = dribbler.XI_DRIBBLE_FEINT_SECONDS
+	dribbler.dribble_burst_seconds = dribbler.dribble_duration_seconds * 0.96
+	stage.player_run_mirrors[dribbler_key] = false
+	stage.sync_presentation(0.0, "broadcast")
+	assert(dribbler_sprite.flip_h == dribbler.visual.flip_h,
+		"Free-run mirroring must not leak into dribble preparation")
+	dribbler.dribble_burst_seconds = 0.0
+	game.ball.release(Vector2.ZERO, 0.0)
+	dribbler.velocity = Vector2.ZERO
+	print("FOOTBALL_XI_DIAGONAL_DRIBBLE_MIRROR_OK action_owns_mirror=true")
 
 	# A moving player retains locked tackle/shot animation, and a player
 	# that actually stops returns to idle even with a stale hidden run.

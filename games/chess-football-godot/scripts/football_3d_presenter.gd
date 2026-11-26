@@ -2824,8 +2824,14 @@ func sync_presentation(delta: float, mode: String) -> void:
 						0.0, 1.0
 					)
 					var base_mirror: bool = player.visual.flip_h
-					if match_node.match_team_size == 11 and (
-						_keeper_locomotion(wanted_animation) or String(wanted_animation).begins_with("idle")
+					# The complete dribble window owns its authored contact
+					# orientation, including the directional lead-in/exit.
+					# Never mix the free-run mirror with that footwork.
+					if (
+						match_node.match_team_size == 11
+						and player.action_lock_seconds <= 0.0
+						and not player.dribble_active()
+						and (_keeper_locomotion(wanted_animation) or String(wanted_animation).begins_with("idle"))
 					):
 						base_mirror = ChessFootballRunDirection.mirror_for_velocity(
 							player.velocity, run_view, bool(player_run_mirrors.get(key, base_mirror))
