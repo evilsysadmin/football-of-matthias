@@ -12,6 +12,12 @@ func _initialize() -> void:
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	var directory := OS.get_environment("RUNNER_TEMP").path_join("football-dense-v1")
 	var owner = game.ball.carrier
+	# Correct dimensions alone are not sufficient: transparent sheets must
+	# never replace visible fallback frames or advance the installed state.
+	var blank_kick := Image.create(16 * 128, 144, false, Image.FORMAT_RGBA8)
+	blank_kick.fill(Color.TRANSPARENT)
+	var blank_diagonal := Image.create(24 * 128, 144, false, Image.FORMAT_RGBA8)
+	blank_diagonal.fill(Color.TRANSPARENT)
 	for club in range(2):
 		var actor: Footballer = game.teams[club][1]
 		var sprite: AnimatedSprite3D = stage.player_sprites[actor.get_instance_id()]
@@ -29,6 +35,13 @@ func _initialize() -> void:
 		stage._sync_visible_animation(actor.get_instance_id(), actor, sprite, &"pass", 0.0)
 		stage._sync_visible_animation(shooter.get_instance_id(), shooter, shot_driver, &"shoot", 0.0)
 		assert(sprite.frame == 4 and shot_driver.frame == 6)
+		var fallback_pass := sprite.sprite_frames.get_frame_texture(&"pass", 4)
+		var fallback_shoot := shot_driver.sprite_frames.get_frame_texture(&"shoot", 6)
+		stage._on_dense_kick_ready(blank_kick, club, &"pass")
+		assert(not stage._dense_kick_loaded.has(club))
+		assert(not stage._dense_kick_pending.has(club))
+		assert(sprite.sprite_frames.get_frame_texture(&"pass", 4) == fallback_pass)
+		assert(shot_driver.sprite_frames.get_frame_texture(&"shoot", 6) == fallback_shoot)
 		for action in ChessFootballDenseV1R2.ACTIONS:
 			var meta := ChessFootballDenseV1R2.sheet_meta(club, action)
 			assert(not meta.is_empty())
@@ -40,6 +53,14 @@ func _initialize() -> void:
 			if action == &"pass":
 				assert(sprite.sprite_frames.get_frame_count(&"pass") == 8)
 				assert(not stage._dense_kick_loaded.has(club))
+				# A valid pass plus an invalid shoot must still be atomic.
+				stage._on_dense_kick_ready(blank_kick, club, &"shoot")
+				assert(not stage._dense_kick_loaded.has(club))
+				assert(stage._dense_kick_pending[club].has(&"pass"))
+				assert(not stage._dense_kick_pending[club].has(&"shoot"))
+				assert(sprite.sprite_frames.get_frame_texture(&"pass", 4) == fallback_pass)
+				assert(shot_driver.sprite_frames.get_frame_texture(&"shoot", 6) == fallback_shoot)
+				assert(sprite.frame == 4 and shot_driver.frame == 6)
 		assert(stage._dense_kick_loaded.has(club))
 		assert(sprite.animation == &"pass" and sprite.frame == 9)
 		assert(shot_driver.animation == &"shoot" and shot_driver.frame == 12)
@@ -83,6 +104,14 @@ func _initialize() -> void:
 		sprite.play(&"run_front_diagonal")
 		sprite.pause()
 		stage.outfield_visual_phases[actor.get_instance_id()] = 10.0
+		var fallback_diagonal := bank.get_frame_texture(&"run_front_diagonal", 0)
+		var fallback_frame := sprite.frame
+		stage._on_dense_diagonal_ready(blank_diagonal, club)
+		assert(not stage._dense_diagonal_loaded.has(club))
+		assert(bank.get_frame_texture(&"run_front_diagonal", 0) == fallback_diagonal)
+		assert(bank.get_frame_count(&"run_front_diagonal") == 16)
+		assert(sprite.frame == fallback_frame)
+		assert(is_equal_approx(float(stage.outfield_visual_phases[actor.get_instance_id()]), 10.0))
 		stage._on_dense_diagonal_ready(diagonal, club)
 		assert(stage._dense_diagonal_loaded.has(club))
 		assert(sprite.frame == 15)
