@@ -655,7 +655,6 @@ func _request_dense_kicks_from_r2() -> void:
 	if not OS.has_feature("web") or match_node.match_team_size != 11:
 		return
 	for team_id in range(2):
-		_dense_atlas_receipt(team_id, &"run_front_diagonal", "pending", "waiting_for_v5_locomotion")
 		for action in ChessFootballDenseV1R2.ACTIONS:
 			var meta := ChessFootballDenseV1R2.sheet_meta(team_id, action)
 			if meta.is_empty():
@@ -688,12 +687,15 @@ func _on_dense_kick_ready(image: Image, team_id: int, action: StringName) -> voi
 			continue
 		var driver := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
 		if driver == null or driver.sprite_frames == null:
+			_dense_atlas_receipt(team_id, &"pass_shoot", "fallback", "missing_driver")
 			return
 		for name in ChessFootballDenseV1R2.ACTIONS:
 			if not driver.sprite_frames.has_animation(name) or driver.sprite_frames.get_frame_count(name) not in [8, 16]:
+				_dense_atlas_receipt(team_id, &"pass_shoot", "fallback", "incompatible_bank")
 				return
 		targets.append(driver.sprite_frames)
 	if targets.size() != match_node.match_team_size - 1:
+		_dense_atlas_receipt(team_id, &"pass_shoot", "fallback", "incomplete_team")
 		return
 	for bank in targets:
 		for name in ChessFootballDenseV1R2.ACTIONS:
@@ -951,6 +953,8 @@ func _request_hero_v5_from_r2() -> void:
 		return
 	for team_id in range(2):
 		for family in ChessFootballHeroV5R2.FAMILIES:
+			if family == "locomotion":
+				_dense_atlas_receipt(team_id, &"run_front_diagonal", "pending", "waiting_for_v5_locomotion")
 			var meta := ChessFootballHeroV5R2.sheet_meta(team_id, family)
 			if OS.has_feature("web"):
 				JavaScriptBridge.eval(
@@ -960,6 +964,8 @@ func _request_hero_v5_from_r2() -> void:
 					true
 				)
 			if meta.is_empty():
+				if family == "locomotion":
+					_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_metadata_rejected")
 				continue
 			var loader := ChessFootballR2AtlasLoader.new()
 			loader.name = "HeroV5_%d_%s" % [team_id, family]
@@ -970,7 +976,9 @@ func _request_hero_v5_from_r2() -> void:
 
 
 func _on_hero_v5_failed(reason: String, team_id: int, family: String) -> void:
-	# Only the localhost CI probe receives diagnostics; staging stays silent.
+	if family == "locomotion":
+		_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_" + reason)
+	# Keep the detailed CI bridge restricted to localhost.
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval(
 			"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) console.warn('FOOTBALL_HERO_V5_FAILED_%d_%s:%s');" % [
@@ -995,7 +1003,10 @@ func _on_hero_v5_ready(image: Image, team_id: int, family: String) -> void:
 
 func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void:
 	var key := "%d:locomotion" % team_id
-	if team_id not in [0, 1] or match_node.match_team_size != 11 or _hero_v5_loaded.has(key) or textures.size() != 48:
+	if team_id not in [0, 1] or match_node.match_team_size != 11 or _hero_v5_loaded.has(key):
+		return
+	if textures.size() != 48:
+		_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_frame_validation_rejected")
 		return
 	var targets: Array[AnimatedSprite3D] = []
 	var names: Array[StringName] = [&"idle_front", &"run_front", &"sprint_front", &"run_front_diagonal", &"sprint_front_diagonal"]
@@ -1005,11 +1016,14 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 			continue
 		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
 		if sprite == null or sprite.sprite_frames == null:
+			_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_missing_driver")
 			return
 		for name in names:
 			if not sprite.sprite_frames.has_animation(name):
+				_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_missing_animation")
 				return
 			if sprite.sprite_frames.get_frame_count(name) not in [1, 8, 12, 24]:
+				_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_unexpected_frame_count")
 				return
 		# Capture actual counts and fallback frame BEFORE clearing the bank.
 		# Async arrivals need not occur in the same order for every view.
@@ -1020,6 +1034,7 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 			prior_cycles[id] = fposmod(phase, float(count)) / float(count)
 		targets.append(sprite)
 	if targets.size() != match_node.match_team_size - 1:
+		_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_incomplete_team")
 		return
 	# Preserve real gait cadence, currently playing phase, and all views not
 	# supplied by the new 3-row sheet (side, back, back-diagonal, keepers).
@@ -1086,12 +1101,15 @@ func _on_dense_diagonal_ready(image: Image, team_id: int) -> void:
 			continue
 		var driver := player_sprites.get(athlete.get_instance_id()) as AnimatedSprite3D
 		if driver == null or driver.sprite_frames == null:
+			_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "missing_driver")
 			return
 		for name in names:
 			if not driver.sprite_frames.has_animation(name) or driver.sprite_frames.get_frame_count(name) != 16:
+				_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "incompatible_bank")
 				return
 		targets.append(driver)
 	if targets.size() != match_node.match_team_size - 1:
+		_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "incomplete_team")
 		return
 	for athlete: Footballer in match_node.teams[team_id]:
 		if athlete.role == "keeper":
