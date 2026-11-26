@@ -488,10 +488,30 @@ func _initialize() -> void:
 	receiver.global_position = passer.global_position + Vector2(-330.0, 90.0)
 	receiver.velocity = Vector2.ZERO
 	assert(game._ai_xi_support_rank(receiver) == 0)
+	# Static marker fixtures must have no leftover movement from the
+	# preceding live pass. Forecast tests below set velocity explicitly.
+	for defender: Footballer in game.teams[0]:
+		defender.velocity = Vector2.ZERO
 	var triangle_base: Vector2 = game._ai_support_target(receiver)
 	var lane_blocker: Footballer = game.teams[0][4]
 	var upper_blocker: Footballer = game.teams[0][3]
 	var lower_blocker: Footballer = game.teams[0][2]
+	# A still-open receiving space will become marked by observed motion.
+	# The same stationary marker moving away must not provoke a detour.
+	lane_blocker.global_position = triangle_base + Vector2(0.0, 185.0)
+	lane_blocker.velocity = Vector2.DOWN * 300.0
+	assert(game._ai_support_target(receiver) == triangle_base)
+	lane_blocker.velocity = Vector2.UP * 300.0
+	assert(game._ai_xi_support_clearance(triangle_base) < game.AI_XI_SUPPORT_MARKED_RADIUS)
+	assert(game._ai_support_target(receiver) != triangle_base)
+	assert(game._ai_xi_project_defender(lane_blocker).distance_to(lane_blocker.global_position) <=
+		game.AI_XI_HUMAN_LANE_READ_MAX_DISTANCE + 0.01)
+	lane_blocker.xi_collision_down_seconds = 0.5
+	assert(game._ai_support_target(receiver) == triangle_base)
+	lane_blocker.xi_collision_down_seconds = 0.0
+	lane_blocker.velocity = Vector2.ZERO
+	assert(game._ai_support_target(receiver) == triangle_base)
+	print("FOOTBALL_XI_SHARED_SUPPORT_FORECAST_OK incoming=true outgoing=true bounded=true fallen_excluded=true")
 	lane_blocker.global_position = triangle_base
 	var open_lane: Vector2 = game._ai_support_target(receiver)
 	assert(open_lane != triangle_base)

@@ -2624,12 +2624,34 @@ func _ai_xi_support_rank(player: Footballer) -> int:
 
 # Exactly the leading short-triangle CPU runner may choose a genuinely
 # open diagonal receiving lane. Do not drag the rest of the 4-3-3 out of shape.
+func _ai_xi_project_defender(defender: Footballer) -> Vector2:
+	# Shared short-horizon observed-motion read, never an interception buff.
+	if (
+		defender.xi_collision_down_seconds > 0.0
+		or defender.velocity.length_squared() < AI_XI_HUMAN_LANE_READ_MIN_SPEED * AI_XI_HUMAN_LANE_READ_MIN_SPEED
+	):
+		return defender.global_position
+	return ChessFootballMath.clamp_to_pitch(
+		defender.global_position + (defender.velocity * AI_XI_HUMAN_LANE_READ_SECONDS).limit_length(
+			AI_XI_HUMAN_LANE_READ_MAX_DISTANCE
+		), match_pitch
+	)
+
+
 func _ai_xi_support_clearance(point: Vector2) -> float:
 	var nearest := INF
 	for defender in teams[0]:
 		if defender.sent_off:
 			continue
 		nearest = minf(nearest, defender.global_position.distance_to(point))
+		# Assess receiving space now AND shortly ahead. A marker moving
+		# away cannot magically clear an already occupied receiving spot.
+		var projected: Vector2 = _ai_xi_project_defender(defender)
+		if projected != defender.global_position:
+			var closest: Vector2 = Geometry2D.get_closest_point_to_segment(
+				point, defender.global_position, projected
+			)
+			nearest = minf(nearest, closest.distance_to(point))
 	return nearest
 
 
@@ -2857,11 +2879,7 @@ func _ai_xi_human_lane_clearance_from(
 			anticipate and rival.xi_collision_down_seconds <= 0.0
 			and rival.velocity.length_squared() >= AI_XI_HUMAN_LANE_READ_MIN_SPEED * AI_XI_HUMAN_LANE_READ_MIN_SPEED
 		):
-			var projected: Vector2 = ChessFootballMath.clamp_to_pitch(
-				position_now + (rival.velocity * AI_XI_HUMAN_LANE_READ_SECONDS).limit_length(
-					AI_XI_HUMAN_LANE_READ_MAX_DISTANCE
-				), match_pitch
-			)
+			var projected: Vector2 = _ai_xi_project_defender(rival)
 			clearance = minf(clearance, _ai_xi_lane_point_gap(projected, origin, corridor, length_sq, destination))
 			# The defender can cross the corridor BETWEEN the two observed
 			# endpoints. Check the bounded swept segment, excluding the same
