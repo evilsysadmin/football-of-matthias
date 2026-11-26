@@ -1169,9 +1169,17 @@ jobs:
           set -euo pipefail
           godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
           log="$RUNNER_TEMP/football-dense-kicks.log"
-          timeout 55s "$godot" --headless --quit-after 420 --path games/chess-football-godot --script res://tests/dense_kicks_r2_smoke.gd 2>&1 | tee "$log"
+          # Four 156-tick physical runs exceed the old 420-render-frame
+          # process limit. Let the script quit explicitly; wall timeout
+          # and all completion markers still fail closed.
+          timeout 55s "$godot" --headless --path games/chess-football-godot --script res://tests/dense_kicks_r2_smoke.gd 2>&1 | tee "$log"
           if grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|Failed to load script' "$log"; then exit 1; fi
           grep -q 'FOOTBALL_DENSE_KICKS_NATIVE_OK' "$log"
+          grep -q 'FOOTBALL_DENSE_DIAGONAL_NATIVE_OK' "$log"
+          for club in 0 1; do
+            grep -q "^FOOTBALL_DENSE_DIAGONAL_LIVE_OK club=$club carrier=true fps=60 frames=24$" "$log"
+            grep -q "^FOOTBALL_DENSE_DIAGONAL_LIVE_OK club=$club carrier=false fps=15 frames=24$" "$log"
+          done
       - name: Optional R2 carry/dribble visual-only state and fallback contract
         shell: bash
         run: |
