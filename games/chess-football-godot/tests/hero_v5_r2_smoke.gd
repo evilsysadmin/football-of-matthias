@@ -104,6 +104,32 @@ func _initialize() -> void:
 		assert(sprite.sprite_frames.get_frame_count(&"hero_feint") == 16)
 		assert(sprite.sprite_frames.get_frame_count(&"hero_cut") == 16)
 		assert(not keeper_sprite.sprite_frames.has_animation(&"hero_feint"))
+		# Test actual visible clock switches between verified 16-pose
+		# front diagonal and existing eight-pose side/rear gait.
+		var actor_id: int = runner.get_instance_id()
+		runner.velocity = Vector2.RIGHT * runner.base_speed
+		runner.action_lock_seconds = 0.0
+		for transition in [
+			[&"run", &"run_front_diagonal"],
+			[&"run_front_diagonal", &"sprint_back_diagonal"],
+			[&"sprint_back_diagonal", &"sprint_front"],
+			[&"sprint_front", &"run"],
+			[&"idle", &"idle_front"],
+			[&"idle_front", &"idle_back"],
+		]:
+			var from: StringName = transition[0]
+			var to: StringName = transition[1]
+			var old_count: int = sprite.sprite_frames.get_frame_count(from)
+			var new_count: int = sprite.sprite_frames.get_frame_count(to)
+			var fraction: float = 0.6875 if old_count > 1 else 0.0
+			stage._sync_visible_animation(actor_id, runner, sprite, from, 0.0)
+			stage.outfield_visual_phases[actor_id] = fraction * float(old_count)
+			stage._sync_visible_animation(actor_id, runner, sprite, to, 0.0)
+			assert(is_equal_approx(float(stage.outfield_visual_phases[actor_id]),
+				fraction * float(new_count)), "Turn must retain fractional cycle phase")
+			assert(sprite.frame == floori(fraction * float(new_count)))
+			assert(sprite.animation == to)
+		print("FOOTBALL_XI_DIAGONAL_PHASE_OK club=%d mixed_counts=true gait_and_idle=true" % club)
 	assert(game.ball.carrier == initial_owner)
 	print("FOOTBALL_HERO_V5_SMOKE_OK clubs=2 families=2 frames=80 no_painted_ball=contract fallback=1")
 	quit(0)
