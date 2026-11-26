@@ -171,6 +171,29 @@ func _initialize() -> void:
 			assert(sprite.frame == floori(fraction * float(new_count)))
 			assert(sprite.animation == to)
 		print("FOOTBALL_XI_DIAGONAL_PHASE_OK club=%d mixed_counts=true gait_and_idle=true" % club)
+	# Offline five-direction preview must fail closed on any missing view
+	# and must not mutate the match's current bank while preparing a copy.
+	var preview = preload("res://scripts/review_xi_directional_candidates.gd")
+	var driver: AnimatedSprite3D = stage.player_sprites[owner.get_instance_id()]
+	var original_bank: SpriteFrames = driver.sprite_frames
+	var rows := {}
+	for i in range(preview.VIEWS.size()):
+		var poses: Array[Texture2D] = []
+		for j in range(preview.EXPECTED[i]):
+			poses.append(runs[0])
+		rows[preview.VIEWS[i]] = poses
+	var missing_view := rows.duplicate()
+	missing_view.erase("back")
+	assert(preview.build_preview_bank(original_bank, missing_view) == null)
+	var copy_bank: SpriteFrames = preview.build_preview_bank(original_bank, rows)
+	assert(copy_bank != null and copy_bank != original_bank)
+	assert(driver.sprite_frames == original_bank)
+	for i in range(preview.VIEWS.size()):
+		for base in [&"run", &"sprint"]:
+			var name := ChessFootballRunDirection.animation_for(base, preview.VIEWS[i])
+			assert(copy_bank.get_frame_count(name) == preview.EXPECTED[i])
+	assert(copy_bank.get_frame_texture(&"pass", 0) == original_bank.get_frame_texture(&"pass", 0))
+	print("FOOTBALL_XI_CANDIDATE_PREVIEW_BANK_OK five_views=true missing_rejected=true")
 	assert(game.ball.carrier == initial_owner)
 	print("FOOTBALL_HERO_V5_SMOKE_OK clubs=2 families=2 frames=80 no_painted_ball=contract fallback=1")
 	quit(0)
