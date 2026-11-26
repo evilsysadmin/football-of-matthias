@@ -85,8 +85,8 @@ func start(meta: Dictionary, allowed_root: String = CDN_ROOT, timeout_seconds: f
 		return
 	_request_node = HTTPRequest.new()
 	_request_node.name = "AtlasHTTP"
-	# Long V5 sheets need a bounded allowance under slow software WebGL;
-	# legacy atlases keep their existing 8-second timeout.
+	# Concurrent action sheets and long V5 sheets can request a bounded
+	# allowance under slow software WebGL; legacy atlases keep 8 seconds.
 	_request_node.timeout = clampf(timeout_seconds, REQUEST_TIMEOUT_SECONDS, 30.0)
 	add_child(_request_node)
 	_request_node.request_completed.connect(
