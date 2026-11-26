@@ -2100,6 +2100,20 @@ jobs:
             install -m 0644 "$unpack/templates/web_nothreads_release.zip" "$dir/web_nothreads_release.zip"
           fi
       - run: python3 scripts/materialize_canonical.py
+      - name: Package exact approved V5 and dense WebP bytes into the Web PCK
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FOOTBALL_V5_ASSET_DIR="$RUNNER_TEMP/football-bundled-v5"
+          python3 scripts/verify_football_v5_r2.py
+          python3 scripts/check_football_dense_v1_r2.py
+          dest=games/chess-football-godot/assets/players/runtime_atlases
+          mkdir -p "$dest"
+          for source in "$FOOTBALL_V5_ASSET_DIR"/*.webp "$RUNNER_TEMP/football-dense-v1"/*.webp; do
+            test -s "$source"
+            cp "$source" "$dest/$(basename "$source").bin"
+          done
+          test "$(find "$dest" -maxdepth 1 -type f -name '*.bin' | wc -l)" -eq 10
       - name: Export actual Godot Web build before publish
         shell: bash
         run: |
@@ -2126,9 +2140,9 @@ jobs:
       - run: npx playwright install chromium
       - name: Boot real WebAssembly in Chromium
         # The Godot Web app runs from 127.0.0.1 with a random test port.
-        # The bucket CORS remains restricted to the real staging origin.
-        # Our local-only bridge checks live staging CORS + exact SHA-256
-        # before fulfilling only the two R2 requests with verified bytes.
+        # Legacy optional atlases retain their verified localhost bridge.
+        # V5/dense must install from SHA-verified bytes inside the Web PCK;
+        # Chromium rejects every external V5/dense atlas request.
         env:
           FOOTBALL_CI_KEEPER_R2_BRIDGE: '1'
         run: node e2e/football-godot-real-web.mjs
