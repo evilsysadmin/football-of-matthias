@@ -54,5 +54,43 @@ class DenseGateTest(unittest.TestCase):
             inspect(Image.new("RGBA", (W * 16, H * 2)))
 
 
+    def test_review_reference_search_pins_exact_bytes(self):
+        from io import BytesIO
+        from prepare_football_direction_review import find_pinned_webps, sha
+        stream = BytesIO()
+        Image.new("RGBA", (128, 144), (10, 20, 30, 255)).save(stream, "WEBP", lossless=True)
+        raw = stream.getvalue()
+        pins = {sha(raw): ("reference.webp", (128, 144))}
+        self.assertEqual(find_pinned_webps(b"GDPC" + raw + b"extra", pins), {"reference.webp": raw})
+        with self.assertRaisesRegex(ValueError, "Missing exact pinned"):
+            find_pinned_webps(b"GDPC" + raw[:-1], pins)
+
+    def test_review_candidate_coverage_and_hash(self):
+        import json
+        from io import BytesIO
+        from zipfile import ZipFile
+        from prepare_football_direction_review import CLUBS, read_candidates, sha
+        raw_file = BytesIO()
+        Image.new("RGBA", (3072, 144), (10, 20, 30, 255)).save(raw_file, "WEBP", lossless=True)
+        raw = raw_file.getvalue()
+        names = [f"{club}_run_{view}_24_candidate_v3.webp" for club in CLUBS for view in ("side", "back", "back_diagonal")]
+        doc = {"status": "candidate_only", "cell": {"width": 128, "height": 144},
+               "entries": [{"file": n, "sha256": sha(raw), "bytes": len(raw), "columns": 24, "rows": 1} for n in names]}
+        with ZipFile(BytesIO(), "w") as archive:
+            for name in names:
+                archive.writestr(name, raw)
+            archive.writestr("phase-review.json", json.dumps(doc))
+            self.assertEqual(set(read_candidates(archive, True)), set(names))
+            with self.assertRaisesRegex(ValueError, "coverage mismatch"):
+                read_candidates(archive)
+        doc["entries"][0]["sha256"] = "0" * 64
+        with ZipFile(BytesIO(), "w") as archive:
+            for name in names:
+                archive.writestr(name, raw)
+            archive.writestr("phase-review.json", json.dumps(doc))
+            with self.assertRaisesRegex(ValueError, "manifest mismatch"):
+                read_candidates(archive, True)
+
+
 if __name__ == "__main__":
     unittest.main()
