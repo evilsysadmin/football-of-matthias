@@ -1553,7 +1553,63 @@ func _initialize() -> void:
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
 	await _human_lane_guard(packed)
+	await process_frame
+	await _human_defensive_role_stability(packed)
 	quit(0)
+
+
+func _human_defensive_role_stability(packed: PackedScene) -> void:
+	var game = packed.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game._set_quick_difficulty("normal")
+	var origin: Vector2 = XI.get_center()
+	var carrier: Footballer = game.teams[1][10]
+	var first: Footballer = game.teams[0][5]
+	var second: Footballer = game.teams[0][6]
+	var manual: Footballer = game.teams[0][4]
+	for defender: Footballer in game.teams[0]:
+		if defender.role != "keeper":
+			defender.global_position = origin + Vector2(-1150.0, 760.0)
+	first.global_position = origin + Vector2(-155.0, -90.0)
+	second.global_position = origin + Vector2(-170.0, 90.0)
+	game._select_player(manual)
+	carrier.global_position = origin
+	game.ball.attach_to(carrier)
+	assert(game._ai_primary_presser(0) == first)
+	assert(game._ai_secondary_presser(0, first) == second)
+	carrier.global_position.y += 30.0
+	assert(game._ai_primary_presser(0) == first)
+	assert(game._ai_secondary_presser(0, first) == second)
+	carrier.global_position.y += 120.0
+	assert(game._ai_primary_presser(0) == second)
+	assert(game._ai_secondary_presser(0, second) == first)
+	game._select_player(second)
+	assert(game._ai_primary_presser(0) == first)
+	assert(game._ai_secondary_presser(0, first) != second)
+	game._select_player(manual)
+	var next_owner: Footballer = game.teams[1][9]
+	next_owner.global_position = origin
+	game.ball.attach_to(next_owner)
+	assert(game._ai_primary_presser(0) == first)
+	assert(game.ai_xi_human_defensive_role_owner == next_owner)
+	game.ball.release(Vector2.ZERO, 0.0)
+	game.ball.global_position = origin
+	game._ai_primary_presser(0)
+	assert(game.ai_xi_human_defensive_role_owner == null)
+	game.ball.attach_to(carrier)
+	carrier.global_position = origin
+	game._set_quick_difficulty("easy")
+	assert(game._ai_primary_presser(0) == first)
+	carrier.global_position.y += 30.0
+	assert(game._ai_primary_presser(0) == second)
+	print("FOOTBALL_XI_HUMAN_ROLE_STABILITY_OK mirrored=true no_flicker=true manual_excluded=true owner_reset=true easy_unchanged=true")
+	game.queue_free()
 
 
 func _human_lane_guard(packed: PackedScene) -> void:
