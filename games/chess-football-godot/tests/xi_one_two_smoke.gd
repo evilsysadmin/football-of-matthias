@@ -287,10 +287,19 @@ func _autonomous_teammate(scene: PackedScene) -> void:
 	assert(game.ball.carrier == owner, "Fresh first touch is not an automatic kick")
 	game.ball.tick_ball(0.8)
 	assert(game._best_ai_pass_target(owner) == receiver)
+	# Exercise an off-centre first touch. An exact home autonomous pass
+	# must point from the actual ball, not the carrier's body centre.
+	game.ball.global_position = owner.global_position + Vector2(18.0, 27.0)
+	var contact: Vector2 = game.ball.global_position
+	var destination: Vector2 = game._ai_xi_pass_aim_point(owner, receiver)
 	game._update_ai(0.0)
 	assert(game.ball.carrier == null and not game.ball.last_release_was_shot)
 	assert(game.ai_intended_pass_receiver == receiver and game.controlled == manual)
 	assert(game.ball.velocity.dot(receiver.global_position - owner.global_position) > 0.0)
+	assert(game.ball.global_position.is_equal_approx(contact))
+	assert(game.ball.velocity.normalized().is_equal_approx(contact.direction_to(destination)),
+		"Autonomous XI passes must release along the real contact-to-outlet ray")
+	print("FOOTBALL_XI_AUTONOMOUS_CONTACT_AIM_OK actual_origin=true manual_unchanged=true")
 	game._update_ai(0.0)
 	assert(receiver.ai_target.distance_to(game._ai_loose_ball_pursuit_point()) < 0.1)
 	# Explicitly select the owner again: even an aged, clear possession
