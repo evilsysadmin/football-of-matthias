@@ -291,16 +291,21 @@ func _initialize() -> void:
 	# physical velocity or the older 5v5 / keeper clocks.
 	assert(is_equal_approx(stage.xi_outfield_stride_advance(0.0, 0.2, 8, 12.0, false), 0.0))
 	assert(is_equal_approx(stage.xi_outfield_stride_advance(250.0, 0.0, 8, 12.0, false), 0.0))
-	var slow_advance := stage.xi_outfield_stride_advance(75.0, 0.10, 8, 12.0, false)
-	var run_advance := stage.xi_outfield_stride_advance(250.0, 0.10, 8, 12.0, false)
-	var sprint_advance := stage.xi_outfield_stride_advance(335.0, 0.10, 8, 15.0, true)
+	# At normal refresh the distance-driven cadence must remain exact.
+	var cadence_delta := 1.0 / 60.0
+	var slow_advance := stage.xi_outfield_stride_advance(75.0, cadence_delta, 8, 12.0, false)
+	var run_advance := stage.xi_outfield_stride_advance(250.0, cadence_delta, 8, 12.0, false)
+	var sprint_advance := stage.xi_outfield_stride_advance(335.0, cadence_delta, 8, 15.0, true)
 	assert(run_advance > slow_advance * 3.0)
 	assert(sprint_advance > run_advance)
 	assert(is_equal_approx(
-		stage.xi_outfield_stride_advance(250.0, 0.10, 12, 18.0, false)
+		stage.xi_outfield_stride_advance(250.0, cadence_delta, 12, 18.0, false)
 		/ run_advance, 1.5
 	))
-	assert(is_equal_approx(stage.xi_outfield_stride_advance(10000.0, 0.10, 8, 12.0, false), 1.62))
+	assert(is_equal_approx(stage.xi_outfield_stride_advance(10000.0, cadence_delta, 8, 12.0, false), 12.0 * 1.35 * cadence_delta))
+	# At low refresh a carrier, like an off-ball runner, must not skip
+	# authored poses. The old 1.62-frame expectation contradicted that.
+	assert(is_equal_approx(stage.xi_outfield_stride_advance(10000.0, 0.10, 8, 12.0, false), 0.99))
 	# At ordinary 60 Hz the short XI off-ball cycle still follows real
 	# support speed exactly. At a slower Web tick it must NEVER jump over
 	# any painted frame, even if a sprint consumes several stride pixels.

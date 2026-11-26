@@ -87,6 +87,7 @@ var action_visual_duration_seconds: float = 0.0
 var tackle_cooldown_seconds: float = 0.0
 var tackle_recovery_seconds: float = 0.0
 var tackle_active_seconds: float = 0.0
+var tackle_contact_delay_seconds: float = 0.0
 var tackle_launch_speed_ratio: float = 0.0
 # XI tackles commit to the actual approach heading at launch. The active
 # contact hitbox cannot swivel in pursuit of a successful late E cut.
@@ -222,6 +223,7 @@ func _process(delta: float) -> void:
 	xi_feint_exit_run_seconds = maxf(0.0, xi_feint_exit_run_seconds - delta)
 	tackle_recovery_seconds = maxf(0.0, tackle_recovery_seconds - delta)
 	tackle_active_seconds = maxf(0.0, tackle_active_seconds - delta)
+	tackle_contact_delay_seconds = maxf(0.0, tackle_contact_delay_seconds - delta)
 	if tackle_active_seconds <= 0.0:
 		tackle_launch_speed_ratio = 0.0
 		tackle_aggressive = false
@@ -325,7 +327,17 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 		speed *= 0.42
 	if contact_stun_seconds > 0.0:
 		speed *= 0.32
-	var desired := wanted_direction.normalized() * speed if moving else Vector2.ZERO
+	# Input.get_vector already applies the device deadzone. Preserve its
+	# remaining magnitude for ordinary XI outfield movement so a small
+	# thumbstick deflection can walk. Digital input still has length one;
+	# committed dribbles and their paid exits keep their existing kinematics.
+	var input_strength := 1.0
+	if (
+		match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
+		and not dribbling and not cut_exit_sprint and not feint_exit_sprint
+	):
+		input_strength = minf(wanted_direction.length(), 1.0)
+	var desired := wanted_direction.normalized() * speed * input_strength if moving else Vector2.ZERO
 	var acceleration := (
 		DRIBBLE_ACCELERATION
 		if dribbling
@@ -444,7 +456,7 @@ func can_tackle() -> bool:
 		and action_lock_seconds <= 0.0
 	)
 
-func start_tackle(aggressive: bool = false) -> bool:
+func start_tackle(aggressive: bool = false, contact_delay: float = 0.0) -> bool:
 	if not can_tackle():
 		return false
 	# Sample BEFORE the tackle launch reduces the current velocity. This
@@ -464,6 +476,7 @@ func start_tackle(aggressive: bool = false) -> bool:
 	tackle_cooldown_seconds = 1.45 if aggressive else 1.10
 	tackle_recovery_seconds = 0.68 if aggressive else 0.38
 	tackle_active_seconds = SLIDE_TACKLE_ACTIVE_SECONDS if aggressive else TACKLE_ACTIVE_SECONDS
+	tackle_contact_delay_seconds = clampf(contact_delay, 0.0, tackle_active_seconds)
 	tackle_launch_speed_ratio = clampf(
 		velocity.length() / maxf(base_speed, 1.0),
 		0.0,
@@ -596,9 +609,10 @@ func _xi_cut_motion_direction() -> Vector2:
 	):
 		return dribble_direction
 	return dribble_entry_direction.lerp(
-		# Reach the lateral lane by mid-touch, not only as E finishes:
-		# a sharper planted foot makes the cut visible from match zoom.
-		dribble_direction, smoothstep(0.10, 0.52, _xi_cut_progress())
+		# The first boot still plants, but finish the lane change before
+		# the midpoint: a slow pivot leaves the attacker running straight
+		# into the defender. Normal acceleration and speed remain intact.
+		dribble_direction, smoothstep(0.08, 0.36, _xi_cut_progress())
 	).normalized()
 
 
@@ -661,6 +675,7 @@ func send_off() -> void:
 	tackle_cooldown_seconds = 0.0
 	tackle_recovery_seconds = 0.0
 	tackle_active_seconds = 0.0
+	tackle_contact_delay_seconds = 0.0
 	tackle_launch_speed_ratio = 0.0
 	tackle_aggressive = false
 	xi_tackle_launch_heading = Vector2.ZERO
@@ -759,6 +774,17 @@ func keeper_save_ratio() -> float:
 		return 0.0
 	return clampf(keeper_save_seconds / keeper_save_total, 0.0, 1.0)
 
+# Shared by the physical ball anchor and the stride lead. Never send
+# the stride touch toward the final cut lane before the planted boot turns.
+func xi_ball_touch_direction() -> Vector2:
+	var forward: Vector2 = dribble_direction if dribble_active() else velocity
+	if dribble_active() and dribble_mode == "cut":
+		forward = _xi_cut_motion_direction()
+	if forward.length_squared() < 0.001:
+		return Vector2(-1.0 if visual != null and visual.flip_h else 1.0, 0.0)
+	return forward.normalized()
+
+
 func ball_anchor() -> Vector2:
 	var facing := -1.0 if visual != null and visual.flip_h else 1.0
 	# Keep legacy 5v5 and keeper catches untouched.
@@ -771,14 +797,7 @@ func ball_anchor() -> Vector2:
 	# the legs or beside a runner travelling vertically/diagonally.
 	# This is the authoritative 2D ball anchor so its shadow, 3D rendering,
 	# possession and release location agree; no visual/physics split.
-	var forward: Vector2 = dribble_direction if dribble_active() else velocity
-	if dribble_active() and dribble_mode == "cut":
-		# Ball and planted body follow the same gradual lane change.
-		forward = _xi_cut_motion_direction()
-	if forward.length_squared() < 0.001:
-		forward = Vector2(facing, 0.0)
-	else:
-		forward = forward.normalized()
+	var forward: Vector2 = xi_ball_touch_direction()
 	var touch_distance := 37.0
 	if dribble_active():
 		touch_distance += dribble_touch_distance * dribble_touch_ratio()

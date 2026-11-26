@@ -353,6 +353,7 @@ func _capture_xi_contact_fall(game: Node2D, stage: ChessFootball3DPresenter, mod
 	assert(stage.xi_collision_fall_display_offset(Vector2.ZERO, 0.42) == Vector3.ZERO)
 	var physics_span := runner.global_position.distance_to(rival.global_position) * stage.WORLD_SCALE
 	var fallen_display_span := 0.0
+	var impact_aspect := 0.0
 	var stages := [0.05, 0.42, 0.74, 1.0]
 	var montage := Image.create(1280 * 2, 720 * 2, false, Image.FORMAT_RGBA8)
 	montage.fill(Color("#15392f"))
@@ -368,13 +369,29 @@ func _capture_xi_contact_fall(game: Node2D, stage: ChessFootball3DPresenter, mod
 		var body_a: Node3D = stage.player_nodes[runner.get_instance_id()]
 		var body_b: Node3D = stage.player_nodes[rival.get_instance_id()]
 		var displayed_span: float = body_a.position.distance_to(body_b.position)
+		if index == 0:
+			impact_aspect = sprite.scale.y / maxf(sprite.scale.x, 0.001)
 		if index == 1:
 			fallen_display_span = displayed_span
 			assert(displayed_span >= physics_span + 1.45,
 				"The two grounded XI bodies must no longer overlap at the same 2D contact centre")
 			assert(absf(rad_to_deg(sprite.rotation.z)) >= 65.0,
 				"Fallen actor must clearly lie down in the real XI renderer")
-			assert(sprite.scale.y < 0.80, "Fallen silhouette must shrink vertically")
+			var fallen_aspect := sprite.scale.y / maxf(sprite.scale.x, 0.001)
+			assert(fallen_aspect >= impact_aspect * 0.85,
+				"Fallen body must roll without compressing into a flat strip")
+			var quad: MeshInstance3D = stage.xi_raster_meshes[runner.get_instance_id()]
+			assert(quad.scale.is_equal_approx(sprite.scale))
+			var material: StandardMaterial3D = quad.material_override
+			assert(material.billboard_mode == BaseMaterial3D.BILLBOARD_DISABLED,
+				"Fallen visible quad must not discard its roll in the billboard shader")
+			var camera_right: Vector3 = stage.camera.global_transform.basis.x.normalized()
+			if mode == "broadcast":
+				camera_right.y = 0.0
+				camera_right = camera_right.normalized()
+			assert(absf(quad.basis.y.normalized().dot(camera_right)) > 0.85,
+				"The actual raster up axis must roll sideways, not only its hidden driver")
+			print("FOOTBALL_XI_FALL_ASPECT_OK camera=%s ratio=%.3f" % [mode, fallen_aspect / impact_aspect])
 		if index == 2:
 			assert(displayed_span < fallen_display_span,
 				"Recovery starts bringing BOTH visual bodies back smoothly")
@@ -394,6 +411,35 @@ func _capture_xi_contact_fall(game: Node2D, stage: ChessFootball3DPresenter, mod
 	var dest: String = output_dir.path_join("football-xi-real-contact-fall-%s.png" % mode)
 	assert(montage.save_png(dest) == OK)
 	print("FOOTBALL_XI_CONTACT_FALL_VISUAL_OK camera=%s 4_phases=1 2_actors=1 visual_separation=1 smooth_recovery=1 no_physics_change=1" % mode)
+	# Independently exercise the authoritative recovery clock instead of
+	# setting a final pose. The renderer must stop tilting the visible
+	# quad after the real fall expires and the athlete can move again.
+	var runner_processing := runner.is_processing()
+	runner.set_process(false)
+	runner.xi_collision_fall(Vector2.LEFT, 0.88)
+	var recovery_ticks := 0
+	while runner.xi_collision_down_seconds > 0.0 and recovery_ticks < 120:
+		runner._process(1.0 / 60.0)
+		recovery_ticks += 1
+	assert(runner.xi_collision_down_seconds == 0.0)
+	assert(runner.contact_stun_seconds == 0.0)
+	runner.action_lock_seconds = 0.0
+	runner.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+	assert(runner.velocity.x > 0.0)
+	stage.sync_presentation(1.0 / 60.0, mode)
+	var recovered: AnimatedSprite3D = stage.player_sprites[runner.get_instance_id()]
+	var recovered_quad: MeshInstance3D = stage.xi_raster_meshes[runner.get_instance_id()]
+	assert(absf(recovered.rotation.z) < deg_to_rad(20.0))
+	assert(recovered_quad.rotation.is_equal_approx(recovered.rotation))
+	assert(recovered_quad.scale.is_equal_approx(recovered.scale))
+	var recovered_material: StandardMaterial3D = recovered_quad.material_override
+	assert(recovered_material.billboard_mode == (
+		BaseMaterial3D.BILLBOARD_ENABLED if mode == "tactical"
+		else BaseMaterial3D.BILLBOARD_FIXED_Y
+	), "Stand-up must restore ordinary billboard rendering")
+	print("FOOTBALL_XI_FALL_CLOCK_RECOVERY_OK camera=%s ticks=%d" % [mode, recovery_ticks])
+	runner.velocity = Vector2.ZERO
+	runner.set_process(runner_processing)
 	game.ball.velocity = Vector2.ZERO
 	runner.global_position = Vector2(-9999.0, -9999.0)
 	rival.global_position = Vector2(-9999.0, -9999.0)

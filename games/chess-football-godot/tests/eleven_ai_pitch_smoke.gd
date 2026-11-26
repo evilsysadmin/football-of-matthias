@@ -445,6 +445,12 @@ func _initialize() -> void:
 	second_outlet.sent_off = true
 	assert(game._best_ai_pass_target(passer, 0.0) == receiver)
 	second_outlet.sent_off = false
+	receiver.xi_collision_down_seconds = 0.5
+	assert(game._best_ai_pass_target(passer) == second_outlet)
+	receiver.xi_collision_down_seconds = 0.0
+	second_outlet.xi_collision_down_seconds = 0.5
+	assert(game._best_ai_pass_target(passer, 0.0) == receiver)
+	second_outlet.xi_collision_down_seconds = 0.0
 	second_outlet.global_position = second_outlet_home
 	second_outlet.velocity = second_outlet_velocity
 	game._set_quick_difficulty("normal")
@@ -482,10 +488,30 @@ func _initialize() -> void:
 	receiver.global_position = passer.global_position + Vector2(-330.0, 90.0)
 	receiver.velocity = Vector2.ZERO
 	assert(game._ai_xi_support_rank(receiver) == 0)
+	# Static marker fixtures must have no leftover movement from the
+	# preceding live pass. Forecast tests below set velocity explicitly.
+	for defender: Footballer in game.teams[0]:
+		defender.velocity = Vector2.ZERO
 	var triangle_base: Vector2 = game._ai_support_target(receiver)
 	var lane_blocker: Footballer = game.teams[0][4]
 	var upper_blocker: Footballer = game.teams[0][3]
 	var lower_blocker: Footballer = game.teams[0][2]
+	# A still-open receiving space will become marked by observed motion.
+	# The same stationary marker moving away must not provoke a detour.
+	lane_blocker.global_position = triangle_base + Vector2(0.0, 185.0)
+	lane_blocker.velocity = Vector2.DOWN * 300.0
+	assert(game._ai_support_target(receiver) == triangle_base)
+	lane_blocker.velocity = Vector2.UP * 300.0
+	assert(game._ai_xi_support_clearance(triangle_base) < game.AI_XI_SUPPORT_MARKED_RADIUS)
+	assert(game._ai_support_target(receiver) != triangle_base)
+	assert(game._ai_xi_project_defender(lane_blocker).distance_to(lane_blocker.global_position) <=
+		game.AI_XI_HUMAN_LANE_READ_MAX_DISTANCE + 0.01)
+	lane_blocker.xi_collision_down_seconds = 0.5
+	assert(game._ai_support_target(receiver) == triangle_base)
+	lane_blocker.xi_collision_down_seconds = 0.0
+	lane_blocker.velocity = Vector2.ZERO
+	assert(game._ai_support_target(receiver) == triangle_base)
+	print("FOOTBALL_XI_SHARED_SUPPORT_FORECAST_OK incoming=true outgoing=true bounded=true fallen_excluded=true")
 	lane_blocker.global_position = triangle_base
 	var open_lane: Vector2 = game._ai_support_target(receiver)
 	assert(open_lane != triangle_base)
@@ -555,6 +581,23 @@ func _initialize() -> void:
 	game.ai_xi_support_rank_slots = [null, null]
 	assert(game._ai_xi_support_rank(role_primary) == 0)
 	assert(game._ai_xi_support_rank(role_secondary) == 1)
+	# Opposite formation homes used to put BOTH CPU outlets on the
+	# same flank. Check both signs while preserving actual assignments.
+	var saved_primary_home: Vector2 = role_primary.home_position
+	var saved_secondary_home: Vector2 = role_secondary.home_position
+	for flank: float in [-1.0, 1.0]:
+		role_primary.home_position.y = role_anchor.y + flank * 350.0
+		role_secondary.home_position.y = role_anchor.y - flank * 350.0
+		var lead_triangle: Vector2 = game._ai_support_target(role_primary)
+		var recycle_triangle: Vector2 = game._ai_support_target(role_secondary)
+		assert(signf(lead_triangle.y - role_anchor.y) == flank)
+		assert(signf(recycle_triangle.y - role_anchor.y) == -flank)
+		assert(lead_triangle.x < role_anchor.x and recycle_triangle.x > role_anchor.x)
+		assert(game._ai_xi_triangle_side(role_primary.home_position.y, role_anchor.y, 0) == flank)
+		assert(game._ai_xi_triangle_side(role_primary.home_position.y, role_anchor.y, 1) == -flank)
+	role_primary.home_position = saved_primary_home
+	role_secondary.home_position = saved_secondary_home
+	print("FOOTBALL_XI_SHARED_TRIANGLE_FLANK_OK opposite=true both_directions=true")
 	role_challenger.global_position = role_anchor + Vector2(-240.0, 0.0)
 	assert(game._ai_xi_support_rank(role_primary) == 0)
 	assert(game._ai_xi_support_rank(role_secondary) == 1)
@@ -571,8 +614,21 @@ func _initialize() -> void:
 	assert(game._ai_xi_support_rank(role_challenger) == -1)
 	assert(game._ai_xi_support_rank(role_primary) == 0)
 	role_challenger.sent_off = false
+	role_primary.xi_collision_down_seconds = 0.5
+	assert(game._ai_xi_support_rank(role_primary) == -1)
+	assert(not (role_primary in game.ai_xi_support_rank_slots))
+	role_primary.xi_collision_down_seconds = 0.0
 	# Releasing the ball or giving it to a rival resets both assignments.
 	game.ball.release(Vector2.LEFT, 300.0)
+	game.ai_intended_pass_receiver = role_primary
+	game.ai_intended_pass_until = game.match_seconds + 1.0
+	assert(game._ai_live_pass_receiver() == role_primary)
+	role_primary.xi_collision_down_seconds = 0.5
+	assert(game._ai_live_pass_receiver() == null)
+	assert(game.ai_intended_pass_receiver == null)
+	role_primary.xi_collision_down_seconds = 0.0
+	assert(game._ai_live_pass_receiver() == null)
+	print("FOOTBALL_XI_AI_AVAILABLE_RECEIVER_OK choice=true support=true live_cancel=true")
 	game._update_ai(0.0)
 	assert(game.ai_xi_support_rank_owner == null)
 	assert(game.ai_xi_support_rank_slots == [null, null])
@@ -1552,4 +1608,256 @@ func _initialize() -> void:
 	print("FOOTBALL_XI_TACKLE_CONTAIN_OK no_wasted_animation=1 no_recovery=1 no_foul=1 normal_cover_contains=1 easy_five_unchanged=1")
 	print("FOOTBALL_XI_CPU_LANE_GUARD_OK pressure=1 cover=1 marker=1 no_teleport=1 no_speed_boost=1 easy=off five=off")
 	print("FOOTBALL_XI_AI_OK goals=2 lanes=3 dribble=1 cover=1 keeper=1 loose=1 q_switch=nearest_valid team_pass=received blocked pressure marked shot=1 old_5v5=unchanged")
+	await _human_lane_guard(packed)
+	await process_frame
+	await _human_defensive_role_stability(packed)
+	await process_frame
+	await _mirrored_compact_shape(packed)
 	quit(0)
+
+
+func _mirrored_compact_shape(packed: PackedScene) -> void:
+	var game = packed.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	game._set_quick_difficulty("normal")
+	var centre: Vector2 = XI.get_center()
+	var home_screen: Footballer = game.teams[0][5]
+	var away_screen: Footballer = game.teams[1][5]
+	var home_owner: Footballer = game.teams[0][10]
+	var away_owner: Footballer = game.teams[1][10]
+	home_screen.home_position = centre + Vector2(-580.0, 160.0)
+	away_screen.home_position = centre + Vector2(580.0, 160.0)
+	for dx: float in [-180.0, -100.0, 0.0, 130.0, 260.0, 490.0]:
+		away_owner.global_position = centre + Vector2(dx, 0.0)
+		home_owner.global_position = centre + Vector2(-dx, 0.0)
+		game.ball.attach_to(away_owner)
+		var home_target: Vector2 = game._ai_xi_human_compact_target(home_screen, away_owner)
+		game.ball.attach_to(home_owner)
+		var away_target: Vector2 = game._ai_xi_human_compact_target(away_screen, home_owner)
+		assert(is_equal_approx(home_target.x + away_target.x, centre.x * 2.0))
+		assert(is_equal_approx(home_target.y, away_target.y))
+		var legacy: Vector2 = away_screen.home_position.lerp(
+			home_owner.global_position, game.AI_DEFENSIVE_SHIFT_RATIO
+		)
+		if dx == -180.0:
+			assert(away_target.distance_to(home_owner.global_position) <
+				legacy.distance_to(home_owner.global_position) - 45.0)
+		elif dx >= 260.0:
+			assert(away_target.is_equal_approx(legacy))
+	# The live away midfield screen must use the same mirrored target.
+	home_owner.global_position = centre + Vector2(180.0, 0.0)
+	game._select_player(home_owner)
+	game.ball.attach_to(home_owner)
+	for player: Footballer in game.teams[0]:
+		if player != home_owner:
+			player.global_position = centre + Vector2(-1150.0, 780.0)
+			player.velocity = Vector2.ZERO
+	for player: Footballer in game.teams[1]:
+		if player.role != "keeper":
+			player.global_position = centre + Vector2(1100.0, 780.0)
+			player.velocity = Vector2.ZERO
+	var first: Footballer = game.teams[1][2]
+	var second: Footballer = game.teams[1][3]
+	first.global_position = home_owner.global_position + Vector2(72.0, 0.0)
+	second.global_position = home_owner.global_position + Vector2(125.0, 40.0)
+	away_screen.global_position = home_owner.global_position + Vector2(430.0, 160.0)
+	assert(game._ai_primary_presser(1) == first)
+	assert(game._ai_secondary_presser(1, first) == second)
+	var expected: Vector2 = game._ai_xi_human_compact_target(away_screen, home_owner)
+	game._update_ai(0.0)
+	assert(away_screen.ai_target.distance_to(expected) < 0.1)
+	assert(game.controlled == home_owner)
+	game.match_team_size = 5
+	assert(game._ai_xi_human_compact_target(away_screen, home_owner).is_equal_approx(
+		away_screen.home_position.lerp(home_owner.global_position, game.AI_DEFENSIVE_SHIFT_RATIO)
+	))
+	print("FOOTBALL_XI_SHARED_COMPACT_OK mirrored=true live_ai=true far_half_hold=true legacy=true")
+	game.queue_free()
+
+
+func _human_defensive_role_stability(packed: PackedScene) -> void:
+	var game = packed.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game._set_quick_difficulty("normal")
+	var origin: Vector2 = XI.get_center()
+	var carrier: Footballer = game.teams[1][10]
+	var first: Footballer = game.teams[0][5]
+	var second: Footballer = game.teams[0][6]
+	var manual: Footballer = game.teams[0][4]
+	for defender: Footballer in game.teams[0]:
+		if defender.role != "keeper":
+			defender.global_position = origin + Vector2(-1150.0, 760.0)
+	first.global_position = origin + Vector2(-155.0, -90.0)
+	second.global_position = origin + Vector2(-170.0, 90.0)
+	game._select_player(manual)
+	carrier.global_position = origin
+	game.ball.attach_to(carrier)
+	assert(game._ai_primary_presser(0) == first)
+	assert(game._ai_secondary_presser(0, first) == second)
+	carrier.global_position.y += 30.0
+	assert(game._ai_primary_presser(0) == first)
+	assert(game._ai_secondary_presser(0, first) == second)
+	carrier.global_position.y += 120.0
+	assert(game._ai_primary_presser(0) == second)
+	assert(game._ai_secondary_presser(0, second) == first)
+	game._select_player(second)
+	assert(game._ai_primary_presser(0) == first)
+	assert(game._ai_secondary_presser(0, first) != second)
+	game._select_player(manual)
+	var next_owner: Footballer = game.teams[1][9]
+	next_owner.global_position = origin
+	game.ball.attach_to(next_owner)
+	assert(game._ai_primary_presser(0) == first)
+	assert(game.ai_xi_human_defensive_role_owner == next_owner)
+	game.ball.release(Vector2.ZERO, 0.0)
+	game.ball.global_position = origin
+	game._ai_primary_presser(0)
+	assert(game.ai_xi_human_defensive_role_owner == null)
+	game.ball.attach_to(carrier)
+	carrier.global_position = origin
+	game._set_quick_difficulty("easy")
+	assert(game._ai_primary_presser(0) == first)
+	carrier.global_position.y += 30.0
+	assert(game._ai_primary_presser(0) == second)
+	print("FOOTBALL_XI_HUMAN_ROLE_STABILITY_OK mirrored=true no_flicker=true manual_excluded=true owner_reset=true easy_unchanged=true")
+	game.queue_free()
+
+
+func _human_lane_guard(packed: PackedScene) -> void:
+	var game = packed.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game._set_quick_difficulty("normal")
+	var centre: Vector2 = XI.get_center()
+	var owner: Footballer = game.teams[1][10]
+	var receiver: Footballer = game.teams[1][9]
+	var presser: Footballer = game.teams[0][10]
+	var cover: Footballer = game.teams[0][8]
+	var marker: Footballer = game.teams[0][6]
+	var manual: Footballer = game.teams[0][4]
+	owner.global_position = centre + Vector2(-600.0, 0.0)
+	for attacker: Footballer in game.teams[1]:
+		if attacker != owner:
+			attacker.global_position = owner.global_position + Vector2(720.0, 640.0)
+			attacker.velocity = Vector2.ZERO
+	receiver.global_position = owner.global_position + Vector2(-350.0, -165.0)
+	for defender: Footballer in game.teams[0]:
+		if defender.role != "keeper":
+			defender.global_position = centre + Vector2(-1300.0, 800.0)
+			defender.velocity = Vector2.ZERO
+	presser.global_position = owner.global_position + Vector2(-70.0, 0.0)
+	cover.global_position = owner.global_position + Vector2(-100.0, 220.0)
+	marker.global_position = owner.global_position + Vector2(-245.0, -260.0)
+	marker.home_position = marker.global_position
+	game._select_player(manual)
+	game.ball.attach_to(owner)
+	var plan: Dictionary = game._ai_xi_lane_assignment(presser, cover, 0)
+	assert(plan.get("marker") == marker and plan.get("receiver") == receiver)
+	var target: Vector2 = plan["target"]
+	assert(target.is_equal_approx(owner.global_position.lerp(receiver.global_position, 0.64) + Vector2(-18.0, 0.0)))
+	game._select_player(marker)
+	assert(game._ai_xi_lane_assignment(presser, cover, 0).get("marker") != marker)
+	game._select_player(manual)
+	marker.xi_collision_down_seconds = 0.5
+	assert(game._ai_xi_lane_assignment(presser, cover, 0).get("marker") != marker)
+	marker.xi_collision_down_seconds = 0.0
+	assert(game._ai_primary_presser(0) == presser)
+	assert(game._ai_secondary_presser(0, presser) == cover)
+	var before: Vector2 = marker.global_position
+	var manual_before: Vector2 = manual.global_position
+	game.ai_next_decision[int(owner.get_instance_id())] = game.match_seconds + 10.0
+	await physics_frame
+	game._update_ai(1.0 / 60.0)
+	assert(marker.ai_target.distance_to(target) < 0.1)
+	assert(marker.global_position.distance_to(before) < 15.0)
+	assert(manual.global_position.is_equal_approx(manual_before) and game.controlled == manual)
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_lane_assignment(presser, cover, 0).is_empty())
+	print("FOOTBALL_XI_HUMAN_LANE_GUARD_OK mirrored=true real_ai=true controlled_excluded=true fallen_excluded=true")
+	# A primary teammate must contain instead of wasting the tackle
+	# animation and recovery at a distance outside the real hitbox.
+	game._set_quick_difficulty("normal")
+	presser.global_position = owner.global_position + Vector2(-82.0, 0.0)
+	presser.velocity = Vector2.RIGHT * 150.0
+	presser.tackle_cooldown_seconds = 0.0
+	presser.tackle_recovery_seconds = 0.0
+	presser.tackle_active_seconds = 0.0
+	presser.action_lock_seconds = 0.0
+	presser.contact_stun_seconds = 0.0
+	assert(game._ai_primary_presser(0) == presser)
+	assert(not game._ai_xi_tackle_commit_ready(presser, owner, false))
+	game._update_ai(0.0)
+	assert(not presser.tackle_active() and presser.tackle_cooldown_seconds == 0.0)
+	assert(game.ball.carrier == owner and game.controlled == manual)
+	presser.global_position = owner.global_position + Vector2(-32.0, 0.0)
+	presser.velocity = Vector2.RIGHT * 150.0
+	assert(game._ai_xi_tackle_commit_ready(presser, owner, false))
+	presser.velocity = Vector2.LEFT * 150.0
+	assert(not game._ai_xi_tackle_commit_ready(presser, owner, false))
+	presser.velocity = Vector2.RIGHT * 150.0
+	presser.tackle_cooldown_seconds = 0.5
+	assert(not game._ai_xi_tackle_commit_ready(presser, owner, false))
+	presser.tackle_cooldown_seconds = 0.0
+	game._set_quick_difficulty("easy")
+	assert(game._ai_xi_tackle_commit_ready(presser, owner, false))
+	print("FOOTBALL_XI_SHARED_PRIMARY_CONTAIN_OK no_wasted_tackle=true legal_contact=true wrong_heading=false cooldown=false manual_unchanged=true")
+	# The second defender now uses the same Hard/Expert opportunity
+	# gate and clean physical hitbox as the opposing team's backup.
+	owner.velocity = Vector2.ZERO
+	owner.dribble_burst_seconds = 0.0
+	owner.xi_cut_exit_run_seconds = 0.0
+	owner.xi_feint_exit_run_seconds = 0.0
+	cover.global_position = owner.global_position + Vector2(-32.0, 0.0)
+	cover.velocity = Vector2.RIGHT * 150.0
+	cover.tackle_cooldown_seconds = 0.0
+	cover.tackle_recovery_seconds = 0.0
+	cover.tackle_active_seconds = 0.0
+	cover.action_lock_seconds = 0.0
+	cover.contact_stun_seconds = 0.0
+	game.ball.attach_to(owner)
+	game._set_quick_difficulty("normal")
+	assert(not game._ai_cpu_second_press_active(cover, owner.global_position))
+	assert(not game._ai_xi_tackle_commit_ready(cover, owner, true))
+	game._set_quick_difficulty("hard")
+	assert(game._ai_cpu_second_press_active(cover, owner.global_position))
+	assert(game._ai_xi_tackle_commit_ready(cover, owner, true))
+	cover.global_position = owner.global_position + Vector2(-82.0, 0.0)
+	assert(not game._ai_xi_tackle_commit_ready(cover, owner, true))
+	cover.global_position = owner.global_position + Vector2(-32.0, 0.0)
+	cover.velocity = Vector2.LEFT * 150.0
+	assert(not game._ai_xi_tackle_commit_ready(cover, owner, true))
+	cover.velocity = Vector2.RIGHT * 150.0
+	cover.tackle_cooldown_seconds = 0.5
+	assert(not game._ai_xi_tackle_commit_ready(cover, owner, true))
+	cover.tackle_cooldown_seconds = 0.0
+	# Keep the first presser closer but in recovery, so the second
+	# must make its own decision on a real uncontested clean contact.
+	presser.global_position = owner.global_position + Vector2(0.0, 20.0)
+	presser.tackle_cooldown_seconds = 0.5
+	assert(game._ai_primary_presser(0) == presser)
+	assert(game._ai_secondary_presser(0, presser) == cover)
+	game.ai_next_decision[int(owner.get_instance_id())] = game.match_seconds + 10.0
+	game._update_ai(0.0)
+	assert(cover.tackle_active(), "Autonomous teammate cover must commit a legal tackle")
+	assert(game.controlled == manual)
+	print("FOOTBALL_XI_HUMAN_SECOND_PRESS_OK hard=true normal_contains=true clean_only=true real_ai=true")
+	game.queue_free()

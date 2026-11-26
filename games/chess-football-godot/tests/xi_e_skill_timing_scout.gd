@@ -10,6 +10,7 @@ const XI: Rect2 = Formation.ELEVEN_PITCH_RECT
 const DT := 1.0 / 60.0
 const MAX_FRAMES := 96
 const FOLLOW_FRAMES := 72
+const CHECKPOINTS := [18, 36, 54, 72]
 const TRIGGERS := [0, 8, 16]
 const DISTANCES := [148.0, 185.0]
 const SIDES := [-1.0, 1.0]
@@ -98,6 +99,10 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 	var lateral: float = 0.0
 	var actual_tackles := 0
 	var nearest_at_e: float = -1.0
+	var checkpoints: Dictionary = {}
+	var trigger_origin: Vector2 = original
+	var uninterrupted_frames := 0
+	var loss_geometry: Dictionary = {}
 	for tick in range(MAX_FRAMES):
 		var holding: bool = game.ball.carrier == carrier
 		var dir: Vector2 = Vector2.ZERO
@@ -112,9 +117,27 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 		var press_e: bool = use_e and holding and tick == trigger
 		if tick == trigger:
 			nearest_at_e = carrier.global_position.distance_to(presser.global_position)
+			trigger_origin = carrier.global_position
 		var cooldowns: Array[float] = []
+		var nearest_ball_rival: Footballer = null
+		var nearest_ball_gap: float = INF
+		var before_ball: Vector2 = game.ball.global_position
+		var before_carrier: Vector2 = carrier.global_position
+		var already_active := 0
 		for rival: Footballer in game.teams[1]:
 			cooldowns.append(rival.tackle_cooldown_seconds)
+			if holding and tick >= trigger and tick < trigger + FOLLOW_FRAMES and first_loss < 0 and not rival.sent_off:
+				var gap: float = rival.global_position.distance_to(before_ball)
+				if gap < nearest_ball_gap:
+					nearest_ball_gap = gap
+					nearest_ball_rival = rival
+				if rival.tackle_active():
+					already_active += 1
+		var carrier_speed_before_tick: float = carrier.velocity.length()
+		var nearest_body_gap: float = (
+			nearest_ball_rival.global_position.distance_to(before_carrier)
+			if nearest_ball_rival != null else -1.0
+		)
 		_input(dir, press_e)
 		game._physics_process(DT)
 		for team in game.teams:
@@ -128,14 +151,42 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 			assert(carrier.dribble_active() and carrier.dribble_mode == spec["action"],
 				"Real E input did not execute the requested XI physical action")
 			e_executed = true
-		if tick >= trigger and first_loss < 0 and game.ball.carrier != carrier:
+		if tick >= trigger and tick < trigger + FOLLOW_FRAMES and first_loss < 0 and game.ball.carrier != carrier:
 			first_loss = tick - trigger
+			# Observe the last still-owned frame. The closest opponent is
+			# deliberately NOT labelled as the player who made the tackle.
+			if nearest_ball_rival != null:
+				var escape_axis := Vector2(-lane.y, lane.x)
+				loss_geometry = {
+					"nearest_ball_opponent": nearest_ball_rival.squad_index,
+					"ball_gap_before_tick": snappedf(nearest_ball_gap, 0.1),
+					"same_rival_body_gap_before_tick": snappedf(nearest_body_gap, 0.1),
+					"ball_offset_across_escape_lane": snappedf(
+						(before_ball - before_carrier).dot(escape_axis), 0.1
+					),
+					"ball_offset_along_escape_lane": snappedf(
+						(before_ball - before_carrier).dot(lane), 0.1
+					),
+					"already_active_opponent_tackles": already_active,
+					"carrier_speed_before_tick": snappedf(carrier_speed_before_tick, 0.1),
+					"carrier_speed_after_tick": snappedf(carrier.velocity.length(), 0.1)
+				}
 			first_cause = (
 				"clean_tackle_pending_claim" if game.pending_tackle_player != null
 				else "body_collision" if carrier.xi_collision_guard_seconds > 0.0
 				else "tackle_stun" if carrier.contact_stun_seconds > 0.0
 				else "other_ball_event"
 			)
+		var elapsed_frames: int = tick - trigger + 1
+		if elapsed_frames > 0 and elapsed_frames <= FOLLOW_FRAMES:
+			if first_loss < 0 and game.ball.carrier == carrier:
+				uninterrupted_frames += 1
+			if elapsed_frames in CHECKPOINTS:
+				checkpoints[str(elapsed_frames)] = {
+					"outcome": _outcome(game, carrier),
+					"uninterrupted": first_loss < 0 and game.ball.carrier == carrier,
+					"forward_since_e": snappedf(carrier.global_position.x - trigger_origin.x, 0.1)
+				}
 		if tick == trigger + FOLLOW_FRAMES - 1:
 			after = _outcome(game, carrier)
 			forward = snappedf(carrier.global_position.x - original.x, 0.1)
@@ -147,6 +198,10 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 		await process_frame
 	_release_keys()
 	assert(after in ["retained", "loose", "cpu_stolen", "teammate", "restart"])
+	# The first-loss statistic is censored at the same horizon as the
+	# outcome/checkpoints, even when the simulation keeps running.
+	assert(first_loss == -1 or (first_loss >= 0 and first_loss < FOLLOW_FRAMES))
+	assert(uninterrupted_frames == (FOLLOW_FRAMES if first_loss == -1 else first_loss))
 	assert((not e_executed) or use_e)
 	var result: Dictionary = {
 		"seed": int(spec["seed"]),
@@ -163,7 +218,10 @@ func _play(spec: Dictionary, use_e: bool) -> Dictionary:
 		"first_loss_cause": first_cause,
 		"forward_advance": forward,
 		"lateral_advance": lateral,
-		"cpu_tackle_attempts": actual_tackles
+		"cpu_tackle_attempts": actual_tackles,
+		"uninterrupted_possession_frames": uninterrupted_frames,
+		"checkpoints": checkpoints,
+		"first_loss_pre_tick_geometry": loss_geometry
 	}
 	root.remove_child(game)
 	game.queue_free()
@@ -204,6 +262,45 @@ func _initialize() -> void:
 					if rows.size() % 12 == 0:
 						print("FOOTBALL_XI_E_TIMING_PROGRESS completed=%d/48" % rows.size())
 	assert(rows.size() == 48)
+	var paired: Dictionary = {}
+	for action in ACTIONS:
+		var summary: Dictionary = {
+			"pairs": 0, "e_longer": 0, "no_e_longer": 0, "equal": 0,
+			"e_possession_frames": 0, "no_e_possession_frames": 0,
+			"e_uninterrupted": {}, "no_e_uninterrupted": {}
+		}
+		for checkpoint in CHECKPOINTS:
+			summary["e_uninterrupted"][str(checkpoint)] = 0
+			summary["no_e_uninterrupted"][str(checkpoint)] = 0
+		for index in range(0, rows.size(), 2):
+			var e: Dictionary = rows[index]
+			var no_e: Dictionary = rows[index + 1]
+			if e["action"] != action:
+				continue
+			assert(e["checkpoints"].size() == CHECKPOINTS.size())
+			assert(no_e["checkpoints"].size() == CHECKPOINTS.size())
+			var e_frames: int = e["uninterrupted_possession_frames"]
+			var no_e_frames: int = no_e["uninterrupted_possession_frames"]
+			summary["pairs"] += 1
+			summary["e_possession_frames"] += e_frames
+			summary["no_e_possession_frames"] += no_e_frames
+			var comparison: String = (
+				"e_longer" if e_frames > no_e_frames
+				else "no_e_longer" if no_e_frames > e_frames else "equal"
+			)
+			summary[comparison] += 1
+			for checkpoint in CHECKPOINTS:
+				var key: String = str(checkpoint)
+				if e["checkpoints"][key]["uninterrupted"]:
+					summary["e_uninterrupted"][key] += 1
+				if no_e["checkpoints"][key]["uninterrupted"]:
+					summary["no_e_uninterrupted"][key] += 1
+		assert(summary["pairs"] == 12)
+		paired[action] = summary
+	print("FOOTBALL_XI_E_TIMING_PAIRED " + JSON.stringify({
+		"difficulty": "hard", "hz": 60, "checkpoints_frames": CHECKPOINTS,
+		"actions": paired
+	}))
 	print("FOOTBALL_XI_E_TIMING_SCOUT " + JSON.stringify({
 		"kind": "observational_22_player_real_input_60hz_e_timing_vs_control_not_match_win_rate",
 		"fixtures": 24,

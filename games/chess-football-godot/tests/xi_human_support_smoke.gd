@@ -239,9 +239,20 @@ func _initialize() -> void:
 	rival_marker.global_position = centre.lerp(lead_base, 0.6)
 	rival_marker.velocity = normal * 300.0
 	assert(game._ai_xi_human_lane_clearance(lead_base, true) < 0.01)
+	# Both forecast endpoints are away from the corridor, yet the
+	# defender's bounded path crosses it. Endpoint-only reads miss this.
+	rival_marker.global_position = centre.lerp(lead_base, 0.6) + normal * 40.0
+	rival_marker.velocity = -normal * 300.0
+	assert(game._ai_xi_human_lane_clearance(lead_base) > 39.0)
+	assert(game._ai_xi_human_lane_clearance(lead_base, true) < 0.01)
+	# An equivalent crossing within the excluded carrier-pressure zone
+	# must not be mistaken for a blocked receiving corridor.
+	rival_marker.global_position = centre.lerp(lead_base, 0.08) + normal * 40.0
+	assert(game._ai_xi_human_lane_clearance(lead_base, true) > 39.0)
 	rival_marker.velocity = Vector2.ZERO
 	rival_marker.global_position = centre + Vector2(1450.0, 800.0)
 	assert(game.ai_xi_human_lane_memory.is_empty())
+	print("FOOTBALL_XI_LANE_SWEEP_OK crossing=true carrier_pressure_excluded=true")
 	print("FOOTBALL_XI_LANE_READ_OK static=", static_gap, " crossing=", incoming_gap)
 
 	# Safety outlet uses the same bounded read without becoming another
@@ -381,4 +392,113 @@ func _initialize() -> void:
 	print("FOOTBALL_XI_SUPPORT_SNAPSHOT_HANDOFF_OK possession=true memory_reset=true")
 
 	print("FOOTBALL_XI_HUMAN_SUPPORT_OK two_outlets=true open_lane=true stable_roles=true real_movement=true loss_reset=true legacy_5v5=true cpu_unchanged=true")
+	game.queue_free()
+	await process_frame
+	await _loose_transition_shape(scene)
+	await process_frame
+	await _mirrored_cutback_shape(scene)
 	quit(0)
+
+
+func _mirrored_cutback_shape(scene: PackedScene) -> void:
+	var game = scene.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	var centre: Vector2 = game.match_pitch.get_center()
+	var owner: Footballer = game.teams[1][10]
+	var home_owner: Footballer = game.teams[0][10]
+	var lead: Footballer = game.teams[1][5]
+	var recycle: Footballer = game.teams[1][6]
+	for flank: float in [-1.0, 1.0]:
+		owner.global_position = Vector2(game.match_pitch.position.x + 250.0, centre.y + flank * 650.0)
+		home_owner.global_position = Vector2(game.match_pitch.end.x - 250.0, owner.global_position.y)
+		for teammate: Footballer in game.teams[1]:
+			if teammate != owner:
+				teammate.global_position = centre + Vector2(1100.0, 700.0)
+				teammate.velocity = Vector2.ZERO
+		lead.global_position = owner.global_position + Vector2(170.0, -flank * 80.0)
+		recycle.global_position = owner.global_position + Vector2(310.0, -flank * 110.0)
+		game.ball.attach_to(owner)
+		assert(game._ai_xi_support_rank(lead) == 0)
+		assert(game._ai_xi_support_rank(recycle) == 1)
+		for rank in range(2):
+			var runner: Footballer = lead if rank == 0 else recycle
+			var target: Vector2 = game._ai_support_target(runner)
+			var reflected: Vector2 = game._ai_xi_cutback_target(home_owner, rank)
+			assert(target.is_equal_approx(game._ai_xi_cutback_target(owner, rank)))
+			assert(is_equal_approx(target.x + reflected.x, centre.x * 2.0))
+			assert(is_equal_approx(target.y, reflected.y))
+			assert(game.match_pitch.has_point(target))
+			assert(target.x > owner.global_position.x)
+	owner.global_position = centre
+	assert(not game._ai_xi_away_cutback_available(lead))
+	game.match_team_size = 5
+	assert(not game._ai_xi_away_cutback_available(lead))
+	print("FOOTBALL_XI_SHARED_CUTBACK_OK mirrored=true both_flanks=true two_outlets=true midfield_off=true legacy_off=true")
+	game.queue_free()
+
+
+func _loose_transition_shape(scene: PackedScene) -> void:
+	var game = scene.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	for team in game.teams:
+		for player: Footballer in team:
+			player.global_position = player.home_position
+			player.velocity = Vector2.ZERO
+	var centre: Vector2 = game.match_pitch.get_center()
+	var home: Footballer = game.teams[0][1]
+	var away: Footballer = game.teams[1][1]
+	var manual: Footballer = game.teams[0][10]
+	game._select_player(manual)
+	game.ball.release(Vector2.RIGHT, 0.0)
+	game.ball.global_position = centre
+	var home_target: Vector2 = game._ai_xi_loose_support_target(home, centre)
+	var away_target: Vector2 = game._ai_xi_loose_support_target(away, centre)
+	assert(home_target.distance_to(centre) < home.home_position.distance_to(centre) - 100.0)
+	assert(away_target.distance_to(centre) < away.home_position.distance_to(centre) - 100.0)
+	assert(is_equal_approx(home_target.x + away_target.x, centre.x * 2.0))
+	assert(is_equal_approx(home_target.y, away_target.y))
+	assert(home_target.distance_to(home.home_position) <= 180.01)
+	assert(away_target.distance_to(away.home_position) <= 180.01)
+	assert(game._ai_xi_loose_support_target(home, centre) == home_target)
+	for defender: Footballer in [home, away]:
+		var first: Footballer = game._ai_primary_presser(defender.team_id)
+		var second: Footballer = game._ai_secondary_presser(defender.team_id, first)
+		assert(defender != first and defender != second)
+	var home_expected: Vector2 = game._ai_spaced_target(home, home_target)
+	var away_expected: Vector2 = game._ai_spaced_target(away, away_target)
+	var manual_start: Vector2 = manual.global_position
+	game._update_ai(0.0)
+	assert(home.ai_target.distance_to(home_expected) < 0.1)
+	assert(away.ai_target.distance_to(away_expected) < 0.1)
+	assert(manual.global_position.is_equal_approx(manual_start))
+	var home_start: Vector2 = home.global_position
+	var away_start: Vector2 = away.global_position
+	for tick in range(12):
+		await physics_frame
+		game._update_ai(STEP)
+	assert(home.global_position.distance_to(home_target) < home_start.distance_to(home_target) - 5.0)
+	assert(away.global_position.distance_to(away_target) < away_start.distance_to(away_target) - 5.0)
+	assert(game.ball.carrier == null and game.controlled == manual)
+	game.ball.attach_to(manual)
+	assert(game._ai_xi_loose_support_target(home, centre) == home.home_position)
+	game.ball.release(Vector2.RIGHT, 0.0)
+	game.match_team_size = 5
+	assert(game._ai_xi_loose_support_target(home, centre) == home.home_position)
+	print("FOOTBALL_XI_LOOSE_TRANSITION_SHAPE_OK mirrored=true real_movement=true bounded=true manual_unchanged=true legacy=true")
+	game.queue_free()

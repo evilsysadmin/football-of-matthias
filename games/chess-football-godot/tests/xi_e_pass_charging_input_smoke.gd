@@ -114,10 +114,11 @@ func _initialize() -> void:
 		"Releasing Space after a successful E must not kick a ghost pass")
 	assert(not game.pass_charging)
 
-	# Equal initial range, different runner trajectories and launch speeds.
+	# Same initial range, different runner trajectories and release speeds.
 	game._cancel_pass_charge()
 	passer.global_position = start
 	passer.velocity = Vector2.ZERO
+	game.ball.global_position = start
 	receiver.global_position = start + Vector2(160.0, 0.0)
 	var base: Vector2 = receiver.global_position
 	receiver.velocity = Vector2.ZERO
@@ -125,6 +126,10 @@ func _initialize() -> void:
 	receiver.velocity = Vector2.RIGHT * 220.0
 	var receding: Vector2 = game._human_pass_aim_point(passer, receiver, 850.0)
 	var slower: Vector2 = game._human_pass_aim_point(passer, receiver, 560.0)
+	game.ball.global_position = start + Vector2(45.0, 0.0)
+	var closer_contact: Vector2 = game._human_pass_aim_point(passer, receiver, 850.0)
+	assert(closer_contact.distance_to(base) < receding.distance_to(base))
+	game.ball.global_position = start
 	receiver.velocity = Vector2.LEFT * 220.0
 	var approaching: Vector2 = game._human_pass_aim_point(passer, receiver, 850.0)
 	assert(receding.x > base.x and approaching.x < base.x)
@@ -135,8 +140,7 @@ func _initialize() -> void:
 	assert(game._human_pass_aim_point(passer, receiver, 850.0).is_equal_approx(base))
 	game.match_team_size = 11
 	receiver.velocity = Vector2.ZERO
-	print("FOOTBALL_XI_PASS_FORECAST_OK receding=", receding.distance_to(base),
-		" approaching=", approaching.distance_to(base), " slow=", slower.distance_to(base))
+	print("FOOTBALL_XI_PASS_FORECAST_OK receding=", receding.distance_to(base), " approaching=", approaching.distance_to(base), " slow=", slower.distance_to(base))
 
 	# Once targeting is no longer deliberate, the cue must not invent
 	# a named receiver. 5v5 keeps the historical bare meter name.

@@ -157,6 +157,7 @@ var xi_actor_models: Dictionary = {}
 # All XI athletes (including when optional R2 is unavailable) must use
 # their canonical local raster. No geometric proxy on the playing field.
 var player_run_views: Dictionary = {}
+var player_run_mirrors: Dictionary = {}
 # Keeper run/action poses tick independently in the visible 3D runtime.
 # Hidden authoritative 2D AnimatedSprite2D nodes are not a reliable clock.
 var keeper_visual_phases: Dictionary = {}
@@ -206,6 +207,9 @@ var _motion_v4_loaded: Dictionary = {}
 var _hero_v5_loaded: Dictionary = {}
 # Authored action replacement becomes active per-club only after full verification.
 var _pass_shoot_r2_loaded: Dictionary = {}
+var _dense_kick_loaded: Dictionary = {}
+var _dense_kick_pending: Dictionary = {}
+var _dense_diagonal_loaded: Dictionary = {}
 # Verified side-view carrier animations. Never alter the 2D ball or physics.
 var _carry_dribble_r2_loaded: Dictionary = {}
 # Independent v2 action sheet state: one verified replacement per club/action.
@@ -608,7 +612,7 @@ func _on_pass_shoot_ready(image: Image, team_id: int) -> void:
 
 
 func _apply_verified_pass_shoot_frames(textures: Array[Texture2D], team_id: int) -> void:
-	if _motion_v4_loaded.has("%d:pass_shoot" % team_id):
+	if _motion_v4_loaded.has("%d:pass_shoot" % team_id) or _dense_kick_loaded.has(team_id):
 		return
 	if team_id not in [0, 1] or textures.size() != 16:
 		return
@@ -633,6 +637,103 @@ func _apply_verified_pass_shoot_frames(textures: Array[Texture2D], team_id: int)
 				frames.set_frame(animation, index, textures[row * 8 + index])
 	_pass_shoot_r2_loaded[team_id] = true
 	tone_gain_cache.clear()
+
+
+# A bounded local console receipt, also in deployed Web builds. No telemetry,
+# user identifiers, URL parameters, or changes to the localhost CI bridge.
+func _dense_atlas_receipt(team_id: int, family: StringName, state: String, detail: String) -> void:
+	if OS.has_feature("web"):
+		print("FOOTBALL_ATLAS dense-v1 team=%d family=%s state=%s detail=%s" % [team_id, String(family), state, detail])
+
+
+func _on_dense_atlas_failed(reason: String, team_id: int, family: StringName) -> void:
+	_dense_atlas_receipt(team_id, family, "fallback", reason)
+
+
+# New immutable kick sheets: two requests per club, atomic installation.
+func _request_dense_kicks_from_r2() -> void:
+	if not OS.has_feature("web") or match_node.match_team_size != 11:
+		return
+	for team_id in range(2):
+		for action in ChessFootballDenseV1R2.ACTIONS:
+			var meta := ChessFootballDenseV1R2.sheet_meta(team_id, action)
+			if meta.is_empty():
+				_dense_atlas_receipt(team_id, action, "fallback", "metadata_rejected")
+				continue
+			var loader := ChessFootballR2AtlasLoader.new()
+			add_child(loader)
+			loader.atlas_ready.connect(_on_dense_kick_ready.bind(team_id, action))
+			loader.atlas_failed.connect(_on_dense_atlas_failed.bind(team_id, action))
+			_dense_atlas_receipt(team_id, action, "requested", "r2")
+			loader.start(meta, ChessFootballDenseV1R2.TRUSTED_ROOT, 30.0)
+
+
+func _on_dense_kick_ready(image: Image, team_id: int, action: StringName) -> void:
+	if team_id not in [0, 1] or action not in ChessFootballDenseV1R2.ACTIONS or _dense_kick_loaded.has(team_id):
+		return
+	var textures := ChessFootballDenseV1R2.frames_from_image(image)
+	if textures.size() != 16:
+		_dense_atlas_receipt(team_id, action, "fallback", "frame_validation_rejected")
+		return
+	_dense_atlas_receipt(team_id, action, "verified", "awaiting_atomic_pair")
+	var pending: Dictionary = _dense_kick_pending.get(team_id, {})
+	pending[action] = textures
+	_dense_kick_pending[team_id] = pending
+	if not pending.has(&"pass") or not pending.has(&"shoot"):
+		return
+	var targets: Array[SpriteFrames] = []
+	for player in match_node.teams[team_id]:
+		if player.role == "keeper":
+			continue
+		var driver := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
+		if driver == null or driver.sprite_frames == null:
+			_dense_atlas_receipt(team_id, &"pass_shoot", "fallback", "missing_driver")
+			return
+		for name in ChessFootballDenseV1R2.ACTIONS:
+			if not driver.sprite_frames.has_animation(name) or driver.sprite_frames.get_frame_count(name) not in [8, 16]:
+				_dense_atlas_receipt(team_id, &"pass_shoot", "fallback", "incompatible_bank")
+				return
+		targets.append(driver.sprite_frames)
+	if targets.size() != match_node.match_team_size - 1:
+		_dense_atlas_receipt(team_id, &"pass_shoot", "fallback", "incomplete_team")
+		return
+	for bank in targets:
+		for name in ChessFootballDenseV1R2.ACTIONS:
+			var count: int = bank.get_frame_count(name)
+			var fps: float = bank.get_animation_speed(name)
+			bank.clear(name)
+			bank.set_animation_loop(name, false)
+			bank.set_animation_speed(name, fps * 16.0 / float(count))
+			for texture: Texture2D in pending[name]:
+				bank.add_frame(name, texture)
+	# SpriteFrames.clear() resets the visible frame. Restore active kicks
+	# immediately from their authoritative action clock, not the old
+	# eight-pose index. Never restart or prolong a gameplay action.
+	for player: Footballer in match_node.teams[team_id]:
+		if player.role == "keeper" or player.action_lock_seconds <= 0.0:
+			continue
+		var id: int = player.get_instance_id()
+		var driver: AnimatedSprite3D = player_sprites[id]
+		var action_name: StringName = driver.animation
+		if action_name not in ChessFootballDenseV1R2.ACTIONS or player.action_visual_duration_seconds <= 0.0:
+			continue
+		var phase: float = xi_complete_action_phase(
+			16, player.action_visual_duration_seconds, player.action_lock_seconds)
+		outfield_visual_names[id] = action_name
+		outfield_visual_phases[id] = phase
+		driver.pause()
+		driver.frame = int(phase)
+	_dense_kick_loaded[team_id] = true
+	_dense_atlas_receipt(team_id, &"pass_shoot", "installed", "16_frames_each")
+	_dense_kick_pending.erase(team_id)
+	_pass_shoot_r2_loaded[team_id] = true
+	tone_gain_cache.clear()
+	body_scale_cache.clear()
+	if OS.has_feature("web") and _dense_kick_loaded.size() == 2:
+		JavaScriptBridge.eval(
+			"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) window.parent.postMessage({source:'chess-football-godot', type:'ci-dense-kicks-installed', team_size:11, sheets:4}, '*');",
+			true
+		)
 
 
 # Download at most one carry/dribble atlas per club, never one per actor.
@@ -777,7 +878,7 @@ func _apply_motion_v4_run(textures: Array[Texture2D], team_id: int) -> void:
 
 func _apply_motion_v4_pass_shoot(textures: Array[Texture2D], team_id: int) -> void:
 	var key := "%d:pass_shoot" % team_id
-	if team_id not in [0, 1] or _motion_v4_loaded.has(key) or textures.size() != 32:
+	if team_id not in [0, 1] or _motion_v4_loaded.has(key) or _dense_kick_loaded.has(team_id) or textures.size() != 32:
 		return
 	var targets: Array[SpriteFrames] = []
 	for player in match_node.teams[team_id]:
@@ -852,6 +953,8 @@ func _request_hero_v5_from_r2() -> void:
 		return
 	for team_id in range(2):
 		for family in ChessFootballHeroV5R2.FAMILIES:
+			if family == "locomotion":
+				_dense_atlas_receipt(team_id, &"run_front_diagonal", "pending", "waiting_for_v5_locomotion")
 			var meta := ChessFootballHeroV5R2.sheet_meta(team_id, family)
 			if OS.has_feature("web"):
 				JavaScriptBridge.eval(
@@ -861,6 +964,8 @@ func _request_hero_v5_from_r2() -> void:
 					true
 				)
 			if meta.is_empty():
+				if family == "locomotion":
+					_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_metadata_rejected")
 				continue
 			var loader := ChessFootballR2AtlasLoader.new()
 			loader.name = "HeroV5_%d_%s" % [team_id, family]
@@ -871,7 +976,9 @@ func _request_hero_v5_from_r2() -> void:
 
 
 func _on_hero_v5_failed(reason: String, team_id: int, family: String) -> void:
-	# Only the localhost CI probe receives diagnostics; staging stays silent.
+	if family == "locomotion":
+		_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_" + reason)
+	# Keep the detailed CI bridge restricted to localhost.
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval(
 			"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) console.warn('FOOTBALL_HERO_V5_FAILED_%d_%s:%s');" % [
@@ -896,23 +1003,38 @@ func _on_hero_v5_ready(image: Image, team_id: int, family: String) -> void:
 
 func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void:
 	var key := "%d:locomotion" % team_id
-	if team_id not in [0, 1] or match_node.match_team_size != 11 or _hero_v5_loaded.has(key) or textures.size() != 48:
+	if team_id not in [0, 1] or match_node.match_team_size != 11 or _hero_v5_loaded.has(key):
+		return
+	if textures.size() != 48:
+		_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_frame_validation_rejected")
 		return
 	var targets: Array[AnimatedSprite3D] = []
 	var names: Array[StringName] = [&"idle_front", &"run_front", &"sprint_front", &"run_front_diagonal", &"sprint_front_diagonal"]
+	var prior_cycles: Dictionary = {}
 	for player in match_node.teams[team_id]:
 		if player.role == "keeper":
 			continue
 		var sprite := player_sprites.get(player.get_instance_id()) as AnimatedSprite3D
 		if sprite == null or sprite.sprite_frames == null:
+			_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_missing_driver")
 			return
 		for name in names:
 			if not sprite.sprite_frames.has_animation(name):
+				_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_missing_animation")
 				return
 			if sprite.sprite_frames.get_frame_count(name) not in [1, 8, 12, 24]:
+				_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_unexpected_frame_count")
 				return
+		# Capture actual counts and fallback frame BEFORE clearing the bank.
+		# Async arrivals need not occur in the same order for every view.
+		if sprite.animation in names:
+			var id: int = player.get_instance_id()
+			var count: int = sprite.sprite_frames.get_frame_count(sprite.animation)
+			var phase: float = float(outfield_visual_phases.get(id, float(sprite.frame)))
+			prior_cycles[id] = fposmod(phase, float(count)) / float(count)
 		targets.append(sprite)
 	if targets.size() != match_node.match_team_size - 1:
+		_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "v5_incomplete_team")
 		return
 	# Preserve real gait cadence, currently playing phase, and all views not
 	# supplied by the new 3-row sheet (side, back, back-diagonal, keepers).
@@ -934,19 +1056,88 @@ func _apply_hero_v5_locomotion(textures: Array[Texture2D], team_id: int) -> void
 			continue
 		var id: int = player.get_instance_id()
 		var driver := player_sprites[id] as AnimatedSprite3D
-		if driver.animation in names:
-			var old_phase: float = float(outfield_visual_phases.get(id, float(driver.frame)))
-			var old_count: int = 8
-			# Phase is a normalized cycle clock, not a gameplay timer.
-			if driver.animation != &"idle_front":
-				old_count = 24 if _motion_v4_loaded.has("%d:run" % team_id) else (12 if _run_v3_r2_loaded.has(team_id) else 8)
-			var new_phase: float = fposmod(old_phase * 16.0 / float(old_count), 16.0)
+		if prior_cycles.has(id):
+			var new_phase: float = float(prior_cycles[id]) * 16.0
 			outfield_visual_phases[id] = new_phase
 			driver.frame = clampi(int(floorf(new_phase)), 0, 15)
 	_hero_v5_loaded[key] = true
 	_emit_hero_v5_ci_receipt()
 	body_scale_cache.clear()
 	tone_gain_cache.clear()
+	_request_dense_diagonal_from_r2(team_id)
+
+
+func _request_dense_diagonal_from_r2(team_id: int) -> void:
+	# Chain behind V5: the older loaders can no longer replace this
+	# direction, and no additional startup requests compete with V5.
+	if not OS.has_feature("web") or match_node.match_team_size != 11:
+		return
+	var meta := ChessFootballDenseV1R2.sheet_meta(team_id, &"run_front_diagonal")
+	if meta.is_empty():
+		_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "metadata_rejected")
+		return
+	var loader := ChessFootballR2AtlasLoader.new()
+	add_child(loader)
+	loader.atlas_ready.connect(_on_dense_diagonal_ready.bind(team_id))
+	loader.atlas_failed.connect(_on_dense_atlas_failed.bind(team_id, &"run_front_diagonal"))
+	_dense_atlas_receipt(team_id, &"run_front_diagonal", "requested", "r2")
+	loader.start(meta, ChessFootballDenseV1R2.TRUSTED_ROOT, 30.0)
+
+
+func _on_dense_diagonal_ready(image: Image, team_id: int) -> void:
+	if team_id not in [0, 1] or match_node.match_team_size != 11 or _dense_diagonal_loaded.has(team_id):
+		return
+	if not _hero_v5_loaded.has("%d:locomotion" % team_id):
+		return
+	var textures := ChessFootballDenseV1R2.frames_from_image(image, 24)
+	if textures.size() != 24:
+		_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "frame_validation_rejected")
+		return
+	_dense_atlas_receipt(team_id, &"run_front_diagonal", "verified", "24_frames")
+	var names: Array[StringName] = [&"run_front_diagonal", &"sprint_front_diagonal"]
+	var targets: Array[AnimatedSprite3D] = []
+	for athlete: Footballer in match_node.teams[team_id]:
+		if athlete.role == "keeper":
+			continue
+		var driver := player_sprites.get(athlete.get_instance_id()) as AnimatedSprite3D
+		if driver == null or driver.sprite_frames == null:
+			_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "missing_driver")
+			return
+		for name in names:
+			if not driver.sprite_frames.has_animation(name) or driver.sprite_frames.get_frame_count(name) != 16:
+				_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "incompatible_bank")
+				return
+		targets.append(driver)
+	if targets.size() != match_node.match_team_size - 1:
+		_dense_atlas_receipt(team_id, &"run_front_diagonal", "fallback", "incomplete_team")
+		return
+	for athlete: Footballer in match_node.teams[team_id]:
+		if athlete.role == "keeper":
+			continue
+		var id: int = athlete.get_instance_id()
+		var driver: AnimatedSprite3D = player_sprites[id]
+		var bank := driver.sprite_frames
+		var active: StringName = driver.animation
+		var phase: float = fposmod(float(outfield_visual_phases.get(id, float(driver.frame))), 16.0)
+		for name in names:
+			var fps: float = bank.get_animation_speed(name)
+			bank.clear(name)
+			bank.set_animation_loop(name, true)
+			bank.set_animation_speed(name, fps * 1.5)
+			for texture in textures:
+				bank.add_frame(name, texture)
+		if active in names:
+			outfield_visual_phases[id] = phase * 1.5
+			driver.frame = floori(phase * 1.5)
+	_dense_diagonal_loaded[team_id] = true
+	_dense_atlas_receipt(team_id, &"run_front_diagonal", "installed", "24_run_and_sprint_frames")
+	body_scale_cache.clear()
+	tone_gain_cache.clear()
+	if OS.has_feature("web") and _dense_diagonal_loaded.size() == 2:
+		JavaScriptBridge.eval(
+			"if (location.hostname === '127.0.0.1' && window.__chessFootballInputProbe === true) window.parent.postMessage({source:'chess-football-godot', type:'ci-dense-diagonal-installed', team_size:11, sheets:2}, '*');",
+			true
+		)
 
 
 func _apply_hero_v5_dribbles(textures: Array[Texture2D], team_id: int) -> void:
@@ -1038,7 +1229,9 @@ func _request_action_poses_from_r2() -> void:
 			loader.atlas_ready.connect(_on_action_pose_ready.bind(team_id, action))
 			loader.atlas_failed.connect(_on_action_pose_failed.bind(team_id, action))
 			_ci_action_pose_trace("request_start", team_id, action)
-			loader.start(meta, ChessFootballActionPosesR2.TRUSTED_ROOT)
+			# Eight concurrent action sheets share the slow software-WebGL
+			# startup with V5. Use the same bounded request allowance.
+			loader.start(meta, ChessFootballActionPosesR2.TRUSTED_ROOT, 30.0)
 
 
 func _on_action_pose_failed(reason: String, team_id: int, action: StringName) -> void:
@@ -1275,6 +1468,7 @@ func setup(p_match: Node) -> void:
 	_request_keeper_catch_atlases_from_r2()
 	_request_motion_v4_from_r2()
 	_request_hero_v5_from_r2()
+	_request_dense_kicks_from_r2()
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -2048,6 +2242,23 @@ static func xi_rotated_foot_anchor_offset(
 	return (rotated_up - Vector3.UP) * foot_extent
 
 
+# Camera-facing explicit basis with roll preserved. The up vector is
+# identical to the one used by xi_rotated_foot_anchor_offset, so the
+# authored boot baseline remains anchored when shader billboarding is off.
+static func xi_fallen_raster_basis(
+	view_camera: Camera3D, roll: float, body_scale: Vector3, tactical: bool
+) -> Basis:
+	var right_axis: Vector3 = view_camera.global_transform.basis.x.normalized()
+	var up_axis: Vector3 = view_camera.global_transform.basis.y.normalized() if tactical else Vector3.UP
+	if not tactical:
+		right_axis.y = 0.0
+		right_axis = right_axis.normalized()
+	var rolled_right: Vector3 = right_axis * cos(roll) + up_axis * sin(roll)
+	var rolled_up: Vector3 = up_axis * cos(roll) - right_axis * sin(roll)
+	var normal: Vector3 = right_axis.cross(up_axis).normalized()
+	return Basis(rolled_right * body_scale.x, rolled_up * body_scale.y, normal * body_scale.z)
+
+
 # Compatibility helper: zero-lean tactical stance uses the same anchor.
 static func xi_tactical_foot_anchor_offset(
 	view_camera: Camera3D, frame: Texture2D, pixel_size: float, scale_y: float
@@ -2800,8 +3011,22 @@ func sync_presentation(delta: float, mode: String) -> void:
 						player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),
 						0.0, 1.0
 					)
+					var base_mirror: bool = player.visual.flip_h
+					# The complete dribble window owns its authored contact
+					# orientation, including the directional lead-in/exit.
+					# Never mix the free-run mirror with that footwork.
+					if (
+						match_node.match_team_size == 11
+						and player.action_lock_seconds <= 0.0
+						and not player.dribble_active()
+						and (_keeper_locomotion(wanted_animation) or String(wanted_animation).begins_with("idle"))
+					):
+						base_mirror = ChessFootballRunDirection.mirror_for_velocity(
+							player.velocity, run_view, bool(player_run_mirrors.get(key, base_mirror))
+						)
+						player_run_mirrors[key] = base_mirror
 					sprite.flip_h = xi_feint_pivot_mirror(
-						player.visual.flip_h, match_node.match_team_size,
+						base_mirror, match_node.match_team_size,
 						run_view, player.role,
 						player.has_ball and match_node.ball.carrier == player,
 						player.dribble_active(), player.dribble_mode,
@@ -2869,8 +3094,13 @@ func sync_presentation(delta: float, mode: String) -> void:
 				# Broadcast uses a genuinely upright billboard; tactical
 				# faces the camera with a compensating 3D centre translation.
 				var tactical_billboard := mode == "tactical"
+				# Built-in billboard shaders rebuild the model basis and
+				# discard roll. During a knockdown use an explicit camera
+				# basis, so the visible raster really rotates with the pose.
+				var fallen_body: bool = player.xi_collision_down_seconds > 0.0
 				var wanted_billboard := (
-					BaseMaterial3D.BILLBOARD_ENABLED if tactical_billboard
+					BaseMaterial3D.BILLBOARD_DISABLED if fallen_body
+					else BaseMaterial3D.BILLBOARD_ENABLED if tactical_billboard
 					else BaseMaterial3D.BILLBOARD_FIXED_Y
 				)
 				if canvas.billboard_mode != wanted_billboard:
@@ -2885,10 +3115,15 @@ func sync_presentation(delta: float, mode: String) -> void:
 				var wanted_position := sprite.position + body_offset
 				if xi_quad.position != wanted_position:
 					xi_quad.position = wanted_position
-				if xi_quad.rotation != sprite.rotation:
-					xi_quad.rotation = sprite.rotation
-				if xi_quad.scale != sprite.scale:
-					xi_quad.scale = sprite.scale
+				if fallen_body:
+					xi_quad.basis = xi_fallen_raster_basis(
+						camera, sprite.rotation.z, sprite.scale, tactical_billboard
+					)
+				else:
+					if xi_quad.rotation != sprite.rotation:
+						xi_quad.rotation = sprite.rotation
+					if xi_quad.scale != sprite.scale:
+						xi_quad.scale = sprite.scale
 				if canvas.albedo_color != sprite.modulate:
 					canvas.albedo_color = sprite.modulate
 			# The existing secondary motion includes deliberate running bob,
@@ -3239,7 +3474,9 @@ static func xi_outfield_stride_advance(
 		return 0.0
 	var cycle_travel_px := 180.0 if sprinting else 168.0
 	var stride_fps := travel_speed * float(frame_count) / cycle_travel_px
-	return delta * minf(stride_fps, base_fps * 1.35)
+	# Match the off-ball visual clock: a slow renderer must not skip
+	# authored carrier stride poses either, especially with dense atlases.
+	return minf(delta * minf(stride_fps, base_fps * 1.35), 0.99)
 
 
 # Draw every original pass/shot pose in its actual lock window. For a
@@ -3386,6 +3623,17 @@ func _sync_visible_animation(
 	if previous != wanted or sprite.animation != wanted:
 		var keep_run_phase := _keeper_locomotion(previous) and _keeper_locomotion(wanted)
 		var keep_idle_phase := String(previous).begins_with("idle") and String(wanted).begins_with("idle")
+		if (
+			match_node.match_team_size == 11 and not is_keeper
+			and (keep_run_phase or keep_idle_phase)
+			and previous != wanted and frames.has_animation(previous)
+		):
+			# V5 front/diagonal poses and other authored directions can
+			# have different frame counts. Preserve fraction of the gait
+			# cycle, not the old raw frame index, when turning.
+			var previous_count: int = frames.get_frame_count(previous)
+			if previous_count > 0 and previous_count != count:
+				phase = fposmod(phase, float(previous_count)) * float(count) / float(previous_count)
 		if not keep_run_phase and not keep_idle_phase:
 			phase = 0.0
 			if not is_keeper and _keeper_locomotion(wanted):
@@ -4015,9 +4263,12 @@ func _sync_player_secondary_motion(
 		)
 		bob = -0.14 * flat
 		lateral_sway = player.contact_sway_sign * 0.08 * flat
-		stretch_x = lerpf(1.0, 1.24, flat)
-		stretch_y = lerpf(1.0, 0.58, flat)
-		tilt_degrees = player.contact_sway_sign * 78.0 * flat
+		# Keep the painted body readable: a fall is a roll, not a
+		# compression into a paper strip. Recovery still follows the
+		# exact collision timer, with no gameplay change.
+		stretch_x = lerpf(1.0, 1.04, flat)
+		stretch_y = lerpf(1.0, 0.96, flat)
+		tilt_degrees = -player.contact_sway_sign * 72.0 * flat
 
 	if player.contact_stun_active() and player.xi_collision_down_seconds <= 0.0:
 		var contact_weight := player.contact_stun_ratio()
@@ -4059,7 +4310,8 @@ func _sync_player_secondary_motion(
 	if (
 		match_node.match_team_size == 11 and player.role != "keeper"
 		and player.has_ball and player.dribble_active()
-		and animation_name not in ["dribble_cut", "dribble_burst"]
+		and player.xi_collision_down_seconds <= 0.0
+		and animation_name not in ["dribble_cut", "dribble_burst", "hero_feint", "hero_cut"]
 	):
 		var progress := 1.0 - clampf(
 			player.dribble_burst_seconds / maxf(player.dribble_duration_seconds, 0.001),

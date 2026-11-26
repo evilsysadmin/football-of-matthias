@@ -247,6 +247,8 @@ const AI_XI_NORMAL_FIRST_TOUCH_REACTION := 0.38
 # punching the ball loose on frame 2 while the attacker is still planted.
 # Shorter than Normal's first-touch read; no new state or physical buffs.
 const AI_XI_HARD_FIRST_TOUCH_READ := 0.22
+# Three 60 Hz frames from a CPU standing-tackle launch to first possible contact.
+const AI_XI_HARD_TACKLE_WINDUP_SECONDS := 0.045
 const AI_XI_EXPERT_FIRST_TOUCH_READ := 0.12
 # A NEW human E touch must be read even during an older possession.
 # This is CPU decision latency, not immunity: already-launched tackle
@@ -451,12 +453,12 @@ var xi_breakaway_owner: Footballer = null
 var xi_breakaway_runner: Footballer = null
 var xi_breakaway_target: Vector2 = Vector2.ZERO
 var xi_breakaway_until: float = 0.0
-# Cached only while the ball is loose; possession resets the assignments.
+# Independent caches for both teams, including loose-ball pursuit.
 var ai_primary_presser_cache: Array = [null, null]
 var ai_secondary_presser_cache: Array = [null, null]
-# Possession-scoped stability applies only to CPU XI Normal+, not the
-# existing loose-ball chase or human/5v5 defensive assignments.
+# XI Normal+ defensive roles persist only for the same opposing carrier.
 var ai_xi_defensive_role_owner: Footballer = null
+var ai_xi_human_defensive_role_owner: Footballer = null
 # Match-clock based to stay paused during overlays and never drift across F5.
 # A manual Q is authoritative for its grace window.
 var xi_human_auto_switch_block_until: float = 0.0
@@ -1058,6 +1060,7 @@ func _xi_pass_charge_receiver() -> Footballer:
 	if (
 		target == null or not is_instance_valid(target)
 		or target.sent_off or target == controlled
+		or target.xi_collision_down_seconds > 0.0
 		or target.team_id != controlled.team_id
 	):
 		return null
@@ -1457,7 +1460,8 @@ func _maybe_complete_one_two(receiver: Footballer) -> bool:
 	var return_point: Vector2 = _human_pass_aim_point(
 		receiver, passer, XI_ONE_TWO_RETURN_POWER
 	)
-	var direction: Vector2 = return_point - receiver.global_position
+	# A first-touch return starts at the actual contact, not the torso.
+	var direction: Vector2 = return_point - ball.global_position
 	if direction.length_squared() < 1.0:
 		_clear_one_two()
 		return false
@@ -1517,15 +1521,20 @@ func _release_charged_pass() -> bool:
 	if valid_target and directional:
 		var offset: Vector2 = target.global_position - passer.global_position
 		valid_target = (
-			offset.length_squared() > 0.001
+			(match_team_size != 11 or target.xi_collision_down_seconds <= 0.0)
+			and offset.length_squared() > 0.001
 			and aim_direction.normalized().dot(offset.normalized()) >= PASS_MIN_TARGET_ALIGNMENT
 		)
 	if valid_target:
-		release_direction = _human_pass_aim_point(passer, target, power) - passer.global_position
-		# Forecasting a run must never bend a directional pass outside
-		# the player's original aim cone.
-		if directional and release_direction.normalized().dot(aim_direction.normalized()) < PASS_MIN_TARGET_ALIGNMENT:
-			release_direction = target.global_position - passer.global_position
+		var origin: Vector2 = ball.global_position if match_team_size == 11 else passer.global_position
+		release_direction = _human_pass_aim_point(passer, target, power) - origin
+		# Forecasting a run may not override the player's directional intent.
+		# Use the real ball contact for both predicted and direct rays.
+		if match_team_size == 11 and directional and release_direction.normalized().dot(aim_direction.normalized()) < PASS_MIN_TARGET_ALIGNMENT:
+			release_direction = target.global_position - origin
+			if release_direction.normalized().dot(aim_direction.normalized()) < PASS_MIN_TARGET_ALIGNMENT:
+				valid_target = false
+				release_direction = aim_direction
 	if release_direction.length_squared() < 0.001:
 		release_direction = Vector2.RIGHT if passer.team_id == 0 else Vector2.LEFT
 	passer.play_action("pass", lerpf(0.58, 0.80, ratio))
@@ -1640,7 +1649,7 @@ func _update_ai(delta: float) -> void:
 	if (
 		match_team_size != 11
 		or ball.carrier == null
-		or ball.carrier.team_id != 1
+		or ball.carrier == controlled
 		or ai_xi_no_safe_pass_owner != ball.carrier
 	):
 		ai_xi_no_safe_pass_owner = null
@@ -1669,12 +1678,11 @@ func _update_ai(delta: float) -> void:
 		var loose_target: Vector2 = _ai_loose_ball_pursuit_point()
 		var presser: Footballer = _ai_primary_presser(team_id)
 		var cover: Footballer = _ai_secondary_presser(team_id, presser)
-		var lane_assignment: Dictionary = (
-			_ai_xi_lane_assignment(presser, cover)
-			if team_id == 1 else {}
-		)
+		var lane_assignment: Dictionary = _ai_xi_lane_assignment(presser, cover, team_id)
 		var lane_marker: Footballer = lane_assignment.get("marker")
-		var pass_receiver: Footballer = _ai_live_pass_receiver() if team_id == 1 else null
+		var pass_receiver: Footballer = _ai_live_pass_receiver()
+		if pass_receiver != null and pass_receiver.team_id != team_id:
+			pass_receiver = null
 		for player in teams[team_id]:
 			if player.sent_off:
 				continue
@@ -1708,6 +1716,11 @@ func _update_ai(delta: float) -> void:
 				elif player == cover:
 					target = _ai_cover_target(player, loose_target)
 					intensity = _ai_adaptive_intensity(AI_COVER_INTENSITY)
+				elif match_team_size == 11:
+					# Keep a shared transition shape while possession is
+					# undecided; the rest of the team follows the play
+					# without turning into extra ball-chasing pressers.
+					target = _ai_xi_loose_support_target(player, loose_target)
 			elif team_has_ball:
 				if ball.carrier == player:
 					target = _ai_dribble_target(player)
@@ -1755,6 +1768,7 @@ func _update_ai(delta: float) -> void:
 			if (
 				ball.carrier != player
 				and player != pending_human_pass_receiver
+				and not (team_id == 0 and player == pass_receiver)
 				and player != lane_marker
 				and (team_has_ball or (player != presser and not contesting_cover and not human_close_cover))
 			):
@@ -1786,7 +1800,7 @@ func _update_ai(delta: float) -> void:
 						_ai_xi_normal_tackle_read_due(ball.carrier, delta)
 						and _ai_xi_tackle_commit_ready(player, ball.carrier, false)
 					):
-						_try_tackle(player)
+						_try_tackle(player, false, true)
 				elif (
 					player == cover
 					and contesting_cover
@@ -1794,36 +1808,63 @@ func _update_ai(delta: float) -> void:
 						< TACKLE_ATTEMPT_RANGE * 0.72
 					and _ai_xi_tackle_commit_ready(player, ball.carrier, true)
 				):
-					_try_tackle(player)
+					_try_tackle(player, false, true)
 
-			if ball.carrier == player and team_id == 1 and _ai_decision_ready(player):
+			if ball.carrier == player and _ai_outfield_attack_allowed(player) and _ai_decision_ready(player):
 				_ai_attack(player)
+
+
+func _ai_outfield_attack_allowed(player: Footballer) -> bool:
+	if player == controlled or player.sent_off or player.role == "keeper":
+		return false
+	if player.team_id == 1:
+		return true
+	# Normal claims hand control to the human receiver. If the user
+	# deliberately selects another footballer, the unselected carrier
+	# can play autonomously after a brief physical first-touch window.
+	# Never kick during the requested wall or a dead-ball transition.
+	return (
+		match_team_size == 11
+		and ball.carrier == player
+		and player.xi_collision_down_seconds <= 0.0
+		and not kickoff_active and not goal_restart_active and not set_piece_active
+		and not pause_menu_open and not xi_one_two_armed
+		and ball.possession_seconds >= AI_XI_PASS_CLOSE_DELAY
+	)
 
 # One reachable *off-ball* defender guards the most plausible forward
 # pass; the presser and cover retain their existing jobs. Nothing is added
-# on Easy, 5v5, loose balls, CPU possession or an exhausted defence with
-# no credible marker. Assignment uses real positions; movement remains
-# normal CharacterBody2D movement and the ordinary CPU intensity.
+# on Easy, 5v5, loose balls or a defence with no credible marker.
+# Both teams use the same mirrored geometry. The controlled player
+# is never assigned; movement remains ordinary CharacterBody2D physics.
 func _ai_xi_lane_assignment(
-	presser: Footballer, cover: Footballer
+	presser: Footballer, cover: Footballer, defending_team: int = 1
 ) -> Dictionary:
 	if (
 		match_team_size != 11
 		or quick_difficulty == "easy"
 		or ball.carrier == null
-		or ball.carrier.team_id != 0
+		or ball.carrier.team_id == defending_team
 	):
 		return {}
 	var owner: Footballer = ball.carrier
+	var forward: float = 1.0 if owner.team_id == 0 else -1.0
+	var byline: bool = (
+		_xi_human_byline_attack() if owner.team_id == 0 else (
+			owner.global_position.x <= match_pitch.position.x + XI_BYLINE_ATTACK_DEPTH
+			and absf(owner.global_position.y - match_pitch.get_center().y) >= XI_BYLINE_ATTACK_WIDE
+		)
+	)
 	var best_marker: Footballer = null
 	var best_target := Vector2.ZERO
 	var best_receiver: Footballer = null
 	var best_score := INF
-	for receiver in teams[0]:
+	for receiver in teams[owner.team_id]:
 		if (
 			receiver == owner
 			or receiver.sent_off
 			or receiver.role == "keeper"
+			or receiver.xi_collision_down_seconds > 0.0
 		):
 			continue
 		var offset: Vector2 = receiver.global_position - owner.global_position
@@ -1831,13 +1872,13 @@ func _ai_xi_lane_assignment(
 		# spot. Read that actual receiver/corridor too, instead of letting
 		# all defenders ignore a perfectly visible dangerous cutback.
 		var cutback_lane: bool = (
-			_xi_human_byline_attack()
-			and receiver.global_position.x < owner.global_position.x - 75.0
+			byline
+			and offset.x * forward < -75.0
 			and absf(receiver.global_position.y - match_pitch.get_center().y) < 430.0
 			and offset.length() <= XI_BYLINE_PASS_MAX_DISTANCE
 		)
 		if not cutback_lane and (
-			offset.x < AI_XI_LANE_MIN_FORWARD
+			offset.x * forward < AI_XI_LANE_MIN_FORWARD
 			or offset.length() > AI_XI_LANE_MAX_PASS_LENGTH
 		):
 			continue
@@ -1845,7 +1886,7 @@ func _ai_xi_lane_assignment(
 		# rather than marking the ball again or chasing a distant winger.
 		var point: Vector2 = ChessFootballMath.clamp_to_pitch(
 			owner.global_position.lerp(receiver.global_position, 0.64)
-			+ Vector2(18.0, 0.0), match_pitch
+			+ Vector2(18.0 * forward, 0.0), match_pitch
 		)
 		if (
 			(presser != null and point.distance_to(presser.global_position)
@@ -1854,10 +1895,12 @@ func _ai_xi_lane_assignment(
 				< AI_XI_LANE_PRESS_SEPARATION)
 		):
 			continue
-		for defender in teams[1]:
+		for defender in teams[defending_team]:
 			if (
 				defender.sent_off
 				or defender.role == "keeper"
+				or defender == controlled
+				or defender.xi_collision_down_seconds > 0.0
 				or defender == presser
 				or defender == cover
 			):
@@ -1872,7 +1915,7 @@ func _ai_xi_lane_assignment(
 			# Prefer reachable lanes near assigned positions. Dangerous
 			# forward options win ties without sending the whole line chasing.
 			var score_value: float = (
-				arrival + home_drift * 0.18 - offset.x * 0.12
+				arrival + home_drift * 0.18 - offset.x * forward * 0.12
 			)
 			if score_value < best_score:
 				best_score = score_value
@@ -2089,6 +2132,16 @@ func _ai_loose_ball_pursuit_point() -> Vector2:
 	return ChessFootballMath.clamp_to_pitch(ball.global_position + lead, match_pitch)
 
 
+# Same bounded transition shape for both XI sides. A loose pass does
+# not send eight supporting players back to static kickoff positions.
+# Anchoring the offset at the formation slot prevents cumulative drift.
+func _ai_xi_loose_support_target(player: Footballer, pursuit_point: Vector2) -> Vector2:
+	if match_team_size != 11 or player.role == "keeper" or ball.carrier != null:
+		return player.home_position
+	var shift: Vector2 = ((pursuit_point - player.home_position) * 0.18).limit_length(180.0)
+	return ChessFootballMath.clamp_to_pitch(player.home_position + shift, match_pitch)
+
+
 func _ai_press_role_margin(nearest_distance: float) -> float:
 	# Do not defend a stale assignment when the ball is within tackle range.
 	return (
@@ -2105,20 +2158,24 @@ func _ai_stable_press_role(
 	cache: Array,
 ) -> Footballer:
 	var keep_xi_defensive_roles := (
-		team_id == 1
-		and match_team_size == 11
+		match_team_size == 11
 		and quick_difficulty != "easy"
 		and ball.carrier != null
-		and ball.carrier.team_id == 0
+		and ball.carrier.team_id != team_id
 	)
-	# Before looking up either role, expire BOTH slots if the carrier
-	# changes or the XI defensive phase ends. Never inherit a pairing
-	# from a prior possession, sent-off player or legacy 5v5 mode.
+	# Both sides use the same possession-scoped role stability. Expire
+	# only this team's slots when its opponent changes or possession ends.
 	var owner_for_roles: Footballer = ball.carrier if keep_xi_defensive_roles else null
-	if team_id == 1 and ai_xi_defensive_role_owner != owner_for_roles:
-		ai_primary_presser_cache[1] = null
-		ai_secondary_presser_cache[1] = null
-		ai_xi_defensive_role_owner = owner_for_roles
+	var previous_owner: Footballer = (
+		ai_xi_defensive_role_owner if team_id == 1 else ai_xi_human_defensive_role_owner
+	)
+	if previous_owner != owner_for_roles:
+		ai_primary_presser_cache[team_id] = null
+		ai_secondary_presser_cache[team_id] = null
+		if team_id == 1:
+			ai_xi_defensive_role_owner = owner_for_roles
+		else:
+			ai_xi_human_defensive_role_owner = owner_for_roles
 	var closest: Footballer = null
 	var closest_distance := INF
 	for player in teams[team_id]:
@@ -2137,9 +2194,8 @@ func _ai_stable_press_role(
 			closest_distance = distance
 			closest = player
 
-	# Possession still resets the old human/5v5/Easy chase assignment.
-	# Only the TWO XI CPU defenders can retain their current jobs while
-	# the same human carries the ball.
+	# Easy, 5v5 and own possession retain the nearest-player behavior.
+	# Only two available XI defenders keep their jobs for the same rival.
 	if ball.carrier != null and not keep_xi_defensive_roles:
 		cache[team_id] = null
 		return closest
@@ -2240,7 +2296,7 @@ func _ai_spaced_target(
 
 func _ai_cpu_second_press_active(player: Footballer, threat_position: Vector2) -> bool:
 	return (
-		player.team_id == 1
+		(match_team_size == 11 or player.team_id == 1)
 		and quick_difficulty != "easy"
 		and (
 			match_team_size != 11
@@ -2248,7 +2304,7 @@ func _ai_cpu_second_press_active(player: Footballer, threat_position: Vector2) -
 			or quick_difficulty == "expert"
 		)
 		and ball.carrier != null
-		and ball.carrier.team_id == 0
+		and ball.carrier.team_id != player.team_id
 		and player.global_position.distance_to(threat_position) <= (
 			AI_XI_SECOND_PRESS_ACTIVATION if match_team_size == 11
 			else AI_CPU_SECOND_PRESS_ACTIVATION
@@ -2285,22 +2341,26 @@ func _ai_xi_diagonal_cover_lead(player: Footballer, threat_position: Vector2) ->
 # Unlike the CPU's strategic cover, do not drift back toward a distant home
 # lane or get pushed away by teammate separation at the final challenge.
 # Outfielders who are neither the first nor second presser help seal nearby
-# midfield lanes when the CPU attacks OUR half. A smooth danger/proximity
+# midfield lanes when the opponent attacks their half. A smooth danger/proximity
 # blend prevents a formation snap on crossing midfield. The maximum extra
 # shift is only 17% of the existing home-to-carrier vector: this is NOT a
 # third chasing presser, a speed boost, or an automatic tackling permission.
 func _ai_xi_human_compact_target(player: Footballer, owner: Footballer) -> Vector2:
 	var ratio: float = AI_DEFENSIVE_SHIFT_RATIO
 	if (
-		match_team_size == 11 and player.team_id == 0
-		and owner != null and owner.team_id == 1
+		match_team_size == 11
+		and owner != null and owner.team_id != player.team_id
 		and ball.carrier == owner
 	):
+		# Reflect the same danger coordinate in the defending team's
+		# direction. Existing home-team geometry remains unchanged.
 		var centre_x: float = match_pitch.get_center().x
+		var defending_forward: float = 1.0 if player.team_id == 0 else -1.0
+		var relative_threat_x: float = (owner.global_position.x - centre_x) * defending_forward
 		var threat_weight: float = 1.0 - smoothstep(
-			centre_x + AI_XI_HUMAN_COMPACT_FULL_THREAT_X,
-			centre_x + AI_XI_HUMAN_COMPACT_NO_THREAT_X,
-			owner.global_position.x
+			AI_XI_HUMAN_COMPACT_FULL_THREAT_X,
+			AI_XI_HUMAN_COMPACT_NO_THREAT_X,
+			relative_threat_x
 		)
 		var home_distance: float = player.home_position.distance_to(owner.global_position)
 		var proximity_weight: float = 1.0 - smoothstep(
@@ -2438,7 +2498,7 @@ func _ai_dribble_target(player: Footballer) -> Vector2:
 	var ordinary_target: Vector2 = ChessFootballMath.clamp_to_pitch(target, match_pitch)
 	if (
 		match_team_size == 11
-		and player.team_id == 1
+		and player != controlled
 		and ball.carrier == player
 		and ai_xi_no_safe_pass_owner == player
 	):
@@ -2455,7 +2515,7 @@ func _ai_xi_no_pass_lane_clearance(player: Footballer, target: Vector2) -> float
 	if squared < 1.0:
 		return 0.0
 	var nearest: float = INF
-	for rival in teams[0]:
+	for rival in teams[1 - player.team_id]:
 		if rival.sent_off:
 			continue
 		var offset: Vector2 = rival.global_position - player.global_position
@@ -2469,8 +2529,9 @@ func _ai_xi_no_pass_lane_clearance(player: Footballer, target: Vector2) -> float
 
 func _ai_xi_no_pass_escape_target(player: Footballer, ordinary_target: Vector2) -> Vector2:
 	var origin: Vector2 = player.global_position
+	var forward: float = 1.0 if player.team_id == 0 else -1.0
 	var forward_target: Vector2 = ChessFootballMath.clamp_to_pitch(
-		origin + Vector2(-AI_XI_NO_PASS_ESCAPE_FORWARD, 0.0), match_pitch
+		origin + Vector2(forward * AI_XI_NO_PASS_ESCAPE_FORWARD, 0.0), match_pitch
 	)
 	var forward_clearance: float = _ai_xi_no_pass_lane_clearance(player, forward_target)
 	if forward_clearance >= AI_XI_NO_PASS_FORWARD_CLEARANCE:
@@ -2483,7 +2544,7 @@ func _ai_xi_no_pass_escape_target(player: Footballer, ordinary_target: Vector2) 
 	var retained_clearance: float = -INF
 	for side in [-1.0, 1.0]:
 		var candidate: Vector2 = origin + Vector2(
-			-AI_XI_NO_PASS_ESCAPE_FORWARD, side * AI_XI_NO_PASS_ESCAPE_LATERAL
+			forward * AI_XI_NO_PASS_ESCAPE_FORWARD, side * AI_XI_NO_PASS_ESCAPE_LATERAL
 		)
 		# Reject a diagonal across the touchline instead of clamping it
 		# into a stall on the boundary. Both options still advance upfield.
@@ -2541,6 +2602,7 @@ func _ai_xi_support_rank(player: Footballer) -> int:
 			if (
 				teammate == ball.carrier
 				or teammate.sent_off
+				or teammate.xi_collision_down_seconds > 0.0
 				or teammate.role == "keeper"
 				or teammate in chosen
 			):
@@ -2574,12 +2636,34 @@ func _ai_xi_support_rank(player: Footballer) -> int:
 
 # Exactly the leading short-triangle CPU runner may choose a genuinely
 # open diagonal receiving lane. Do not drag the rest of the 4-3-3 out of shape.
+func _ai_xi_project_defender(defender: Footballer) -> Vector2:
+	# Shared short-horizon observed-motion read, never an interception buff.
+	if (
+		defender.xi_collision_down_seconds > 0.0
+		or defender.velocity.length_squared() < AI_XI_HUMAN_LANE_READ_MIN_SPEED * AI_XI_HUMAN_LANE_READ_MIN_SPEED
+	):
+		return defender.global_position
+	return ChessFootballMath.clamp_to_pitch(
+		defender.global_position + (defender.velocity * AI_XI_HUMAN_LANE_READ_SECONDS).limit_length(
+			AI_XI_HUMAN_LANE_READ_MAX_DISTANCE
+		), match_pitch
+	)
+
+
 func _ai_xi_support_clearance(point: Vector2) -> float:
 	var nearest := INF
 	for defender in teams[0]:
 		if defender.sent_off:
 			continue
 		nearest = minf(nearest, defender.global_position.distance_to(point))
+		# Assess receiving space now AND shortly ahead. A marker moving
+		# away cannot magically clear an already occupied receiving spot.
+		var projected: Vector2 = _ai_xi_project_defender(defender)
+		if projected != defender.global_position:
+			var closest: Vector2 = Geometry2D.get_closest_point_to_segment(
+				point, defender.global_position, projected
+			)
+			nearest = minf(nearest, closest.distance_to(point))
 	return nearest
 
 
@@ -2807,12 +2891,17 @@ func _ai_xi_human_lane_clearance_from(
 			anticipate and rival.xi_collision_down_seconds <= 0.0
 			and rival.velocity.length_squared() >= AI_XI_HUMAN_LANE_READ_MIN_SPEED * AI_XI_HUMAN_LANE_READ_MIN_SPEED
 		):
-			var projected: Vector2 = ChessFootballMath.clamp_to_pitch(
-				position_now + (rival.velocity * AI_XI_HUMAN_LANE_READ_SECONDS).limit_length(
-					AI_XI_HUMAN_LANE_READ_MAX_DISTANCE
-				), match_pitch
-			)
+			var projected: Vector2 = _ai_xi_project_defender(rival)
 			clearance = minf(clearance, _ai_xi_lane_point_gap(projected, origin, corridor, length_sq, destination))
+			# The defender can cross the corridor BETWEEN the two observed
+			# endpoints. Check the bounded swept segment, excluding the same
+			# initial carrier-pressure zone as the point-gap calculation.
+			if clearance > 0.0 and length_sq >= 1.0:
+				var crossing = Geometry2D.segment_intersects_segment(
+					position_now, projected, origin + corridor * 0.16, destination
+				)
+				if crossing != null:
+					clearance = 0.0
 	return clearance
 
 
@@ -2929,6 +3018,37 @@ func _ai_xi_human_open_recycle_target(player: Footballer, base_target: Vector2) 
 	return base_target
 
 
+# A shared flank contract keeps the base passing triangle open.
+# The leading runner may still adjust its path to avoid actual markers.
+func _ai_xi_triangle_side(lead_home_y: float, carrier_y: float, rank: int) -> float:
+	var lead_side: float = 1.0 if lead_home_y >= carrier_y else -1.0
+	return lead_side if rank == 0 else -lead_side
+
+
+# Identical receiving geometry for a wide attack toward either goal.
+func _ai_xi_cutback_target(owner: Footballer, rank: int) -> Vector2:
+	var flank: float = 1.0 if owner.global_position.y >= match_pitch.get_center().y else -1.0
+	var depth: float = XI_BYLINE_SPOT_DEPTH if rank == 0 else XI_BYLINE_EDGE_DEPTH
+	return Vector2(
+		match_pitch.end.x - depth if owner.team_id == 0 else match_pitch.position.x + depth,
+		match_pitch.get_center().y + flank * (
+			XI_BYLINE_SPOT_CENTRE_OFFSET if rank == 0 else -XI_BYLINE_EDGE_CENTRE_OFFSET
+		)
+	)
+
+
+func _ai_xi_away_cutback_available(player: Footballer) -> bool:
+	return (
+		match_team_size == 11 and ball.carrier != null
+		and ball.carrier.team_id == 1 and player.team_id == 1
+		and not kickoff_active and not goal_restart_active and not set_piece_active
+		and player.role in ["midfielder", "wing", "forward"]
+		and player.global_position.distance_to(ball.carrier.global_position) <= XI_BYLINE_SUPPORT_REACH
+		and ball.carrier.global_position.x <= match_pitch.position.x + XI_BYLINE_ATTACK_DEPTH
+		and absf(ball.carrier.global_position.y - match_pitch.get_center().y) >= XI_BYLINE_ATTACK_WIDE
+	)
+
+
 func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false):
 	if ball.carrier == null:
 		return player.home_position
@@ -2939,19 +3059,7 @@ func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false
 			if player == xi_breakaway_runner and ball.carrier == xi_breakaway_owner:
 				return xi_breakaway_target
 			if _xi_human_byline_attack():
-				var flank: float = (
-					1.0 if ball.carrier.global_position.y >= match_pitch.get_center().y
-					else -1.0
-				)
-				var cutback: Vector2 = Vector2(
-					match_pitch.end.x - (
-						XI_BYLINE_SPOT_DEPTH if human_rank == 0 else XI_BYLINE_EDGE_DEPTH
-					),
-					match_pitch.get_center().y + flank * (
-						XI_BYLINE_SPOT_CENTRE_OFFSET if human_rank == 0
-						else -XI_BYLINE_EDGE_CENTRE_OFFSET
-					)
-				)
+				var cutback: Vector2 = _ai_xi_cutback_target(ball.carrier, human_rank)
 				return (
 					_ai_xi_human_open_support_target(player, cutback)
 					if human_rank == 0 else cutback
@@ -2961,10 +3069,7 @@ func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false
 				lead_outlet.home_position.y if lead_outlet != null
 				else player.home_position.y
 			)
-			var lead_side: float = (
-				1.0 if lead_home_y >= ball.carrier.global_position.y else -1.0
-			)
-			var side: float = lead_side if human_rank == 0 else -lead_side
+			var side: float = _ai_xi_triangle_side(lead_home_y, ball.carrier.global_position.y, human_rank)
 			var triangle: Vector2 = ChessFootballMath.clamp_to_pitch(
 				ball.carrier.global_position + Vector2(
 					AI_XI_HUMAN_SUPPORT_FORWARD if human_rank == 0
@@ -2984,8 +3089,15 @@ func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false
 	# the existing 4-3-3 lanes; they must run, never teleport, into support.
 	var rank := _ai_xi_support_rank(player)
 	if rank >= 0:
-		var primary_side := 1.0 if player.home_position.y >= ball.carrier.global_position.y else -1.0
-		var side := primary_side if rank == 0 else -primary_side
+		if _ai_xi_away_cutback_available(player):
+			ai_xi_support_lane_memory.erase(int(player.get_instance_id()))
+			return _ai_xi_cutback_target(ball.carrier, rank)
+		# Use the leading outlet's flank for BOTH slots, not the
+		# recycling player's own home lane. Opposite homes used to
+		# produce two targets on the same side of the carrier.
+		var lead: Footballer = ai_xi_support_rank_slots[0]
+		var lead_home_y: float = lead.home_position.y if lead != null else player.home_position.y
+		var side: float = _ai_xi_triangle_side(lead_home_y, ball.carrier.global_position.y, rank)
 		var triangle_target: Vector2 = ChessFootballMath.clamp_to_pitch(
 			ball.carrier.global_position + Vector2(
 				forward * (175.0 if rank == 0 else -145.0),
@@ -3274,6 +3386,7 @@ func _ai_live_pass_receiver() -> Footballer:
 		ai_intended_pass_receiver == null
 		or not is_instance_valid(ai_intended_pass_receiver)
 		or ai_intended_pass_receiver.sent_off
+		or (match_team_size == 11 and ai_intended_pass_receiver.xi_collision_down_seconds > 0.0)
 		or match_seconds > ai_intended_pass_until
 		or ball.carrier != null
 	):
@@ -3380,12 +3493,22 @@ func _ai_xi_should_wait_for_support(
 ) -> bool:
 	if (
 		match_team_size != 11
-		or player.team_id != 1
 		or ball.carrier != player
+		or player == controlled
+		or receiver == null or receiver == controlled
+		or receiver.team_id != player.team_id
+		or receiver.sent_off or receiver.xi_collision_down_seconds > 0.0
 		or pressure_distance < AI_XI_PASS_PRESSURE_RADIUS
 		or ball.possession_seconds >= AI_XI_SUPPORT_RUN_WAIT_MAX_SECONDS
-		or _ai_xi_support_rank(receiver) != 0
 	):
+		return false
+	# Both autonomous carriers can read their actual lead outlet.
+	# Manual passes never enter this decision path.
+	var rank: int = (
+		_ai_xi_support_rank(receiver) if player.team_id == 1
+		else _ai_xi_human_support_rank(receiver)
+	)
+	if rank != 0:
 		return false
 	var target: Vector2 = _ai_support_target(receiver)
 	var remaining: Vector2 = target - receiver.global_position
@@ -3533,10 +3656,12 @@ func _ai_attack(player: Footballer) -> void:
 
 	var target := _best_ai_pass_target(player)
 	if target == null:
-		if match_team_size == 11 and player.team_id == 1:
+		if match_team_size == 11 and player != controlled:
+			if ai_xi_no_safe_pass_owner != player:
+				ai_xi_no_pass_escape_side = 0.0
 			ai_xi_no_safe_pass_owner = player
 		return
-	if match_team_size == 11 and player.team_id == 1:
+	if match_team_size == 11:
 		ai_xi_no_safe_pass_owner = null
 		ai_xi_no_pass_escape_side = 0.0
 	var pass_destination: Vector2 = target.global_position
@@ -3549,17 +3674,13 @@ func _ai_attack(player: Footballer) -> void:
 	# an otherwise unproductive sideways/recycling pass.
 	var pressured := pressure_distance < (
 		AI_XI_PASS_CLOSE_PRESS_RADIUS
-		if match_team_size == 11 and player.team_id == 1
-		else (
-			AI_XI_PASS_PRESSURE_RADIUS
-			if match_team_size == 11 else _ai_adaptive_pressure_radius()
-		)
+		if match_team_size == 11 else _ai_adaptive_pressure_radius()
 	)
 	var useful_gain := forward_gain > (
 		AI_XI_PASS_FORWARD_GAIN if match_team_size == 11 else _ai_adaptive_forward_pass_gain()
 	)
 	if pressured or useful_gain:
-		if match_team_size == 11 and player.team_id == 1:
+		if match_team_size == 11:
 			var setup_seconds: float = _ai_xi_pass_setup_seconds(
 				player, pressure_distance, forward_gain
 			)
@@ -3589,7 +3710,12 @@ func _ai_attack(player: Footballer) -> void:
 			pass_power = clampf(190.0 + distance * 2.25, PASS_MIN_POWER, PASS_MAX_POWER)
 			ai_intended_pass_receiver = target
 			ai_intended_pass_until = match_seconds + AI_XI_PASS_RECEIVER_SECONDS
-		var kick_direction: Vector2 = pass_destination - player.global_position
+		# XI releases from the actual first-touch ball position, just as
+		# the manual charged pass does. Keep 5v5 and release errors intact.
+		var kick_origin: Vector2 = ball.global_position if match_team_size == 11 else player.global_position
+		var kick_direction: Vector2 = pass_destination - kick_origin
+		if kick_direction.length_squared() < 0.001:
+			kick_direction = Vector2.RIGHT if player.team_id == 0 else Vector2.LEFT
 		if match_team_size == 11 and player.team_id == 1:
 			# One release-time error: once kicked, the physical ball keeps
 			# its real trajectory. Do not modify target selection or teammates.
@@ -3638,6 +3764,8 @@ func _best_ai_pass_target(
 	var second_progress: float = 0.0
 	for teammate in teams[player.team_id]:
 		if teammate == player or teammate.sent_off or teammate.role == "keeper":
+			continue
+		if match_team_size == 11 and teammate.xi_collision_down_seconds > 0.0:
 			continue
 		var destination: Vector2 = teammate.global_position
 		if match_team_size == 11:
@@ -3702,10 +3830,11 @@ func _human_pass_aim_point(passer: Footballer, receiver: Footballer, power: floa
 		or receiver.velocity.length_squared() < XI_HUMAN_PASS_LEAD_MIN_SPEED * XI_HUMAN_PASS_LEAD_MIN_SPEED
 	):
 		return destination
-	# Estimate ground travel using the actual launch speed and friction.
-	# Only a conservative fraction of travel time is used to lead a
-	# runner. The existing assistance limits remain unchanged.
-	var speed: float = maxf(minf(power * passer.pass_power_multiplier(), ball.max_speed), 1.0)
+	# Match the ground-ball release speed and 60 Hz friction. Forecast a
+	# conservative fraction of travel time, not a magical intercept. The
+	# existing 300ms / 72-unit limits remain unchanged.
+	var origin: Vector2 = ball.global_position if ball.carrier == passer else passer.global_position
+	var speed: float = maxf(minf(power * passer.pass_power_multiplier(), ball.max_speed), 0.0)
 	var travelled: float = 0.0
 	var elapsed: float = 0.0
 	const STEP := 1.0 / 60.0
@@ -3715,16 +3844,14 @@ func _human_pass_aim_point(passer: Footballer, receiver: Footballer, power: floa
 		travelled += speed * STEP
 		var horizon: float = minf(XI_HUMAN_PASS_LEAD_SECONDS, elapsed * LEAD_FRACTION)
 		var projected: Vector2 = ChessFootballMath.clamp_to_pitch(
-			destination + (receiver.velocity * horizon).limit_length(XI_HUMAN_PASS_LEAD_DISTANCE),
-			match_pitch
-		)
-		if travelled >= passer.global_position.distance_to(projected):
+			destination + (receiver.velocity * horizon).limit_length(XI_HUMAN_PASS_LEAD_DISTANCE), match_pitch)
+		if travelled >= origin.distance_to(projected):
 			return projected
 		speed *= ball.fast_ball_friction if speed >= FootballBall.FAST_BALL_THRESHOLD else ball.friction
+		if speed < 4.0:
+			speed = 0.0
 	return ChessFootballMath.clamp_to_pitch(
-		destination + (receiver.velocity * XI_HUMAN_PASS_LEAD_SECONDS).limit_length(XI_HUMAN_PASS_LEAD_DISTANCE),
-		match_pitch
-	)
+		destination + (receiver.velocity * XI_HUMAN_PASS_LEAD_SECONDS).limit_length(XI_HUMAN_PASS_LEAD_DISTANCE), match_pitch)
 
 
 func _best_directional_pass_target(
@@ -3748,6 +3875,10 @@ func _best_directional_pass_target(
 	var incumbent_score := -INF
 	for teammate in teams[player.team_id]:
 		if teammate.sent_off or teammate == player:
+			continue
+		# A fallen athlete cannot currently receive a ball. Do not let
+		# recipient hysteresis keep an unavailable directional outlet.
+		if xi_charged and teammate.xi_collision_down_seconds > 0.0:
 			continue
 		var offset: Vector2 = teammate.global_position - player.global_position
 		var distance := offset.length()
@@ -3963,8 +4094,13 @@ func _ai_xi_tackle_commit_ready(
 			and ball.possession_seconds < AI_XI_NORMAL_FIRST_TOUCH_REACTION
 		):
 			return false
-	if match_team_size != 11 or tackler.team_id != 1 or quick_difficulty == "easy":
+	# Both XI teams' autonomous defenders must see actual legal contact
+	# before committing. Manual tackles do not call this decision gate.
+	# Easy and legacy 5v5 keep their original timing/behavior.
+	if match_team_size != 11 or quick_difficulty == "easy":
 		return true
+	if tackler.team_id == 0 and is_cover and not _ai_cpu_second_press_active(tackler, victim.global_position):
+		return false
 	# Hard used to commit at 2-3 physical frames into the touch; the human
 	# could reclaim the glancing deflection well before a duel was over.
 	# See the dribbler's actual first plant before choosing a real hitbox,
@@ -3979,7 +4115,7 @@ func _ai_xi_tackle_commit_ready(
 			return false
 	if (
 		ball.carrier != victim
-		or victim.team_id != 0
+		or victim.team_id == tackler.team_id
 		or tackler.sent_off
 		or not tackler.can_tackle()
 		or tackler.global_position.distance_to(victim.global_position)
@@ -4067,7 +4203,18 @@ func _xi_contextual_cut_direction(player: Footballer, requested: Vector2) -> Vec
 		for rival in teams[1 - player.team_id]:
 			if rival.sent_off:
 				continue
-			clearance = minf(clearance, aim.distance_to(rival.global_position))
+			# A free destination does not make a cut safe if the runner
+			# must cross a defender on the way there. Sample the planted
+			# entry and lateral exit, including observed rival movement.
+			for progress: float in [0.35, 0.65, 1.0]:
+				var point: Vector2 = player.global_position.lerp(aim, progress)
+				var rival_position: Vector2 = rival.global_position
+				clearance = minf(clearance, point.distance_to(rival_position))
+				if rival.xi_collision_down_seconds <= 0.0:
+					var forecast: Vector2 = rival_position + (
+						rival.velocity * (0.30 * progress)
+					).limit_length(80.0)
+					clearance = minf(clearance, point.distance_to(forecast))
 		# If both lanes are equally clear, make the natural inward cut.
 		var score: float = clearance - absf(aim.y - match_pitch.get_center().y) * 0.08
 		if score > best_score:
@@ -4321,7 +4468,7 @@ func _handle_contextual_special(direction: Vector2) -> void:
 			_queue_xi_human_tackle(controlled, direction, true)
 
 
-func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
+func _try_tackle(tackler: Footballer, aggressive: bool = false, automatic: bool = false) -> bool:
 	if ball.carrier == null or ball.carrier == tackler:
 		return false
 	var victim: Footballer = ball.carrier
@@ -4333,7 +4480,18 @@ func _try_tackle(tackler: Footballer, aggressive: bool = false) -> bool:
 		return false
 
 	var hitbox := _tackle_hitbox(tackler, _tackle_contact_target(victim), aggressive)
-	if not tackler.start_tackle(aggressive):
+	# Scope the experimental preparation beat to the moving cut/exit.
+	# A planted feint already has a separate read/response contract.
+	# Preserve that contract, ordinary running, F and manual tackles.
+	var windup: float = (
+		AI_XI_HARD_TACKLE_WINDUP_SECONDS
+		if automatic and match_team_size == 11 and quick_difficulty == "hard"
+		and tackler.team_id == 1 and victim.team_id == 0 and not aggressive
+		and victim.dribble_mode == "cut"
+		and (victim.dribble_active() or victim.xi_cut_exit_run_seconds > 0.0)
+		else 0.0
+	)
+	if not tackler.start_tackle(aggressive, windup):
 		return false
 	if tackler == controlled and match_team_size == 11:
 		_show_action_feedback("SEGADA" if aggressive else "ENTRADA")
@@ -4347,6 +4505,10 @@ func _resolve_tackle_contact(
 	hitbox: Dictionary = {},
 ) -> bool:
 	if not tackler.tackle_active() or ball.carrier != victim:
+		return false
+	# Do not resolve the launch-frame hitbox: after the preparation beat
+	# _update_active_tackle_contacts samples the LIVE geometry again.
+	if tackler.tackle_contact_delay_seconds > 0.0:
 		return false
 	if victim.team_id == tackler.team_id:
 		return false
@@ -4585,7 +4747,7 @@ func _try_claim_loose_ball() -> void:
 			return
 		best = home if home_score < away_score else away
 	if best != null:
-		ball.attach_to(best)
+		ball.attach_to(best, match_team_size == 11)
 		if best.team_id == 0:
 			if not _maybe_complete_one_two(best):
 				_select_player(best)
@@ -4770,6 +4932,9 @@ func _select_player(player: Footballer) -> void:
 		controlled.set_active(false)
 	controlled = player
 	controlled.set_active(true)
+	if ai_xi_no_safe_pass_owner == controlled:
+		ai_xi_no_safe_pass_owner = null
+		ai_xi_no_pass_escape_side = 0.0
 
 func _resolve_goal_frame_collision(
 	previous_position: Vector2,

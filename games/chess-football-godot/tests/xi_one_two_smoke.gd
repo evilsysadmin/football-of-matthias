@@ -95,9 +95,10 @@ func _initialize() -> void:
 	# Without a second Space, the ordinary first touch retains the ball
 	# and transfers human control to its real receiver. No automatic walls.
 	game._select_player(passer)
-	game.ball.attach_to(passer)
+	# Reset motion before placing the ball: the XI anchor depends on velocity.
 	passer.velocity = Vector2.ZERO
 	receiver.velocity = Vector2.ZERO
+	game.ball.attach_to(passer)
 	assert(game._begin_directional_pass_charge(Vector2.RIGHT))
 	assert(game.pass_target == receiver)
 	game.pass_charge_seconds = 0.11
@@ -236,6 +237,7 @@ func _initialize() -> void:
 	passer.xi_collision_down_seconds = 0.0
 	print("FOOTBALL_XI_ONE_TWO_FALL_OK receiver_keeps_ball=true")
 
+	_first_touch_continuity(game, passer, receiver, interceptor)
 	print("FOOTBALL_XI_ONE_TWO_OK real_pass=true deliberate_input=true physical_return=true normal_pass=true interceptable=true cancel=true")
 	# A fresh match exercises the production tick ordering with all 22
 	# players available. Only the initial positions and first charged pass
@@ -244,7 +246,135 @@ func _initialize() -> void:
 	game.queue_free()
 	await process_frame
 	await _live_wall(scene)
+	await process_frame
+	await _autonomous_teammate(scene)
 	quit(0)
+
+
+func _autonomous_teammate(scene: PackedScene) -> void:
+	var game = scene.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	game._set_quick_difficulty("normal")
+	var centre: Vector2 = game.match_pitch.get_center()
+	for team in game.teams:
+		for player: Footballer in team:
+			player.velocity = Vector2.ZERO
+			player.global_position = centre + Vector2(
+				-1200.0 if player.team_id == 0 else 1200.0,
+				-900.0 + float(player.squad_index) * 160.0
+			)
+	var owner: Footballer = game.teams[0][3]
+	var receiver: Footballer = game.teams[0][6]
+	var manual: Footballer = game.teams[0][8]
+	owner.global_position = centre
+	receiver.global_position = centre + Vector2(310.0, 0.0)
+	game._select_player(owner)
+	game.ball.attach_to(owner)
+	game.ball.tick_ball(0.8)
+	game._update_ai(0.0)
+	assert(game.ball.carrier == owner, "AI may not kick for the selected human")
+	game._select_player(manual)
+	game.ball.attach_to(owner)
+	game._update_ai(0.0)
+	assert(game.ball.carrier == owner, "Fresh first touch is not an automatic kick")
+	game.ball.tick_ball(0.8)
+	assert(game._best_ai_pass_target(owner) == receiver)
+	# Exercise an off-centre first touch. An exact home autonomous pass
+	# must point from the actual ball, not the carrier's body centre.
+	game.ball.global_position = owner.global_position + Vector2(18.0, 27.0)
+	var contact: Vector2 = game.ball.global_position
+	var destination: Vector2 = game._ai_xi_pass_aim_point(owner, receiver)
+	game._update_ai(0.0)
+	assert(game.ball.carrier == null and not game.ball.last_release_was_shot)
+	assert(game.ai_intended_pass_receiver == receiver and game.controlled == manual)
+	assert(game.ball.velocity.dot(receiver.global_position - owner.global_position) > 0.0)
+	assert(game.ball.global_position.is_equal_approx(contact))
+	assert(game.ball.velocity.normalized().is_equal_approx(contact.direction_to(destination)),
+		"Autonomous XI passes must release along the real contact-to-outlet ray")
+	print("FOOTBALL_XI_AUTONOMOUS_CONTACT_AIM_OK actual_origin=true manual_unchanged=true")
+	game._update_ai(0.0)
+	assert(receiver.ai_target.distance_to(game._ai_loose_ball_pursuit_point()) < 0.1)
+	# Explicitly select the owner again: even an aged, clear possession
+	# must not authorize AI to execute the human's next action.
+	game._select_player(owner)
+	game.ball.attach_to(owner)
+	game.ball.tick_ball(1.0)
+	game._update_ai(0.0)
+	assert(game.ball.carrier == owner and game.controlled == owner)
+	print("FOOTBALL_XI_AUTONOMOUS_TEAMMATE_OK real_pass=true receiver_chase=true manual_excluded=true fresh_touch_protected=true")
+	# An autonomous carrier can wait for a genuine lead runner, just
+	# like the opposing AI. Pressure, timeout and manual control win.
+	game._select_player(manual)
+	game.ball.attach_to(owner)
+	receiver.global_position = centre + Vector2(0.0, 100.0)
+	receiver.velocity = Vector2.ZERO
+	assert(game._ai_xi_human_support_rank(receiver) == 0)
+	var outlet: Vector2 = game._ai_support_target(receiver)
+	assert(outlet.distance_to(receiver.global_position) > game.AI_XI_SUPPORT_RUN_WAIT_DISTANCE)
+	receiver.velocity = receiver.global_position.direction_to(outlet) * 150.0
+	game.ball.tick_ball(0.4)
+	assert(game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 100.0))
+	receiver.velocity *= -1.0
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	receiver.velocity *= -1.0
+	receiver.xi_collision_down_seconds = 0.5
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	receiver.xi_collision_down_seconds = 0.0
+	game._select_player(receiver)
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	game._select_player(owner)
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	game._select_player(manual)
+	game.ball.tick_ball(1.0)
+	assert(not game._ai_xi_should_wait_for_support(owner, receiver, 400.0))
+	print("FOOTBALL_XI_SHARED_SUPPORT_WAIT_OK runner=true pressure_cancel=true timeout=true manual_excluded=true")
+	# No safe pass and a blocked forward corridor: the autonomous home
+	# carrier must reuse the mirrored diagonal escape, not run into traffic.
+	for teammate: Footballer in game.teams[0]:
+		if teammate != owner:
+			teammate.global_position = centre + Vector2(-1200.0, 800.0)
+			teammate.velocity = Vector2.ZERO
+	for rival: Footballer in game.teams[1]:
+		rival.global_position = centre + Vector2(1200.0, 800.0)
+		rival.velocity = Vector2.ZERO
+	var blocker: Footballer = game.teams[1][4]
+	owner.global_position = centre
+	owner.velocity = Vector2.ZERO
+	blocker.global_position = centre + Vector2(140.0, 0.0)
+	game.ball.attach_to(owner)
+	assert(game._best_ai_pass_target(owner) == null)
+	game._ai_attack(owner)
+	assert(game.ball.carrier == owner and game.ai_xi_no_safe_pass_owner == owner)
+	var escape: Vector2 = game._ai_dribble_target(owner)
+	assert(escape.x > centre.x + 140.0 and absf(escape.y - centre.y) >= 160.0)
+	assert(game.match_pitch.has_point(escape))
+	var side: float = game.ai_xi_no_pass_escape_side
+	blocker.global_position.y += 9.0
+	assert(signf(game._ai_dribble_target(owner).y - centre.y) == side)
+	# A manual takeover discards the plan synchronously.
+	game._select_player(owner)
+	assert(game.ai_xi_no_safe_pass_owner == null and game.ai_xi_no_pass_escape_side == 0.0)
+	game._select_player(manual)
+	game._ai_attack(owner)
+	assert(game.ai_xi_no_safe_pass_owner == owner)
+	# When a real outlet returns, retire the old run even during setup.
+	blocker.global_position = centre + Vector2(1200.0, 800.0)
+	receiver.global_position = centre + Vector2(310.0, 0.0)
+	receiver.velocity = Vector2.ZERO
+	assert(game._best_ai_pass_target(owner) == receiver)
+	game._ai_attack(owner)
+	assert(game.ai_xi_no_safe_pass_owner == null and game.ai_xi_no_pass_escape_side == 0.0)
+	print("FOOTBALL_XI_SHARED_ESCAPE_OK mirrored=true stable=true manual_reset=true outlet_reset=true")
+	game.queue_free()
 
 
 func _live_wall(scene: PackedScene) -> void:
@@ -304,3 +434,72 @@ func _live_wall(scene: PackedScene) -> void:
 	print("FOOTBALL_XI_ONE_TWO_LIVE_OK passer_travel=", passer.global_position.distance_to(start),
 		" rival_travel=", rival.global_position.distance_to(rival_start), " real_return=true")
 	game.queue_free()
+
+
+# A legal incoming ball must retain its exact world position when claimed.
+# Exercise the production claim path, not a direct test-only pickup.
+func _first_touch_continuity(game, passer: Footballer, receiver: Footballer, rival: Footballer) -> void:
+	game._clear_one_two()
+	var centre: Vector2 = game.match_pitch.get_center()
+	for team in game.teams:
+		for player: Footballer in team:
+			player.velocity = Vector2.ZERO
+			player.global_position = centre + Vector2(
+				500.0 if player.team_id == 0 else -500.0,
+				100.0 + float(player.squad_index) * 50.0
+			)
+	receiver.global_position = centre
+	for motion: Vector2 in [Vector2.ZERO, Vector2.LEFT, Vector2.UP, Vector2.RIGHT]:
+		game.ball.attach_to(passer)
+		game.ball.release(Vector2.RIGHT, 400.0)
+		receiver.velocity = motion * receiver.base_speed
+		var contact: Vector2 = centre + Vector2(-24.0, 0.0)
+		game.ball.global_position = contact
+		game._try_claim_loose_ball()
+		assert(game.ball.carrier == receiver and game.controlled == receiver)
+		assert(game.ball.global_position.is_equal_approx(contact), "XI claim must not snap to boot")
+		assert(game.ball.velocity == Vector2.ZERO and game.ball.possession_seconds == 0.0)
+		# An immediate kick originates at the actual contact point.
+		if motion != Vector2.ZERO:
+			assert(game._begin_pass_charge(passer))
+			game.pass_charge_seconds = 0.11
+			assert(game._release_charged_pass())
+			assert(game.ball.global_position.is_equal_approx(contact))
+			var expected_direction: Vector2 = (passer.global_position - contact).normalized()
+			assert(game.ball.velocity.normalized().is_equal_approx(expected_direction),
+				"Targeted first-touch pass must aim from actual contact")
+		else:
+			var target: Vector2 = centre + receiver.ball_anchor()
+			var initial_error := contact.distance_to(target)
+			game.ball.tick_ball(STEP)
+			assert(game.ball.global_position.distance_to(target) < initial_error)
+			assert(not game.ball.global_position.is_equal_approx(target))
+			for tick in range(12):
+				game.ball.tick_ball(STEP)
+			assert(game.ball.global_position.distance_to(target) < 1.0)
+			assert(game.ball.carrier == receiver)
+	# Equal opposing contact remains loose; preserving position cannot grant
+	# priority to the intended receiver or to a particular team.
+	game.ball.attach_to(passer)
+	game.ball.release(Vector2.RIGHT, 400.0)
+	receiver.velocity = Vector2.ZERO
+	rival.velocity = Vector2.ZERO
+	rival.global_position = centre + Vector2(0.0, 40.0)
+	game.ball.global_position = centre + Vector2(0.0, 20.0)
+	game._try_claim_loose_ball()
+	assert(game.ball.carrier == null)
+	rival.global_position = centre + Vector2(500.0, 0.0)
+	game._try_claim_loose_ball()
+	assert(game.ball.carrier == receiver)
+	# Explicit placement/restart, keeper catch and legacy 5v5 still snap.
+	game.ball.attach_to(receiver)
+	assert(game.ball.global_position.is_equal_approx(centre + receiver.ball_anchor()))
+	var keeper: Footballer = game.teams[0][0]
+	game.ball.attach_to(keeper, true)
+	assert(game.ball.global_position.is_equal_approx(keeper.global_position + keeper.ball_anchor()))
+	var pitch: Rect2 = receiver.match_pitch
+	receiver.match_pitch = ChessFootballMath.PITCH_RECT
+	game.ball.attach_to(receiver, true)
+	assert(game.ball.global_position.is_equal_approx(centre + receiver.ball_anchor()))
+	receiver.match_pitch = pitch
+	print("FOOTBALL_XI_FIRST_TOUCH_CONTINUITY_OK four_headings=true tie=true immediate_release=true legacy=true")

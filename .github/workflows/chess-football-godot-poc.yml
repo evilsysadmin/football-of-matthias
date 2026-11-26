@@ -84,6 +84,8 @@ jobs:
         run: python3 scripts/check_football_idle_r2.py
       - name: Verify R2 pass/shoot objects and staging CORS (fail closed)
         run: python3 scripts/check_football_pass_shoot_r2.py
+      - name: Verify six published dense V1 WebPs (HTTP CORS SHA geometry)
+        run: python3 scripts/check_football_dense_v1_r2.py
       - name: Verify R2 carry/dribble objects and staging CORS (fail closed)
         run: python3 scripts/check_football_carry_dribble_r2.py
       # Probe the NEW canonical-style v2 candidates independently. v1 is
@@ -102,6 +104,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/football-art-venv"
           "$RUNNER_TEMP/football-art-venv/bin/python" -m pip install --disable-pip-version-check --no-deps Pillow==12.0.0
           "$RUNNER_TEMP/football-art-venv/bin/python" -m unittest discover -s scripts -p 'test_football_directional_art_gate.py' -v
+          "$RUNNER_TEMP/football-art-venv/bin/python" -m unittest discover -s scripts -p 'test_football_dense_diagonal_gate.py' -v
           "$RUNNER_TEMP/football-art-venv/bin/python" scripts/football_directional_art_gate.py references \
             --source-dir "$RUNNER_TEMP" \
             --output-dir "$RUNNER_TEMP/chess-football-review"
@@ -1160,6 +1163,23 @@ jobs:
             exit 1
           fi
           grep -q 'football optional R2 pass/shoot sheets, atomic frames and fallback: OK' "$log"
+      - name: Install verified dense V1 kick banks in real XI scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot"
+          log="$RUNNER_TEMP/football-dense-kicks.log"
+          # Four 156-tick physical runs exceed the old 420-render-frame
+          # process limit. Let the script quit explicitly; wall timeout
+          # and all completion markers still fail closed.
+          timeout 55s "$godot" --headless --path games/chess-football-godot --script res://tests/dense_kicks_r2_smoke.gd 2>&1 | tee "$log"
+          if grep -Eq 'SCRIPT ERROR:|Assertion failed|Parse Error:|Failed to load script' "$log"; then exit 1; fi
+          grep -q 'FOOTBALL_DENSE_KICKS_NATIVE_OK' "$log"
+          grep -q 'FOOTBALL_DENSE_DIAGONAL_NATIVE_OK' "$log"
+          for club in 0 1; do
+            grep -q "^FOOTBALL_DENSE_DIAGONAL_LIVE_OK club=$club carrier=true fps=60 frames=24$" "$log"
+            grep -q "^FOOTBALL_DENSE_DIAGONAL_LIVE_OK club=$club carrier=false fps=15 frames=24$" "$log"
+          done
       - name: Optional R2 carry/dribble visual-only state and fallback contract
         shell: bash
         run: |
@@ -1465,7 +1485,7 @@ jobs:
           log="$RUNNER_TEMP/football-pass-shoot-r2-visual.log"
           export FOOTBALL_PASS_SHOOT_PREVIEW_DIR="$RUNNER_TEMP/football-pass-shoot-r2"
           set +e
-          timeout 85s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/pass_shoot_r2_visual.gd 2>&1 | tee "$log"
+          timeout 150s xvfb-run -a "$godot" --windowed --resolution 1280x720 --path games/chess-football-godot --script res://tests/pass_shoot_r2_visual.gd 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           for mode in broadcast tactical; do
@@ -1489,6 +1509,11 @@ jobs:
           fi
           grep -q 'FOOTBALL_PASS_SHOOT_REAL_GODOT_REVIEW_OK teams=2 actions=2 phases=3 cameras=2' "$log"
           test "$(grep -c '^FOOTBALL_XI_ACTION_TIMELINE_OK team=' "$log")" -eq 4
+          grep -q 'FOOTBALL_DENSE_KICKS_VISUAL_OK teams=2 actions=2 frames=16' "$log"
+          test "$(grep -c '^FOOTBALL_DENSE_ACTION_TIMELINE_OK team=.*frames=16' "$log")" -eq 4
+          dense="$(sed -n 's/^FOOTBALL_PASS_SHOOT_CAPTURE_DENSE_TIMELINE_BROADCAST=//p' "$log" | tail -1)"
+          test -n "$dense" && test -s "$dense"
+          cp "$dense" "$RUNNER_TEMP/chess-football-review/dense-kicks-timeline-broadcast.png"
           test -s "$RUNNER_TEMP/chess-football-review/pass-shoot-timeline-broadcast.png"
           for mode in broadcast tactical; do
             for phase in before after; do
@@ -2086,8 +2111,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Restore shared npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: football-manager-npm-${{ runner.os }}-${{ runner.arch }}-npm11.6.1-${{ hashFiles('package.json', 'frontend/package.json') }}
       - name: Install with pinned npm workspace resolver
         run: npx --yes npm@11.6.1 install --no-audit --no-fund
+      - name: Restore shared Chromium browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: football-manager-chromium-${{ runner.os }}-${{ runner.arch }}-playwright-1.64.1
       - run: npx playwright install chromium
       - name: Boot real WebAssembly in Chromium
         # The Godot Web app runs from 127.0.0.1 with a random test port.
