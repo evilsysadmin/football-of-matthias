@@ -78,6 +78,8 @@ const LOCOMOTION_CROSSFADE_SECONDS := 0.10
 const ACTION_CROSSFADE_SECONDS := 0.08
 var visual_crossfade_seconds: float = 0.0
 var visual_crossfade_total: float = 0.0
+## Shared physical plant and Dense presenter recovery window for XI passes.
+const XI_PASS_PLANT_SECONDS := 0.25
 var action_lock_seconds: float = 0.0
 # Visual duration is the original action's requested lock. The 11v11
 # presenter needs it to display every *authored* pass/shot pose even when
@@ -233,6 +235,11 @@ func _process(delta: float) -> void:
 	xi_collision_guard_seconds = maxf(0.0, xi_collision_guard_seconds - delta)
 	keeper_hold_seconds = maxf(0.0, keeper_hold_seconds - delta)
 	keeper_save_seconds = maxf(0.0, keeper_save_seconds - delta)
+	advance_action_clock(delta)
+
+
+# Explicitly reusable by deterministic match fixtures which disable _process.
+func advance_action_clock(delta: float) -> void:
 	if action_lock_seconds <= 0.0:
 		return
 	action_lock_seconds = maxf(0.0, action_lock_seconds - delta)
@@ -243,12 +250,33 @@ func set_active(value: bool) -> void:
 	active = value
 	queue_redraw()
 
+# A kick commits the standing foot. Freeze only ordinary XI outfield
+# locomotion during the contact/follow-through, not the full action lock.
+# Both human and AI movement must obey this, including control handoffs.
+func xi_pass_plant_active() -> bool:
+	return (
+		match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper"
+		and visual != null and visual.animation == &"pass"
+		and action_lock_seconds > 0.0 and action_visual_duration_seconds > 0.0
+		and action_visual_duration_seconds - action_lock_seconds
+			< minf(action_visual_duration_seconds, XI_PASS_PLANT_SECONDS)
+	)
+
+
+func _plant_xi_pass_feet() -> void:
+	velocity = Vector2.ZERO
+	last_sprinting = false
+
+
 func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	if xi_collision_down_seconds > 0.0:
 		velocity = Vector2.ZERO
 		return
 	if sent_off:
 		velocity = Vector2.ZERO
+		return
+	if xi_pass_plant_active():
+		_plant_xi_pass_feet()
 		return
 	if dribble_active() and not has_ball:
 		dribble_burst_seconds = 0.0
@@ -373,6 +401,9 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0, settle_at_ta
 		velocity = Vector2.ZERO
 		return
 	ai_target = target
+	if xi_pass_plant_active():
+		_plant_xi_pass_feet()
+		return
 	var offset := target - global_position
 	var moving := offset.length() >= 8.0
 	var sprint_requested := role != "keeper" and intensity >= AI_SPRINT_INTENSITY
@@ -446,6 +477,9 @@ func play_action(animation_name: String, duration: float = 0.78) -> void:
 	action_visual_duration_seconds = action_lock_seconds
 	visual.speed_scale = 1.0
 	visual.play(animation_name)
+	# Clear incoming sprint inertia on the same tick as ball release.
+	if xi_pass_plant_active():
+		_plant_xi_pass_feet()
 
 func can_tackle() -> bool:
 	return (
