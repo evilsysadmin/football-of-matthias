@@ -266,12 +266,67 @@ func _initialize() -> void:
 		shooter.action_lock_seconds = 0.0
 	assert(ChessFootball3DPresenter.xi_dense_live_shot_phase(0, 8, 0.72, 0.72) == 0.0)
 	print("FOOTBALL_DENSE_LIVE_SHOT_CONTACT_OK clubs=2 contact_frames=7,10 visible_seconds=0.32 physics_unchanged=true")
+	# The actual live camera must still widen the pitch at the touchline,
+	# but the same stationary raster must keep a comparable screen height.
+	_check_dense_broadcast_size(game, stage)
 	stage._dense_live_outfield_installed = false
 	print("FOOTBALL_DENSE_LIVE_PASS_CONTACT_OK clubs=2 immediate_release=true contact_frame=7 recovery=true")
 	await _dense_diagonal_live(game, stage)
 	print("FOOTBALL_DENSE_DIAGONAL_NATIVE_OK clubs=2 frames=24 phase=true precedence=true")
 	print("FOOTBALL_DENSE_KICKS_NATIVE_OK teams=2 frames=16 atomic=true")
 	quit(0)
+
+
+func _check_dense_broadcast_size(game: Node2D, stage: ChessFootball3DPresenter) -> void:
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	game.ball.release(Vector2.ZERO, 0.0)
+	var runner: Footballer = game.teams[0][1]
+	var key: int = runner.get_instance_id()
+	var driver: AnimatedSprite3D = stage.player_sprites[key]
+	var quad: MeshInstance3D = stage.xi_raster_meshes[key]
+	var view_size: Vector2 = stage.get_viewport().get_visible_rect().size
+	var reference := ChessFootball3DPresenter.xi_dense_broadcast_reference_pixels(view_size)
+	assert(reference > 0.0)
+	game._select_player(runner)
+	runner.velocity = Vector2.ZERO
+	runner.action_lock_seconds = 0.0
+	runner._sync_locomotion(false)
+	stage.player_run_views[key] = "side"
+	var middle: Vector2 = game.match_pitch.get_center()
+	var heights: Array[float] = []
+	var fovs: Array[float] = []
+	for y in [middle.y, game.match_pitch.position.y + 110.0, game.match_pitch.end.y - 110.0]:
+		runner.global_position = Vector2(middle.x, y)
+		game.ball.global_position = runner.global_position
+		# Settle the actual camera and its continuous compensation, not
+		# a synthetic projection or manually assigned mesh scale.
+		for tick in range(24):
+			stage.sync_presentation(0.25, "broadcast")
+		assert(String(driver.animation).begins_with("idle"))
+		var frame: Texture2D = stage._xi_frame_texture(runner, driver)
+		var extent: float = (
+			ChessFootballSpriteBank.frame_bottom(frame) - float(frame.get_height()) * 0.5
+		) * driver.pixel_size * quad.scale.y
+		var boot: Vector3 = quad.global_position - Vector3.UP * extent
+		var head: Vector3 = boot + Vector3.UP * (
+			ChessFootballSpriteBank.frame_height(frame) * driver.pixel_size * quad.scale.y
+		)
+		assert(quad.scale == driver.scale)
+		var height: float = stage.camera.unproject_position(head).distance_to(stage.camera.unproject_position(boot))
+		heights.append(height)
+		fovs.append(stage.camera.fov)
+		var shadow: MeshInstance3D = stage.player_nodes[key].get_node("ContactShadow")
+		var ring: MeshInstance3D = stage.player_nodes[key].get_node("ActiveDisc")
+		assert(is_equal_approx(shadow.scale.x, ring.scale.x))
+		assert(absf(boot.y - shadow.global_position.y) < 0.05)
+	assert(fovs[1] > fovs[0] + 2.0 and fovs[2] > fovs[0] + 2.0)
+	for height in heights:
+		assert(absf(height / heights[0] - 1.0) < 0.10,
+			"Live Dense touchline sprite must not shrink with lens: " + str(heights))
+	print("FOOTBALL_DENSE_TOUCHLINE_SIZE_OK heights=", heights, " fovs=", fovs)
+	stage._dense_broadcast_size_mix = 0.0
 
 
 # Use the actual SHA-verified new bank, physical CharacterBody2D motion
