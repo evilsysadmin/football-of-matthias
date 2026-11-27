@@ -92,5 +92,54 @@ class DenseGateTest(unittest.TestCase):
                 read_candidates(archive, True)
 
 
+
+class FallGateTest(unittest.TestCase):
+    @staticmethod
+    def fixture():
+        # Geometry-only rectangles, never approved football artwork.
+        sheet = Image.new("RGBA", (128 * 16, 144))
+        draw = ImageDraw.Draw(sheet)
+        for i in range(16):
+            height = [118, 112, 106, 92, 82, 65, 42, 36, 34, 40, 58, 76, 88, 98, 110, 120][i]
+            width = 90 if 6 <= i <= 9 else 38 + i
+            x = i * 128 + (128 - width) // 2
+            draw.rectangle((x, 134 - height, x + width - 1, 133), fill="white")
+        return sheet
+
+    def test_low_prone_pose_is_accepted_for_review_only(self):
+        from football_fall_art_gate import inspect
+        result = inspect(self.fixture())
+        self.assertTrue(result["accepted_for_human_review"], result["problems"])
+        self.assertEqual(result["unique_shapes"], 16)
+
+    def test_upright_middle_and_duplicate_shapes_rejected(self):
+        from football_fall_art_gate import inspect
+        sheet = self.fixture()
+        sheet.paste(sheet.crop((0, 0, 128, 144)), (7 * 128, 0))
+        result = inspect(sheet)
+        self.assertIn("7:PRONE_POSE_REQUIRED", result["problems"])
+        self.assertIn("REPEATED_SHAPES:15/16", result["problems"])
+
+    def test_translated_shape_does_not_count_as_new_pose(self):
+        from football_fall_art_gate import inspect
+        sheet = self.fixture()
+        pose = sheet.crop((6 * 128, 0, 7 * 128, 144))
+        shifted = Image.new("RGBA", (128, 144))
+        shifted.paste(pose, (3, 0))
+        sheet.paste(shifted, (7 * 128, 0))
+        self.assertIn("REPEATED_SHAPES:15/16", inspect(sheet)["problems"])
+
+    def test_empty_border_and_wrong_geometry_rejected(self):
+        from football_fall_art_gate import inspect
+        sheet = self.fixture()
+        sheet.paste((0, 0, 0, 0), (128, 0, 256, 144))
+        sheet.putpixel((0, 50), (255, 255, 255, 8))
+        result = inspect(sheet)
+        self.assertIn("1:EMPTY", result["problems"])
+        self.assertTrue(any(p.startswith("0:ALPHA_MARGIN") for p in result["problems"]))
+        with self.assertRaises(ArtworkRejected):
+            inspect(Image.new("RGBA", (128 * 15, 144)))
+
+
 if __name__ == "__main__":
     unittest.main()
