@@ -156,8 +156,27 @@ func _initialize() -> void:
 						quit(1)
 						return
 					var material: StandardMaterial3D = stage.xi_raster_meshes[id].material_override
-					if material.albedo_texture != driver.sprite_frames.get_frame_texture(wanted, driver.frame):
+					var source: Texture2D = driver.sprite_frames.get_frame_texture(wanted, driver.frame)
+					# Rear views render a roster-numbered COPY, not the raw
+					# atlas texture. Verify the exact source AND the existing
+					# derived texture contract without disabling dorsals.
+					var expected: Texture2D = stage._xi_numbered_rear_frame(player, source, wanted)
+					if material.albedo_texture != expected or stage._xi_frame_texture(player, driver) != source:
 						printerr("Wrong mesh texture ", club, " ", VIEWS[i])
+						quit(1)
+						return
+					if VIEWS[i] in ["back", "back_diagonal"]:
+						if player.shirt_number >= 1 and player.shirt_number <= 99:
+							if expected == source or expected.get_size() != source.get_size():
+								printerr("Missing derived dorsal texture ", club, " ", VIEWS[i])
+								quit(1)
+								return
+							if expected.get_image().get_used_rect() != source.get_image().get_used_rect():
+								printerr("Dorsal changed source silhouette bounds ", club, " ", VIEWS[i])
+								quit(1)
+								return
+					elif expected != source:
+						printerr("Unexpected dorsal on non-rear view ", club, " ", VIEWS[i])
 						quit(1)
 						return
 			await process_frame
