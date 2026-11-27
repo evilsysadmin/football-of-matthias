@@ -447,13 +447,17 @@ func _check_dense_positional_arrival(game: Node2D, stage: ChessFootball3DPresent
 			stage.sync_presentation(DT, "broadcast")
 			assert(runner.global_position.distance_to(settled) < 0.1)
 			assert(String(driver.animation).begins_with("idle"))
-		target += Vector2(280.0, 0.0)
+		# This native fixture installs the exact Dense front-diagonal row,
+		# not the full Web side bank. Resume towards a real diagonal outlet
+		# to test the 24-frame row rather than asserting against legacy art.
+		target += Vector2(280.0, 280.0)
 		for tick in range(36):
 			await physics_frame
 			runner.move_ai(DT, target, 0.83, true)
 			stage.sync_presentation(DT, "broadcast")
 		assert(runner.global_position.x > settled.x + 50.0)
-		assert(String(driver.animation).begins_with("run"))
+		assert(runner.global_position.y > settled.y + 50.0)
+		assert(driver.animation == &"run_front_diagonal")
 		assert(driver.sprite_frames.get_frame_count(driver.animation) == 24)
 		print("FOOTBALL_DENSE_POSITIONAL_ARRIVAL_OK club=%d overshoot=%.2f reversals=%d resumed=true" % [club, overshoot, reversals])
 		runner.global_position = Vector2(-9999.0, -9999.0)
