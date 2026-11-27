@@ -19,6 +19,27 @@ func _initialize() -> void:
 	game.kickoff_active = false
 	assert(game.match_pitch == XI)
 	assert(game.debug_team_counts() == [11, 11])
+	# Own lineup displays the exact active actor stats; the rival projection
+	# contains names only. Inspecting either tab must not unpause the match.
+	var own_rows: Array[Dictionary] = game._pause_lineup_rows(0)
+	var rival_rows: Array[Dictionary] = game._pause_lineup_rows(1)
+	assert(own_rows.size() == 11 and rival_rows.size() == 11)
+	for i in range(11):
+		var own: Footballer = game.teams[0][i]
+		assert(own_rows[i]["name"] == own.scouting_player_name)
+		assert(own_rows[i]["stats"]["VEL"] == own.scouting_pace)
+		assert(own_rows[i]["stats"]["PAS"] == own.scouting_passing)
+		assert(own_rows[i]["stats"].size() == 7)
+		assert(rival_rows[i] == {"name": game.teams[1][i].scouting_player_name})
+	game._toggle_pause_menu()
+	game._open_pause_lineups()
+	assert(game.pause_menu_open and game.pause_lineup_panel.visible)
+	game._show_pause_lineup(1)
+	assert(game.pause_lineup_list.get_child_count() == 22)
+	game._toggle_pause_menu()
+	assert(game.pause_menu_open and not game.pause_lineup_panel.visible)
+	game._toggle_pause_menu()
+	assert(not game.pause_menu_open)
 	# The six candidate motion-v4 WebPs are SHA-pinned but MUST remain
 	# unavailable until the operator verifies the actual public R2 objects.
 	for team_id in range(2):
