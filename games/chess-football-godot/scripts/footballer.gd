@@ -235,6 +235,11 @@ func _process(delta: float) -> void:
 	xi_collision_guard_seconds = maxf(0.0, xi_collision_guard_seconds - delta)
 	keeper_hold_seconds = maxf(0.0, keeper_hold_seconds - delta)
 	keeper_save_seconds = maxf(0.0, keeper_save_seconds - delta)
+	advance_action_clock(delta)
+
+
+# Explicitly reusable by deterministic match fixtures which disable _process.
+func advance_action_clock(delta: float) -> void:
 	if action_lock_seconds <= 0.0:
 		return
 	action_lock_seconds = maxf(0.0, action_lock_seconds - delta)

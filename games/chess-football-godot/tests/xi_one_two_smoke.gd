@@ -5,6 +5,15 @@ extends SceneTree
 # independently interceptable ball. No fake goals, pickups or engine mocks.
 const STEP := 1.0 / 60.0
 
+# These fixtures deliberately disable automatic actor processing. Advance
+# the production action clock exactly once per simulated 60Hz step, so
+# a real pass plant expires rather than freezing the runner indefinitely.
+func _advance_fixture_action_clocks(game) -> void:
+	for team in game.teams:
+		for player: Footballer in team:
+			player.advance_action_clock(STEP)
+
+
 func _initialize() -> void:
 	var scene := load("res://main.tscn") as PackedScene
 	assert(scene != null)
@@ -58,6 +67,7 @@ func _initialize() -> void:
 	assert(game.xi_one_two_run_until > game.match_seconds)
 	for tick in range(150):
 		await physics_frame
+		_advance_fixture_action_clocks(game)
 		game.match_seconds += STEP
 		game._handle_human(STEP)
 		game.ball.tick_ball(STEP)
@@ -79,6 +89,7 @@ func _initialize() -> void:
 	var received_return := false
 	for tick in range(150):
 		await physics_frame
+		_advance_fixture_action_clocks(game)
 		game.match_seconds += STEP
 		game._handle_human(STEP)
 		game.ball.tick_ball(STEP)
@@ -107,6 +118,7 @@ func _initialize() -> void:
 	var ordinary_receive := false
 	for tick in range(150):
 		await physics_frame
+		_advance_fixture_action_clocks(game)
 		game.match_seconds += STEP
 		game.ball.tick_ball(STEP)
 		game._try_claim_loose_ball()
@@ -137,6 +149,7 @@ func _initialize() -> void:
 	var intercepted := false
 	for tick in range(100):
 		await physics_frame
+		_advance_fixture_action_clocks(game)
 		game.match_seconds += STEP
 		game.ball.tick_ball(STEP)
 		game._try_claim_loose_ball()
@@ -181,6 +194,7 @@ func _initialize() -> void:
 	var neutral_travel := 0.0
 	for tick in range(150):
 		await physics_frame
+		_advance_fixture_action_clocks(game)
 		game.match_seconds += STEP
 		if game.controlled == receiver:
 			var before: Vector2 = receiver.global_position
@@ -225,6 +239,7 @@ func _initialize() -> void:
 	var fall_receive := false
 	for tick in range(150):
 		await physics_frame
+		_advance_fixture_action_clocks(game)
 		game.match_seconds += STEP
 		game.ball.tick_ball(STEP)
 		game._try_claim_loose_ball()
@@ -420,6 +435,7 @@ func _live_wall(scene: PackedScene) -> void:
 	var received := false
 	for tick in range(150):
 		await physics_frame
+		_advance_fixture_action_clocks(game)
 		game._physics_process(STEP)
 		if game.action_feedback_text == "PARED":
 			returned = true
