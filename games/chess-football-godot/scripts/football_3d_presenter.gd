@@ -208,6 +208,7 @@ var _hero_v5_loaded: Dictionary = {}
 # Authored action replacement becomes active per-club only after full verification.
 var _pass_shoot_r2_loaded: Dictionary = {}
 var _dense_live_outfield_installed := false
+var _dense_broadcast_size_mix: float = 0.0
 # Both SHA-pinned 16-pose Dense pass sheets first show the extended
 # striking leg at index 7 (zero-based). The ball release is immediate.
 const DENSE_PASS_CONTACT_FRAME := 7
@@ -2936,6 +2937,26 @@ func sync_presentation(delta: float, mode: String) -> void:
 		if match_node.match_team_size == 11 and mode == "broadcast"
 		else -1.0
 	)
+	# The live camera widens its lens at both touchlines for pitch safety.
+	# Do not make all Dense bodies inherit that change in screen height.
+	# Use a neutral, centre-play reference; blend away for cinematic restarts
+	# and tactical transitions, and retain the existing bounded depth scale.
+	if _dense_live_outfield_installed and mode == "broadcast" and xi_reference_pixels > 0.0:
+		var ordinary_play: bool = (
+			not match_node.kickoff_active and not match_node.goal_restart_active
+			and not match_node.set_piece_active and not xi_returning_from_tactical
+			and penalty_camera_mix < 0.05
+			and camera.position.z <= BROADCAST_DEPTH * XI_BROADCAST_DEPTH_SCALE + CAMERA_CORNER_RELEASE_DEPTH_EPSILON
+		)
+		_dense_broadcast_size_mix = lerpf(
+			_dense_broadcast_size_mix, 1.0 if ordinary_play else 0.0,
+			_camera_smoothing_factor(CAMERA_LERP_SPEED, delta)
+		)
+		var stable_pixels := xi_dense_broadcast_reference_pixels(get_viewport().get_visible_rect().size)
+		if stable_pixels > 0.0:
+			xi_reference_pixels = lerpf(xi_reference_pixels, stable_pixels, _dense_broadcast_size_mix)
+	else:
+		_dense_broadcast_size_mix = 0.0
 	var holding_keeper: Footballer = match_node.ball.carrier
 	if holding_keeper != null and holding_keeper.role != "keeper":
 		holding_keeper = null
@@ -3941,6 +3962,24 @@ static func xi_projected_reference_pixels(view_camera: Camera3D) -> float:
 	return view_camera.unproject_position(reference).distance_to(
 		view_camera.unproject_position(head)
 	)
+
+
+# Project the same 1.48m reference segment through the neutral XI centre
+# camera, using Godot's vertical FOV (KEEP_HEIGHT). This depends only on
+# viewport geometry, not on ball lane, active actor or live camera pitch.
+# No auxiliary Camera3D, texture readback or per-actor projection work.
+static func xi_dense_broadcast_reference_pixels(view_size: Vector2) -> float:
+	if view_size.x <= 0.0 or view_size.y <= 0.0:
+		return 0.0
+	var camera_y := BROADCAST_HEIGHT * XI_BROADCAST_HEIGHT_SCALE
+	var camera_z := BROADCAST_DEPTH * XI_BROADCAST_DEPTH_SCALE
+	var forward := Vector2(-camera_y, BROADCAST_BASE_LOOK_Z - camera_z).normalized()
+	var up := Vector2(-forward.y, forward.x)
+	var ground := Vector2(0.02 - camera_y, -camera_z)
+	var head := ground + Vector2(1.48, 0.0)
+	var fov := xi_broadcast_fov_for_aspect(view_size) - XI_BROADCAST_CENTER_ZOOM_DEGREES
+	return absf(head.dot(up) / head.dot(forward) - ground.dot(up) / ground.dot(forward)) \
+		* view_size.y * 0.5 / tan(deg_to_rad(fov) * 0.5)
 
 
 # Optional precomputed reference is an optimization only: two-argument
