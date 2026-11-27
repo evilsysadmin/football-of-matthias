@@ -1613,6 +1613,8 @@ func _initialize() -> void:
 	await _human_defensive_role_stability(packed)
 	await process_frame
 	await _mirrored_compact_shape(packed)
+	await process_frame
+	await _vision_tactical_read(packed)
 	quit(0)
 
 
@@ -1860,4 +1862,53 @@ func _human_lane_guard(packed: PackedScene) -> void:
 	assert(cover.tackle_active(), "Autonomous teammate cover must commit a legal tackle")
 	assert(game.controlled == manual)
 	print("FOOTBALL_XI_HUMAN_SECOND_PRESS_OK hard=true normal_contains=true clean_only=true real_ai=true")
+	game.queue_free()
+
+
+# Paired real actor target reads and the actual AI decision scheduler.
+# Existing rosters remain neutral until an explicit vision rating is supplied.
+func _vision_tactical_read(packed: PackedScene) -> void:
+	var game = packed.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	assert(Footballer.validated_vision(1) == 1)
+	assert(Footballer.validated_vision(99) == 99)
+	assert(Footballer.validated_vision(100) == 75)
+	assert(Footballer.validated_vision(32.5) == 75)
+	assert(Footballer.validated_vision("90") == 75)
+	for club in range(2):
+		var low: Footballer = game.teams[club][5]
+		var high: Footballer = game.teams[club][6]
+		assert(low.scouting_vision == 75 and high.scouting_vision == 75)
+		low.scouting_vision = 20
+		high.scouting_vision = 95
+		var centre: Vector2 = game.match_pitch.get_center()
+		var next_target: Vector2 = centre + Vector2(220.0, 0.0)
+		assert(low.xi_vision_read_target(centre, 0.0, true, 123) == centre)
+		assert(high.xi_vision_read_target(centre, 0.0, true, 123) == centre)
+		assert(low.xi_vision_read_target(next_target, 1.0 / 60.0, true, 123) == centre)
+		assert(high.xi_vision_read_target(next_target, 1.0 / 60.0, true, 123) == next_target)
+		for tick in range(16):
+			low.xi_vision_read_target(next_target, 1.0 / 60.0, true, 123)
+		assert(low.xi_vision_read_target(next_target, 0.0, true, 123) == next_target)
+		assert(low.xi_vision_read_target(centre, 0.0, true, 456) == centre)
+		assert(low.xi_vision_read_target(next_target, 0.0, false, 456) == next_target)
+		# Scheduler is shared by the two autonomous teams; time differences
+		# originate from vision, not pace or different ball physics.
+		game._select_player(game.teams[0][10])
+		game.ai_next_decision.clear()
+		assert(game._ai_decision_ready(low))
+		assert(game._ai_decision_ready(high))
+		var low_due: float = game.ai_next_decision[low.get_instance_id()]
+		var high_due: float = game.ai_next_decision[high.get_instance_id()]
+		assert(low_due > high_due)
+		assert(is_equal_approx(low_due - game.match_seconds, game._ai_adaptive_decision_interval() * low.vision_decision_multiplier()))
+		low.scouting_vision = 75
+		assert(is_equal_approx(low.vision_decision_multiplier(), 1.0))
+		assert(low.xi_vision_read_target(centre, 0.0, true, 789) == centre)
+	print("FOOTBALL_XI_VISION_READ_OK clubs=2 neutral_legacy=true bounded=true critical_roles_unfiltered=true")
 	game.queue_free()
