@@ -65,8 +65,38 @@ func _initialize() -> void:
 	assert(game.performance_label.visible)
 	assert(game.performance_label.text.begins_with("FPS "))
 	assert(game.ball.carrier == original_holder)
+	# Diagnose a real selected actor's displacement separately from an
+	# intentional handoff to a distant teammate. Never change possession.
+	var actor: Footballer = game.controlled
+	var other: Footballer = game.teams[0][1]
+	var origin: Vector2 = actor.global_position
+	actor.global_position += Vector2(5.0, 0.0)
+	game._update_performance_overlay(STEP)
+	assert(is_equal_approx(game.performance_motion_max_step, 5.0))
+	assert(game.performance_motion_switches == 0)
+	game._select_player(other)
+	game._update_performance_overlay(STEP)
+	assert(game.performance_motion_switches == 1)
+	assert(is_equal_approx(game.performance_motion_last_switch_distance,
+		other.global_position.distance_to(actor.global_position)))
+	assert(is_equal_approx(game.performance_motion_max_step, 5.0))
+	var other_origin: Vector2 = other.global_position
+	game.kickoff_active = true
+	other.global_position += Vector2(300.0, 0.0)
+	game._update_performance_overlay(STEP)
+	game.kickoff_active = false
+	game._update_performance_overlay(STEP)
+	assert(is_equal_approx(game.performance_motion_max_step, 5.0))
+	assert(game.performance_motion_switches == 1)
+	# Restore the test fixture; measuring alone never changed the ball.
+	actor.global_position = origin
+	other.global_position = other_origin
+	game._select_player(actor)
+	assert(game.ball.carrier == original_holder)
 	game._toggle_performance_overlay()
 	assert(not game.performance_label.visible)
+	assert(game.performance_motion_switches == 0 and game.performance_motion_max_step == 0.0)
+	print("FOOTBALL_XI_CONTINUITY_OVERLAY_OK same_actor=true handoff_separate=true restart_excluded=true")
 	# Warm texture/memory caches before measuring steady-state work.
 	for tick in range(60):
 		game._physics_process(STEP)
