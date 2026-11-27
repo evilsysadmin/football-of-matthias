@@ -10,39 +10,13 @@ const MOVES := [Vector2.RIGHT, Vector2.DOWN, Vector2(1, 1), Vector2.UP, Vector2(
 const CLUBS := ["fc_matthias", "real_enroque"]
 const EXPECTED := [24, 24, 24, 24, 24]
 
+const DenseRunBank = preload("res://scripts/football_dense_run_bank.gd")
+
 static func expected_count(view: String, compare_v5: bool = false) -> int:
-	return 16 if view == "front" and compare_v5 else 24
+	return DenseRunBank.expected_count(view, compare_v5)
 
 static func build_preview_bank(original: SpriteFrames, rows: Dictionary, compare_v5: bool = false) -> SpriteFrames:
-	# Build the entire replacement on a copy. Any missing/invalid view leaves
-	# the original untouched. This helper is not an approval or release gate.
-	if original == null or rows.size() != VIEWS.size():
-		return null
-	for i in range(VIEWS.size()):
-		var view: String = VIEWS[i]
-		var row: Variant = rows.get(view)
-		if not row is Array or row.size() != expected_count(view, compare_v5):
-			return null
-		for texture in row:
-			if not texture is Texture2D or texture.get_size() != Vector2(128, 144):
-				return null
-		for base in [&"run", &"sprint"]:
-			var name := ChessFootballRunDirection.animation_for(base, view)
-			if not original.has_animation(name) or original.get_frame_count(name) < 1:
-				return null
-	var result := original.duplicate() as SpriteFrames
-	for view in VIEWS:
-		var row: Array = rows[view]
-		for base in [&"run", &"sprint"]:
-			var name := ChessFootballRunDirection.animation_for(base, view)
-			var fps := original.get_animation_speed(name)
-			var old_count := original.get_frame_count(name)
-			result.clear(name)
-			result.set_animation_loop(name, true)
-			result.set_animation_speed(name, fps * float(row.size()) / float(old_count))
-			for texture in row:
-				result.add_frame(name, texture)
-	return result
+	return DenseRunBank.build_bank(original, rows, compare_v5)
 
 
 func _load_club(club: int, args: PackedStringArray) -> Dictionary:
@@ -102,27 +76,19 @@ func _initialize() -> void:
 	game.goal_restart_active = false
 	game.set_piece_active = false
 	var stage: ChessFootball3DPresenter = game.presentation_3d
-	var prepared := {}
+	var rows_by_club := {}
 	for club in range(2):
 		var rows := _load_club(club, args)
 		if rows.is_empty():
 			quit(1)
 			return
-		for athlete: Footballer in game.teams[club]:
-			if athlete.role == "keeper":
-				continue
-			var driver: AnimatedSprite3D = stage.player_sprites[athlete.get_instance_id()]
-			var bank := build_preview_bank(driver.sprite_frames, rows, compare_v5)
-			if bank == null:
-				quit(1)
-				return
-			prepared[athlete.get_instance_id()] = bank
-	if prepared.size() != 20:
+		rows_by_club[club] = rows
+	if not DenseRunBank.install_all(game.teams, stage.player_sprites,
+		stage.outfield_visual_phases, stage.outfield_visual_names, rows_by_club, compare_v5):
+		printerr("Complete two-club locomotion transaction rejected")
 		quit(1)
 		return
-	for id in prepared:
-		var driver: AnimatedSprite3D = stage.player_sprites[id]
-		driver.sprite_frames = prepared[id]
+	print("FOOTBALL_DENSE_RUN_BANK_INSTALLED clubs=2 outfield=20 review_only=true")
 	# Compare all five orientations in ONE actual pitch/camera frame, both
 	# clubs. This is a controlled visual fixture, not live match gameplay.
 	game.ball.release(Vector2.ZERO, 0.0)
