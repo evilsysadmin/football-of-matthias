@@ -11,6 +11,7 @@ const CLUBS := ["fc_matthias", "real_enroque"]
 const EXPECTED := [24, 24, 24, 24, 24]
 
 const DenseRunBank = preload("res://scripts/football_dense_run_bank.gd")
+const DirectionPack = preload("res://scripts/football_dense_direction_pack.gd")
 
 static func expected_count(view: String, compare_v5: bool = false) -> int:
 	return DenseRunBank.expected_count(view, compare_v5)
@@ -77,12 +78,24 @@ func _initialize() -> void:
 	game.set_piece_active = false
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	var rows_by_club := {}
-	for club in range(2):
-		var rows := _load_club(club, args)
-		if rows.is_empty():
+	if compare_v5:
+		for club in range(2):
+			var rows := _load_club(club, args)
+			if rows.is_empty():
+				quit(1)
+				return
+			rows_by_club[club] = rows
+	else:
+		# Strict mode now validates the exact published generation within
+		# Godot as well as the upstream Python verification.
+		rows_by_club = DirectionPack.load_pack(func(_club: int, view: String, filename: String) -> PackedByteArray:
+			var path: String = args[1].path_join(filename) if view == "front_diagonal" else args[0].path_join(filename.replace("_v1.webp", "_candidate_v3.webp"))
+			return FileAccess.get_file_as_bytes(path)
+		)
+		if rows_by_club.size() != 2:
 			quit(1)
 			return
-		rows_by_club[club] = rows
+		print("FOOTBALL_DENSE_PACK_SHA_OK clubs=2 sheets=10")
 	if not DenseRunBank.install_all(game.teams, stage.player_sprites,
 		stage.outfield_visual_phases, stage.outfield_visual_names, rows_by_club, compare_v5):
 		printerr("Complete two-club locomotion transaction rejected")
