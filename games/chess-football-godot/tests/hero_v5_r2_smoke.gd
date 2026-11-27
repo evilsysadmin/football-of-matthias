@@ -232,6 +232,26 @@ func _initialize() -> void:
 			for view in installer.VIEWS:
 				for base in [&"run", &"sprint"]:
 					assert(installed.get_frame_count(ChessFootballRunDirection.animation_for(base, view)) == 24)
+	# Fresh canonical bank only: live Dense must not retain an old
+	# outfield texture in idle, kicks or temporary action animations.
+	var fresh := ChessFootballSpriteBank.build_frames(0, owner.role, owner.squad_index, true)
+	var kick_rows := {}
+	for action in [&"pass", &"shoot"]:
+		var poses: Array[Texture2D] = []
+		for i in range(16):
+			poses.append(runs[1])
+		kick_rows[action] = poses
+	var live: SpriteFrames = installer.build_bank(fresh, rows, false, kick_rows)
+	assert(live != null)
+	for view in installer.VIEWS:
+		assert(live.get_frame_texture(ChessFootballRunDirection.animation_for(&"idle", view), 0) == runs[0])
+	for action in [&"pass", &"shoot"]:
+		assert(live.get_frame_count(action) == 16 and live.get_frame_texture(action, 0) == runs[1])
+	for action in [&"tackle", &"slide_tackle", &"celebrate"]:
+		assert(live.get_frame_count(action) == fresh.get_frame_count(action))
+		assert(live.get_frame_texture(action, 0) == runs[0])
+	assert(installer.build_bank(fresh, rows, false, {&"pass": kick_rows[&"pass"]}) == null)
+	print("FOOTBALL_DENSE_LIVE_BANK_OK same_generation_fallbacks=true kicks=true")
 	print("FOOTBALL_DENSE_RUN_TRANSACTION_OK both_clubs=true rollback=true phase=true keeper_untouched=true")
 	print("FOOTBALL_XI_CANDIDATE_PREVIEW_BANK_OK five_views=true missing_rejected=true")
 	assert(game.ball.carrier == initial_owner)
