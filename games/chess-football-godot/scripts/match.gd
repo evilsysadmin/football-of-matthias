@@ -533,6 +533,13 @@ var pending_tackle_seconds: float = 0.0
 # Opt-in only, no per-frame overlay work while hidden.
 var performance_label: Label
 var performance_refresh_seconds: float = 0.0
+# F2-only local continuity diagnostic. A change of controlled actor must
+# never be counted as movement of the same physical footballer.
+var performance_motion_id: int = 0
+var performance_motion_position := Vector2.ZERO
+var performance_motion_max_step: float = 0.0
+var performance_motion_switches: int = 0
+var performance_motion_last_switch_distance: float = 0.0
 var score_label: Label
 var help_label: Label
 var view_label: Label
@@ -695,13 +702,40 @@ func _toggle_performance_overlay() -> void:
 		return
 	performance_label.visible = not performance_label.visible
 	performance_refresh_seconds = 0.0
+	performance_motion_id = 0
+	performance_motion_max_step = 0.0
+	performance_motion_switches = 0
+	performance_motion_last_switch_distance = 0.0
 	if performance_label.visible:
 		_update_performance_overlay(0.0)
+
+
+# Sample once per physics tick while the overlay is visible, not merely
+# when the text refreshes. Restart formations are legitimate relocations.
+func _sample_performance_motion() -> void:
+	if (
+		not is_instance_valid(controlled) or kickoff_active or goal_restart_active
+		or set_piece_active or pause_menu_open
+	):
+		performance_motion_id = 0
+		return
+	var id: int = controlled.get_instance_id()
+	var position: Vector2 = controlled.global_position
+	if performance_motion_id != 0:
+		var distance: float = position.distance_to(performance_motion_position)
+		if performance_motion_id == id:
+			performance_motion_max_step = maxf(performance_motion_max_step, distance)
+		else:
+			performance_motion_switches += 1
+			performance_motion_last_switch_distance = distance
+	performance_motion_id = id
+	performance_motion_position = position
 
 
 func _update_performance_overlay(delta: float) -> void:
 	if performance_label == null or not performance_label.visible:
 		return
+	_sample_performance_motion()
 	performance_refresh_seconds -= maxf(delta, 0.0)
 	if performance_refresh_seconds > 0.0:
 		return
@@ -710,6 +744,10 @@ func _update_performance_overlay(delta: float) -> void:
 	var process_ms: float = float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0
 	performance_label.text = "FPS %d  ·  Física %.1f ms  ·  Proceso %.1f ms" % [
 		Engine.get_frames_per_second(), physics_ms, process_ms
+	]
+	performance_label.text += "\nCambios %d · Salto selección %.0f px · Paso máx. %.1f px" % [
+		performance_motion_switches, performance_motion_last_switch_distance,
+		performance_motion_max_step
 	]
 
 func _create_audio() -> void:
@@ -890,9 +928,9 @@ func _create_hud() -> void:
 	performance_label.add_theme_constant_override("shadow_offset_y", 2)
 	hud.add_child(performance_label)
 	performance_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	performance_label.offset_left = -390.0
+	performance_label.offset_left = -440.0
 	performance_label.offset_right = -16.0
-	performance_label.offset_top = -46.0
+	performance_label.offset_top = -66.0
 	performance_label.offset_bottom = -12.0
 	_create_pause_menu(hud)
 
