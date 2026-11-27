@@ -427,7 +427,7 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0, settle_at_ta
 		elif settle_at_target and match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper":
 			# Brake within the physical stopping distance of an off-ball
 			# target rather than sprinting through it and turning back.
-			# Only explicitly assigned support outlets opt in; pursuit stays unchanged.
+			# Positional support and shape opt in; pursuit stays unchanged.
 			var arrival_speed := sqrt(2.0 * MOVE_ACCELERATION * maxf(0.0, offset.length() - 8.0))
 			desired = desired.limit_length(arrival_speed)
 	var acceleration := MOVE_ACCELERATION if desired.length_squared() > 0.001 else MOVE_DECELERATION

@@ -272,6 +272,7 @@ func _initialize() -> void:
 	stage._dense_live_outfield_installed = false
 	print("FOOTBALL_DENSE_LIVE_PASS_CONTACT_OK clubs=2 immediate_release=true contact_frame=7 recovery=true")
 	await _dense_diagonal_live(game, stage)
+	await _check_dense_positional_arrival(game, stage)
 	print("FOOTBALL_DENSE_DIAGONAL_NATIVE_OK clubs=2 frames=24 phase=true precedence=true")
 	print("FOOTBALL_DENSE_KICKS_NATIVE_OK teams=2 frames=16 atomic=true")
 	quit(0)
@@ -405,3 +406,56 @@ func _dense_diagonal_live(game: Node2D, stage: ChessFootball3DPresenter) -> void
 			runner.global_position = Vector2(-9999.0, -9999.0)
 			runner.velocity = Vector2.ZERO
 	game.ball.release(Vector2.ZERO, 0.0)
+
+
+# Real body movement + actual Dense frames: a positional runner should
+# settle at a destination and stay still, then follow a new destination.
+# No fake displacement, target changes or manual velocity during the run.
+func _check_dense_positional_arrival(game: Node2D, stage: ChessFootball3DPresenter) -> void:
+	const DT := 1.0 / 60.0
+	stage._dense_live_outfield_installed = true
+	var centre: Vector2 = game.match_pitch.get_center()
+	for club in range(2):
+		var runner: Footballer = game.teams[club][6]
+		var key: int = runner.get_instance_id()
+		var driver: AnimatedSprite3D = stage.player_sprites[key]
+		var target: Vector2 = centre + Vector2(240.0, 0.0)
+		game._select_player(game.teams[1 - club][1])
+		runner.global_position = centre
+		runner.velocity = Vector2.ZERO
+		runner.action_lock_seconds = 0.0
+		runner.contact_stun_seconds = 0.0
+		runner.tackle_recovery_seconds = 0.0
+		runner.xi_collision_down_seconds = 0.0
+		var overshoot := 0.0
+		var reversals := 0
+		for tick in range(150):
+			await physics_frame
+			runner.move_ai(DT, target, 0.83, true)
+			stage.sync_presentation(DT, "broadcast")
+			overshoot = maxf(overshoot, runner.global_position.x - target.x)
+			if runner.velocity.x < -12.0:
+				reversals += 1
+		assert(overshoot <= 8.0 and reversals == 0)
+		assert(runner.global_position.distance_to(target) <= 9.0)
+		assert(runner.velocity.length() < 1.0)
+		assert(String(driver.animation).begins_with("idle"))
+		var settled: Vector2 = runner.global_position
+		for tick in range(12):
+			await physics_frame
+			runner.move_ai(DT, target, 0.83, true)
+			stage.sync_presentation(DT, "broadcast")
+			assert(runner.global_position.distance_to(settled) < 0.1)
+			assert(String(driver.animation).begins_with("idle"))
+		target += Vector2(280.0, 0.0)
+		for tick in range(36):
+			await physics_frame
+			runner.move_ai(DT, target, 0.83, true)
+			stage.sync_presentation(DT, "broadcast")
+		assert(runner.global_position.x > settled.x + 50.0)
+		assert(String(driver.animation).begins_with("run"))
+		assert(driver.sprite_frames.get_frame_count(driver.animation) == 24)
+		print("FOOTBALL_DENSE_POSITIONAL_ARRIVAL_OK club=%d overshoot=%.2f reversals=%d resumed=true" % [club, overshoot, reversals])
+		runner.global_position = Vector2(-9999.0, -9999.0)
+		runner.velocity = Vector2.ZERO
+	stage._dense_live_outfield_installed = false
