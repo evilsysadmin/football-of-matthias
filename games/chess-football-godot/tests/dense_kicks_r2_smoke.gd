@@ -195,9 +195,21 @@ func _initialize() -> void:
 			assert(driver.frame >= previous and driver.frame <= 15)
 			previous = driver.frame
 		assert(previous == 15)
+		# Follow-through finishes in 250ms, not after the simulation lock.
+		assert(ChessFootball3DPresenter.xi_dense_live_pass_phase(16, duration, duration - 0.125) >= 11.0)
+		assert(ChessFootball3DPresenter.xi_dense_live_pass_phase(16, duration, duration - 0.24) == 15.0)
+		passer.velocity = Vector2.ZERO
+		passer.action_lock_seconds = duration - 0.20
+		stage.sync_presentation(0.0, "broadcast")
+		assert(driver.animation == &"pass")
+		passer.action_lock_seconds = duration - 0.26
+		stage.sync_presentation(0.0, "broadcast")
+		assert(String(driver.animation).begins_with("idle"))
+		assert(is_equal_approx(passer.action_lock_seconds, duration - 0.26))
 		assert(game.ball.carrier == null and game.ball.velocity == release_velocity)
 		passer.action_lock_seconds = 0.0
 	assert(ChessFootball3DPresenter.xi_dense_live_pass_phase(8, 0.72, 0.72) == 0.0)
+	print("FOOTBALL_DENSE_LIVE_PASS_QUICK_RECOVERY_OK clubs=2 visual_seconds=0.25 gameplay_lock_unchanged=true")
 	stage._dense_live_outfield_installed = false
 	print("FOOTBALL_DENSE_LIVE_PASS_CONTACT_OK clubs=2 immediate_release=true contact_frame=7 recovery=true")
 	await _dense_diagonal_live(game, stage)
