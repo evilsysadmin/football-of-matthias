@@ -1725,6 +1725,7 @@ func _update_ai(delta: float) -> void:
 			if player.sent_off:
 				continue
 			if player == controlled:
+				player.reset_xi_vision_read()
 				continue
 			if player.role == "keeper":
 				_update_keeper_ai(player, delta)
@@ -1835,6 +1836,8 @@ func _update_ai(delta: float) -> void:
 						and player != cover and player != lane_marker)
 				)
 			)
+			var vision_context: int = int(ball.carrier.get_instance_id()) if ball.carrier != null else 0
+			target = player.xi_vision_read_target(target, delta, settle_at_position, vision_context)
 			player.move_ai(delta, target, intensity, settle_at_position)
 
 			if (
@@ -2528,7 +2531,10 @@ func _ai_decision_ready(player: Footballer) -> bool:
 	var next_time := float(ai_next_decision.get(key, 0.0))
 	if match_seconds < next_time:
 		return false
-	ai_next_decision[key] = match_seconds + _ai_adaptive_decision_interval()
+	var interval := _ai_adaptive_decision_interval()
+	if match_team_size == 11 and player != controlled and player.role != "keeper":
+		interval *= player.vision_decision_multiplier()
+	ai_next_decision[key] = match_seconds + interval
 	return true
 
 func _ai_dribble_target(player: Footballer) -> Vector2:
