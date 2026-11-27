@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FOOTBALL_MANAGER_CLUBS } from './footballManagerClubs.js';
 import { getDefaultFootballLineup, getFootballClubRoster, evaluateFootballLineup } from './footballManagerRoster.js';
 import { advanceFootballSeason, createFootballSeason } from './footballManagerSeason.js';
-import { advanceFootballDevelopment, getDevelopedFootballRoster, FOOTBALL_MAX_GROWTH_PER_ATTRIBUTE } from './footballManagerDevelopment.js';
+import { advanceFootballDevelopment, getDevelopedFootballRoster, getFootballPlayerProgress, FOOTBALL_MAX_GROWTH_PER_ATTRIBUTE } from './footballManagerDevelopment.js';
 
 describe('Football manager · earned development', () => {
   const club = FOOTBALL_MANAGER_CLUBS[0];
@@ -65,5 +65,35 @@ describe('Football manager · earned development', () => {
     });
     expect(altered).toBe(true);
     expect(evaluateFootballLineup(roster, starters).attackDelta).toBe(0);
+  });
+});
+
+describe('Football RPG · derived experience', () => {
+  it('starts at level one and advances exactly at the threshold', () => {
+    expect(getFootballPlayerProgress()).toEqual({ xp: 0, level: 1, xpIntoLevel: 0, xpToNextLevel: 500 });
+    expect(getFootballPlayerProgress({ starts: 4, shooting: 3 })).toEqual({ xp: 475, level: 1, xpIntoLevel: 475, xpToNextLevel: 25 });
+    expect(getFootballPlayerProgress({ starts: 4, shooting: 2, shape: 2 })).toEqual({ xp: 500, level: 2, xpIntoLevel: 0, xpToNextLevel: 500 });
+    expect(getFootballPlayerProgress({ starts: 5, shooting: 4 })).toEqual({ xp: 600, level: 2, xpIntoLevel: 100, xpToNextLevel: 400 });
+  });
+  it('rejects impossible attendance and unsafe arithmetic', () => {
+    for (const data of [{ starts: -1 }, { starts: 1.5 }, { starts: 1, shooting: 1, shape: 1 }, { starts: Number.MAX_SAFE_INTEGER }, { starts: 2, shooting: NaN }]) {
+      expect(() => getFootballPlayerProgress(data)).toThrow('Invalid football player');
+    }
+  });
+  it('derives the same XP on repeated reads without changing the development ledger', () => {
+    const roster = getFootballClubRoster(FOOTBALL_MANAGER_CLUBS[0]);
+    const lineup = getDefaultFootballLineup(roster);
+    let development;
+    for (const training of ['shooting', 'shape', 'standard', 'recovery', 'standard']) {
+      development = advanceFootballDevelopment(roster, lineup, training, development);
+    }
+    const before = JSON.stringify(development);
+    const first = getDevelopedFootballRoster(roster, development);
+    const second = getDevelopedFootballRoster(roster, development);
+    expect(first).toEqual(second);
+    expect(JSON.stringify(development)).toBe(before);
+    expect(first.filter(p => lineup.includes(p.id)).map(p => p.progression.xp)).toEqual([550, 550, 550, 550, 550]);
+    expect(first.filter(p => !lineup.includes(p.id)).every(p => p.progression.level === 1 && p.progression.xp === 0)).toBe(true);
+    expect(Object.isFrozen(first[0].progression)).toBe(true);
   });
 });
