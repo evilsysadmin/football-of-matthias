@@ -24,6 +24,10 @@ var scouting_shooting: int = 75
 var scouting_technique: int = 75
 var scouting_tackling: int = 75
 var scouting_keeping: int = 75
+var scouting_vision: int = 75
+var _xi_vision_target: Vector2 = Vector2.ZERO
+var _xi_vision_context: int = -1
+var _xi_vision_remaining: float = 0.0
 var technique_control_multiplier: float = 1.0
 var movement_multiplier: float = 1.0
 var stamina_drain_multiplier: float = 1.0
@@ -161,6 +165,8 @@ func _apply_match_scouting(p_team_size: int = 5) -> void:
 	scouting_technique = int(stats.get("technique", 75))
 	scouting_tackling = int(stats.get("tackling", 75))
 	scouting_keeping = int(stats.get("keeping", 75))
+	scouting_vision = validated_vision(stats.get("vision", 75))
+	reset_xi_vision_read()
 	technique_control_multiplier = clampf(
 		1.0 + float(scouting_technique - 75) * 0.0025, 0.93, 1.06
 	)
@@ -173,6 +179,41 @@ func _apply_match_scouting(p_team_size: int = 5) -> void:
 	stamina_drain_multiplier = clampf(
 		1.0 - float(scouting_endurance - 75) * 0.008, 0.90, 1.20
 	)
+
+# Optional scouting field: legacy snapshots retain exactly neutral behavior.
+static func validated_vision(value: Variant) -> int:
+	if typeof(value) not in [TYPE_INT, TYPE_FLOAT]:
+		return 75
+	var rating := float(value)
+	if is_nan(rating) or is_inf(rating) or rating < 1.0 or rating > 99.0 or floorf(rating) != rating:
+		return 75
+	return int(rating)
+
+
+func vision_decision_multiplier() -> float:
+	return clampf(1.0 + (75.0 - float(scouting_vision)) * 0.006, 0.85, 1.40)
+
+
+func reset_xi_vision_read() -> void:
+	_xi_vision_context = -1
+	_xi_vision_remaining = 0.0
+
+
+# Only ordinary positional reads may be delayed. A new tactical context,
+# carrier/receiver/presser role, or manual control invalidates the old read.
+# Low vision holds the previous plausible target briefly; no idle penalty,
+# per-frame randomness, future knowledge, speed or ball physics change.
+func xi_vision_read_target(target: Vector2, delta: float, positional: bool, context: int) -> Vector2:
+	if not positional or role == "keeper" or has_ball or sent_off or xi_collision_down_seconds > 0.0 or scouting_vision >= 75:
+		reset_xi_vision_read()
+		return target
+	_xi_vision_remaining = maxf(0.0, _xi_vision_remaining - maxf(delta, 0.0))
+	if _xi_vision_context != context or _xi_vision_remaining <= 0.00001:
+		_xi_vision_context = context
+		_xi_vision_target = target
+		_xi_vision_remaining = clampf((75.0 - float(scouting_vision)) * 0.0035, 0.0, 0.26)
+	return _xi_vision_target
+
 
 # Only ball velocity changes for passes/shots; direction and goalkeeper
 # mechanics remain intact. Rating 75 is neutral for legacy actors.
