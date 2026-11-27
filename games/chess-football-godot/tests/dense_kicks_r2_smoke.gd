@@ -230,6 +230,42 @@ func _initialize() -> void:
 	assert(ChessFootball3DPresenter.xi_dense_live_pass_phase(8, 0.72, 0.72) == 0.0)
 	print("FOOTBALL_DENSE_LIVE_PASS_QUICK_RECOVERY_OK clubs=2 visual_seconds=0.25 gameplay_lock_unchanged=true")
 	print("FOOTBALL_XI_PASS_PLANT_OK clubs=2 human_and_ai=true no_slide=true resume=true")
+	# Exercise each actual pinned shoot sheet on the real charged-shot
+	# release path. The two clubs have different authored contact frames.
+	for club in range(2):
+		var shooter: Footballer = game.teams[club][2]
+		var key: int = shooter.get_instance_id()
+		var driver: AnimatedSprite3D = stage.player_sprites[key]
+		var material: StandardMaterial3D = stage.xi_raster_meshes[key].material_override
+		shooter.velocity = Vector2.ZERO
+		game._select_player(shooter)
+		game.ball.attach_to(shooter)
+		game._begin_shot_charge(0.0)
+		game.shot_charge_seconds = 0.11
+		game._release_charged_shot()
+		assert(game.ball.carrier == null and game.ball.last_release_was_shot)
+		assert(game.ball.velocity.length() > 0.0)
+		var release_velocity: Vector2 = game.ball.velocity
+		var duration: float = shooter.action_visual_duration_seconds
+		var contact: int = 7 if club == 0 else 10
+		stage.sync_presentation(0.0, "broadcast")
+		assert(driver.animation == &"shoot" and driver.frame == contact)
+		assert(material.albedo_texture == driver.sprite_frames.get_frame_texture(&"shoot", contact))
+		var previous := driver.frame
+		for tick in range(1, 16):
+			shooter.action_lock_seconds = duration - float(tick) * 0.02
+			stage._sync_visible_animation(key, shooter, driver, &"shoot", 0.0)
+			assert(driver.frame >= previous and driver.frame <= 15)
+			previous = driver.frame
+		assert(previous == 15)
+		shooter.action_lock_seconds = duration - 0.33
+		stage.sync_presentation(0.0, "broadcast")
+		assert(String(driver.animation).begins_with("idle"))
+		assert(is_equal_approx(shooter.action_lock_seconds, duration - 0.33))
+		assert(game.ball.velocity == release_velocity and game.ball.carrier == null)
+		shooter.action_lock_seconds = 0.0
+	assert(ChessFootball3DPresenter.xi_dense_live_shot_phase(0, 8, 0.72, 0.72) == 0.0)
+	print("FOOTBALL_DENSE_LIVE_SHOT_CONTACT_OK clubs=2 contact_frames=7,10 visible_seconds=0.32 physics_unchanged=true")
 	stage._dense_live_outfield_installed = false
 	print("FOOTBALL_DENSE_LIVE_PASS_CONTACT_OK clubs=2 immediate_release=true contact_frame=7 recovery=true")
 	await _dense_diagonal_live(game, stage)

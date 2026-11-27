@@ -214,6 +214,10 @@ const DENSE_PASS_CONTACT_FRAME := 7
 # A short pass is a quick strike, not a full 0.58–0.80s leg swing.
 # Keep the simulation's action lock separate from the visible gesture.
 const DENSE_PASS_VISIBLE_SECONDS := Footballer.XI_PASS_PLANT_SECONDS
+# Reviewed against the exact pinned Dense shoot sheets: each club has
+# its own first extended striking-leg pose. Do not assume pass timing.
+const DENSE_SHOT_CONTACT_FRAMES := [7, 10]
+const DENSE_SHOT_VISIBLE_SECONDS := 0.32
 var _dense_kick_loaded: Dictionary = {}
 var _dense_kick_pending: Dictionary = {}
 var _dense_diagonal_loaded: Dictionary = {}
@@ -2966,6 +2970,14 @@ func sync_presentation(delta: float, mode: String) -> void:
 					)
 				):
 					wanted_animation = xi_outfield_motion_animation(player.velocity, player.last_sprinting)
+				if (
+					_dense_live_outfield_installed and player.role != "keeper"
+					and wanted_animation == &"shoot"
+					and player.action_visual_duration_seconds > 0.0
+					and player.action_visual_duration_seconds - player.action_lock_seconds
+						>= minf(player.action_visual_duration_seconds, DENSE_SHOT_VISIBLE_SECONDS)
+				):
+					wanted_animation = xi_outfield_motion_animation(player.velocity, player.last_sprinting)
 				# XI's VISIBLE off-ball raster must reflect physical movement even
 				# if the hidden 2D sprite briefly remains in an idle state. Keep
 				# possession/carry, locked actions, keeper and 5v5 rendering intact.
@@ -3689,14 +3701,26 @@ static func xi_complete_action_phase(
 # Do not render its pre-contact wind-up AFTER that event. Use the authored
 # strike pose immediately, then the original follow-through/recovery over
 # the unchanged action lock. No added input latency or physics delay.
-static func xi_dense_live_pass_phase(frame_count: int, total_seconds: float, remaining_seconds: float) -> float:
+static func _xi_dense_contact_phase(frame_count: int, total_seconds: float, remaining_seconds: float, contact: int, gesture_seconds: float) -> float:
 	if frame_count != 16 or total_seconds <= 0.0:
 		return xi_complete_action_phase(frame_count, total_seconds, remaining_seconds)
 	var elapsed := maxf(0.0, total_seconds - remaining_seconds)
-	var visible_seconds := minf(total_seconds, DENSE_PASS_VISIBLE_SECONDS)
+	var visible_seconds := minf(total_seconds, gesture_seconds)
 	var progress := clampf(elapsed / visible_seconds, 0.0, 1.0)
 	return minf(float(frame_count - 1),
-		float(DENSE_PASS_CONTACT_FRAME) + floorf(progress * float(frame_count - DENSE_PASS_CONTACT_FRAME)))
+		float(contact) + floorf(progress * float(frame_count - contact)))
+
+
+static func xi_dense_live_pass_phase(frame_count: int, total_seconds: float, remaining_seconds: float) -> float:
+	return _xi_dense_contact_phase(frame_count, total_seconds, remaining_seconds,
+		DENSE_PASS_CONTACT_FRAME, DENSE_PASS_VISIBLE_SECONDS)
+
+
+static func xi_dense_live_shot_phase(team_id: int, frame_count: int, total_seconds: float, remaining_seconds: float) -> float:
+	if team_id not in [0, 1]:
+		return xi_complete_action_phase(frame_count, total_seconds, remaining_seconds)
+	return _xi_dense_contact_phase(frame_count, total_seconds, remaining_seconds,
+		DENSE_SHOT_CONTACT_FRAMES[team_id], DENSE_SHOT_VISIBLE_SECONDS)
 
 
 static func xi_dense_live_pass_recovered(total_seconds: float, remaining_seconds: float) -> bool:
@@ -3856,6 +3880,10 @@ func _sync_visible_animation(
 		if _dense_live_outfield_installed and wanted == &"pass":
 			phase = xi_dense_live_pass_phase(
 				count, player.action_visual_duration_seconds, player.action_lock_seconds
+			)
+		elif _dense_live_outfield_installed and wanted == &"shoot":
+			phase = xi_dense_live_shot_phase(
+				player.team_id, count, player.action_visual_duration_seconds, player.action_lock_seconds
 			)
 		else:
 			phase = xi_complete_action_phase(
