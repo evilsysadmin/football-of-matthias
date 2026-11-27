@@ -211,6 +211,9 @@ var _dense_live_outfield_installed := false
 # Both SHA-pinned 16-pose Dense pass sheets first show the extended
 # striking leg at index 7 (zero-based). The ball release is immediate.
 const DENSE_PASS_CONTACT_FRAME := 7
+# A short pass is a quick strike, not a full 0.58–0.80s leg swing.
+# Keep the simulation's action lock separate from the visible gesture.
+const DENSE_PASS_VISIBLE_SECONDS := 0.25
 var _dense_kick_loaded: Dictionary = {}
 var _dense_kick_pending: Dictionary = {}
 var _dense_diagonal_loaded: Dictionary = {}
@@ -2952,6 +2955,17 @@ func sync_presentation(delta: float, mode: String) -> void:
 				)
 			if player.visual != null:
 				var wanted_animation := StringName(player.visual.animation)
+				# Stop showing a completed Dense pass even if the gameplay
+				# lock still has time left. Use actual motion, never fake a
+				# run or unlock the underlying player/ball simulation.
+				if (
+					_dense_live_outfield_installed and player.role != "keeper"
+					and wanted_animation == &"pass"
+					and xi_dense_live_pass_recovered(
+						player.action_visual_duration_seconds, player.action_lock_seconds
+					)
+				):
+					wanted_animation = xi_outfield_motion_animation(player.velocity, player.last_sprinting)
 				# XI's VISIBLE off-ball raster must reflect physical movement even
 				# if the hidden 2D sprite briefly remains in an idle state. Keep
 				# possession/carry, locked actions, keeper and 5v5 rendering intact.
@@ -3678,9 +3692,15 @@ static func xi_complete_action_phase(
 static func xi_dense_live_pass_phase(frame_count: int, total_seconds: float, remaining_seconds: float) -> float:
 	if frame_count != 16 or total_seconds <= 0.0:
 		return xi_complete_action_phase(frame_count, total_seconds, remaining_seconds)
-	var progress := clampf(1.0 - remaining_seconds / total_seconds, 0.0, 1.0)
+	var elapsed := maxf(0.0, total_seconds - remaining_seconds)
+	var visible_seconds := minf(total_seconds, DENSE_PASS_VISIBLE_SECONDS)
+	var progress := clampf(elapsed / visible_seconds, 0.0, 1.0)
 	return minf(float(frame_count - 1),
 		float(DENSE_PASS_CONTACT_FRAME) + floorf(progress * float(frame_count - DENSE_PASS_CONTACT_FRAME)))
+
+
+static func xi_dense_live_pass_recovered(total_seconds: float, remaining_seconds: float) -> bool:
+	return total_seconds > 0.0 and total_seconds - remaining_seconds >= minf(total_seconds, DENSE_PASS_VISIBLE_SECONDS)
 
 
 func _sync_visible_animation(
