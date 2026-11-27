@@ -213,7 +213,7 @@ var _dense_live_outfield_installed := false
 const DENSE_PASS_CONTACT_FRAME := 7
 # A short pass is a quick strike, not a full 0.58–0.80s leg swing.
 # Keep the simulation's action lock separate from the visible gesture.
-const DENSE_PASS_VISIBLE_SECONDS := 0.25
+const DENSE_PASS_VISIBLE_SECONDS := Footballer.XI_PASS_PLANT_SECONDS
 var _dense_kick_loaded: Dictionary = {}
 var _dense_kick_pending: Dictionary = {}
 var _dense_diagonal_loaded: Dictionary = {}

@@ -179,7 +179,18 @@ func _initialize() -> void:
 		var driver: AnimatedSprite3D = stage.player_sprites[key]
 		var material: StandardMaterial3D = stage.xi_raster_meshes[key].material_override
 		game.ball.attach_to(passer)
+		# Incoming running momentum must be stopped at the real kick.
+		passer.velocity = Vector2(170.0, 20.0)
+		passer.last_sprinting = true
+		var planted_at: Vector2 = passer.global_position
 		game._pass_from(passer, Vector2.RIGHT if club == 0 else Vector2.LEFT)
+		assert(passer.xi_pass_plant_active())
+		assert(passer.velocity == Vector2.ZERO and not passer.last_sprinting)
+		for tick in range(6):
+			passer.move_human(1.0 / 60.0, Vector2.RIGHT, true)
+			passer.move_ai(1.0 / 60.0, planted_at + Vector2(400.0, 0.0), 1.0)
+			assert(passer.global_position == planted_at and passer.velocity == Vector2.ZERO)
+
 		assert(game.ball.carrier == null and game.ball.velocity.length() > 0.0)
 		var duration: float = passer.action_visual_duration_seconds
 		assert(is_equal_approx(duration, 0.72))
@@ -205,11 +216,20 @@ func _initialize() -> void:
 		passer.action_lock_seconds = duration - 0.26
 		stage.sync_presentation(0.0, "broadcast")
 		assert(String(driver.animation).begins_with("idle"))
+		assert(not passer.xi_pass_plant_active())
+		# Both movement entry points resume after the shared window even
+		# while the original action/cooldown lock still has time remaining.
+		passer.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+		assert(passer.velocity.x > 0.0)
+		passer.velocity = Vector2.ZERO
+		passer.move_ai(1.0 / 60.0, passer.global_position + Vector2(400.0, 0.0), 1.0)
+		assert(passer.velocity.x > 0.0)
 		assert(is_equal_approx(passer.action_lock_seconds, duration - 0.26))
 		assert(game.ball.carrier == null and game.ball.velocity == release_velocity)
 		passer.action_lock_seconds = 0.0
 	assert(ChessFootball3DPresenter.xi_dense_live_pass_phase(8, 0.72, 0.72) == 0.0)
 	print("FOOTBALL_DENSE_LIVE_PASS_QUICK_RECOVERY_OK clubs=2 visual_seconds=0.25 gameplay_lock_unchanged=true")
+	print("FOOTBALL_XI_PASS_PLANT_OK clubs=2 human_and_ai=true no_slide=true resume=true")
 	stage._dense_live_outfield_installed = false
 	print("FOOTBALL_DENSE_LIVE_PASS_CONTACT_OK clubs=2 immediate_release=true contact_frame=7 recovery=true")
 	await _dense_diagonal_live(game, stage)
