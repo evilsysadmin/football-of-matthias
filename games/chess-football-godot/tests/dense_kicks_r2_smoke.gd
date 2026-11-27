@@ -169,6 +169,69 @@ func _initialize() -> void:
 		assert(bank.get_frame_texture(&"run_back_diagonal", 0) == back_before)
 		assert(bank.get_frame_texture(&"run", 0) == run_before)
 		assert(game.ball.carrier == owner)
+	# Exercise the live-only contact clock on the actual pinned pass sheets,
+	# not the legacy preview path above. Use a real pass and keep its
+	# release and lock authoritative; no synthetic delayed ball motion.
+	stage._dense_live_outfield_installed = true
+	for club in range(2):
+		var passer: Footballer = game.teams[club][1]
+		var key: int = passer.get_instance_id()
+		var driver: AnimatedSprite3D = stage.player_sprites[key]
+		var material: StandardMaterial3D = stage.xi_raster_meshes[key].material_override
+		game.ball.attach_to(passer)
+		# Incoming running momentum must be stopped at the real kick.
+		passer.velocity = Vector2(170.0, 20.0)
+		passer.last_sprinting = true
+		var planted_at: Vector2 = passer.global_position
+		game._pass_from(passer, Vector2.RIGHT if club == 0 else Vector2.LEFT)
+		assert(passer.xi_pass_plant_active())
+		assert(passer.velocity == Vector2.ZERO and not passer.last_sprinting)
+		for tick in range(6):
+			passer.move_human(1.0 / 60.0, Vector2.RIGHT, true)
+			passer.move_ai(1.0 / 60.0, planted_at + Vector2(400.0, 0.0), 1.0)
+			assert(passer.global_position == planted_at and passer.velocity == Vector2.ZERO)
+
+		assert(game.ball.carrier == null and game.ball.velocity.length() > 0.0)
+		var duration: float = passer.action_visual_duration_seconds
+		assert(is_equal_approx(duration, 0.72))
+		var release_velocity: Vector2 = game.ball.velocity
+		stage.sync_presentation(0.0, "broadcast")
+		assert(driver.animation == &"pass" and driver.frame == 7)
+		assert(material.albedo_texture == driver.sprite_frames.get_frame_texture(&"pass", 7))
+		assert(is_equal_approx(passer.action_lock_seconds, duration))
+		var previous := driver.frame
+		for step in range(1, 16):
+			passer.action_lock_seconds = duration * (1.0 - float(step) / 16.0)
+			stage._sync_visible_animation(key, passer, driver, &"pass", 0.0)
+			assert(driver.frame >= previous and driver.frame <= 15)
+			previous = driver.frame
+		assert(previous == 15)
+		# Follow-through finishes in 250ms, not after the simulation lock.
+		assert(ChessFootball3DPresenter.xi_dense_live_pass_phase(16, duration, duration - 0.125) >= 11.0)
+		assert(ChessFootball3DPresenter.xi_dense_live_pass_phase(16, duration, duration - 0.24) == 15.0)
+		passer.velocity = Vector2.ZERO
+		passer.action_lock_seconds = duration - 0.20
+		stage.sync_presentation(0.0, "broadcast")
+		assert(driver.animation == &"pass")
+		passer.action_lock_seconds = duration - 0.26
+		stage.sync_presentation(0.0, "broadcast")
+		assert(String(driver.animation).begins_with("idle"))
+		assert(not passer.xi_pass_plant_active())
+		# Both movement entry points resume after the shared window even
+		# while the original action/cooldown lock still has time remaining.
+		passer.move_human(1.0 / 60.0, Vector2.RIGHT, false)
+		assert(passer.velocity.x > 0.0)
+		passer.velocity = Vector2.ZERO
+		passer.move_ai(1.0 / 60.0, passer.global_position + Vector2(400.0, 0.0), 1.0)
+		assert(passer.velocity.x > 0.0)
+		assert(is_equal_approx(passer.action_lock_seconds, duration - 0.26))
+		assert(game.ball.carrier == null and game.ball.velocity == release_velocity)
+		passer.action_lock_seconds = 0.0
+	assert(ChessFootball3DPresenter.xi_dense_live_pass_phase(8, 0.72, 0.72) == 0.0)
+	print("FOOTBALL_DENSE_LIVE_PASS_QUICK_RECOVERY_OK clubs=2 visual_seconds=0.25 gameplay_lock_unchanged=true")
+	print("FOOTBALL_XI_PASS_PLANT_OK clubs=2 human_and_ai=true no_slide=true resume=true")
+	stage._dense_live_outfield_installed = false
+	print("FOOTBALL_DENSE_LIVE_PASS_CONTACT_OK clubs=2 immediate_release=true contact_frame=7 recovery=true")
 	await _dense_diagonal_live(game, stage)
 	print("FOOTBALL_DENSE_DIAGONAL_NATIVE_OK clubs=2 frames=24 phase=true precedence=true")
 	print("FOOTBALL_DENSE_KICKS_NATIVE_OK teams=2 frames=16 atomic=true")
