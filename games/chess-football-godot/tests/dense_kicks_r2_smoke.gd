@@ -12,6 +12,30 @@ func _initialize() -> void:
 	var stage: ChessFootball3DPresenter = game.presentation_3d
 	var directory := OS.get_environment("RUNNER_TEMP").path_join("football-dense-v1")
 	var owner = game.ball.carrier
+	var pack = preload("res://scripts/football_dense_direction_pack.gd")
+	assert(pack.PINNED.size() == 8)
+	var seen := {}
+	for club in range(2):
+		for view in ["side", "front", "front_diagonal", "back", "back_diagonal"]:
+			var metadata: Dictionary = pack.sheet_meta(club, view)
+			assert(not metadata.is_empty())
+			assert(metadata["columns"] == 24 and metadata["rows"] == 1)
+			assert(ChessFootballR2AtlasLoader.valid_metadata(metadata, ChessFootballDenseV1R2.TRUSTED_ROOT))
+			seen[metadata["url"]] = true
+	assert(seen.size() == 10)
+	assert(pack.sheet_meta(-1, "side").is_empty())
+	assert(pack.sheet_meta(0, "../side").is_empty())
+	assert(pack.sheet_meta(0, "pass").is_empty())
+	assert(pack.load_pack(func(_club: int, _view: String, _file: String) -> PackedByteArray:
+		return PackedByteArray()
+	).is_empty())
+	var invalid := Image.create(3072, 144, false, Image.FORMAT_RGBA8)
+	invalid.fill(Color.WHITE)
+	var wrong_bytes: PackedByteArray = invalid.save_webp_to_buffer(true)
+	assert(pack.load_pack(func(_club: int, _view: String, _file: String) -> PackedByteArray:
+		return wrong_bytes
+	).is_empty())
+	print("FOOTBALL_DENSE_PACK_METADATA_OK sheets=10 missing_and_wrong_sha_rejected=true")
 	# Correct dimensions alone are not sufficient: transparent sheets must
 	# never replace visible fallback frames or advance the installed state.
 	var blank_kick := Image.create(16 * 128, 144, false, Image.FORMAT_RGBA8)
