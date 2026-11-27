@@ -397,6 +397,8 @@ func _initialize() -> void:
 	await _loose_transition_shape(scene)
 	await process_frame
 	await _mirrored_cutback_shape(scene)
+	await process_frame
+	await _shared_attacking_block_follow(scene)
 	quit(0)
 
 
@@ -501,4 +503,67 @@ func _loose_transition_shape(scene: PackedScene) -> void:
 	game.match_team_size = 5
 	assert(game._ai_xi_loose_support_target(home, centre) == home.home_position)
 	print("FOOTBALL_XI_LOOSE_TRANSITION_SHAPE_OK mirrored=true real_movement=true bounded=true manual_unchanged=true legacy=true")
+	game.queue_free()
+
+
+# The non-outlet rows must actually follow a progressing attack, not only
+# the two near-ball runners. Test mirrored real XI targets and physical
+# movement while preserving manual ownership and the wide formation lanes.
+func _shared_attacking_block_follow(scene: PackedScene) -> void:
+	var game = scene.instantiate()
+	game.match_team_size = 11
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game.kickoff_active = false
+	game.goal_restart_active = false
+	game.set_piece_active = false
+	var centre: Vector2 = game.match_pitch.get_center()
+	var deltas: Array[float] = []
+	for club in range(2):
+		var forward := 1.0 if club == 0 else -1.0
+		for team in game.teams:
+			for player: Footballer in team:
+				player.set_process(false)
+				player.set_physics_process(false)
+				player.global_position = player.home_position
+				player.velocity = Vector2.ZERO
+		var carrier: Footballer = game.teams[club][10]
+		var lead: Footballer = game.teams[club][5]
+		var recycle: Footballer = game.teams[club][6]
+		var defender: Footballer = game.teams[club][1]
+		var midfielder: Footballer = game.teams[club][7]
+		carrier.global_position = centre
+		lead.global_position = centre + Vector2(-forward * 80.0, 60.0)
+		recycle.global_position = centre + Vector2(-forward * 120.0, -60.0)
+		defender.global_position = centre + Vector2(-forward * 1300.0, -300.0)
+		midfielder.global_position = centre + Vector2(-forward * 1100.0, 300.0)
+		game._select_player(carrier if club == 0 else game.teams[0][10])
+		game.ball.attach_to(carrier)
+		var before_def: Vector2 = game._ai_support_target(defender)
+		var before_mid: Vector2 = game._ai_support_target(midfielder)
+		carrier.global_position += Vector2(forward * 600.0, 0.0)
+		lead.global_position += Vector2(forward * 600.0, 0.0)
+		recycle.global_position += Vector2(forward * 600.0, 0.0)
+		var after_def: Vector2 = game._ai_support_target(defender)
+		var after_mid: Vector2 = game._ai_support_target(midfielder)
+		assert(game.match_pitch.has_point(after_def) and game.match_pitch.has_point(after_mid))
+		var def_delta: float = (after_def.x - before_def.x) * forward
+		var mid_delta: float = (after_mid.x - before_mid.x) * forward
+		assert(def_delta >= 270.0 and mid_delta >= 340.0)
+		assert(mid_delta > def_delta)
+		assert(is_equal_approx(before_def.y, after_def.y))
+		assert(is_equal_approx(before_mid.y, after_mid.y))
+		deltas.append(def_delta)
+		deltas.append(mid_delta)
+		var start: Vector2 = midfielder.global_position
+		for tick in range(18):
+			await physics_frame
+			midfielder.move_ai(STEP, after_mid, 0.83, true)
+		assert((midfielder.global_position.x - start.x) * forward > 20.0)
+	assert(is_equal_approx(deltas[0], deltas[2]))
+	assert(is_equal_approx(deltas[1], deltas[3]))
+	print("FOOTBALL_XI_SHARED_ATTACKING_BLOCK_OK clubs=2 real_movement=true lanes_preserved=true")
 	game.queue_free()
