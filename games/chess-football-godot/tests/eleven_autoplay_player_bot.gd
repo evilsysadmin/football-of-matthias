@@ -335,6 +335,11 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	game.ball.attach_to(cpu_owner)
 	game.xi_human_auto_switch_block_until = 0.0
 
+	# Test-only per-actor continuity samples. Stable possession and roster
+	# identity are required; resets, injuries and handoffs are excluded.
+	var offball_previous: Dictionary = {}
+	var offball_totals: Dictionary = {}
+	var offball_sample_owner: Footballer = null
 	var movement_frames := 0
 	var actual_human_travel_units := 0.0
 	var cpu_frames := 0
@@ -456,6 +461,15 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 		var before_control: Footballer = current
 		var before_control_position: Vector2 = before_control.global_position
 		game._physics_process(STEP)
+		var open_now: bool = not (game.kickoff_active or game.goal_restart_active or game.set_piece_active)
+		if not playing or not open_now or game.ball.carrier != carrier or carrier == null:
+			offball_previous.clear()
+			offball_sample_owner = null
+		elif tick % 6 == 0:
+			if offball_sample_owner != carrier:
+				offball_previous.clear()
+			offball_sample_owner = carrier
+			_sample_offball_continuity(game, before_control, offball_previous, offball_totals)
 		# Count only physical displacement of the actually selected athlete
 		# during the authoritative 60 Hz tick. Pressed keys without movement
 		# must never allow a vacuous replay to pass the QA liveness gate.
@@ -654,6 +668,21 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	_release_keys()
 	assert(game.match_seconds >= float(TICKS) * STEP - STEP)
 	_validate_real_match(game)
+	# Keep diagnostic counters out of the existing strict replay signature.
+	# Print bounded, deterministic per-player summaries, not 60Hz logs.
+	var offball_report: Array[Dictionary] = []
+	for identity in offball_totals:
+		var entry: Dictionary = offball_totals[identity]
+		entry["identity"] = identity
+		entry["travel"] = snappedf(float(entry["travel"]), 0.1)
+		entry["target_travel"] = snappedf(float(entry["target_travel"]), 0.1)
+		entry["max_target_step"] = snappedf(float(entry["max_target_step"]), 0.1)
+		offball_report.append(entry)
+	assert(not offball_report.is_empty(), "Off-ball probe needs genuine stable possession samples")
+	print("FOOTBALL_XI_OFFBALL_CONTINUITY " + JSON.stringify({
+		"seed": trial_seed, "difficulty": difficulty, "sample_hz": 10,
+		"players": offball_report,
+	}))
 	var record: Dictionary = {
 		"seed": trial_seed,
 		"difficulty": difficulty,
@@ -697,3 +726,53 @@ func _play(trial_seed: int, difficulty: String) -> Dictionary:
 	game.queue_free()
 	await process_frame
 	return record
+
+
+# Read-only 10Hz snapshots from the real 60Hz input bot. Reversal is
+# deliberately diagnostic, not a failure: legitimate tactical turns exist.
+func _sample_offball_continuity(game: Node2D, before_control: Footballer,
+	previous: Dictionary, totals: Dictionary) -> void:
+	for team in game.teams:
+		for player: Footballer in team:
+			var identity := "%d:%d" % [player.team_id, player.squad_index]
+			if (
+				player.role == "keeper" or player == game.controlled
+				or player == before_control or player == game.ball.carrier
+				or player.sent_off or player.xi_collision_down_seconds > 0.0
+				or player.contact_stun_seconds > 0.0 or player.action_lock_seconds > 0.0
+			):
+				previous.erase(identity)
+				continue
+			var position: Vector2 = player.global_position
+			var velocity: Vector2 = player.velocity
+			var target: Vector2 = player.ai_target
+			var entry: Dictionary = totals.get(identity, {
+				"samples": 0, "travel": 0.0, "target_travel": 0.0,
+				"max_target_step": 0.0, "velocity_reversals": 0,
+				"target_reversals": 0, "near_target_reversals": 0,
+				"near_target_samples": 0,
+			})
+			if previous.has(identity):
+				var old: Dictionary = previous[identity]
+				var old_velocity: Vector2 = old["velocity"]
+				var old_target: Vector2 = old["target"]
+				var old_position: Vector2 = old["position"]
+				var target_step: Vector2 = target - old_target
+				var old_target_step: Vector2 = old["target_step"]
+				var near_target: bool = position.distance_to(target) <= 45.0
+				entry["samples"] += 1
+				entry["travel"] += position.distance_to(old_position)
+				entry["target_travel"] += target_step.length()
+				entry["max_target_step"] = maxf(float(entry["max_target_step"]), target_step.length())
+				if near_target:
+					entry["near_target_samples"] += 1
+				if velocity.length() >= 12.0 and old_velocity.length() >= 12.0 and velocity.normalized().dot(old_velocity.normalized()) < -0.5:
+					entry["velocity_reversals"] += 1
+					if near_target:
+						entry["near_target_reversals"] += 1
+				if target_step.length() >= 8.0 and old_target_step.length() >= 8.0 and target_step.normalized().dot(old_target_step.normalized()) < -0.5:
+					entry["target_reversals"] += 1
+				previous[identity] = {"position": position, "velocity": velocity, "target": target, "target_step": target_step}
+			else:
+				previous[identity] = {"position": position, "velocity": velocity, "target": target, "target_step": Vector2.ZERO}
+			totals[identity] = entry
