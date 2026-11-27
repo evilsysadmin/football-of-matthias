@@ -66,3 +66,33 @@ static func load_bundled_pack() -> Dictionary:
 		var path := ChessFootballR2AtlasLoader.BUNDLED_ATLAS_DIR + filename + ".bin"
 		return FileAccess.get_file_as_bytes(path) if FileAccess.file_exists(path) else PackedByteArray()
 	)
+
+
+static func load_bundled_kicks() -> Dictionary:
+	var images := {}
+	for club in range(2):
+		var actions := {}
+		for action in ChessFootballDenseV1R2.ACTIONS:
+			var meta := ChessFootballDenseV1R2.sheet_meta(club, action)
+			if meta.is_empty():
+				return {}
+			var filename: String = String(meta["url"]).get_file()
+			var path := ChessFootballR2AtlasLoader.BUNDLED_ATLAS_DIR + filename + ".bin"
+			if not FileAccess.file_exists(path):
+				return {}
+			var image := ChessFootballR2AtlasLoader.decode_verified_webp(
+				FileAccess.get_file_as_bytes(path), meta, ChessFootballDenseV1R2.TRUSTED_ROOT)
+			if not ChessFootballDenseV1R2.frame_geometry_error(image, 16).is_empty():
+				return {}
+			actions[action] = image
+		images[club] = actions
+	var result := {}
+	for club in range(2):
+		var rows := {}
+		for action in ChessFootballDenseV1R2.ACTIONS:
+			var frames := ChessFootballDenseV1R2.frames_from_image(images[club][action], 16)
+			if frames.size() != 16:
+				return {}
+			rows[action] = frames
+		result[club] = rows
+	return result

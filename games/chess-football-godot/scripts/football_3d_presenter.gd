@@ -1459,6 +1459,27 @@ func _allow_xi_art_preview() -> bool:
 		true))
 
 
+# The fully authored release remains incomplete. This playable interim
+# generation has authored run/sprint/pass/shoot and same-kit fallback
+# poses for the other outfield actions. Never mix late legacy R2 upgrades.
+func _install_bundled_dense_outfield() -> bool:
+	var pack = preload("res://scripts/football_dense_direction_pack.gd")
+	var installer = preload("res://scripts/football_dense_run_bank.gd")
+	var rows: Dictionary = pack.load_bundled_pack()
+	if rows.size() != 2:
+		return false
+	var kicks: Dictionary = pack.load_bundled_kicks()
+	if kicks.size() != 2:
+		return false
+	if not installer.install_all(match_node.teams, player_sprites,
+		outfield_visual_phases, outfield_visual_names, rows, false, kicks):
+		return false
+	tone_gain_cache.clear()
+	body_scale_cache.clear()
+	rear_shirt_frame_cache.clear()
+	return true
+
+
 func setup(p_match: Node) -> void:
 	match_node = p_match
 	var pitch: Rect2 = match_node.match_pitch
@@ -1473,6 +1494,16 @@ func setup(p_match: Node) -> void:
 	sync_presentation(1.0, "broadcast")
 	# Render approved XI atlases as real textured 3D meshes.
 	_build_xi_quad_bodies()
+	# Real exported XI game: verify and install both clubs before the
+	# first rendered frame. The explicit localhost legacy preview is
+	# retained for its existing regression tests, not public users.
+	if OS.has_feature("web") and match_node.match_team_size == 11 and not _allow_xi_art_preview():
+		if _install_bundled_dense_outfield():
+			sync_presentation(0.0, "broadcast")
+			_request_keeper_catch_atlases_from_r2()
+			print("FOOTBALL_XI_DENSE_LIVE_INSTALLED clubs=2 outfield=20 directions=5 kicks=4 source=pck temporary_idle_actions=true")
+			return
+		print("FOOTBALL_XI_DENSE_LIVE_FALLBACK incomplete_or_invalid_bundle")
 	_request_idle_front_from_r2()
 	_request_animated_idle_from_r2()
 	_request_lateral_run_from_r2()

@@ -714,22 +714,21 @@ try {
   }
   console.log('CHESS_FOOTBALL_REAL_WEB_READY OK');
 
-  // First boot XI with the ordinary art policy, without the explicit art
-  // preview flag. The incomplete generation must NOT enter either club.
+  // Ordinary XI boot MUST install the complete Dense outfield from PCK.
+  // No localhost art preview flag is set for this boot.
   await page.goto('about:blank');
-  const artHoldReceipt = page.waitForEvent('console', {
-    predicate: line => line.text().includes('FOOTBALL_XI_ART_POLICY legacy incomplete_directional_family'),
+  const liveDenseReceipt = page.waitForEvent('console', {
+    predicate: line => line.text().includes('FOOTBALL_XI_DENSE_LIVE_INSTALLED clubs=2 outfield=20 directions=5 kicks=4 source=pck'),
     timeout: 90000
   });
   await page.goto(url + '#football-ci-eleven=1', {waitUntil: 'domcontentloaded', timeout: 30000});
-  await artHoldReceipt;
+  await liveDenseReceipt;
   await page.waitForFunction(() => window.__chessFootballWebReady === true, null, {timeout: 60000});
-  await page.waitForFunction(() => window.__chessFootballActionPoseReceipts.some(r => r.team_size === 11 && r.sheets === 8), null, {timeout: 60000});
-  const held = await page.evaluate(() => ({hero: window.__chessFootballHeroV5Receipts.length, kicks: window.__chessFootballDenseKicksInstalled, diagonal: window.__chessFootballDenseDiagonalInstalled}));
-  if (held.hero || held.kicks || held.diagonal || messages.some(m => m.includes('FOOTBALL_ATLAS bundled_verified file=')) || failures.length) {
-    throw new Error('Incomplete art activated during normal XI boot: ' + JSON.stringify(held) + ' ' + failures.slice(0, 8).join('; '));
+  const held = await page.evaluate(() => ({hero: window.__chessFootballHeroV5Receipts.length, oldActions: window.__chessFootballActionPoseReceipts.length}));
+  if (held.hero || held.oldActions || failures.length) {
+    throw new Error('Legacy overlay entered live Dense XI: ' + JSON.stringify(held) + ' ' + failures.slice(0, 8).join('; '));
   }
-  console.log('FOOTBALL_XI_PUBLIC_ART_HOLD_OK clubs=2 partial_generation_installs=0');
+  console.log('FOOTBALL_XI_REAL_WEB_DENSE_LIVE_OK clubs=2 outfield=20 source=pck');
   // Keep testing the exact candidate assets in the same WASM, with an
   // explicit localhost-only preview opt-in that cannot enable live staging.
   await page.goto('about:blank');
