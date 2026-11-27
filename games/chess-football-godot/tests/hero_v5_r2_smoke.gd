@@ -198,6 +198,41 @@ func _initialize() -> void:
 			var name := ChessFootballRunDirection.animation_for(base, preview.VIEWS[i])
 			assert(copy_bank.get_frame_count(name) == preview.EXPECTED[i])
 	assert(copy_bank.get_frame_texture(&"pass", 0) == original_bank.get_frame_texture(&"pass", 0))
+	# Exercise the same whole-match transaction used by real Godot review.
+	var installer = preload("res://scripts/football_dense_run_bank.gd")
+	var old_banks := {}
+	for club in range(2):
+		for athlete: Footballer in game.teams[club]:
+			var id: int = athlete.get_instance_id()
+			old_banks[id] = stage.player_sprites[id].sprite_frames
+	var owner_id: int = owner.get_instance_id()
+	stage._sync_visible_animation(owner_id, owner, driver, &"run", 0.0)
+	var old_run_count := driver.sprite_frames.get_frame_count(&"run")
+	stage.outfield_visual_phases[owner_id] = 0.625 * float(old_run_count)
+	assert(not installer.install_all(game.teams, stage.player_sprites,
+		stage.outfield_visual_phases, stage.outfield_visual_names, {0: rows}))
+	assert(not installer.install_all(game.teams, stage.player_sprites,
+		stage.outfield_visual_phases, stage.outfield_visual_names, {0: rows, 1: missing_view}))
+	for id in old_banks:
+		assert(stage.player_sprites[id].sprite_frames == old_banks[id])
+	assert(is_equal_approx(float(stage.outfield_visual_phases[owner_id]), 0.625 * float(old_run_count)))
+	assert(installer.install_all(game.teams, stage.player_sprites,
+		stage.outfield_visual_phases, stage.outfield_visual_names, {0: rows, 1: rows}))
+	assert(driver.animation == &"run" and driver.frame == 15)
+	assert(is_equal_approx(float(stage.outfield_visual_phases[owner_id]), 15.0))
+	for club in range(2):
+		for athlete: Footballer in game.teams[club]:
+			var id: int = athlete.get_instance_id()
+			var installed: SpriteFrames = stage.player_sprites[id].sprite_frames
+			if athlete.role == "keeper":
+				assert(installed == old_banks[id])
+				continue
+			assert(installed != old_banks[id])
+			assert(installed.get_frame_texture(&"pass", 0) == old_banks[id].get_frame_texture(&"pass", 0))
+			for view in installer.VIEWS:
+				for base in [&"run", &"sprint"]:
+					assert(installed.get_frame_count(ChessFootballRunDirection.animation_for(base, view)) == 24)
+	print("FOOTBALL_DENSE_RUN_TRANSACTION_OK both_clubs=true rollback=true phase=true keeper_untouched=true")
 	print("FOOTBALL_XI_CANDIDATE_PREVIEW_BANK_OK five_views=true missing_rejected=true")
 	assert(game.ball.carrier == initial_owner)
 	print("FOOTBALL_HERO_V5_SMOKE_OK clubs=2 families=2 frames=80 no_painted_ball=contract fallback=1")
