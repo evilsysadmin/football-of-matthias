@@ -3191,10 +3191,25 @@ func _ai_support_target(player: Footballer, reuse_human_assignment: bool = false
 		# Preserve the XI's genuine 4-3-3 rows and wide lanes while moving
 		# support toward the ball. Never funnel ten teammates into one
 		# narrow column, and do not alter the existing 5v5 support plan.
-		var weight := 0.50 if player.role in ["wing", "forward"] else 0.36
+		# The two short outlets are not the whole attack. Move the other
+		# rows with the actual ball carrier rather than anchoring midfield
+		# and defenders to their kick-off positions. Shared by BOTH teams.
+		# Defenders retain a deeper line; wide players preserve their lanes.
+		var weight := xi_attacking_block_follow_weight(player.role)
 		target.x = lerpf(player.home_position.x, target.x, weight)
 		target.y = lerpf(player.home_position.y, ball.carrier.global_position.y, 0.18)
 	return ChessFootballMath.clamp_to_pitch(target, match_pitch)
+
+static func xi_attacking_block_follow_weight(role: String) -> float:
+	match role:
+		"defender":
+			return 0.46
+		"midfielder":
+			return 0.58
+		"wing", "forward":
+			return 0.64
+	return 0.36
+
 
 func _nearest_opponent_to(player: Footballer) -> Footballer:
 	var opponents: Array = teams[1 - player.team_id]
