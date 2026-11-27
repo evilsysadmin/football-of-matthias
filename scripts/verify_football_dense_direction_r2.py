@@ -74,6 +74,7 @@ def fetch(item):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--canonical-names", action="store_true", help="Preserve immutable R2 names for Web PCK packaging")
     args = parser.parse_args()
     with ThreadPoolExecutor(max_workers=4) as pool:
         verified = list(pool.map(fetch, EXPECTED.items()))
@@ -81,7 +82,8 @@ def main():
     # offline review CLI; the immutable published R2 keys remain _v1.webp.
     args.output.mkdir(parents=True, exist_ok=False)
     for name, raw in verified:
-        (args.output / name.replace("_v1.webp", "_candidate_v3.webp")).write_bytes(raw)
+        filename = name if args.canonical_names else name.replace("_v1.webp", "_candidate_v3.webp")
+        (args.output / filename).write_bytes(raw)
     print("FOOTBALL_DIRECTION_R2_ALL_VERIFIED sheets=8 review_only=true")
 
 

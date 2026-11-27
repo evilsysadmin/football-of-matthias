@@ -2117,20 +2117,21 @@ jobs:
             install -m 0644 "$unpack/templates/web_nothreads_release.zip" "$dir/web_nothreads_release.zip"
           fi
       - run: python3 scripts/materialize_canonical.py
-      - name: Package exact approved V5 and dense WebP bytes into the Web PCK
+      - name: Package exact V5 and complete Dense direction WebP bytes into the Web PCK
         shell: bash
         run: |
           set -euo pipefail
           export FOOTBALL_V5_ASSET_DIR="$RUNNER_TEMP/football-bundled-v5"
           python3 scripts/verify_football_v5_r2.py
           python3 scripts/check_football_dense_v1_r2.py
+          python3 scripts/verify_football_dense_direction_r2.py "$RUNNER_TEMP/football-bundled-directions" --canonical-names
           dest=games/chess-football-godot/assets/players/runtime_atlases
           mkdir -p "$dest"
-          for source in "$FOOTBALL_V5_ASSET_DIR"/*.webp "$RUNNER_TEMP/football-dense-v1"/*.webp; do
+          for source in "$FOOTBALL_V5_ASSET_DIR"/*.webp "$RUNNER_TEMP/football-dense-v1"/*.webp "$RUNNER_TEMP/football-bundled-directions"/*.webp; do
             test -s "$source"
             cp "$source" "$dest/$(basename "$source").bin"
           done
-          test "$(find "$dest" -maxdepth 1 -type f -name '*.bin' | wc -l)" -eq 10
+          test "$(find "$dest" -maxdepth 1 -type f -name '*.bin' | wc -l)" -eq 18
       - name: Export actual Godot Web build before publish
         shell: bash
         run: |
@@ -2139,6 +2140,27 @@ jobs:
           cd games/chess-football-godot
           "$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot" --headless --editor --quit
           "$GITHUB_WORKSPACE/.godot-ci/$GODOT_VERSION/godot" --headless --export-release Web build/web/index.html
+      - name: Attest all ten Dense locomotion sheets in the exported PCK
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=scripts python3 - <<'PY'
+          from pathlib import Path
+          from prepare_football_direction_review import find_pinned_webps, MAX_PCK
+          from check_football_dense_v1_r2 import EXPECTED as dense
+          from verify_football_dense_direction_r2 import EXPECTED as directions
+          path = Path("games/chess-football-godot/build/web/index.pck")
+          if not 0 < path.stat().st_size <= MAX_PCK:
+              raise ValueError("PCK size outside offline review bound")
+          pins = {digest: (name, (3072, 144)) for name, (digest, _) in directions.items()}
+          pins.update({digest: (name, (3072, 144)) for name, (digest, _) in dense.items() if "_run_front_diagonal_" in name})
+          if len(pins) != 10:
+              raise ValueError("Incomplete pinned Dense locomotion set")
+          found = find_pinned_webps(path.read_bytes(), pins)
+          for name in sorted(found):
+              print("FOOTBALL_DENSE_PCK_VERIFIED", name, len(found[name]))
+          print("FOOTBALL_DENSE_PCK_COMPLETE sheets=10 activation=false")
+          PY
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
