@@ -729,72 +729,10 @@ try {
     throw new Error('Legacy overlay entered live Dense XI: ' + JSON.stringify(held) + ' ' + failures.slice(0, 8).join('; '));
   }
   console.log('FOOTBALL_XI_REAL_WEB_DENSE_LIVE_OK clubs=2 outfield=20 source=pck');
-  // Keep testing the exact candidate assets in the same WASM, with an
-  // explicit localhost-only preview opt-in that cannot enable live staging.
-  await page.goto('about:blank');
-  await page.addInitScript(() => { window.__chessFootballPartialArtPreview = true; });
-  await page.goto(url + '#football-ci-eleven=1', {
-    waitUntil: 'domcontentloaded', timeout: 30000
-  });
-  await page.waitForFunction(() => window.__chessFootballWebReady === true, null, { timeout: 60000 });
+  // Drive the ordinary Dense XI boot (no localhost legacy preview flag).
   if (await page.locator('canvas').count() === 0) {
-    throw new Error('XI Web runtime reported ready without canvas');
+    throw new Error('Dense XI Web runtime reported ready without canvas');
   }
-  // A SHA/CORS-valid HTTP response alone does NOT prove installed sprites.
-  // Require a CI-only receipt from the real XI Godot WASM presenter, emitted
-  // only after ALL eight R2 action sheets replace the real team sprite banks.
-  // If a browser silently falls back to old art, the required gate fails.
-  try {
-    await page.waitForFunction(
-      () => window.__chessFootballActionPoseReceipts.some((receipt) =>
-        receipt.team_size === 11 && receipt.sheets === 8),
-      null, { timeout: 60000 }
-    );
-  } catch (error) {
-    // Keep the strict installed-sprites gate; a 200 response is not proof.
-    // A hung software-WebGL renderer must not stall CI diagnostics forever.
-    const diagnostic = await Promise.race([
-      page.evaluate(() => ({
-        webReady: window.__chessFootballWebReady === true,
-        canvasPresent: Boolean(document.querySelector('canvas')),
-        actionPoseReceipts: Array.isArray(window.__chessFootballActionPoseReceipts)
-          ? window.__chessFootballActionPoseReceipts.slice(-8) : null,
-        heroV5Receipts: Array.isArray(window.__chessFootballHeroV5Receipts)
-          ? window.__chessFootballHeroV5Receipts.slice(-4) : null,
-      })).catch((probeError) => ({ probeError: String(probeError.message || probeError) })),
-      new Promise((resolve) => setTimeout(() =>
-        resolve({ probeError: 'WebGL diagnostic timed out after 5s' }), 5000)),
-    ]);
-    console.error('FOOTBALL_XI_WEB_ACTION_POSE_RECEIPT_TIMEOUT', JSON.stringify(diagnostic));
-    throw error;
-  }
-  console.log('FOOTBALL_XI_REAL_WEB_ACTION_POSES_INSTALLED_OK teams=2 actions=4 sheets=8');
-  // HTTP 200 by itself is not enough: actual Godot WASM must install all
-  // four V5 banks into 20 outfield SpriteFrames before continuing.
-  try {
-    await page.waitForFunction(
-      () => window.__chessFootballHeroV5Receipts.some((receipt) =>
-        receipt.team_size === 11 && receipt.sheets === 4),
-      null, { timeout: 60000 }
-    );
-  } catch (error) {
-    console.log('FOOTBALL_WEB_CI_HERO_V5_RECEIPTS',
-      JSON.stringify(await page.evaluate(() => window.__chessFootballHeroV5Receipts)));
-    throw error;
-  }
-  console.log('FOOTBALL_XI_REAL_WEB_HERO_V5_INSTALLED_OK clubs=2 families=2 sheets=4');
-  await page.waitForFunction(() => window.__chessFootballDenseKicksInstalled === true, null, {timeout: 60000});
-  console.log('FOOTBALL_XI_REAL_WEB_DENSE_KICKS_INSTALLED_OK clubs=2 sheets=4 frames=16');
-  await page.waitForFunction(() => window.__chessFootballDenseDiagonalInstalled === true, null, {timeout: 60000});
-  console.log('FOOTBALL_XI_REAL_WEB_DENSE_DIAGONAL_INSTALLED_OK clubs=2 sheets=2 frames=24');
-  const bundled = new Set(messages.flatMap(message => {
-    const match = message.match(/FOOTBALL_ATLAS bundled_verified file=([a-z0-9_]+\.webp)/);
-    return match ? [match[1]] : [];
-  }));
-  if (process.env.FOOTBALL_CI_KEEPER_R2_BRIDGE === '1' && (bundled.size !== 10 || failures.length)) {
-    throw new Error('Expected ten SHA-verified bundled V5/dense sheets and zero runtime failures: ' + JSON.stringify([...bundled]) + ' ' + failures.slice(0, 8).join('; '));
-  }
-  console.log('FOOTBALL_XI_BUNDLED_ATLASES_OK sheets=' + bundled.size);
   // The first 5v5 boot already exercised Playwright's real canvas.click.
   // After a full WASM reboot in software WebGL, locator.click can hang in
   // actionability/scroll checks during ReadPixels GPU stalls despite a real,
@@ -905,6 +843,7 @@ try {
     throw new Error('XI browser autoplay has no live in-game sample');
   }
   const bot = { kind: 'real_chromium_godot_xi_autoplay_not_user_telemetry',
+    art_mode: 'public_dense_pck',
     start_clock: opening.match_clock, moves: [], actions: [],
     sampled_control_changes: 0, sampled_carrier_teams: [], saw_sprint: false };
   let lastPlayer = opening.player_id;
@@ -1012,6 +951,86 @@ try {
   writeFileSync(resolve(output, 'xi-real-browser-autoplay.json'), JSON.stringify(bot, null, 2) + '\n');
   console.log('FOOTBALL_XI_REAL_BROWSER_AUTOPLAY_OK moves=6 action_receipts=4' +
     ' game_seconds=' + bot.match_seconds + ' sprint=1');
+  const liveOverlays = await page.evaluate(() => ({
+    hero: window.__chessFootballHeroV5Receipts.length,
+    oldActions: window.__chessFootballActionPoseReceipts.length,
+    kicks: window.__chessFootballDenseKicksInstalled,
+    diagonal: window.__chessFootballDenseDiagonalInstalled,
+  }));
+  if (liveOverlays.hero || liveOverlays.oldActions || liveOverlays.kicks ||
+      liveOverlays.diagonal || failures.length) {
+    throw new Error('Late legacy overlay entered live Dense XI: ' +
+      JSON.stringify(liveOverlays) + ' ' + failures.slice(0, 8).join('; '));
+  }
+  console.log('FOOTBALL_XI_DENSE_LIVE_GAMEPLAY_OK moves=6 action_receipts=4 legacy_overlays=0');
+  // Only now reboot into the historical localhost art preview for its
+  // independent loader contracts. Gameplay above exercised the public art.
+  // Keep testing the exact candidate assets in the same WASM, with an
+  // explicit localhost-only preview opt-in that cannot enable live staging.
+  await page.goto('about:blank');
+  await page.addInitScript(() => { window.__chessFootballPartialArtPreview = true; });
+  await page.goto(url + '#football-ci-eleven=1', {
+    waitUntil: 'domcontentloaded', timeout: 30000
+  });
+  await page.waitForFunction(() => window.__chessFootballWebReady === true, null, { timeout: 60000 });
+  if (await page.locator('canvas').count() === 0) {
+    throw new Error('XI Web runtime reported ready without canvas');
+  }
+  // A SHA/CORS-valid HTTP response alone does NOT prove installed sprites.
+  // Require a CI-only receipt from the real XI Godot WASM presenter, emitted
+  // only after ALL eight R2 action sheets replace the real team sprite banks.
+  // If a browser silently falls back to old art, the required gate fails.
+  try {
+    await page.waitForFunction(
+      () => window.__chessFootballActionPoseReceipts.some((receipt) =>
+        receipt.team_size === 11 && receipt.sheets === 8),
+      null, { timeout: 60000 }
+    );
+  } catch (error) {
+    // Keep the strict installed-sprites gate; a 200 response is not proof.
+    // A hung software-WebGL renderer must not stall CI diagnostics forever.
+    const diagnostic = await Promise.race([
+      page.evaluate(() => ({
+        webReady: window.__chessFootballWebReady === true,
+        canvasPresent: Boolean(document.querySelector('canvas')),
+        actionPoseReceipts: Array.isArray(window.__chessFootballActionPoseReceipts)
+          ? window.__chessFootballActionPoseReceipts.slice(-8) : null,
+        heroV5Receipts: Array.isArray(window.__chessFootballHeroV5Receipts)
+          ? window.__chessFootballHeroV5Receipts.slice(-4) : null,
+      })).catch((probeError) => ({ probeError: String(probeError.message || probeError) })),
+      new Promise((resolve) => setTimeout(() =>
+        resolve({ probeError: 'WebGL diagnostic timed out after 5s' }), 5000)),
+    ]);
+    console.error('FOOTBALL_XI_WEB_ACTION_POSE_RECEIPT_TIMEOUT', JSON.stringify(diagnostic));
+    throw error;
+  }
+  console.log('FOOTBALL_XI_REAL_WEB_ACTION_POSES_INSTALLED_OK teams=2 actions=4 sheets=8');
+  // HTTP 200 by itself is not enough: actual Godot WASM must install all
+  // four V5 banks into 20 outfield SpriteFrames before continuing.
+  try {
+    await page.waitForFunction(
+      () => window.__chessFootballHeroV5Receipts.some((receipt) =>
+        receipt.team_size === 11 && receipt.sheets === 4),
+      null, { timeout: 60000 }
+    );
+  } catch (error) {
+    console.log('FOOTBALL_WEB_CI_HERO_V5_RECEIPTS',
+      JSON.stringify(await page.evaluate(() => window.__chessFootballHeroV5Receipts)));
+    throw error;
+  }
+  console.log('FOOTBALL_XI_REAL_WEB_HERO_V5_INSTALLED_OK clubs=2 families=2 sheets=4');
+  await page.waitForFunction(() => window.__chessFootballDenseKicksInstalled === true, null, {timeout: 60000});
+  console.log('FOOTBALL_XI_REAL_WEB_DENSE_KICKS_INSTALLED_OK clubs=2 sheets=4 frames=16');
+  await page.waitForFunction(() => window.__chessFootballDenseDiagonalInstalled === true, null, {timeout: 60000});
+  console.log('FOOTBALL_XI_REAL_WEB_DENSE_DIAGONAL_INSTALLED_OK clubs=2 sheets=2 frames=24');
+  const bundled = new Set(messages.flatMap(message => {
+    const match = message.match(/FOOTBALL_ATLAS bundled_verified file=([a-z0-9_]+\.webp)/);
+    return match ? [match[1]] : [];
+  }));
+  if (process.env.FOOTBALL_CI_KEEPER_R2_BRIDGE === '1' && (bundled.size !== 10 || failures.length)) {
+    throw new Error('Expected ten SHA-verified bundled V5/dense sheets and zero runtime failures: ' + JSON.stringify([...bundled]) + ' ' + failures.slice(0, 8).join('; '));
+  }
+  console.log('FOOTBALL_XI_BUNDLED_ATLASES_OK sheets=' + bundled.size);
   // Only AFTER the gameplay gate: an optional ReadPixels screenshot must
   // never block or invalidate the real input assertions.
   await page.screenshot({ path: resolve(output, 'real-web-xi-kickoff.png'), timeout: 4000 })
