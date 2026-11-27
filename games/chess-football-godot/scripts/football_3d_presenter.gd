@@ -2287,8 +2287,8 @@ static func xi_tactical_foot_anchor_offset(
 	return xi_rotated_foot_anchor_offset(view_camera, frame, pixel_size, scale_y, 0.0, true)
 
 
-# Paint dark ink into an IMAGE COPY of the current authenticated rear
-# raster frame. The digit pixels sit inside the visible white jersey torso
+# Paint contrasting ink into an IMAGE COPY of the authenticated rear
+# raster frame. The digit pixels sit inside the visible jersey torso
 # itself, so they move/scale with the runner and cannot float off the shirt.
 # Front/side/pass frames and all source atlas ImageTextures remain untouched.
 # This is presentation only; neither roster scoring nor ball physics reads it.
@@ -2300,7 +2300,7 @@ func _xi_numbered_rear_frame(
 	var name := String(animation)
 	if not (name.ends_with("_back") or name.ends_with("_back_diagonal")):
 		return source
-	var key := str(source.get_instance_id()) + ":" + str(player.shirt_number)
+	var key := str(source.get_instance_id()) + ":" + str(player.shirt_number) + ":" + str(player.team_id)
 	var cached: Texture2D = rear_shirt_frame_cache.get(key)
 	if cached != null:
 		return cached
@@ -2321,9 +2321,10 @@ func _xi_numbered_rear_frame(
 	var ink_width: int = digits.length() * 3 * glyph_scale + (digits.length() - 1) * glyph_scale
 	var initial_x: int = used.position.x + (used.size.x - ink_width) / 2
 	# Some running frames tilt the jersey within the image. Search a small
-	# torso-only region for a white, opaque backing before printing: never
+	# torso-only region for a consistent, opaque backing before printing: never
 	# paint empty padding, hair, or skin by assuming one fixed anchor.
 	var best_score: int = -1
+	var best_light_ink := false
 	var x_left: int = initial_x
 	var y_top: int = used.position.y + roundi(float(used.size.y) * 0.33) - (5 * glyph_scale) / 2
 	for torso_fraction in [0.26, 0.30, 0.34, 0.38, 0.42, 0.46]:
@@ -2332,7 +2333,9 @@ func _xi_numbered_rear_frame(
 			var candidate_y: int = used.position.y + roundi(
 				float(used.size.y) * torso_fraction
 			) - (5 * glyph_scale) / 2
-			var candidate_score: int = 0
+			var opaque_samples := 0
+			var dark_samples := 0
+			var light_samples := 0
 			for digit_index in range(digits.length()):
 				var sample_glyph: String = SHIRT_DIGITS.get(digits.substr(digit_index, 1), "")
 				for row in range(5):
@@ -2345,15 +2348,24 @@ func _xi_numbered_rear_frame(
 							continue
 						var sample: Color = image.get_pixel(test_x, test_y)
 						if sample.a >= 0.30:
-							candidate_score += 1
-							if minf(sample.r, minf(sample.g, sample.b)) >= 0.60:
-								candidate_score += 4
+							opaque_samples += 1
+							var luminance := sample.r * 0.2126 + sample.g * 0.7152 + sample.b * 0.0722
+							if luminance < 0.45:
+								dark_samples += 1
+							else:
+								light_samples += 1
+			# Prioritize opaque coverage and a consistent backing; break
+			# ties by the original search order, not bright highlights.
+			var candidate_score := opaque_samples * 8 + maxi(dark_samples, light_samples)
 			if candidate_score > best_score:
 				best_score = candidate_score
+				best_light_ink = dark_samples > light_samples
 				x_left = candidate_x
 				y_top = candidate_y
 	var painted_pixels := 0
 	var ink := Color(0.025, 0.070, 0.155, 1.0)
+	if best_light_ink:
+		ink = Color(0.94, 0.79, 0.36, 1.0) if player.team_id == 0 else Color(0.96, 0.97, 0.99, 1.0)
 	for index in range(digits.length()):
 		var glyph: String = SHIRT_DIGITS.get(digits.substr(index, 1), "")
 		if glyph.length() != 15:
