@@ -72,6 +72,35 @@ func _initialize() -> void:
 			assert(stage.player_nodes[player.get_instance_id()].get_node_or_null(
 				"RearShirtNumber") == null, "No floating text mesh over shirt")
 	assert(home.shirt_number == 11 and away.shirt_number == 2)
+	# Uniform synthetic jersey fixtures isolate ink contrast from art layout.
+	# Test the actual image compositor, not only its chosen colour.
+	for player in [home, away]:
+		for background in [Color(0.10, 0.13, 0.18), Color(0.87, 0.89, 0.91)]:
+			var image := Image.create(128, 144, false, Image.FORMAT_RGBA8)
+			image.fill(Color.TRANSPARENT)
+			image.fill_rect(Rect2i(34, 12, 60, 122), background)
+			var source := ImageTexture.create_from_image(image)
+			var before := source.get_image().get_data()
+			var numbered: Texture2D = stage._xi_numbered_rear_frame(player, source, &"run_back")
+			assert(numbered != source)
+			assert(stage._xi_numbered_rear_frame(player, source, &"run_back") == numbered)
+			assert(stage._xi_numbered_rear_frame(player, source, &"run_front") == source)
+			var rendered := numbered.get_image()
+			var original := source.get_image()
+			var changed := 0
+			for y in range(144):
+				for x in range(128):
+					var old := original.get_pixel(x, y)
+					var new := rendered.get_pixel(x, y)
+					assert(is_equal_approx(old.a, new.a))
+					if old == new:
+						continue
+					changed += 1
+					var old_luma := old.r * 0.2126 + old.g * 0.7152 + old.b * 0.0722
+					var new_luma := new.r * 0.2126 + new.g * 0.7152 + new.b * 0.0722
+					assert(new_luma > old_luma + 0.45 if background.r < 0.5 else new_luma < old_luma - 0.45)
+			assert(changed > 0 and source.get_image().get_data() == before)
+	print("FOOTBALL_XI_DORSAL_CONTRAST_OK dark=true light=true alpha_unchanged=true")
 	var center: Vector2 = game.match_pitch.get_center()
 	home.global_position = center + Vector2(-170.0, 55.0)
 	away.global_position = center + Vector2(110.0, -25.0)
