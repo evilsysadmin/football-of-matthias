@@ -207,6 +207,10 @@ var _motion_v4_loaded: Dictionary = {}
 var _hero_v5_loaded: Dictionary = {}
 # Authored action replacement becomes active per-club only after full verification.
 var _pass_shoot_r2_loaded: Dictionary = {}
+var _dense_live_outfield_installed := false
+# Both SHA-pinned 16-pose Dense pass sheets first show the extended
+# striking leg at index 7 (zero-based). The ball release is immediate.
+const DENSE_PASS_CONTACT_FRAME := 7
 var _dense_kick_loaded: Dictionary = {}
 var _dense_kick_pending: Dictionary = {}
 var _dense_diagonal_loaded: Dictionary = {}
@@ -1477,6 +1481,7 @@ func _install_bundled_dense_outfield() -> bool:
 	tone_gain_cache.clear()
 	body_scale_cache.clear()
 	rear_shirt_frame_cache.clear()
+	_dense_live_outfield_installed = true
 	return true
 
 
@@ -3666,6 +3671,18 @@ static func xi_complete_action_phase(
 	return minf(float(frame_count - 1), floorf(progress * float(frame_count)))
 
 
+# The authoritative pass already released the ball when play_action began.
+# Do not render its pre-contact wind-up AFTER that event. Use the authored
+# strike pose immediately, then the original follow-through/recovery over
+# the unchanged action lock. No added input latency or physics delay.
+static func xi_dense_live_pass_phase(frame_count: int, total_seconds: float, remaining_seconds: float) -> float:
+	if frame_count != 16 or total_seconds <= 0.0:
+		return xi_complete_action_phase(frame_count, total_seconds, remaining_seconds)
+	var progress := clampf(1.0 - remaining_seconds / total_seconds, 0.0, 1.0)
+	return minf(float(frame_count - 1),
+		float(DENSE_PASS_CONTACT_FRAME) + floorf(progress * float(frame_count - DENSE_PASS_CONTACT_FRAME)))
+
+
 func _sync_visible_animation(
 	key: int, player: Footballer, sprite: AnimatedSprite3D, wanted: StringName, delta: float
 ) -> void:
@@ -3816,9 +3833,14 @@ func _sync_visible_animation(
 		and player.action_lock_seconds > 0.0
 		and player.action_visual_duration_seconds > 0.0
 	):
-		phase = xi_complete_action_phase(
-			count, player.action_visual_duration_seconds, player.action_lock_seconds
-		)
+		if _dense_live_outfield_installed and wanted == &"pass":
+			phase = xi_dense_live_pass_phase(
+				count, player.action_visual_duration_seconds, player.action_lock_seconds
+			)
+		else:
+			phase = xi_complete_action_phase(
+				count, player.action_visual_duration_seconds, player.action_lock_seconds
+			)
 	else:
 		phase += advance * maxf(player.visual.speed_scale, 0.0)
 	if frames.get_animation_loop(wanted):
