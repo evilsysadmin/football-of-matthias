@@ -41,6 +41,11 @@ const STAMINA_RECOVER_IDLE_PER_SECOND := 19.0
 const STAMINA_RECOVER_THRESHOLD := 40.0
 const AI_SPRINT_INTENSITY := 0.94
 const AI_EXHAUSTED_INTENSITY_CAP := 0.82
+# XI positional runners settle inside a small inner radius and ignore tiny
+# tactical target changes until the outer radius is crossed.
+const XI_POSITIONAL_SETTLE_RADIUS := 9.0
+const XI_POSITIONAL_RESUME_RADIUS := 20.0
+var xi_positional_settled: bool = false
 # Keepers need a sharp lateral shuffle to react to a shot. Outfield movement,
 # dribbling and the penalty keeper's separately controlled speed are unchanged.
 const KEEPER_AI_SPEED_MULTIPLIER := 1.65
@@ -140,6 +145,7 @@ func configure(p_team_id: int, p_index: int, p_role: String, p_position: Vector2
 	global_position = p_position
 	home_position = p_position
 	ai_target = p_position
+	xi_positional_settled = false
 	team_color = p_color
 	_apply_match_scouting(p_team_size)
 	_configure_visual()
@@ -269,6 +275,7 @@ func _plant_xi_pass_feet() -> void:
 
 
 func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
+	xi_positional_settled = false
 	if xi_collision_down_seconds > 0.0:
 		velocity = Vector2.ZERO
 		return
@@ -394,6 +401,9 @@ func move_human(delta: float, direction: Vector2, sprinting: bool) -> void:
 	_sync_locomotion(actual_sprint or dribbling)
 
 func move_ai(delta: float, target: Vector2, intensity: float = 1.0, settle_at_target: bool = false) -> void:
+	var positional := settle_at_target and match_pitch == Formation.ELEVEN_PITCH_RECT and role != "keeper" and not has_ball
+	if not positional or xi_collision_down_seconds > 0.0 or sent_off:
+		xi_positional_settled = false
 	if xi_collision_down_seconds > 0.0:
 		velocity = Vector2.ZERO
 		return
@@ -406,6 +416,13 @@ func move_ai(delta: float, target: Vector2, intensity: float = 1.0, settle_at_ta
 		return
 	var offset := target - global_position
 	var moving := offset.length() >= 8.0
+	if positional:
+		if xi_positional_settled:
+			xi_positional_settled = offset.length() < XI_POSITIONAL_RESUME_RADIUS
+		elif offset.length() <= XI_POSITIONAL_SETTLE_RADIUS and velocity.length() < 1.0:
+			xi_positional_settled = true
+		if xi_positional_settled:
+			moving = false
 	var sprint_requested := role != "keeper" and intensity >= AI_SPRINT_INTENSITY
 	var actual_sprint := _update_stamina(delta, sprint_requested, moving)
 	last_sprinting = actual_sprint
