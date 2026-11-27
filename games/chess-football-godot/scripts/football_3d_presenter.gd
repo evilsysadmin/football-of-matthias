@@ -3071,10 +3071,17 @@ func sync_presentation(delta: float, mode: String) -> void:
 					or (hero_name == &"hero_cut" and run_view in ["side", "front_diagonal"])
 				) and sprite.sprite_frames.has_animation(hero_name):
 					wanted_animation = hero_name
-				# Temporary collision art: a single opaque, already approved
-				# idle pose tilts down. Never substitute unapproved ghost frames.
+				# Authored fall/recovery takes precedence over locomotion and actions.
+				# Without a complete installed row, retain the historical fallback.
 				if player.xi_collision_down_seconds > 0.0 and player.role != "keeper":
 					wanted_animation = &"idle"
+					if (
+						match_node.match_team_size == 11
+						and sprite.sprite_frames.has_animation(&"fall_recover")
+						and sprite.sprite_frames.get_frame_count(&"fall_recover") == 16
+						and not sprite.sprite_frames.get_animation_loop(&"fall_recover")
+					):
+						wanted_animation = &"fall_recover"
 				var save_before_catch := xi_keeper_dive_before_catch(
 					match_node.match_team_size, player == holding_keeper,
 					_keeper_catch_r2_loaded.has(int(player.team_id)),
@@ -3148,6 +3155,9 @@ func sync_presentation(delta: float, mode: String) -> void:
 						player.dribble_active(), player.dribble_mode,
 						wanted_animation, feint_progress
 					)
+					if wanted_animation == &"fall_recover":
+						# Source row falls towards screen right; mirror the impact.
+						sprite.flip_h = player.contact_sway_sign < 0.0
 			sprite.pixel_size = TACTICAL_PLAYER_PIXEL_SIZE if mode == "tactical" else PLAYER_PIXEL_SIZE
 			_sync_player_secondary_motion(player, sprite, proxy, delta)
 			var tone_gain := _tonal_view_gain(sprite)
@@ -3213,7 +3223,9 @@ func sync_presentation(delta: float, mode: String) -> void:
 				# Built-in billboard shaders rebuild the model basis and
 				# discard roll. During a knockdown use an explicit camera
 				# basis, so the visible raster really rotates with the pose.
-				var fallen_body: bool = player.xi_collision_down_seconds > 0.0
+				var fallen_body: bool = (
+					player.xi_collision_down_seconds > 0.0 and sprite.animation != &"fall_recover"
+				)
 				var wanted_billboard := (
 					BaseMaterial3D.BILLBOARD_DISABLED if fallen_body
 					else BaseMaterial3D.BILLBOARD_ENABLED if tactical_billboard
@@ -3792,6 +3804,13 @@ func _sync_visible_animation(
 		names[key] = wanted
 	var advance := maxf(delta, 0.0) * frames.get_animation_speed(wanted)
 	if (
+		match_node.match_team_size == 11 and not is_keeper
+		and wanted == &"fall_recover" and player.xi_collision_down_seconds > 0.0
+	):
+		phase = xi_complete_action_phase(
+			count, player.xi_collision_down_total, player.xi_collision_down_seconds
+		)
+	elif (
 		match_node.match_team_size == 11 and not is_keeper
 		and player.has_ball and player.dribble_active() and player.dribble_mode == "feint"
 		and String(wanted) in [
@@ -4424,7 +4443,15 @@ func _sync_player_secondary_motion(
 			save_weight,
 		)
 
-	if player.xi_collision_down_seconds > 0.0 and match_node.match_team_size == 11:
+	if animation_name == "fall_recover" and player.xi_collision_down_seconds > 0.0:
+		# Preserve the painted anatomy and the actual alpha ground contact.
+		# No extra roll, stretch, bob or time authority over the authored row.
+		bob = 0.0
+		lateral_sway = 0.0
+		stretch_x = 1.0
+		stretch_y = 1.0
+		tilt_degrees = 0.0
+	elif player.xi_collision_down_seconds > 0.0 and match_node.match_team_size == 11:
 		# Real knockdown, visually grounded by the existing contact shadow.
 		# No new textures or collision geometry until the fall atlas is ready.
 		var fall_progress := 1.0 - player.xi_collision_down_ratio()

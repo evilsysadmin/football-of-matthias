@@ -273,6 +273,7 @@ func _initialize() -> void:
 	print("FOOTBALL_DENSE_LIVE_PASS_CONTACT_OK clubs=2 immediate_release=true contact_frame=7 recovery=true")
 	await _dense_diagonal_live(game, stage)
 	await _check_dense_positional_arrival(game, stage)
+	_check_authored_fall_playback(game, stage)
 	print("FOOTBALL_DENSE_DIAGONAL_NATIVE_OK clubs=2 frames=24 phase=true precedence=true")
 	print("FOOTBALL_DENSE_KICKS_NATIVE_OK teams=2 frames=16 atomic=true")
 	quit(0)
@@ -463,3 +464,44 @@ func _check_dense_positional_arrival(game: Node2D, stage: ChessFootball3DPresent
 		runner.global_position = Vector2(-9999.0, -9999.0)
 		runner.velocity = Vector2.ZERO
 	stage._dense_live_outfield_installed = false
+
+
+# Test-only textures exercise the actual XI renderer/clock, NOT art quality.
+# No candidate fall image is published or installed by this fixture.
+func _check_authored_fall_playback(game: Node2D, stage: ChessFootball3DPresenter) -> void:
+	for club in range(2):
+		var actor: Footballer = game.teams[club][6]
+		var key: int = actor.get_instance_id()
+		var driver: AnimatedSprite3D = stage.player_sprites[key]
+		var quad: MeshInstance3D = stage.xi_raster_meshes[key]
+		var material: StandardMaterial3D = quad.material_override
+		var original: SpriteFrames = driver.sprite_frames
+		var fixture: SpriteFrames = original.duplicate() as SpriteFrames
+		fixture.add_animation(&"fall_recover")
+		fixture.set_animation_loop(&"fall_recover", false)
+		for i in range(16):
+			fixture.add_frame(&"fall_recover", original.get_frame_texture(&"run", i % original.get_frame_count(&"run")))
+		actor.global_position = game.match_pitch.get_center() + Vector2(100.0 * club, 180.0)
+		actor.action_lock_seconds = 0.0
+		actor.xi_collision_fall(Vector2(-1.0 if club == 0 else 1.0, 0.0), 1.0)
+		var physical_position: Vector2 = actor.global_position
+		driver.sprite_frames = fixture
+		for view in ["broadcast", "tactical"]:
+			for remaining in [0.95, 0.50, 0.10]:
+				actor.xi_collision_down_seconds = remaining
+				stage.sync_presentation(0.0, view)
+				assert(driver.animation == &"fall_recover")
+				assert(driver.frame == int(floor((1.0 - remaining) * 16.0)))
+				assert(is_zero_approx(driver.rotation.z))
+				assert(driver.flip_h == (club == 0))
+				assert(material.albedo_texture == fixture.get_frame_texture(&"fall_recover", driver.frame))
+				assert(material.billboard_mode != BaseMaterial3D.BILLBOARD_DISABLED)
+				assert(actor.global_position == physical_position)
+				assert(is_equal_approx(actor.xi_collision_down_seconds, remaining))
+		actor.xi_collision_down_seconds = 0.0
+		actor.contact_stun_seconds = 0.0
+		stage.sync_presentation(0.0, "broadcast")
+		assert(driver.animation != &"fall_recover")
+		driver.sprite_frames = original
+		stage.sync_presentation(0.0, "broadcast")
+	print("FOOTBALL_XI_AUTHORED_FALL_PLAYBACK_OK clubs=2 cameras=2 physics_unchanged=true fixture_only=true")
