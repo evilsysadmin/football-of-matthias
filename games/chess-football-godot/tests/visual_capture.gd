@@ -852,6 +852,15 @@ func _initialize() -> void:
 	for _frame in range(4):
 		await process_frame
 	await _save_capture(match_node, "menu", "VISUAL_CAPTURE_MENU")
+	match_node._open_pause_lineups()
+	for _frame in range(4):
+		await process_frame
+	await _save_capture(match_node, "lineup-own", "VISUAL_CAPTURE_LINEUP_OWN")
+	match_node._show_pause_lineup(1)
+	for _frame in range(4):
+		await process_frame
+	await _save_capture(match_node, "lineup-rival", "VISUAL_CAPTURE_LINEUP_RIVAL")
+	match_node._close_pause_lineups()
 
 	# Full source atlases are review evidence too: every animation and every
 	# authored frame must remain inspectable instead of trusting one runtime pose.
