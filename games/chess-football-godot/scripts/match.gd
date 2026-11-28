@@ -550,6 +550,9 @@ var pause_overlay: ColorRect
 var pause_exit_button: Button
 var pause_menu_button: Button
 var pause_sfx_button: Button
+var pause_menu_center: CenterContainer
+var pause_lineup_panel: VBoxContainer
+var pause_lineup_list: VBoxContainer
 
 func _ready() -> void:
 	# CI keeps the loopback-only probe. The staging preview additionally
@@ -945,6 +948,7 @@ func _create_pause_menu(hud: CanvasLayer) -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	pause_overlay.add_child(center)
+	pause_menu_center = center
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(390.0, 360.0)
@@ -989,15 +993,113 @@ func _create_pause_menu(hud: CanvasLayer) -> void:
 	pause_sfx_button.pressed.connect(_toggle_match_sfx)
 	settings_row.add_child(pause_sfx_button)
 
-	var restart_button := _menu_button("REINICIAR PARTIDO")
+	var actions_row := HBoxContainer.new()
+	actions_row.add_theme_constant_override("separation", 8)
+	box.add_child(actions_row)
+	var restart_button := _menu_button("REINICIAR")
+	restart_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	restart_button.pressed.connect(_restart_match)
-	box.add_child(restart_button)
+	actions_row.add_child(restart_button)
+	var lineup_button := _menu_button("ALINEACIONES")
+	lineup_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lineup_button.pressed.connect(_open_pause_lineups)
+	actions_row.add_child(lineup_button)
 
 	var hint := Label.new()
 	hint.text = "ESC · cerrar menú"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.62))
 	box.add_child(hint)
+
+	# A full-height secondary pause screen with scrolling, not extra menu
+	# height. The match remains paused while inspecting either lineup.
+	pause_lineup_panel = VBoxContainer.new()
+	pause_lineup_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pause_lineup_panel.offset_left = 16.0
+	pause_lineup_panel.offset_top = 12.0
+	pause_lineup_panel.offset_right = -16.0
+	pause_lineup_panel.offset_bottom = -12.0
+	pause_lineup_panel.hide()
+	pause_overlay.add_child(pause_lineup_panel)
+	var toolbar := HBoxContainer.new()
+	pause_lineup_panel.add_child(toolbar)
+	var back := _menu_button("VOLVER")
+	back.pressed.connect(_close_pause_lineups)
+	toolbar.add_child(back)
+	for team_id in range(2):
+		var tab := _menu_button("TU EQUIPO" if team_id == 0 else "RIVAL")
+		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tab.pressed.connect(_show_pause_lineup.bind(team_id))
+		toolbar.add_child(tab)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	pause_lineup_panel.add_child(scroll)
+	pause_lineup_list = VBoxContainer.new()
+	pause_lineup_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pause_lineup_list.add_theme_constant_override("separation", 6)
+	scroll.add_child(pause_lineup_list)
+
+
+func _pause_lineup_rows(team_id: int) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	if team_id not in [0, 1]:
+		return rows
+	for player: Footballer in teams[team_id]:
+		var row := {"name": player.scouting_player_name}
+		# The rival UI gets names ONLY: no hidden stat labels, tooltips
+		# or values in its presentation model.
+		if team_id == 0:
+			row["number"] = player.shirt_number
+			row["role"] = player.role
+			row["controlled"] = player == controlled
+			row["sent_off"] = player.sent_off
+			row["stats"] = {"VEL": player.scouting_pace, "RES": player.scouting_endurance,
+				"TEC": player.scouting_technique, "PAS": player.scouting_passing,
+				"TIR": player.scouting_shooting, "ENT": player.scouting_tackling,
+				"POR": player.scouting_keeping}
+		rows.append(row)
+	return rows
+
+
+func _show_pause_lineup(team_id: int) -> void:
+	for child in pause_lineup_list.get_children():
+		pause_lineup_list.remove_child(child)
+		child.queue_free()
+	for row in _pause_lineup_rows(team_id):
+		var name_label := Label.new()
+		name_label.add_theme_font_size_override("font_size", 20)
+		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_label.text = String(row["name"])
+		if team_id == 0:
+			var role_names := {"keeper": "POR", "defender": "DEF", "midfielder": "MED", "wing": "EXT", "forward": "DEL"}
+			name_label.text = "%d · %s · %s%s" % [row["number"], row["name"], role_names.get(row["role"], row["role"]), " · CONTROLADO" if row["controlled"] else ""]
+			if row["sent_off"]:
+				name_label.text += " · EXPULSADO"
+		pause_lineup_list.add_child(name_label)
+		if team_id == 0:
+			var stats_label := Label.new()
+			stats_label.add_theme_font_size_override("font_size", 16)
+			stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			var parts := PackedStringArray()
+			for stat in row["stats"]:
+				parts.append("%s %d" % [stat, row["stats"][stat]])
+			stats_label.text = "   ".join(parts)
+			pause_lineup_list.add_child(stats_label)
+		pause_lineup_list.add_child(HSeparator.new())
+
+
+func _open_pause_lineups() -> void:
+	pause_menu_center.hide()
+	pause_lineup_panel.show()
+	_show_pause_lineup(0)
+
+
+func _close_pause_lineups() -> void:
+	pause_lineup_panel.hide()
+	pause_menu_center.show()
+	pause_exit_button.grab_focus()
+
 
 func _menu_button(text_value: String) -> Button:
 	var button := Button.new()
@@ -1007,6 +1109,9 @@ func _menu_button(text_value: String) -> Button:
 	return button
 
 func _toggle_pause_menu() -> void:
+	if pause_menu_open and pause_lineup_panel != null and pause_lineup_panel.visible:
+		_close_pause_lineups()
+		return
 	pause_menu_open = not pause_menu_open
 	pause_overlay.visible = pause_menu_open
 	if audio_fx != null:
