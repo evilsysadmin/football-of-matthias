@@ -447,6 +447,17 @@ func _check_dense_positional_arrival(game: Node2D, stage: ChessFootball3DPresent
 			stage.sync_presentation(DT, "broadcast")
 			assert(runner.global_position.distance_to(settled) < 0.1)
 			assert(String(driver.animation).begins_with("idle"))
+		# A moving tactical target can alternate around a settled actor every
+		# physics tick. It must not restart the gait for these tiny shifts.
+		assert(runner.xi_positional_settled)
+		for tick in range(24):
+			await physics_frame
+			var jitter := Vector2(12.0 if tick % 2 == 0 else -12.0, 0.0)
+			runner.move_ai(DT, settled + jitter, 0.83, true)
+			stage.sync_presentation(DT, "broadcast")
+			assert(runner.global_position.distance_to(settled) < 0.1)
+			assert(runner.velocity.length() < 1.0)
+			assert(String(driver.animation).begins_with("idle"))
 		# This native fixture installs the exact Dense front-diagonal row,
 		# not the full Web side bank. Resume towards a real diagonal outlet
 		# to test the 24-frame row rather than asserting against legacy art.
@@ -455,6 +466,7 @@ func _check_dense_positional_arrival(game: Node2D, stage: ChessFootball3DPresent
 			await physics_frame
 			runner.move_ai(DT, target, 0.83, true)
 			stage.sync_presentation(DT, "broadcast")
+		assert(not runner.xi_positional_settled)
 		assert(runner.global_position.x > settled.x + 50.0)
 		assert(runner.global_position.y > settled.y + 50.0)
 		assert(driver.animation == &"run_front_diagonal")
